@@ -56,6 +56,7 @@ enum MarkdownFormattingStyle {
     case quote
     case plainBlock
     case removeFormatting
+    case tableOfContents
     case unorderedList
     case orderedList
     case taskList
@@ -127,6 +128,8 @@ enum MarkdownFormatter {
             return removeBlockMarkers(text, selection: safeSelection)
         case .removeFormatting:
             return removeFormatting(text, selection: safeSelection)
+        case .tableOfContents:
+            return tableOfContents(text, selection: safeSelection)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -386,6 +389,33 @@ enum MarkdownFormatter {
         let replacement = MarkdownLinkSyntax.makeLink(label: label, destination: "https://")
         let urlStart = selection.location + (replacement as NSString).range(of: "https://").location
         return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))
+    }
+
+    private static func tableOfContents(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let source = text as NSString
+        let remainingText = source.replacingCharacters(in: selection, with: "")
+        let anchors = MarkdownHeadingIndex(analysis: MarkdownAnalysis(remainingText)).anchors
+        guard let minimumLevel = anchors.map(\.entry.level).min() else {
+            return MarkdownEdit(range: selection, replacement: source.substring(with: selection),
+                selection: selection)
+        }
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        let lines = anchors.map { anchor in
+            let indent = String(repeating: "  ", count: anchor.entry.level - minimumLevel)
+            let title = MarkdownHeadingIndex.visibleText(anchor.entry.title)
+            return indent + "- " + MarkdownLinkSyntax.makeLink(label: title,
+                destination: "#" + anchor.slug)
+        }.joined(separator: newline)
+        let before = source.substring(to: selection.location)
+        let after = source.substring(from: NSMaxRange(selection))
+        let prefix = selection.length == 0 && !before.isEmpty && !before.hasSuffix(newline + newline)
+            ? (before.hasSuffix(newline) ? newline : newline + newline) : ""
+        let suffix = selection.length == 0 && !after.isEmpty && !after.hasPrefix(newline + newline)
+            ? (after.hasPrefix(newline) ? newline : newline + newline) : ""
+        let replacement = prefix + lines + suffix
+        return MarkdownEdit(range: selection, replacement: replacement,
+            selection: NSRange(location: selection.location + (prefix as NSString).length,
+                length: (lines as NSString).length))
     }
 
     private static func removeFormatting(_ text: String, selection: NSRange) -> MarkdownEdit {

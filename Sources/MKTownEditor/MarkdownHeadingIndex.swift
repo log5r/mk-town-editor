@@ -57,7 +57,7 @@ struct MarkdownHeadingIndex {
         return result.isEmpty ? "section" : result
     }
 
-    private static func visibleText(_ markdown: String) -> String {
+    static func visibleText(_ markdown: String) -> String {
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
