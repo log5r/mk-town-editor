@@ -68,6 +68,10 @@ private struct SearchWorkspaceActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ReplaceWorkspaceActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 private struct OpenEncodingImportActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -140,6 +144,10 @@ extension FocusedValues {
         get { self[SearchWorkspaceActionKey.self] }
         set { self[SearchWorkspaceActionKey.self] = newValue }
     }
+    var replaceWorkspaceAction: (() -> Void)? {
+        get { self[ReplaceWorkspaceActionKey.self] }
+        set { self[ReplaceWorkspaceActionKey.self] = newValue }
+    }
     var openEncodingImportAction: (() -> Void)? {
         get { self[OpenEncodingImportActionKey.self] }
         set { self[OpenEncodingImportActionKey.self] = newValue }
@@ -165,6 +173,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
     @FocusedValue(\.openQuickFileAction) private var openQuickFileAction
     @FocusedValue(\.searchWorkspaceAction) private var searchWorkspaceAction
+    @FocusedValue(\.replaceWorkspaceAction) private var replaceWorkspaceAction
     @FocusedValue(\.openEncodingImportAction) private var openEncodingImportAction
     @FocusedValue(\.textFormatActions) private var textFormatActions
     @ObservedObject var settingsStore: EditorSettingsStore
@@ -207,6 +216,8 @@ struct MarkdownCommands: Commands {
             Button("フォルダ全体を検索…") { searchWorkspaceAction?() }
                 .keyboardShortcut("f", modifiers: [.command, .option, .shift])
                 .disabled(searchWorkspaceAction == nil || workspaceStore.rootURL == nil)
+            Button("複数ファイルを置換…") { replaceWorkspaceAction?() }
+                .disabled(replaceWorkspaceAction == nil || workspaceStore.rootURL == nil)
             Button("ファイル一覧を更新") { workspaceStore.refresh(force: true) }
                 .disabled(workspaceStore.rootURL == nil)
         }
