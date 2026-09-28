@@ -147,6 +147,11 @@ final class EditorTextView: NSTextView {
         return didBecome
     }
 
+    override func insertNewline(_ sender: Any?) {
+        if commandModel?.continueListOrQuote() == true { return }
+        super.insertNewline(sender)
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         makeMarkdownMenu(baseMenu: super.menu(for: event))
     }
