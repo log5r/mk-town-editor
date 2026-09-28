@@ -24,6 +24,7 @@ struct MarkdownImageDraft: Identifiable {
 
 struct MarkdownInlineLink: Equatable {
     let range: NSRange
+    let labelRange: NSRange
     let destinationRange: NSRange
     let destination: String
     let isImage: Bool
@@ -45,6 +46,7 @@ enum MarkdownLinkSyntax {
             let range = isImage
                 ? NSRange(location: cursor - 1, length: parsed.range.length + 1) : parsed.range
             result.append(MarkdownInlineLink(range: range,
+                                             labelRange: parsed.labelRange,
                                              destinationRange: parsed.destinationRange,
                                              destination: unescape(parsed.destination),
                                              isImage: isImage))

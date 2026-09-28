@@ -107,6 +107,35 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.applying(to: ""), "> ")
     }
 
+    func testRemoveFormattingKeepsVisibleLabelsAndDestinations() {
+        let source = "**強調🙂** [案内](https://example.com/a_b \"title\") ![図](images/a.png)"
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "強調🙂 案内 (https://example.com/a_b) 図 (images/a.png)")
+    }
+
+    func testRemoveFormattingAtCaretOnlyChangesContainingConstruct() {
+        let source = "前 **強調** と *斜体*"
+        let location = (source as NSString).range(of: "強調").location
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source,
+            selection: NSRange(location: location, length: 0))
+        XCTAssertEqual(edit.applying(to: source), "前 強調 と *斜体*")
+    }
+
+    func testRemoveFormattingLeavesUnselectedMarkupIntact() {
+        let source = "**前** と ~~後~~"
+        let selection = (source as NSString).range(of: "~~後~~")
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source, selection: selection)
+        XCTAssertEqual(edit.applying(to: source), "**前** と 後")
+    }
+
+    func testRemoveFormattingKeepsFencedCodeLiteralAndRemovesNearbyEmphasis() {
+        let source = "**前**\n```md\n**literal**\n```\n~~後~~"
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "前\n```md\n**literal**\n```\n後")
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))

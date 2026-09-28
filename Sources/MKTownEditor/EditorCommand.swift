@@ -10,6 +10,7 @@ enum EditorCommand: Hashable {
     case heading(level: Int)
     case quote
     case plainBlock
+    case removeFormatting
     case unorderedList
     case orderedList
     case taskList
@@ -23,7 +24,7 @@ enum EditorCommand: Hashable {
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .link, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -36,6 +37,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
         case .quote: "引用"
         case .plainBlock: "本文に戻す"
+        case .removeFormatting: "書式を除去"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -61,6 +63,7 @@ enum EditorCommand: Hashable {
         case .heading: "number"
         case .quote: "text.quote"
         case .plainBlock: "text.alignleft"
+        case .removeFormatting: "textformat"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -86,6 +89,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
         case .quote: (">", [.command, .shift])
         case .plainBlock: nil
+        case .removeFormatting: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -128,6 +132,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): model.apply(.heading(level: level))
         case .quote: model.apply(.quote)
         case .plainBlock: model.apply(.plainBlock)
+        case .removeFormatting: model.apply(.removeFormatting)
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)

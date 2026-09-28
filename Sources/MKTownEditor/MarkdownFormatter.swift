@@ -55,6 +55,7 @@ enum MarkdownFormattingStyle {
     case heading(level: Int)
     case quote
     case plainBlock
+    case removeFormatting
     case unorderedList
     case orderedList
     case taskList
@@ -124,6 +125,8 @@ enum MarkdownFormatter {
             return toggleQuote(text, selection: safeSelection)
         case .plainBlock:
             return removeBlockMarkers(text, selection: safeSelection)
+        case .removeFormatting:
+            return removeFormatting(text, selection: safeSelection)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -383,6 +386,83 @@ enum MarkdownFormatter {
         let replacement = MarkdownLinkSyntax.makeLink(label: label, destination: "https://")
         let urlStart = selection.location + (replacement as NSString).range(of: "https://").location
         return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))
+    }
+
+    private static func removeFormatting(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let source = text as NSString
+        let fencedCode = MarkdownAnalysis(text).blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
+        let codeRanges = MarkdownInlineSyntax.codeSpanRanges(in: text)
+        let links = MarkdownLinkSyntax.inlineLinks(in: text).filter { link in
+            !codeRanges.contains { NSIntersectionRange($0, link.range).length > 0 } &&
+                !fencedCode.contains { NSIntersectionRange($0, link.range).length > 0 }
+        }
+        let inlineSpans = ["**", "__", "~~", "*", "_", "`"].flatMap {
+            formattingSpans(in: text, markers: [$0]).map(\.range)
+        }.filter { span in !fencedCode.contains { NSIntersectionRange($0, span).length > 0 } }
+        let candidates = links.map(\.range) + inlineSpans
+        let target: NSRange
+        if let enclosing = candidates.filter({ range in
+            selection.length == 0
+                ? selection.location > range.location && selection.location < NSMaxRange(range)
+                : selection.location >= range.location && NSMaxRange(selection) <= NSMaxRange(range)
+        }).min(by: { $0.length < $1.length }) {
+            target = enclosing
+        } else {
+            target = selection
+        }
+        let raw = source.substring(with: target) as NSString
+        var fragment = ""
+        var cursor = 0
+        for range in fencedCode.compactMap({ code -> NSRange? in
+            let intersection = NSIntersectionRange(code, target)
+            return intersection.length == 0 ? nil : NSRange(
+                location: intersection.location - target.location, length: intersection.length)
+        }).sorted(by: { $0.location < $1.location }) {
+            fragment += strippingInlineFormatting(raw.substring(with:
+                NSRange(location: cursor, length: range.location - cursor)))
+            fragment += raw.substring(with: range)
+            cursor = NSMaxRange(range)
+        }
+        fragment += strippingInlineFormatting(raw.substring(from: cursor))
+        return MarkdownEdit(range: target, replacement: fragment,
+            selection: NSRange(location: target.location, length: (fragment as NSString).length))
+    }
+
+    private static func strippingInlineFormatting(_ text: String) -> String {
+        let source = text as NSString
+        let codeRanges = MarkdownInlineSyntax.codeSpanRanges(in: text)
+        let links = MarkdownLinkSyntax.inlineLinks(in: text).filter { link in
+            !codeRanges.contains { NSIntersectionRange($0, link.range).length > 0 }
+        }
+        guard !links.isEmpty else { return strippingEmphasis(text) }
+        var result = ""
+        var cursor = 0
+        for link in links {
+            result += strippingEmphasis(source.substring(with:
+                NSRange(location: cursor, length: link.range.location - cursor)))
+            let label = source.substring(with: link.labelRange)
+                .replacingOccurrences(of: #"\([\[\]_*`])"#, with: "$1",
+                    options: .regularExpression)
+            result += strippingEmphasis(label)
+            if !link.destination.isEmpty { result += " (\(link.destination))" }
+            cursor = NSMaxRange(link.range)
+        }
+        result += strippingEmphasis(source.substring(from: cursor))
+        return result
+    }
+
+    private static func strippingEmphasis(_ text: String) -> String {
+        var fragment = text
+        let markers = ["**", "__", "~~", "*", "_", "`"]
+        for _ in 0..<max(1, fragment.count) {
+            let spans = markers.flatMap { formattingSpans(in: fragment, markers: [$0]) }
+            guard let span = spans.min(by: { $0.range.location < $1.range.location ||
+                ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }) else { break }
+            let current = fragment as NSString
+            fragment = current.replacingCharacters(in: span.range,
+                with: current.substring(with: span.innerRange))
+        }
+        return fragment
     }
 
     private static let quoteMarkerExpression = try! NSRegularExpression(pattern: #"^([ \t]*)>[ \t]?"#)
