@@ -1,6 +1,6 @@
 import Foundation
 
-struct DocumentStatistics: Equatable {
+struct DocumentStatistics: Equatable, Sendable {
     let characters: Int
     let words: Int
     let lines: Int

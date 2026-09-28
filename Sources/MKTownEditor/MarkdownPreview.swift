@@ -5,41 +5,49 @@ struct MarkdownPreview: View {
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
+    var snapshot: DocumentSnapshot?
+    var usesSharedAnalysis = false
 
     var body: some View {
-        let analysis = MarkdownAnalysis(markdown)
-        if PreviewAccessibility.requiresStructuredView(analysis.blocks) {
-            let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(visibleBlocks, id: \.id) { block in
-                        HStack(alignment: .top, spacing: 8) {
-                            ForEach(0..<quoteDepth(of: block, in: analysis), id: \.self) { _ in
-                                Rectangle()
-                                    .fill(Color.secondary.opacity(0.5))
-                                    .frame(width: 2)
-                                    .accessibilityHidden(true)
-                            }
-                            if let table = block.table {
-                                tableView(table, in: analysis)
-                            } else if block.kind == .blank {
-                                Text(" ").frame(height: 12)
-                            } else if let task = block.task {
-                                taskView(block, task: task, in: analysis)
-                            } else {
-                                blockText(block, in: analysis)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 24)
-            }
-            .focusable()
+        if usesSharedAnalysis && snapshot == nil {
+            ProgressView("プレビューを準備中")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            MarkdownTextPreview(markdown: markdown, documentContext: documentContext)
+            let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
+            if PreviewAccessibility.requiresStructuredView(analysis.blocks) {
+                let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleBlocks, id: \.id) { block in
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(0..<quoteDepth(of: block, in: analysis), id: \.self) { _ in
+                                    Rectangle()
+                                        .fill(Color.secondary.opacity(0.5))
+                                        .frame(width: 2)
+                                        .accessibilityHidden(true)
+                                }
+                                if let table = block.table {
+                                    tableView(table, in: analysis)
+                                } else if block.kind == .blank {
+                                    Text(" ").frame(height: 12)
+                                } else if let task = block.task {
+                                    taskView(block, task: task, in: analysis)
+                                } else {
+                                    blockText(block, in: analysis)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 24)
+                }
+                .focusable()
+            } else {
+                MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
+                                    analysis: snapshot?.analysis)
+            }
         }
     }
 
@@ -164,6 +172,7 @@ enum PreviewAccessibility {
 private struct MarkdownTextPreview: NSViewRepresentable {
     let markdown: String
     let documentContext: DocumentContext
+    let analysis: MarkdownAnalysis?
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -196,7 +205,8 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     }
 
     private func update(_ textView: NSTextView) {
-        textView.textStorage?.setAttributedString(MarkdownRenderer.render(markdown,
-                                                                         documentContext: documentContext))
+        let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
+            ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
+        textView.textStorage?.setAttributedString(rendered)
     }
 }

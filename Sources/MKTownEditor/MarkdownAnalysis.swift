@@ -1,12 +1,12 @@
 import Foundation
 
-enum MarkdownLineBreak: Equatable {
+enum MarkdownLineBreak: Equatable, Sendable {
     case soft
     case hard
 }
 
-struct MarkdownTable: Equatable {
-    enum Alignment: Equatable {
+struct MarkdownTable: Equatable, Sendable {
+    enum Alignment: Equatable, Sendable {
         case leading
         case center
         case trailing
@@ -18,19 +18,19 @@ struct MarkdownTable: Equatable {
     let rowRanges: [NSRange]
 }
 
-struct MarkdownTask: Equatable {
+struct MarkdownTask: Equatable, Sendable {
     let isChecked: Bool
     let content: String
 }
 
-struct MarkdownReference: Equatable {
+struct MarkdownReference: Equatable, Sendable {
     let destination: String
     let title: String?
     let sourceRange: NSRange
 }
 
-struct MarkdownBlock: Equatable {
-    enum Kind: Equatable {
+struct MarkdownBlock: Equatable, Sendable {
+    enum Kind: Equatable, Sendable {
         case paragraph
         case heading(level: Int)
         case quote
@@ -75,7 +75,7 @@ struct MarkdownBlock: Equatable {
 }
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
-struct MarkdownAnalysis {
+struct MarkdownAnalysis: Sendable {
     let blocks: [MarkdownBlock]
     let positionMap: MarkdownPositionMap
     let references: [String: MarkdownReference]

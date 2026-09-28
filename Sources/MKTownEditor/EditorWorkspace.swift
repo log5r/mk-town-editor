@@ -6,6 +6,7 @@ struct EditorWorkspace: View {
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @Environment(\.undoManager) private var undoManager
     @StateObject private var editorModel = MarkdownEditorModel()
+    @StateObject private var analysisStore = DocumentAnalysisStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
@@ -26,7 +27,7 @@ struct EditorWorkspace: View {
     }
 
     private var statistics: DocumentStatistics {
-        DocumentStatistics(text: document.text)
+        analysisStore.snapshot?.statistics ?? DocumentStatistics(text: document.text)
     }
 
     private var documentContext: DocumentContext {
@@ -95,6 +96,7 @@ struct EditorWorkspace: View {
                  : imageDropError ?? "")
         }
         .onAppear {
+            analysisStore.update(source: document.text)
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
             } else {
@@ -116,6 +118,12 @@ struct EditorWorkspace: View {
                 break
             }
         }
+        .onChange(of: document.text) { _, newText in
+            analysisStore.update(source: newText)
+        }
+        .onDisappear {
+            analysisStore.cancel()
+        }
     }
 
     @ViewBuilder
@@ -128,19 +136,27 @@ struct EditorWorkspace: View {
                 sourceEditor
                     .frame(minWidth: 280)
                 MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                                onToggleTask: toggleTask)
+                                onToggleTask: previewTaskAction,
+                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true)
                     .frame(minWidth: 280)
             }
         case .preview:
             MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                            onToggleTask: toggleTask)
+                            onToggleTask: previewTaskAction,
+                            snapshot: analysisStore.snapshot, usesSharedAnalysis: true)
         }
+    }
+
+    private var previewTaskAction: ((Int) -> Void)? {
+        guard analysisStore.snapshot?.source == document.text else { return nil }
+        return { toggleTask(at: $0) }
     }
 
     private var sourceEditor: some View {
         MarkdownTextEditor(text: $document.text, model: editorModel,
                            textStyle: settingsStore.textStyle(for: fileURL),
                            layoutOptions: settingsStore.layoutOptions(),
+                           sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage)
     }

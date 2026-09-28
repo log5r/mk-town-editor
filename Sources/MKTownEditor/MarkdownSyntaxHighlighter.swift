@@ -1,8 +1,8 @@
 import AppKit
 import Foundation
 
-struct MarkdownSyntaxSpan: Equatable {
-    enum Role: Equatable {
+struct MarkdownSyntaxSpan: Equatable, Sendable {
+    enum Role: Equatable, Sendable {
         case heading
         case code
         case link
@@ -17,7 +17,6 @@ struct MarkdownSyntaxSpan: Equatable {
     let role: Role
 }
 
-@MainActor
 enum MarkdownSyntaxHighlighter {
     private static let quoteExpression = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)+"#)
     private static let listExpression = try! NSRegularExpression(
@@ -30,9 +29,9 @@ enum MarkdownSyntaxHighlighter {
         pattern: #"(?<!!)\[[^\]\n]+\](?:\([^\n]*?\)|\[[^\]\n]*\])"#
     )
 
-    static func spans(in text: String) -> [MarkdownSyntaxSpan] {
+    static func spans(in text: String, analysis: MarkdownAnalysis? = nil) -> [MarkdownSyntaxSpan] {
         let source = text as NSString
-        let analysis = MarkdownAnalysis(text)
+        let analysis = analysis ?? MarkdownAnalysis(text)
         let codeBlocks = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
         var result: [MarkdownSyntaxSpan] = []
         for block in analysis.blocks {
@@ -107,19 +106,21 @@ enum MarkdownSyntaxHighlighter {
         return result
     }
 
-    static func apply(to textView: NSTextView) {
+    @MainActor
+    static func apply(to textView: NSTextView, spans providedSpans: [MarkdownSyntaxSpan]? = nil) {
         guard !textView.hasMarkedText(), let layoutManager = textView.layoutManager else { return }
         let length = (textView.string as NSString).length
         guard length > 0 else { return }
         let fullRange = NSRange(location: 0, length: length)
         layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
-        for span in spans(in: textView.string)
+        for span in providedSpans ?? spans(in: textView.string)
         where span.range.length > 0 && NSMaxRange(span.range) <= length {
             layoutManager.addTemporaryAttribute(.foregroundColor, value: color(for: span.role),
                                                  forCharacterRange: span.range)
         }
     }
 
+    @MainActor
     private static func color(for role: MarkdownSyntaxSpan.Role) -> NSColor {
         switch role {
         case .heading: .systemBlue
