@@ -52,6 +52,10 @@ struct EditorWorkspace: View {
     @State private var showingQuickOpen = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
+    @State private var showingPreviewSearch = false
+    @State private var previewSearchQuery = ""
+    @State private var previewSearchCaseSensitive = false
+    @State private var previewSearchRange: NSRange?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -160,6 +164,12 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
         .focusedSceneValue(\.searchWorkspaceAction) { showingWorkspaceSearch = true }
         .focusedSceneValue(\.replaceWorkspaceAction) { showingWorkspaceReplace = true }
+        .focusedSceneValue(\.previewSearchActions,
+            mode.wrappedValue == .preview ? PreviewSearchActions(
+                show: { showingPreviewSearch = true },
+                next: { navigatePreviewSearch(backwards: false) },
+                previous: { navigatePreviewSearch(backwards: true) }
+            ) : nil)
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,
@@ -224,6 +234,13 @@ struct EditorWorkspace: View {
             WorkspaceReplaceSheet(currentDocumentURL: fileURL) {
                 workspaceStore.refresh(force: true)
             }
+        }
+        .sheet(isPresented: $showingPreviewSearch) {
+            PreviewSearchSheet(query: $previewSearchQuery,
+                               caseSensitive: $previewSearchCaseSensitive,
+                               source: document.text,
+                               selectedLocation: previewSearchRange?.location,
+                               onNavigate: navigatePreviewMatch)
         }
         .sheet(item: $fileAction) { action in
             if let root = workspaceStore.rootURL {
@@ -445,11 +462,15 @@ struct EditorWorkspace: View {
         }
         .onChange(of: document.text) { _, newText in
             analysisStore.update(source: newText)
+            previewSearchRange = nil
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
         }
+        .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
+        .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receivePendingDocumentLink()
+            if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
         }
         .onChange(of: documentLinkNavigation.pending) { _, _ in
             receivePendingDocumentLink()
@@ -474,6 +495,7 @@ struct EditorWorkspace: View {
                             onToggleTask: previewTaskAction,
                             snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                             navigationTarget: previewNavigationTarget,
+                            searchRange: previewSearchRange,
                             onOpenHeading: navigateToHeading,
                             onOpenDocument: openLinkedDocument,
                             onRevealSource: revealSource,
@@ -517,6 +539,7 @@ struct EditorWorkspace: View {
                                 onToggleTask: previewTaskAction,
                                 snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                                 navigationTarget: previewNavigationTarget,
+                                searchRange: previewSearchRange,
                                 onOpenHeading: navigateToHeading,
                                 onOpenDocument: openLinkedDocument,
                                 onVisibleBlockChange: synchronizeEditor(to:),
@@ -971,6 +994,26 @@ struct EditorWorkspace: View {
                                                  in: snapshot.analysis) else { return }
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+    }
+
+    private func navigatePreviewSearch(backwards: Bool) {
+        let matches = PreviewSearch.matches(in: document.text, query: previewSearchQuery,
+                                            caseSensitive: previewSearchCaseSensitive)
+        guard let match = PreviewSearch.next(in: matches, after: previewSearchRange?.location,
+                                             backwards: backwards) else {
+            showingPreviewSearch = true
+            return
+        }
+        navigatePreviewMatch(match)
+    }
+
+    private func navigatePreviewMatch(_ match: PreviewSearchMatch) {
+        let destination = NavigationPoint(documentURL: fileURL,
+                                          utf16Location: match.range.location)
+        navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        previewSearchRange = match.range
+        editorModel.selectAndReveal(match.range)
+        scrollPreview(to: match.range.location)
     }
 
     private func synchronizePreview(to sourceLocation: Int) {
