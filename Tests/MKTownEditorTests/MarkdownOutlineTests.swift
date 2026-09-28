@@ -46,4 +46,31 @@ final class MarkdownOutlineTests: XCTestCase {
         XCTAssertEqual(MarkdownOutline.search("", in: entries), entries)
         XCTAssertTrue(MarkdownOutline.search("missing", in: entries).isEmpty)
     }
+
+    func testSectionMoveCarriesChildHeadingsAndUsesOneEdit() throws {
+        let source = "# A\n本文\n## 子\n子本文\n\n# B\n別本文\n\n# C\n末尾"
+        let location = (source as NSString).range(of: "# A").location
+        let edit = try XCTUnwrap(MarkdownSectionMove.edit(in: source,
+            headingLocation: location, direction: .down))
+        let moved = try XCTUnwrap(edit.applying(to: source))
+        XCTAssertTrue(moved.hasPrefix("# B\n別本文\n\n# A\n本文\n## 子\n子本文"))
+        XCTAssertTrue(moved.hasSuffix("# C\n末尾"))
+        XCTAssertEqual(edit.selection.location, (moved as NSString).range(of: "# A").location)
+        XCTAssertNil(MarkdownSectionMove.edit(in: source,
+            headingLocation: location, direction: .up))
+    }
+
+    func testSectionMovePreservesFinalNewlinePolicyAndParentBoundary() throws {
+        let source = "# Parent\r\n## First\r\nOne\r\n\r\n## Second\r\nTwo\r\n# Other\r\nEnd"
+        let first = (source as NSString).range(of: "## First").location
+        let edit = try XCTUnwrap(MarkdownSectionMove.edit(in: source,
+            headingLocation: first, direction: .down))
+        let moved = try XCTUnwrap(edit.applying(to: source))
+        XCTAssertTrue(moved.contains("# Parent\r\n## Second\r\nTwo\r\n\r\n## First\r\nOne"), moved.debugDescription)
+        XCTAssertTrue(moved.hasSuffix("# Other\r\nEnd"))
+        XCTAssertFalse(moved.hasSuffix("\n"))
+        let other = (source as NSString).range(of: "# Other").location
+        XCTAssertNil(MarkdownSectionMove.edit(in: source,
+            headingLocation: other, direction: .down))
+    }
 }

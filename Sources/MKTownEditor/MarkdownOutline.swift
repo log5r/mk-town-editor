@@ -31,6 +31,72 @@ enum MarkdownOutline {
     }
 }
 
+enum SectionMoveDirection { case up, down }
+
+enum MarkdownSectionMove {
+    static func edit(in text: String, headingLocation: Int,
+                     direction: SectionMoveDirection) -> MarkdownEdit? {
+        let source = text as NSString
+        let headings = MarkdownOutline.entries(in: MarkdownAnalysis(text))
+        guard let selected = headings.firstIndex(where: {
+            $0.sourceRange.location == headingLocation
+        }) else { return nil }
+        var parents: [Int?] = []
+        var stack: [Int] = []
+        for index in headings.indices {
+            while let last = stack.last, headings[last].level >= headings[index].level {
+                stack.removeLast()
+            }
+            parents.append(stack.last)
+            stack.append(index)
+        }
+        let siblings = headings.indices.filter {
+            headings[$0].level == headings[selected].level && parents[$0] == parents[selected]
+        }
+        guard let position = siblings.firstIndex(of: selected) else { return nil }
+        let other: Int
+        switch direction {
+        case .up:
+            guard position > 0 else { return nil }
+            other = siblings[position - 1]
+        case .down:
+            guard position + 1 < siblings.count else { return nil }
+            other = siblings[position + 1]
+        }
+        func end(of index: Int) -> Int {
+            headings.dropFirst(index + 1).first {
+                $0.level <= headings[index].level
+            }?.sourceRange.location ?? source.length
+        }
+        let first = min(selected, other)
+        let second = max(selected, other)
+        let firstStart = headings[first].sourceRange.location
+        let secondStart = headings[second].sourceRange.location
+        let lastEnd = end(of: second)
+        guard end(of: first) == secondStart else { return nil }
+        let firstText = source.substring(with: NSRange(location: firstStart,
+            length: secondStart - firstStart))
+        let secondText = source.substring(with: NSRange(location: secondStart,
+            length: lastEnd - secondStart))
+        func parts(_ value: String) -> (body: String, separator: String) {
+            let raw = value as NSString
+            let trailing = raw.range(of: "[\\r\\n]+$", options: .regularExpression)
+            guard trailing.location != NSNotFound else { return (value, "") }
+            return (raw.substring(to: trailing.location), raw.substring(with: trailing))
+        }
+        let firstParts = parts(firstText)
+        let secondParts = parts(secondText)
+        let replacement = secondParts.body + firstParts.separator +
+            firstParts.body + secondParts.separator
+        let movedStart = direction == .up ? firstStart :
+            firstStart + (secondParts.body as NSString).length +
+                (firstParts.separator as NSString).length
+        return MarkdownEdit(range: NSRange(location: firstStart, length: lastEnd - firstStart),
+            replacement: replacement,
+            selection: NSRange(location: movedStart, length: 0))
+    }
+}
+
 enum MarkdownSelectionExpansion {
     static func next(in text: String, selection: NSRange) -> NSRange? {
         let length = (text as NSString).length

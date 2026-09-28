@@ -971,6 +971,20 @@ struct EditorWorkspace: View {
                     .padding(.leading, CGFloat(entry.level - 1) * 12)
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                Button("セクションを上へ移動") {
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .up)
+                }
+                .disabled(editorModel.textView == nil ||
+                    MarkdownSectionMove.edit(in: document.text,
+                        headingLocation: entry.sourceRange.location, direction: .up) == nil)
+                Button("セクションを下へ移動") {
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .down)
+                }
+                .disabled(editorModel.textView == nil ||
+                    MarkdownSectionMove.edit(in: document.text,
+                        headingLocation: entry.sourceRange.location, direction: .down) == nil)
+            }
             .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
             .disabled(analysisStore.snapshot?.source != document.text)
             .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
