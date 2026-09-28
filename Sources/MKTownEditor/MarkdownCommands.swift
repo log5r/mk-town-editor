@@ -12,6 +12,17 @@ private struct GoToHeadingActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct NavigationHistoryActions {
+    let canGoBack: Bool
+    let canGoForward: Bool
+    let goBack: () -> Void
+    let goForward: () -> Void
+}
+
+private struct NavigationHistoryActionsKey: FocusedValueKey {
+    typealias Value = NavigationHistoryActions
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -26,16 +37,28 @@ extension FocusedValues {
         get { self[GoToHeadingActionKey.self] }
         set { self[GoToHeadingActionKey.self] = newValue }
     }
+    var navigationHistoryActions: NavigationHistoryActions? {
+        get { self[NavigationHistoryActionsKey.self] }
+        set { self[NavigationHistoryActionsKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
     @FocusedValue(\.markdownEditorModel) private var editorModel
     @FocusedValue(\.goToLineAction) private var goToLineAction
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
+    @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
         CommandMenu("移動") {
+            Button("戻る") { navigationHistoryActions?.goBack() }
+                .keyboardShortcut("[", modifiers: [.command, .option])
+                .disabled(navigationHistoryActions?.canGoBack != true)
+            Button("進む") { navigationHistoryActions?.goForward() }
+                .keyboardShortcut("]", modifiers: [.command, .option])
+                .disabled(navigationHistoryActions?.canGoForward != true)
+            Divider()
             Button("指定行へ移動…") { goToLineAction?() }
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(goToLineAction == nil)
