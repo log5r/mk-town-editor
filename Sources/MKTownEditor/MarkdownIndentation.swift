@@ -10,7 +10,9 @@ enum MarkdownIndentation {
 
     private static let quotePattern = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)+"#)
 
-    static func edit(in text: String, selection: NSRange, direction: Direction) -> MarkdownEdit? {
+    static func edit(in text: String, selection: NSRange, direction: Direction,
+                     listIndentWidth: Int = 2, codeIndentWidth: Int = 4) -> MarkdownEdit? {
+        guard (2...8).contains(listIndentWidth), (2...8).contains(codeIndentWidth) else { return nil }
         let source = text as NSString
         guard selection.location <= source.length,
               selection.length <= source.length - selection.location else { return nil }
@@ -21,7 +23,7 @@ enum MarkdownIndentation {
                   selectedLines.contains(where: { NSLocationInRange($0, block.sourceRange) }) else { return false }
             guard direction == .outdent else { return true }
             let position = indentationStart(in: source, lineStart: block.sourceRange.location)
-            return change(at: position, in: source, amount: 2, direction: .outdent) != nil
+            return change(at: position, in: source, amount: listIndentWidth, direction: .outdent) != nil
         }
         let selectedIDs = Set(listBlocks.map(\.id))
         let blocksByID = Dictionary(uniqueKeysWithValues: analysis.blocks.map { ($0.id, $0) })
@@ -36,8 +38,8 @@ enum MarkdownIndentation {
         guard !listLines.isEmpty || !codeLines.isEmpty else { return nil }
 
         if selection.length == 0, listLines.isEmpty, !codeLines.isEmpty, direction == .indent {
-            return MarkdownEdit(range: selection, replacement: "    ",
-                                selection: NSRange(location: selection.location + 4, length: 0))
+            return MarkdownEdit(range: selection, replacement: String(repeating: " ", count: codeIndentWidth),
+                                selection: NSRange(location: selection.location + codeIndentWidth, length: 0))
         }
 
         var changes: [Change] = []
@@ -47,12 +49,12 @@ enum MarkdownIndentation {
                 continue
             }
             let position = indentationStart(in: source, lineStart: line)
-            if let change = change(at: position, in: source, amount: 2, direction: direction) {
+            if let change = change(at: position, in: source, amount: listIndentWidth, direction: direction) {
                 changes.append(change)
             }
         }
         for line in codeLines.sorted() {
-            if let change = change(at: line, in: source, amount: 4, direction: direction) {
+            if let change = change(at: line, in: source, amount: codeIndentWidth, direction: direction) {
                 changes.append(change)
             }
         }

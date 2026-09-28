@@ -71,6 +71,9 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertNil(decoded.fontChoice)
         XCTAssertNil(decoded.horizontalMargin)
         XCTAssertNil(decoded.verticalMargin)
+        XCTAssertNil(decoded.tabWidth)
+        XCTAssertNil(decoded.listIndentWidth)
+        XCTAssertNil(decoded.codeIndentWidth)
     }
 
     func testTextStyleResolvesFolderSizeAndAppAppearance() {
@@ -111,6 +114,23 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(store.app.fontSize, 13)
         XCTAssertEqual(store.app.fontChoice, .system)
         XCTAssertEqual(store.app.lineSpacing, 7)
+    }
+
+    func testLayoutOptionsPersistAndTabWidthIsIndependentOfIndentWidth() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var app = store.app
+        app.wrapsLines = false
+        app.tabWidth = 6
+        app.listIndentWidth = 4
+        app.codeIndentWidth = 8
+        store.setAppSettings(app)
+
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.layoutOptions(), EditorLayoutOptions(
+            wrapsLines: false, listIndentWidth: 4, codeIndentWidth: 8
+        ))
+        XCTAssertEqual(restored.textStyle(for: nil).tabWidth, 6)
     }
 
     private func isolatedDefaults() -> UserDefaults {

@@ -22,6 +22,16 @@ struct EditorPreferencesView: View {
             Stepper(value: binding(\.verticalMargin, default: 18), in: 8...48, step: 2) {
                 Text("上下の余白: \(Int(settingsStore.app.verticalMargin ?? 18)) pt")
             }
+            Toggle("行を折り返す", isOn: binding(\.wrapsLines))
+            Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
+                Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
+            }
+            Stepper(value: binding(\.listIndentWidth, default: 2), in: 2...8) {
+                Text("リストの字下げ: \(settingsStore.app.listIndentWidth ?? 2) 文字")
+            }
+            Stepper(value: binding(\.codeIndentWidth, default: 4), in: 2...8) {
+                Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
+            }
         }
         .formStyle(.grouped)
         .frame(width: 430)

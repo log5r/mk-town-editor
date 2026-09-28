@@ -18,8 +18,39 @@ final class EditorTextStyleTests: XCTestCase {
         XCTAssertEqual(textView.font?.pointSize, 17)
         XCTAssertEqual(textView.textContainerInset, NSSize(width: 22, height: 16))
         XCTAssertEqual(textView.defaultParagraphStyle?.lineSpacing, 6)
+        XCTAssertGreaterThan(textView.defaultParagraphStyle?.defaultTabInterval ?? 0, 0)
         XCTAssertEqual(textView.string, source)
         XCTAssertEqual(textView.selectedRange(), selection)
         XCTAssertFalse(textView.undoManager?.canUndo ?? false)
+    }
+
+    func testTabWidthAndWrappingUpdateTextContainerAndScrollers() {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 240, height: 100))
+        let textView = NSTextView(frame: scrollView.contentView.bounds)
+        scrollView.documentView = textView
+        let style = EditorTextStyle(tabWidth: 6)
+        style.apply(to: textView)
+        let space = (" " as NSString).size(withAttributes: [.font: textView.font!]).width
+        XCTAssertEqual(textView.defaultParagraphStyle?.defaultTabInterval ?? -1, space * 6, accuracy: 0.01)
+
+        EditorLayoutOptions(wrapsLines: false).apply(to: textView, in: scrollView)
+        XCTAssertTrue(scrollView.hasHorizontalScroller)
+        XCTAssertFalse(textView.textContainer!.widthTracksTextView)
+        XCTAssertTrue(textView.isHorizontallyResizable)
+        XCTAssertEqual(textView.textContainer!.containerSize.width, CGFloat.greatestFiniteMagnitude)
+
+        textView.string = String(repeating: "W", count: 120)
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        EditorLayoutOptions(wrapsLines: false).synchronizeWidth(of: textView, in: scrollView)
+        XCTAssertGreaterThan(textView.frame.width, scrollView.contentSize.width)
+
+        textView.string = "short"
+        EditorLayoutOptions(wrapsLines: false).synchronizeWidth(of: textView, in: scrollView)
+        XCTAssertEqual(textView.frame.width, scrollView.contentSize.width)
+
+        EditorLayoutOptions(wrapsLines: true).apply(to: textView, in: scrollView)
+        XCTAssertFalse(scrollView.hasHorizontalScroller)
+        XCTAssertTrue(textView.textContainer!.widthTracksTextView)
+        XCTAssertFalse(textView.isHorizontallyResizable)
     }
 }
