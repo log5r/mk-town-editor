@@ -211,6 +211,12 @@ struct WorkspaceFileOperationSheet: View {
                         _ = try WorkspaceFileOperations.moveToTrash(source, root: root)
                     }
                 }.value
+                switch action {
+                case let .rename(source), let .move(source):
+                    if let movePlan { workspaceStore.remapPins(from: source, to: movePlan.destinationURL) }
+                case let .trash(source): workspaceStore.removePins(under: source)
+                case .createDocument, .createFolder: break
+                }
                 dismiss()
                 onComplete()
             } catch {

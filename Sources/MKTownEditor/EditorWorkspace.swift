@@ -489,14 +489,51 @@ struct EditorWorkspace: View {
                         Image(systemName: "plus")
                     }
                     .help("ワークスペースに作成")
+                    Menu {
+                        Picker("並び順", selection: Binding(
+                            get: { workspaceStore.viewSettings.sortOrder },
+                            set: { workspaceStore.setSortOrder($0) }
+                        )) {
+                            ForEach(WorkspaceViewSettings.SortOrder.allCases, id: \.self) { value in
+                                Text(value.title).tag(value)
+                            }
+                        }
+                        Picker("表示", selection: Binding(
+                            get: { workspaceStore.viewSettings.filter },
+                            set: { workspaceStore.setFileFilter($0) }
+                        )) {
+                            ForEach(WorkspaceViewSettings.FileFilter.allCases, id: \.self) { value in
+                                Text(value.title).tag(value)
+                            }
+                        }
+                        Divider()
+                        Button("すべての拡張子") { workspaceStore.setExtensionFilter(nil) }
+                        ForEach(workspaceStore.availableExtensions, id: \.self) { ext in
+                            Button {
+                                workspaceStore.setExtensionFilter(ext)
+                            } label: {
+                                if workspaceStore.viewSettings.fileExtension == ext {
+                                    Label(".\(ext)", systemImage: "checkmark")
+                                } else {
+                                    Text(".\(ext)")
+                                }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "line.3.horizontal.decrease")
+                    }
+                    .help("並び順とフィルター")
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             List {
-                OutlineGroup(workspaceStore.nodes, children: \.children) { node in
+                OutlineGroup(workspaceStore.visibleNodes, children: \.children) { node in
                     if node.isDirectory {
-                        Label(node.name, systemImage: "folder")
+                        HStack {
+                            Label(node.name, systemImage: "folder")
+                            if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
+                        }
                             .contextMenu { fileContextActions(for: node) }
                     } else {
                         Button {
@@ -509,7 +546,10 @@ struct EditorWorkspace: View {
                                 }
                             }
                         } label: {
-                            Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
+                            HStack {
+                                Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
+                                if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
+                            }
                         }
                         .buttonStyle(.plain)
                         .contextMenu { fileContextActions(for: node) }
@@ -535,6 +575,10 @@ struct EditorWorkspace: View {
 
     @ViewBuilder
     private func fileContextActions(for node: WorkspaceNode) -> some View {
+        Button(isPinned(node) ? "ピン留めを外す" : "ピン留め") {
+            workspaceStore.togglePin(node.url)
+        }
+        Divider()
         if node.isDirectory {
             Button("新規Markdown書類…") { fileAction = .createDocument(node.url) }
             Button("新規フォルダ…") { fileAction = .createFolder(node.url) }
@@ -543,6 +587,11 @@ struct EditorWorkspace: View {
         Button("名前を変更…") { fileAction = .rename(node.url) }
         Button("移動…") { fileAction = .move(node.url) }
         Button("ゴミ箱へ移動…", role: .destructive) { fileAction = .trash(node.url) }
+    }
+
+    private func isPinned(_ node: WorkspaceNode) -> Bool {
+        guard let root = workspaceStore.rootURL else { return false }
+        return workspaceStore.viewSettings.isPinned(node.url, root: root)
     }
 
     private var outlineSidebar: some View {
