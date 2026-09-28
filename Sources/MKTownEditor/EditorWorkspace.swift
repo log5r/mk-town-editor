@@ -57,6 +57,8 @@ struct EditorWorkspace: View {
     @State private var previewSearchCaseSensitive = false
     @State private var previewSearchRange: NSRange?
     @State private var showingStatistics = false
+    @State private var writingGoalInput = ""
+    @State private var unsavedSessionBaseline: Int?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -488,6 +490,12 @@ struct EditorWorkspace: View {
                 restorePosition(for: fileURL)
             }
             analysisStore.update(source: document.text)
+            if let fileURL {
+                settingsStore.ensureWritingSession(for: fileURL,
+                    initialCharacters: statistics.characters)
+            } else if unsavedSessionBaseline == nil {
+                unsavedSessionBaseline = statistics.characters
+            }
             receivePendingDocumentLink()
             receivePendingSearchPosition()
             workspaceStore.refresh()
@@ -534,6 +542,8 @@ struct EditorWorkspace: View {
                 if !settingsStore.hasDocumentState(for: newURL) {
                     settingsStore.setMode(unsavedMode, for: newURL)
                 }
+                settingsStore.ensureWritingSession(for: newURL,
+                    initialCharacters: unsavedSessionBaseline ?? statistics.characters)
             case let (oldURL?, nil):
                 unsavedMode = settingsStore.mode(for: oldURL)
             case (nil, nil):
@@ -1256,9 +1266,14 @@ struct EditorWorkspace: View {
                         Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Divider()
+                        writingProgressView
                     }
                     .padding(16)
-                    .frame(width: 340, alignment: .leading)
+                    .frame(width: 370, alignment: .leading)
+                    .onAppear { writingGoalInput = fileURL.flatMap {
+                        settingsStore.displayState(for: $0)?.writingGoal.map(String.init)
+                    } ?? "" }
                 }
         }
         .font(.caption)
@@ -1292,6 +1307,49 @@ struct EditorWorkspace: View {
             return "—"
         }
         return "約\(minutes) 分"
+    }
+
+    private var writingProgressView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("執筆目標とセッション").font(.headline)
+            if let fileURL {
+                let state = settingsStore.displayState(for: fileURL)
+                if let goal = state?.writingGoal {
+                    ProgressView(value: min(1, Double(statistics.characters) / Double(goal))) {
+                        Text("\(statistics.characters) / \(goal) 文字")
+                    }
+                    Text(statistics.characters >= goal ? "目標を達成しました" : "目標まで \(goal - statistics.characters) 文字")
+                        .font(.caption)
+                }
+                HStack {
+                    TextField("文字数目標", text: $writingGoalInput)
+                        .textFieldStyle(.roundedBorder)
+                    Button("設定") {
+                        settingsStore.setWritingGoal(Int(writingGoalInput), for: fileURL)
+                    }
+                    .disabled((Int(writingGoalInput) ?? 0) <= 0)
+                    if state?.writingGoal != nil {
+                        Button("解除") {
+                            settingsStore.setWritingGoal(nil, for: fileURL)
+                            writingGoalInput = ""
+                        }
+                    }
+                }
+                let change = statistics.characters - (state?.sessionBaselineCharacters ?? statistics.characters)
+                Text("セッションの増減: \(change >= 0 ? "+" : "")\(change) 文字")
+                Button("セッションをここから開始") {
+                    settingsStore.resetWritingSession(for: fileURL,
+                        currentCharacters: statistics.characters)
+                }
+                .font(.caption)
+            } else {
+                Text("目標を保存するには書類を保存してください。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                let change = statistics.characters - (unsavedSessionBaseline ?? statistics.characters)
+                Text("このウインドウの増減: \(change >= 0 ? "+" : "")\(change) 文字")
+            }
+        }
     }
 
     private func formatButton(_ command: EditorCommand) -> some View {

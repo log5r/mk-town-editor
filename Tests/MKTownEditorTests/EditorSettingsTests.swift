@@ -120,6 +120,27 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.readingEstimate, estimate)
     }
 
+    func testWritingGoalAndSessionBaselinePersistAndFollowRename() {
+        let defaults = isolatedDefaults()
+        let oldURL = URL(fileURLWithPath: "/tmp/work/draft.md")
+        let newURL = URL(fileURLWithPath: "/tmp/work/final.md")
+        let store = EditorSettingsStore(defaults: defaults)
+        store.ensureWritingSession(for: oldURL, initialCharacters: 120)
+        store.ensureWritingSession(for: oldURL, initialCharacters: 140)
+        store.setWritingGoal(500, for: oldURL)
+        store.moveDocumentState(from: oldURL, to: newURL)
+
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(restored.displayState(for: oldURL))
+        XCTAssertEqual(restored.displayState(for: newURL)?.writingGoal, 500)
+        XCTAssertEqual(restored.displayState(for: newURL)?.sessionBaselineCharacters, 120)
+        restored.resetWritingSession(for: newURL, currentCharacters: 150)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults)
+            .displayState(for: newURL)?.sessionBaselineCharacters, 150)
+        restored.setWritingGoal(nil, for: newURL)
+        XCTAssertNil(restored.displayState(for: newURL)?.writingGoal)
+    }
+
     func testOldAppSettingsDecodeWithoutImageImportMode() throws {
         let data = Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8)
         let decoded = try JSONDecoder().decode(AppEditorSettings.self, from: data)

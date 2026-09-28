@@ -128,6 +128,8 @@ struct DocumentDisplayState: Codable, Equatable {
     var splitRatio: Double? = nil
     var sidebarTab: String? = nil
     var sidebarVisible: Bool? = nil
+    var writingGoal: Int? = nil
+    var sessionBaselineCharacters: Int? = nil
 }
 
 private struct StoredEditorSettings: Codable, Equatable {
@@ -251,6 +253,31 @@ final class EditorSettingsStore: ObservableObject {
 
     func displayState(for documentURL: URL) -> DocumentDisplayState? {
         values.documents[Self.key(for: documentURL)]
+    }
+
+    func setWritingGoal(_ goal: Int?, for documentURL: URL) {
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        state.writingGoal = goal.flatMap { $0 > 0 ? $0 : nil }
+        values.documents[key] = state
+        save()
+    }
+
+    func ensureWritingSession(for documentURL: URL, initialCharacters: Int) {
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        guard state.sessionBaselineCharacters == nil else { return }
+        state.sessionBaselineCharacters = max(0, initialCharacters)
+        values.documents[key] = state
+        save()
+    }
+
+    func resetWritingSession(for documentURL: URL, currentCharacters: Int) {
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        state.sessionBaselineCharacters = max(0, currentCharacters)
+        values.documents[key] = state
+        save()
     }
 
     func savePosition(for documentURL: URL, selection: NSRange, scrollX: Double, scrollY: Double,
