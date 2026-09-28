@@ -55,6 +55,7 @@ enum MarkdownFormattingStyle {
     case heading(level: Int)
     case quote
     case unorderedList
+    case orderedList
 }
 
 struct MarkdownEdit: Equatable {
@@ -94,6 +95,8 @@ enum MarkdownFormatter {
             return prefixLines(text, selection: safeSelection, prefix: "> ")
         case .unorderedList:
             return prefixLines(text, selection: safeSelection, prefix: "- ")
+        case .orderedList:
+            return orderedList(text, selection: safeSelection)
         }
     }
 
@@ -269,6 +272,58 @@ enum MarkdownFormatter {
             replacement: replacement,
             selection: NSRange(location: lineRange.location, length: (replacement as NSString).length)
         )
+    }
+
+    private static let listMarkerExpression = try! NSRegularExpression(
+        pattern: #"^([ \t]*)(?:[-+*][ \t]+|([0-9]{1,9})[.)][ \t]+)(.*)$"#
+    )
+
+    private static func orderedList(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let source = text as NSString
+        let lineRange = source.lineRange(for: selection)
+        if lineRange.length == 0 {
+            return MarkdownEdit(range: lineRange, replacement: "1. ",
+                                selection: NSRange(location: lineRange.location + 3, length: 0))
+        }
+        var lines: [(indent: String, content: String, ending: String, start: Int?)] = []
+        var cursor = lineRange.location
+        repeat {
+            var lineStart = 0
+            var lineEnd = 0
+            var contentsEnd = 0
+            source.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
+                                for: NSRange(location: cursor, length: 0))
+            let raw = source.substring(with: NSRange(location: lineStart, length: contentsEnd - lineStart))
+            let ending = source.substring(with: NSRange(location: contentsEnd, length: lineEnd - contentsEnd))
+            if let match = listMarkerExpression.firstMatch(in: raw,
+                                                           range: NSRange(location: 0, length: (raw as NSString).length)) {
+                let nsRaw = raw as NSString
+                let numberRange = match.range(at: 2)
+                lines.append((nsRaw.substring(with: match.range(at: 1)),
+                              nsRaw.substring(with: match.range(at: 3)), ending,
+                              numberRange.location == NSNotFound ? nil : Int(nsRaw.substring(with: numberRange))))
+            } else {
+                let indent = String(raw.prefix(while: { $0 == " " || $0 == "\t" }))
+                lines.append((indent, String(raw.dropFirst(indent.count)), ending, nil))
+            }
+            cursor = lineEnd
+        } while cursor < NSMaxRange(lineRange)
+
+        if selection.length == 0, lines.count == 1, lines[0].content.isEmpty {
+            let replacement = lines[0].indent + "1. " + lines[0].ending
+            return MarkdownEdit(range: lineRange, replacement: replacement,
+                                selection: NSRange(location: lineRange.location +
+                                                   (lines[0].indent as NSString).length + 3, length: 0))
+        }
+
+        var number = lines.first(where: { !$0.content.isEmpty })?.start ?? 1
+        let replacement = lines.map { line in
+            guard !line.content.isEmpty else { return line.indent + line.ending }
+            defer { number += 1 }
+            return line.indent + "\(number). " + line.content + line.ending
+        }.joined()
+        let newSelection = NSRange(location: lineRange.location, length: (replacement as NSString).length)
+        return MarkdownEdit(range: lineRange, replacement: replacement, selection: newSelection)
     }
 
     private static func heading(_ text: String, selection: NSRange, level: Int) -> MarkdownEdit {

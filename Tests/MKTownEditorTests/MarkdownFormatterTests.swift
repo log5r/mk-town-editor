@@ -240,4 +240,43 @@ final class MarkdownFormatterTests: XCTestCase {
                                            selection: (source as NSString).range(of: "literal"))
         XCTAssertEqual(edit.applying(to: source), "`~~~~literal~~~~`")
     }
+
+    func testOrderedListNumbersMultipleSelectedLinesAndLeavesOtherLines() {
+        let source = "前\n一\n二\n後"
+        let edit = MarkdownFormatter.apply(.orderedList, to: source,
+                                           selection: (source as NSString).range(of: "一\n二"))
+        XCTAssertEqual(edit.applying(to: source), "前\n1. 一\n2. 二\n後")
+    }
+
+    func testOrderedListConvertsExistingBulletsAndRenumbersFromExistingStart() {
+        let source = "- one\n+ two\n* three"
+        let edit = MarkdownFormatter.apply(.orderedList, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "1. one\n2. two\n3. three")
+
+        let numbered = "3) one\n8. two"
+        let renumbered = MarkdownFormatter.apply(.orderedList, to: numbered,
+                                                 selection: NSRange(location: 0, length: (numbered as NSString).length))
+        XCTAssertEqual(renumbered.applying(to: numbered), "3. one\n4. two")
+    }
+
+    func testOrderedListPreservesIndentBlankLinesAndCRLF() {
+        let source = "  - 🙂\r\n\r\n  * 次"
+        let edit = MarkdownFormatter.apply(.orderedList, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "  1. 🙂\r\n\r\n  2. 次")
+    }
+
+    func testOrderedListAtEmptyDocumentAndBlankLinePlacesCaretAfterMarker() {
+        for (source, location, expected) in [
+            ("", 0, "1. "),
+            ("前\n", 2, "前\n1. "),
+            ("前\n\n後", 2, "前\n1. \n後")
+        ] {
+            let edit = MarkdownFormatter.apply(.orderedList, to: source,
+                                               selection: NSRange(location: location, length: 0))
+            XCTAssertEqual(edit.applying(to: source), expected)
+            XCTAssertEqual(edit.selection, NSRange(location: location + 3, length: 0))
+        }
+    }
 }

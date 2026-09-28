@@ -9,10 +9,11 @@ enum EditorCommand: Hashable {
     case heading(level: Int)
     case quote
     case unorderedList
+    case orderedList
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .quote, .unorderedList]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .quote, .unorderedList, .orderedList]
 
     var title: String {
         switch self {
@@ -24,6 +25,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
         case .quote: "引用"
         case .unorderedList: "箇条書き"
+        case .orderedList: "番号付きリスト"
         case .find: "検索…"
         }
     }
@@ -38,6 +40,7 @@ enum EditorCommand: Hashable {
         case .heading: "number"
         case .quote: "text.quote"
         case .unorderedList: "list.bullet"
+        case .orderedList: "list.number"
         case .find: "magnifyingglass"
         }
     }
@@ -52,6 +55,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
         case .quote: (">", [.command, .shift])
         case .unorderedList: ("8", [.command, .shift])
+        case .orderedList: ("7", [.command, .shift])
         case .find: ("f", .command)
         }
     }
@@ -73,6 +77,7 @@ enum EditorCommand: Hashable {
         case let .heading(level): model.apply(.heading(level: level))
         case .quote: model.apply(.quote)
         case .unorderedList: model.apply(.unorderedList)
+        case .orderedList: model.apply(.orderedList)
         case .find: model.showFindBar()
         }
     }
