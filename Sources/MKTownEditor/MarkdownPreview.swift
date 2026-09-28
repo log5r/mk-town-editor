@@ -14,6 +14,7 @@ struct MarkdownPreview: View {
     var usesSharedAnalysis = false
     var navigationTarget: PreviewNavigationTarget?
     var onOpenHeading: ((String) -> Void)?
+    var onOpenDocument: ((URL) -> Void)?
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -61,14 +62,22 @@ struct MarkdownPreview: View {
                     }
                 }
                 .environment(\.openURL, OpenURLAction { url in
-                    guard let fragment = MarkdownHeadingIndex.localFragment(in: url),
-                          let onOpenHeading else { return .systemAction }
-                    onOpenHeading(fragment)
-                    return .handled
+                    if let fragment = MarkdownHeadingIndex.localFragment(in: url),
+                       let onOpenHeading {
+                        onOpenHeading(fragment)
+                        return .handled
+                    }
+                    if MarkdownDocumentLink(url: url, context: documentContext) != nil,
+                       let onOpenDocument {
+                        onOpenDocument(url)
+                        return .handled
+                    }
+                    return .systemAction
                 })
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
-                                    analysis: snapshot?.analysis, onOpenHeading: onOpenHeading)
+                                    analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
+                                    onOpenDocument: onOpenDocument)
             }
         }
     }
@@ -196,6 +205,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let documentContext: DocumentContext
     let analysis: MarkdownAnalysis?
     let onOpenHeading: ((String) -> Void)?
+    let onOpenDocument: ((URL) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -208,6 +218,8 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         let textView = NSTextView()
         textView.delegate = context.coordinator
         context.coordinator.onOpenHeading = onOpenHeading
+        context.coordinator.onOpenDocument = onOpenDocument
+        context.coordinator.documentContext = documentContext
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -229,18 +241,29 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         context.coordinator.onOpenHeading = onOpenHeading
+        context.coordinator.onOpenDocument = onOpenDocument
+        context.coordinator.documentContext = documentContext
         update(textView)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onOpenHeading: ((String) -> Void)?
+        var onOpenDocument: ((URL) -> Void)?
+        var documentContext = DocumentContext(fileURL: nil)
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             let url = link as? URL ?? (link as? String).flatMap(URL.init(string:))
-            guard let url, let fragment = MarkdownHeadingIndex.localFragment(in: url),
-                  let onOpenHeading else { return false }
-            onOpenHeading(fragment)
-            return true
+            guard let url else { return false }
+            if let fragment = MarkdownHeadingIndex.localFragment(in: url), let onOpenHeading {
+                onOpenHeading(fragment)
+                return true
+            }
+            if MarkdownDocumentLink(url: url, context: documentContext) != nil,
+               let onOpenDocument {
+                onOpenDocument(url)
+                return true
+            }
+            return false
         }
     }
 

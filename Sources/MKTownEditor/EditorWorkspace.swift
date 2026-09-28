@@ -4,7 +4,9 @@ struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
     @EnvironmentObject private var settingsStore: EditorSettingsStore
+    @EnvironmentObject private var documentLinkNavigation: DocumentLinkNavigation
     @Environment(\.undoManager) private var undoManager
+    @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
@@ -19,6 +21,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
     @State private var missingHeading: String?
+    @State private var documentLinkError: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -107,6 +110,14 @@ struct EditorWorkspace: View {
         } message: {
             Text("#\(missingHeading ?? "") に対応する見出しがありません。")
         }
+        .alert("リンク先を開けません", isPresented: Binding(
+            get: { documentLinkError != nil },
+            set: { if !$0 { documentLinkError = nil } }
+        )) {
+            Button("OK") { documentLinkError = nil }
+        } message: {
+            Text(documentLinkError ?? "")
+        }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft) { label, destination, title in
                 editorModel.commitLink(label: label, destination: destination, title: title)
@@ -142,6 +153,7 @@ struct EditorWorkspace: View {
         }
         .onAppear {
             analysisStore.update(source: document.text)
+            receivePendingDocumentLink()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
             } else {
@@ -167,6 +179,12 @@ struct EditorWorkspace: View {
         .onChange(of: document.text) { _, newText in
             analysisStore.update(source: newText)
         }
+        .onChange(of: analysisStore.snapshot?.source) { _, _ in
+            receivePendingDocumentLink()
+        }
+        .onChange(of: documentLinkNavigation.pending) { _, _ in
+            receivePendingDocumentLink()
+        }
         .onDisappear {
             analysisStore.cancel()
         }
@@ -185,7 +203,8 @@ struct EditorWorkspace: View {
                                 onToggleTask: previewTaskAction,
                                 snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                                 navigationTarget: previewNavigationTarget,
-                                onOpenHeading: navigateToHeading)
+                                onOpenHeading: navigateToHeading,
+                                onOpenDocument: openLinkedDocument)
                     .frame(minWidth: 280)
             }
         case .preview:
@@ -193,7 +212,8 @@ struct EditorWorkspace: View {
                             onToggleTask: previewTaskAction,
                             snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                             navigationTarget: previewNavigationTarget,
-                            onOpenHeading: navigateToHeading)
+                            onOpenHeading: navigateToHeading,
+                            onOpenDocument: openLinkedDocument)
         }
     }
 
@@ -256,6 +276,29 @@ struct EditorWorkspace: View {
             return
         }
         navigate(to: entry)
+    }
+
+    private func openLinkedDocument(_ url: URL) {
+        guard let link = MarkdownDocumentLink(url: url, context: documentContext) else { return }
+        if link.fileURL == fileURL {
+            if let fragment = link.fragment { navigateToHeading(fragment) }
+            return
+        }
+        documentLinkNavigation.request(link)
+        Task {
+            do {
+                try await openDocument(at: link.fileURL)
+            } catch {
+                documentLinkNavigation.cancel(for: link.fileURL)
+                documentLinkError = error.localizedDescription
+            }
+        }
+    }
+
+    private func receivePendingDocumentLink() {
+        guard let fileURL, analysisStore.snapshot?.source == document.text,
+              let fragment = documentLinkNavigation.take(for: fileURL) else { return }
+        navigateToHeading(fragment)
     }
 
     private var currentNavigationPoint: NavigationPoint {
