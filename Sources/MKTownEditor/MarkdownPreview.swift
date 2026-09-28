@@ -7,6 +7,7 @@ struct PreviewNavigationTarget: Equatable {
 }
 
 struct MarkdownPreview: View {
+    @StateObject private var renderCache = PreviewRenderCache()
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
@@ -27,13 +28,13 @@ struct MarkdownPreview: View {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
                 onVisibleBlockChange != nil || onRevealSource != nil {
-                let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
+                let layout = PreviewLayoutIndex(analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: 0) {
-                            ForEach(visibleBlocks, id: \.id) { block in
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(layout.visibleBlocks, id: \.id) { block in
                                 HStack(alignment: .top, spacing: 8) {
-                                    ForEach(0..<quoteDepth(of: block, in: analysis), id: \.self) { _ in
+                                    ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
                                         Rectangle()
                                             .fill(Color.secondary.opacity(0.5))
                                             .frame(width: 2)
@@ -106,9 +107,7 @@ struct MarkdownPreview: View {
 
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let rendered = PreviewTypography.scaled(
-            MarkdownRenderer.renderLeaf(block, in: analysis, documentContext: documentContext),
-            by: zoom)
+        let rendered = renderCache.render(block, in: analysis, context: documentContext, zoom: zoom)
         if case let .heading(level) = block.kind {
             Text(AttributedString(rendered))
                 .textSelection(.enabled)
@@ -134,23 +133,12 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            Text(AttributedString(PreviewTypography.scaled(
-                MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: false,
-                                            documentContext: documentContext), by: zoom)))
+            Text(AttributedString(renderCache.render(block, in: analysis, context: documentContext,
+                                                    zoom: zoom, showsTaskPrefix: false)))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func quoteDepth(of block: MarkdownBlock, in analysis: MarkdownAnalysis) -> Int {
-        var depth = 0
-        var parentID = block.parentID
-        while let id = parentID, let parent = analysis.blocks.first(where: { $0.id == id }) {
-            if parent.kind == .quote { depth += 1 }
-            parentID = parent.parentID
-        }
-        return depth
     }
 
     private func tableView(_ table: MarkdownTable, in analysis: MarkdownAnalysis) -> some View {
@@ -178,9 +166,8 @@ struct MarkdownPreview: View {
     ) -> some View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
-                Text(AttributedString(PreviewTypography.scaled(
-                    MarkdownRenderer.renderTableCell(cells[column], in: analysis,
-                                                     documentContext: documentContext), by: zoom)))
+                Text(AttributedString(renderCache.renderCell(cells[column], in: analysis,
+                    context: documentContext, zoom: zoom)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -267,7 +254,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
             .underlineStyle: NSUnderlineStyle.single.rawValue
         ]
         scrollView.documentView = textView
-        update(textView)
+        update(textView, coordinator: context.coordinator)
         return scrollView
     }
 
@@ -276,13 +263,16 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         context.coordinator.onOpenHeading = onOpenHeading
         context.coordinator.onOpenDocument = onOpenDocument
         context.coordinator.documentContext = documentContext
-        update(textView)
+        update(textView, coordinator: context.coordinator)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onOpenHeading: ((String) -> Void)?
         var onOpenDocument: ((URL) -> Void)?
         var documentContext = DocumentContext(fileURL: nil)
+        var renderedSource: String?
+        var renderedContext: DocumentContext?
+        var renderedZoom: Double?
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             let url = link as? URL ?? (link as? String).flatMap(URL.init(string:))
@@ -300,9 +290,15 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         }
     }
 
-    private func update(_ textView: NSTextView) {
+    private func update(_ textView: NSTextView, coordinator: Coordinator) {
+        guard coordinator.renderedSource != markdown ||
+                coordinator.renderedContext != documentContext ||
+                coordinator.renderedZoom != zoom else { return }
         let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
             ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
+        coordinator.renderedSource = markdown
+        coordinator.renderedContext = documentContext
+        coordinator.renderedZoom = zoom
     }
 }
