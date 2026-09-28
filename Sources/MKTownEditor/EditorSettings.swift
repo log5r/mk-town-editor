@@ -175,6 +175,7 @@ private struct StoredEditorSettings: Codable, Equatable {
     var app = AppEditorSettings()
     var folders: [String: FolderEditorSettings] = [:]
     var documents: [String: DocumentDisplayState] = [:]
+    var bookmarks: [DocumentBookmark]? = nil
 }
 
 /// Persists shared settings while keeping document display state separate from Markdown source.
@@ -342,8 +343,46 @@ final class EditorSettingsStore: ObservableObject {
     func moveDocumentState(from oldURL: URL, to newURL: URL) {
         let oldKey = Self.key(for: oldURL)
         let newKey = Self.key(for: newURL)
-        guard oldKey != newKey, let state = values.documents.removeValue(forKey: oldKey) else { return }
-        values.documents[newKey] = state
+        guard oldKey != newKey else { return }
+        if let state = values.documents.removeValue(forKey: oldKey) {
+            values.documents[newKey] = state
+        }
+        values.bookmarks = (values.bookmarks ?? []).map { bookmark in
+            guard Self.key(for: bookmark.documentURL) == oldKey else { return bookmark }
+            var moved = bookmark
+            moved.documentURL = newURL.resolvingSymlinksInPath().standardizedFileURL
+            return moved
+        }
+        save()
+    }
+
+    var bookmarks: [DocumentBookmark] { values.bookmarks ?? [] }
+
+    func addBookmark(_ bookmark: DocumentBookmark) {
+        var items = values.bookmarks ?? []
+        items.append(bookmark)
+        if items.count > 500 { items.removeFirst(items.count - 500) }
+        values.bookmarks = items
+        save()
+    }
+
+    func removeBookmark(_ id: UUID) {
+        values.bookmarks?.removeAll { $0.id == id }
+        save()
+    }
+
+    func moveBookmarks(under oldURL: URL, to newURL: URL) {
+        let oldPath = Self.key(for: oldURL)
+        let prefix = oldPath.hasSuffix("/") ? oldPath : oldPath + "/"
+        let newBase = newURL.resolvingSymlinksInPath().standardizedFileURL
+        values.bookmarks = (values.bookmarks ?? []).map { bookmark in
+            let path = Self.key(for: bookmark.documentURL)
+            guard path == oldPath || path.hasPrefix(prefix) else { return bookmark }
+            var moved = bookmark
+            let remainder = String(path.dropFirst(oldPath.count))
+            moved.documentURL = URL(fileURLWithPath: newBase.path + remainder)
+            return moved
+        }
         save()
     }
 

@@ -59,4 +59,21 @@ final class NavigationHistoryTests: XCTestCase {
                        renamed)
         XCTAssertEqual(history.back.last, NavigationPoint(documentURL: renamed, utf16Location: 4))
     }
+
+    func testBookmarkRelocatesByNearbyTextAndHeadingAfterEdits() {
+        let body = String(repeating: "a", count: 35) + "目印🙂" + String(repeating: "b", count: 35)
+        let original = "# 第一\n\(body)\n\n# 第二\n\(body)\n"
+        let marker = (original as NSString).range(of: "目印🙂", options: .backwards).location
+        let bookmark = DocumentBookmark.capture(in: original, at: marker,
+            documentURL: URL(fileURLWithPath: "/tmp/note.md"))
+        let updated = "前置き\n" + original
+        let expected = (updated as NSString).range(of: "目印🙂", options: .backwards).location
+        XCTAssertEqual(bookmark.resolvedLocation(in: updated), expected)
+        let changed = NSMutableString(string: updated)
+        changed.replaceCharacters(in: NSRange(location: expected,
+            length: ("目印🙂" as NSString).length), with: "変更")
+        let heading = changed.range(of: "# 第二").location
+        XCTAssertEqual(bookmark.resolvedLocation(in: changed as String),
+            heading + (bookmark.sectionOffset ?? 0))
+    }
 }
