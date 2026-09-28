@@ -62,6 +62,7 @@ struct EditorWorkspace: View {
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
     @State private var showingSnapshotHistory = false
+    @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
     @State private var previewSearchCaseSensitive = false
@@ -173,7 +174,9 @@ struct EditorWorkspace: View {
     }
 
     private var documentContext: DocumentContext {
-        DocumentContext(fileURL: fileURL)
+        DocumentContext(fileURL: fileURL,
+                        attachmentDirectory: settingsStore.attachmentDirectory(for: fileURL),
+                        markdownDialect: settingsStore.markdownDialect(for: fileURL))
     }
 
     private var navigationView: some View {
@@ -378,6 +381,11 @@ struct EditorWorkspace: View {
                         undoManager: undoManager, actionName: "スナップショットを復元")
                     return true
                 }
+            }
+        }
+        .sheet(isPresented: $showingFolderSettings) {
+            if let root = workspaceStore.rootURL {
+                FolderEditorSettingsView(settingsStore: settingsStore, folderURL: root)
             }
         }
         .sheet(isPresented: $showingPreviewSearch) {
@@ -607,7 +615,8 @@ struct EditorWorkspace: View {
                 }
                 restorePosition(for: fileURL)
             }
-            analysisStore.update(source: document.text)
+            analysisStore.update(source: document.text,
+                                 dialect: settingsStore.markdownDialect(for: fileURL))
             if let fileURL {
                 settingsStore.ensureWritingSession(for: fileURL,
                     initialCharacters: statistics.characters)
@@ -674,13 +683,18 @@ struct EditorWorkspace: View {
         }
         .onChange(of: document.text) { _, newText in
             previewUpdates.sourceChanged()
-            analysisStore.update(source: newText)
+            analysisStore.update(source: newText,
+                                 dialect: settingsStore.markdownDialect(for: fileURL))
             previewSearchRange = nil
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
         }
         .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
+        .onChange(of: settingsStore.markdownDialect(for: fileURL)) { _, dialect in
+            analysisStore.update(source: document.text, dialect: dialect)
+            previewUpdates.resume()
+        }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
@@ -758,7 +772,8 @@ struct EditorWorkspace: View {
         let isCurrent = displayedSource == document.text
         let selectedSnapshot = previewUpdates.state.isPaused
             ? previewUpdates.snapshot : analysisStore.snapshot
-        let matchingSnapshot = selectedSnapshot?.source == displayedSource ? selectedSnapshot : nil
+        let matchingSnapshot = selectedSnapshot?.source == displayedSource &&
+            selectedSnapshot?.dialect == documentContext.markdownDialect ? selectedSnapshot : nil
         let taskAction: ((Int) -> Void)? = isCurrent ? previewTaskAction : nil
         let headingAction: ((String) -> Void)? = isCurrent
             ? { fragment in navigateToHeading(fragment) } : nil
@@ -778,7 +793,8 @@ struct EditorWorkspace: View {
             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
         return VStack(spacing: 0) {
             PreviewUpdateControls(updates: previewUpdates, source: document.text,
-                                  preferredSnapshot: analysisStore.snapshot)
+                                  preferredSnapshot: analysisStore.snapshot,
+                                  dialect: documentContext.markdownDialect)
             preview
         }
     }
@@ -991,6 +1007,11 @@ struct EditorWorkspace: View {
                 .disabled(workspaceStore.rootURL == nil)
                 .help("ファイル名で書類を探す")
                 if let root = workspaceStore.rootURL {
+                    Button("フォルダの編集設定", systemImage: "gearshape") {
+                        showingFolderSettings = true
+                    }
+                    .labelStyle(.iconOnly)
+                    .help("このフォルダの字下げ・添付先・Markdown構文")
                     Menu {
                         Button("新規Markdown書類…") { fileAction = .createDocument(root) }
                         Button("新規フォルダ…") { fileAction = .createFolder(root) }
@@ -1292,7 +1313,8 @@ struct EditorWorkspace: View {
         panel.begin { response in
             guard response == .OK, let destination = panel.url else { return }
             let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL,
-                                                   preset: preset)
+                                                   preset: preset,
+                                                   dialect: settingsStore.markdownDialect(for: fileURL))
             do {
                 try html.write(to: destination, atomically: true, encoding: .utf8)
             } catch {
@@ -1324,7 +1346,8 @@ struct EditorWorkspace: View {
                 defer { isExportingPDF = false }
                 do {
                     try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination,
-                                                   preset: preset)
+                                                   preset: preset,
+                                                   dialect: settingsStore.markdownDialect(for: sourceURL))
                 } catch {
                     pdfExportError = error.localizedDescription
                 }
@@ -1344,7 +1367,8 @@ struct EditorWorkspace: View {
             let view = try MarkdownPDFExporter.printableView(document.text, documentURL: fileURL,
                                                              printInfo: info, title: title,
                                                              header: printSettings.header,
-                                                             footer: printSettings.footer)
+                                                             footer: printSettings.footer,
+                                                             dialect: settingsStore.markdownDialect(for: fileURL))
             let operation = NSPrintOperation(view: view, printInfo: info)
             operation.jobTitle = title
             operation.showsPrintPanel = true
@@ -1361,7 +1385,8 @@ struct EditorWorkspace: View {
         guard selection.length > 0, NSMaxRange(selection) <= source.length else { return }
         do {
             try MarkdownRichClipboard.copy(source.substring(with: selection), documentURL: fileURL,
-                                           to: .general)
+                                            to: .general,
+                                            dialect: settingsStore.markdownDialect(for: fileURL))
         } catch {
             richCopyError = error.localizedDescription
         }
@@ -1472,7 +1497,7 @@ struct EditorWorkspace: View {
     private var sourceEditor: some View {
         MarkdownTextEditor(text: $document.text, model: editorModel,
                            textStyle: settingsStore.textStyle(for: fileURL),
-                           layoutOptions: settingsStore.layoutOptions(),
+                           layoutOptions: settingsStore.layoutOptions(for: fileURL),
                            sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,

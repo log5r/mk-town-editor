@@ -262,12 +262,12 @@ struct ImageResourceManager {
             return ImportedImage(relativePath: relative.joined(separator: "/"), createdFileURL: nil)
         }
 
-        let assets = try assetsDirectory(beside: directory)
+        let assets = try assetsDirectory(beside: directory, name: context.attachmentDirectory.rawValue)
         let staging = assets.appendingPathComponent(".import-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: staging) }
         try fileManager.copyItem(at: source, to: staging)
         if let existing = try matchingImage(for: staging, in: assets) {
-            return ImportedImage(relativePath: "assets/\(existing.lastPathComponent)",
+            return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(existing.lastPathComponent)",
                                  createdFileURL: nil)
         }
         let name = source.deletingPathExtension().lastPathComponent
@@ -278,11 +278,11 @@ struct ImageResourceManager {
             if fileManager.fileExists(atPath: destination.path) { continue }
             do {
                 try fileManager.moveItem(at: staging, to: destination)
-                return ImportedImage(relativePath: "assets/\(fileName)", createdFileURL: destination)
+                return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(fileName)", createdFileURL: destination)
             } catch {
                 if (error as? CocoaError)?.code == .fileWriteFileExists {
                     if fileManager.contentsEqual(atPath: staging.path, andPath: destination.path) {
-                        return ImportedImage(relativePath: "assets/\(fileName)", createdFileURL: nil)
+                        return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(fileName)", createdFileURL: nil)
                     }
                     continue
                 }
@@ -319,7 +319,8 @@ struct ImageResourceManager {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: outputSize
         ] as CFDictionary) else { throw ImageResourceError.invalidImage }
-        let assets = try assetsDirectory(beside: directoryURL.standardizedFileURL.resolvingSymlinksInPath())
+        let assets = try assetsDirectory(beside: directoryURL.standardizedFileURL.resolvingSymlinksInPath(),
+                                         name: context.attachmentDirectory.rawValue)
         let staging = assets.appendingPathComponent(".derive-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: staging) }
         guard let destination = CGImageDestinationCreateWithURL(staging as CFURL,
@@ -332,7 +333,7 @@ struct ImageResourceManager {
         CGImageDestinationAddImage(destination, image, encoding)
         guard CGImageDestinationFinalize(destination) else { throw ImageResourceError.invalidImage }
         if let existing = try matchingImage(for: staging, in: assets) {
-            return ImportedImage(relativePath: "assets/\(existing.lastPathComponent)",
+            return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(existing.lastPathComponent)",
                                  createdFileURL: nil)
         }
         let base = fileURL.deletingPathExtension().lastPathComponent + "-edited"
@@ -343,7 +344,7 @@ struct ImageResourceManager {
             if fileManager.fileExists(atPath: target.path) { continue }
             do {
                 try fileManager.moveItem(at: staging, to: target)
-                return ImportedImage(relativePath: "assets/\(name)", createdFileURL: target)
+                return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(name)", createdFileURL: target)
             } catch {
                 if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
                 throw error
@@ -367,7 +368,8 @@ struct ImageResourceManager {
         CGImageDestinationAddImage(destination, image, nil)
         guard CGImageDestinationFinalize(destination) else { throw ImageResourceError.invalidImage }
 
-        let assets = try assetsDirectory(beside: directoryURL.standardizedFileURL.resolvingSymlinksInPath())
+        let assets = try assetsDirectory(beside: directoryURL.standardizedFileURL.resolvingSymlinksInPath(),
+                                         name: context.attachmentDirectory.rawValue)
         let staging = assets.appendingPathComponent(".paste-\(UUID().uuidString)")
         defer { try? fileManager.removeItem(at: staging) }
         try (encoded as Data).write(to: staging, options: .withoutOverwriting)
@@ -382,7 +384,7 @@ struct ImageResourceManager {
             if fileManager.fileExists(atPath: url.path) { continue }
             do {
                 try fileManager.moveItem(at: staging, to: url)
-                return ImportedImage(relativePath: "assets/\(name)", createdFileURL: url)
+                return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(name)", createdFileURL: url)
             } catch {
                 if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
                 throw error
@@ -391,9 +393,9 @@ struct ImageResourceManager {
         throw ImageResourceError.noAvailableName
     }
 
-    private func assetsDirectory(beside directory: URL) throws -> URL {
+    private func assetsDirectory(beside directory: URL, name: String) throws -> URL {
         let directoryPath = directory.path.hasSuffix("/") ? directory.path : directory.path + "/"
-        let assets = directory.appendingPathComponent("assets", isDirectory: true)
+        let assets = directory.appendingPathComponent(name, isDirectory: true)
         try fileManager.createDirectory(at: assets, withIntermediateDirectories: true)
         guard assets.resolvingSymlinksInPath().path.hasPrefix(directoryPath) else {
             throw ImageResourceError.unsafeAssetsDirectory
@@ -515,7 +517,7 @@ struct FileAttachmentManager {
                 Array(sourceParts.dropFirst(common))
             return ImportedImage(relativePath: parts.joined(separator: "/"), createdFileURL: nil)
         }
-        let assets = base.appendingPathComponent("assets", isDirectory: true)
+        let assets = base.appendingPathComponent(context.attachmentDirectory.rawValue, isDirectory: true)
         try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
         guard assets.resolvingSymlinksInPath().path.hasPrefix(prefix) else {
             throw ImageResourceError.unsafeAssetsDirectory
@@ -535,7 +537,7 @@ struct FileAttachmentManager {
                     FileManager.default.contentsEqual(atPath: staging.path, andPath: candidate.path)
             }
         if let existing {
-            return ImportedImage(relativePath: "assets/\(existing.lastPathComponent)",
+            return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(existing.lastPathComponent)",
                                  createdFileURL: nil)
         }
         let name = source.deletingPathExtension().lastPathComponent
@@ -547,7 +549,7 @@ struct FileAttachmentManager {
             if FileManager.default.fileExists(atPath: target.path) { continue }
             do {
                 try FileManager.default.moveItem(at: staging, to: target)
-                return ImportedImage(relativePath: "assets/\(filename)", createdFileURL: target)
+                return ImportedImage(relativePath: "\(context.attachmentDirectory.rawValue)/\(filename)", createdFileURL: target)
             } catch {
                 if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
                 throw error

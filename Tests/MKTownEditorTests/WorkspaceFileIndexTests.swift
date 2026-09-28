@@ -55,13 +55,17 @@ final class WorkspaceFileIndexTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let assets = root.appendingPathComponent("assets")
+        let images = root.appendingPathComponent("images")
         let chapter = root.appendingPathComponent("chapter")
         try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: chapter, withIntermediateDirectories: true)
         let used = assets.appendingPathComponent("図 one.png")
         let unused = assets.appendingPathComponent("old.heic")
+        let unusedInImages = images.appendingPathComponent("old.png")
         try Data([1]).write(to: used)
         try Data([2]).write(to: unused)
+        try Data([3]).write(to: unusedInImages)
         let first = root.appendingPathComponent("index.md")
         let second = chapter.appendingPathComponent("note.md")
         try "![used](assets/%E5%9B%B3%20one.png)\n![missing](assets/lost.png)\n`![code](assets/old.heic)`".write(
@@ -73,13 +77,13 @@ final class WorkspaceFileIndexTests: XCTestCase {
 
         XCTAssertEqual(result.missing.map { $0.url.lastPathComponent }, ["lost.png"])
         XCTAssertEqual(result.missing[0].sources, [first])
-        XCTAssertEqual(result.unused.map { $0.url.lastPathComponent }, ["old.heic"])
+        XCTAssertEqual(Set(result.unused.map { $0.url.lastPathComponent }), ["old.heic", "old.png"])
         XCTAssertEqual(result.used.map { $0.url.lastPathComponent }, ["図 one.png"])
         XCTAssertEqual(Set(result.used[0].sources), Set([first, second]))
 
         let changed = try await WorkspaceAttachmentAudit.scan(root: root,
             openDocuments: [first: Data("![now used](assets/old.heic)".utf8)])
-        XCTAssertTrue(changed.unused.isEmpty)
+        XCTAssertEqual(changed.unused.map { $0.url.lastPathComponent }, ["old.png"])
         XCTAssertEqual(changed.used.first(where: { $0.url == unused })?.sources, [first])
     }
 }

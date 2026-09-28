@@ -24,4 +24,11 @@ final class MarkdownRichClipboardTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "見出し")
         XCTAssertNotNil(pasteboard.data(forType: .rtf))
     }
+
+    func testBasicDialectClipboardLeavesTableAsText() throws {
+        let payload = try MarkdownRichClipboard.payload(
+            for: "| A |\n| --- |\n| B |", documentURL: nil, dialect: .basic)
+        XCTAssertFalse(payload.html.contains("<table>"))
+        XCTAssertTrue(payload.plainText.contains("| A |"))
+    }
 }

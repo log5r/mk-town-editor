@@ -8,6 +8,22 @@ final class ImageResourceManagerTests: XCTestCase {
     private let png = Data(base64Encoded:
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lGQAAAAASUVORK5CYII=")!
 
+    func testFolderAttachmentDirectoryControlsCopiedImagePath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documentFolder = root.appendingPathComponent("document")
+        try FileManager.default.createDirectory(at: documentFolder, withIntermediateDirectories: true)
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let context = DocumentContext(fileURL: documentFolder.appendingPathComponent("README.md"),
+                                      attachmentDirectory: .images)
+        let imported = try ImageResourceManager().importImage(at: image, for: context)
+        XCTAssertEqual(imported.relativePath, "images/photo.png")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imported.createdFileURL!.path))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: documentFolder.appendingPathComponent("assets").path))
+    }
+
     func testImageAlreadyBesideDocumentUsesRelativePathWithoutCopy() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -195,6 +211,11 @@ final class ImageResourceManagerTests: XCTestCase {
         try Data("changed".utf8).write(to: different)
         let numbered = try manager.importFile(at: different, for: context, mode: .managedCopy)
         XCTAssertEqual(numbered.relativePath, "assets/仕様 one-2.pdf")
+        let imagesContext = DocumentContext(fileURL: docs.appendingPathComponent("note.md"),
+                                            attachmentDirectory: .images)
+        let copiedToImages = try manager.importFile(at: file, for: imagesContext,
+                                                     mode: .managedCopy)
+        XCTAssertEqual(copiedToImages.relativePath, "images/仕様 one.pdf")
     }
 }
 

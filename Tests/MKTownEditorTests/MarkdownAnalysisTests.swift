@@ -3,6 +3,19 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownAnalysisTests: XCTestCase {
+    func testBasicDialectLeavesExtendedBlocksAsOrdinaryText() {
+        let source = "---\ntitle: Draft\n---\n\n| A |\n| --- |\n| B |\n\nText[^a]\n\n[^a]: Footnote"
+        let extended = MarkdownAnalysis(source)
+        let basic = MarkdownAnalysis(source, dialect: .basic)
+        XCTAssertNotNil(extended.frontMatter)
+        XCTAssertFalse(extended.footnotes.entries.isEmpty)
+        XCTAssertTrue(extended.blocks.contains { $0.kind == .table })
+        XCTAssertNil(basic.frontMatter)
+        XCTAssertTrue(basic.footnotes.entries.isEmpty)
+        XCTAssertFalse(basic.blocks.contains { $0.kind == .table })
+        XCTAssertTrue(basic.blocks.contains { $0.content.contains("title: Draft") })
+        XCTAssertTrue(basic.blocks.contains { $0.content.contains("[^a]: Footnote") })
+    }
     func testFootnotesOrderReferencesAndHideDefinitionsFromBody() {
         let source = "Text[^b] and [^a], again[^b].\n\n[^a]: Alpha\n[^b]: Beta\n    continued\n\n```\n[^code]: Hidden\n```"
         let analysis = MarkdownAnalysis(source)

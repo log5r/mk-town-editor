@@ -225,24 +225,26 @@ struct MarkdownBlock: Equatable, Sendable {
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
 struct MarkdownAnalysis: Sendable {
+    let dialect: MarkdownDialect
     let blocks: [MarkdownBlock]
     let positionMap: MarkdownPositionMap
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
 
-    init(_ markdown: String) {
+    init(_ markdown: String, dialect: MarkdownDialect = .extended) {
+        self.dialect = dialect
         positionMap = MarkdownPositionMap(markdown)
-        let preliminary = Self.parse(markdown)
-        let frontMatter = MarkdownFrontMatter(source: markdown)
+        let preliminary = Self.parse(markdown, dialect: dialect)
+        let frontMatter = dialect == .extended ? MarkdownFrontMatter(source: markdown) : nil
         self.frontMatter = frontMatter
-        let index = MarkdownFootnoteIndex(source: markdown,
+        let index = MarkdownFootnoteIndex(source: dialect == .extended ? markdown : "",
             codeRanges: preliminary.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange),
             excludedRanges: [frontMatter?.sourceRange].compactMap { $0 })
         footnotes = index
         let excluded = index.definitionRanges + [frontMatter?.sourceRange].compactMap { $0 }
         let parsed = excluded.isEmpty ? preliminary
-            : Self.parse(Self.maskedRegions(in: markdown, ranges: excluded))
+            : Self.parse(Self.maskedRegions(in: markdown, ranges: excluded), dialect: dialect)
         blocks = parsed.blocks.filter { block in
             !excluded.contains { NSLocationInRange(block.sourceRange.location, $0) }
         }
@@ -282,11 +284,11 @@ struct MarkdownAnalysis: Sendable {
         pattern: #"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:<([^<>]*)>|([^\s]+))(?:[ \t]+(?:\"([^\"]*)\"|'([^']*)'|\(([^)]*)\)))?[ \t]*$"#
     )
 
-    private static func parse(_ markdown: String) ->
+    private static func parse(_ markdown: String, dialect: MarkdownDialect) ->
         (blocks: [MarkdownBlock], references: [String: MarkdownReference]) {
         var nextID = 0
         var references: [String: MarkdownReference] = [:]
-        let blocks = parseLines(sourceLines(markdown), parentID: nil,
+        let blocks = parseLines(sourceLines(markdown), parentID: nil, dialect: dialect,
                                 nextID: &nextID, references: &references)
         return (blocks, references)
     }
@@ -294,6 +296,7 @@ struct MarkdownAnalysis: Sendable {
     private static func parseLines(
         _ lines: [SourceLine],
         parentID: Int?,
+        dialect: MarkdownDialect,
         nextID: inout Int,
         references: inout [String: MarkdownReference]
     ) -> [MarkdownBlock] {
@@ -348,12 +351,14 @@ struct MarkdownAnalysis: Sendable {
                 let contentLines = MarkdownCalloutKind.parse(quoteLines.first?.text ?? "") == nil
                     ? quoteLines : Array(quoteLines.dropFirst())
                 result.append(contentsOf: parseLines(contentLines, parentID: quoteID,
+                                                     dialect: dialect,
                                                      nextID: &nextID, references: &references))
                 listAncestors.removeAll()
                 continue
             }
 
             if let definition = parseReferenceDefinition(line.text),
+                (dialect == .extended || !definition.key.hasPrefix("^")),
                 result.last(where: { $0.parentID == parentID })?.kind != .paragraph {
                 if references[definition.key] == nil {
                     references[definition.key] = MarkdownReference(
@@ -425,7 +430,7 @@ struct MarkdownAnalysis: Sendable {
                 continue
             }
 
-            if index + 1 < lines.count, indentationWidth(line.text) < 4,
+            if dialect == .extended, index + 1 < lines.count, indentationWidth(line.text) < 4,
                 parseHeading(line.text) == nil, parseList(line.text) == nil,
                 !isThematicBreak(line.text),
                 let table = parseTableHeader(line.text, delimiter: lines[index + 1].text) {
@@ -495,7 +500,7 @@ struct MarkdownAnalysis: Sendable {
                 while next < lines.count && isParagraphContinuation(lines[next].text) &&
                     indentationWidth(lines[next].text) > list.indent &&
                     indentationWidth(lines[next].text) < list.contentIndent + 4 &&
-                    !(next + 1 < lines.count &&
+                    !(dialect == .extended && next + 1 < lines.count &&
                       parseTableHeader(lines[next].text, delimiter: lines[next + 1].text) != nil) {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
                     parts.append(withoutLeadingIndent(lines[next].text))

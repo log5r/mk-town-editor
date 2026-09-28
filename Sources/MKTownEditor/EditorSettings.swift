@@ -48,6 +48,25 @@ enum ProofingLanguage: String, Codable, CaseIterable {
     }
 }
 
+enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
+    case extended
+    case basic
+
+    var title: String {
+        switch self {
+        case .extended: "拡張（表・脚注・フロントマター）"
+        case .basic: "基本（表・脚注・フロントマターなし）"
+        }
+    }
+}
+
+enum AttachmentDirectory: String, Codable, CaseIterable, Sendable {
+    case assets
+    case images
+
+    var title: String { rawValue }
+}
+
 struct EditorProofingSettings: Codable, Equatable {
     var language: ProofingLanguage = .automatic
     var checksSpelling = true
@@ -144,6 +163,8 @@ struct AppEditorSettings: Codable, Equatable {
     var showsFrontMatterInPreview: Bool?
     var snippets: [EditorSnippet]?
     var loadsRemoteImages: Bool?
+    var attachmentDirectory: AttachmentDirectory?
+    var markdownDialect: MarkdownDialect?
 }
 
 enum EditorZoomSurface: CaseIterable {
@@ -170,6 +191,11 @@ struct FolderEditorSettings: Codable, Equatable {
     var defaultMode: EditorMode?
     var fontSize: Double?
     var imageImportMode: ImageImportMode?
+    var tabWidth: Int?
+    var listIndentWidth: Int?
+    var codeIndentWidth: Int?
+    var attachmentDirectory: AttachmentDirectory?
+    var markdownDialect: MarkdownDialect?
 }
 
 struct DocumentDisplayState: Codable, Equatable {
@@ -224,6 +250,22 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    func folderSettings(for folderURL: URL) -> FolderEditorSettings {
+        values.folders[Self.key(for: folderURL)] ?? FolderEditorSettings()
+    }
+
+    func attachmentDirectory(for documentURL: URL?) -> AttachmentDirectory {
+        guard let documentURL else { return values.app.attachmentDirectory ?? .assets }
+        return nearestFolderValue(for: documentURL, \.attachmentDirectory)
+            ?? values.app.attachmentDirectory ?? .assets
+    }
+
+    func markdownDialect(for documentURL: URL?) -> MarkdownDialect {
+        guard let documentURL else { return values.app.markdownDialect ?? .extended }
+        return nearestFolderValue(for: documentURL, \.markdownDialect)
+            ?? values.app.markdownDialect ?? .extended
+    }
+
     func mode(for documentURL: URL?) -> EditorMode {
         guard let documentURL else { return values.app.defaultMode }
         let path = Self.key(for: documentURL)
@@ -249,7 +291,9 @@ final class EditorSettingsStore: ObservableObject {
             lineSpacing: min(12, max(0, values.app.lineSpacing)) * zoom(for: .editor),
             horizontalMargin: min(48, max(8, values.app.horizontalMargin ?? 18)),
             verticalMargin: min(48, max(8, values.app.verticalMargin ?? 18)),
-            tabWidth: min(8, max(2, values.app.tabWidth ?? 4))
+            tabWidth: min(8, max(2,
+                documentURL.flatMap { nearestFolderValue(for: $0, \.tabWidth) }
+                    ?? values.app.tabWidth ?? 4))
         )
     }
 
@@ -276,11 +320,15 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
-    func layoutOptions() -> EditorLayoutOptions {
+    func layoutOptions(for documentURL: URL? = nil) -> EditorLayoutOptions {
         EditorLayoutOptions(
             wrapsLines: values.app.wrapsLines,
-            listIndentWidth: min(8, max(2, values.app.listIndentWidth ?? 2)),
-            codeIndentWidth: min(8, max(2, values.app.codeIndentWidth ?? 4))
+            listIndentWidth: min(8, max(2,
+                documentURL.flatMap { nearestFolderValue(for: $0, \.listIndentWidth) }
+                    ?? values.app.listIndentWidth ?? 2)),
+            codeIndentWidth: min(8, max(2,
+                documentURL.flatMap { nearestFolderValue(for: $0, \.codeIndentWidth) }
+                    ?? values.app.codeIndentWidth ?? 4))
         )
     }
 
