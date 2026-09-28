@@ -15,6 +15,7 @@ struct EditorWorkspace: View {
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     @State private var previewNavigationTarget: PreviewNavigationTarget?
     @State private var navigationSequence = 0
+    @State private var showingGoToLine = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -76,6 +77,14 @@ struct EditorWorkspace: View {
             }
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
+        .focusedSceneValue(\.goToLineAction) { showingGoToLine = true }
+        .sheet(isPresented: $showingGoToLine) {
+            let index = MarkdownLineIndex(document.text)
+            GoToLineSheet(lineCount: index.lineCount,
+                          initialLine: index.line(containingUTF16Offset: editorModel.selectedRange.location)) { line in
+                goToLine(line)
+            }
+        }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft) { label, destination, title in
                 editorModel.commitLink(label: label, destination: destination, title: title)
@@ -209,6 +218,12 @@ struct EditorWorkspace: View {
         editorModel.navigate(to: entry.sourceRange.location)
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(blockID: entry.id, sequence: navigationSequence)
+    }
+
+    private func goToLine(_ requestedLine: Int) {
+        let destination = MarkdownLineIndex(document.text).destination(for: requestedLine)
+        if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+        editorModel.navigate(to: destination.utf16Location)
     }
 
     private var sourceEditor: some View {

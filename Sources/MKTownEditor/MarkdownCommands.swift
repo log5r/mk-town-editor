@@ -4,18 +4,33 @@ private struct MarkdownEditorModelKey: FocusedValueKey {
     typealias Value = MarkdownEditorModel
 }
 
+private struct GoToLineActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
         set { self[MarkdownEditorModelKey.self] = newValue }
     }
+
+    var goToLineAction: (() -> Void)? {
+        get { self[GoToLineActionKey.self] }
+        set { self[GoToLineActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
     @FocusedValue(\.markdownEditorModel) private var editorModel
+    @FocusedValue(\.goToLineAction) private var goToLineAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
+        CommandMenu("移動") {
+            Button("指定行へ移動…") { goToLineAction?() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(goToLineAction == nil)
+        }
         CommandMenu("文字表示") {
             Button("文字を拡大") { settingsStore.adjustFontSize(by: 1) }
                 .keyboardShortcut("+", modifiers: .command)
