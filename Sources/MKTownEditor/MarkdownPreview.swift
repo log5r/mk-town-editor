@@ -496,3 +496,65 @@ private struct QuickLookImageView: NSViewRepresentable {
         view.close()
     }
 }
+
+@MainActor
+final class DetachedPreviewWindowManager: NSObject, ObservableObject, NSWindowDelegate {
+    @Published private(set) var documentURL: URL?
+    private var window: NSWindow?
+
+    var isOpen: Bool { window?.isVisible == true }
+
+    func show(document: Binding<MarkdownDocument>, documentURL: URL?,
+              settingsStore: EditorSettingsStore) {
+        self.documentURL = documentURL
+        if let window, window.isVisible {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let content = DetachedPreviewContent(document: document, manager: self,
+            settingsStore: settingsStore)
+        let controller = NSHostingController(rootView: content)
+        let window = NSWindow(contentViewController: controller)
+        window.title = title
+        window.setContentSize(NSSize(width: 760, height: 680))
+        window.minSize = NSSize(width: 420, height: 300)
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.delegate = self
+        window.setFrameAutosaveName("MKTownEditor.detachedPreview")
+        window.makeKeyAndOrderFront(nil)
+        self.window = window
+    }
+
+    func updateDocumentURL(_ url: URL?) {
+        documentURL = url
+        window?.title = title
+    }
+
+    func close() {
+        window?.close()
+        window = nil
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+    }
+
+    private var title: String {
+        "プレビュー — \(documentURL?.lastPathComponent ?? "無題")"
+    }
+}
+
+private struct DetachedPreviewContent: View {
+    @Binding var document: MarkdownDocument
+    @ObservedObject var manager: DetachedPreviewWindowManager
+    @ObservedObject var settingsStore: EditorSettingsStore
+
+    var body: some View {
+        MarkdownPreview(markdown: document.text,
+                        documentContext: DocumentContext(fileURL: manager.documentURL),
+                        showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+                        zoom: settingsStore.zoom(for: .preview),
+                        loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+            .frame(minWidth: 420, minHeight: 300)
+    }
+}
