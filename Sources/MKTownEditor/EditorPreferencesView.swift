@@ -155,3 +155,48 @@ struct SnippetPickerView: View {
         .frame(width: 420, height: 320)
     }
 }
+
+struct CommandPaletteView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: MarkdownEditorModel
+    @State private var query = ""
+
+    private var matches: [EditorCommand] {
+        EditorCommand.paletteMatches(query, in: model)
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            TextField("コマンド名またはショートカット", text: $query)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { if let first = matches.first { execute(first) } }
+            List(matches, id: \.self) { command in
+                Button { execute(command) } label: {
+                    HStack {
+                        Label(command.title, systemImage: command.symbolName)
+                        Spacer()
+                        if let shortcut = command.shortcutLabel {
+                            Text(shortcut).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if matches.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding()
+        .frame(width: 500, height: 420)
+    }
+
+    private func execute(_ command: EditorCommand) {
+        dismiss()
+        model.showingCommandPalette = false
+        command.perform(on: model)
+    }
+}

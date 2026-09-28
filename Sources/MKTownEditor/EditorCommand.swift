@@ -23,6 +23,7 @@ enum EditorCommand: Hashable {
     case toggleFold
     case unfoldAll
     case snippet
+    case commandPalette
     case unorderedList
     case orderedList
     case taskList
@@ -36,6 +37,18 @@ enum EditorCommand: Hashable {
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
+    static let palette: [Self] = [
+        .bold, .italic, .strikethrough, .inlineCode, .removeFormatting,
+        .link, .footnote, .image, .table, .snippet,
+        .heading(level: 0), .heading(level: 1), .heading(level: 2),
+        .heading(level: 3), .heading(level: 4), .heading(level: 5), .heading(level: 6),
+        .quote, .plainBlock, .unorderedList, .orderedList, .taskList,
+        .renumberList, .indentList, .outdentList, .toggleTaskCompletion,
+        .codeBlock(language: nil), .horizontalRule, .comment,
+        .tableOfContents, .duplicateLines, .moveLinesUp, .moveLinesDown,
+        .deleteLines, .expandSelection, .shrinkSelection, .toggleFold,
+        .unfoldAll, .find
+    ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
     static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .link, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
@@ -62,6 +75,7 @@ enum EditorCommand: Hashable {
         case .toggleFold: "見出し・コードを折りたたむ／展開"
         case .unfoldAll: "すべて展開"
         case .snippet: "スニペットを挿入…"
+        case .commandPalette: "コマンドパレット…"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -100,6 +114,7 @@ enum EditorCommand: Hashable {
         case .toggleFold: "chevron.right"
         case .unfoldAll: "chevron.down"
         case .snippet: "text.insert"
+        case .commandPalette: "command"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -133,6 +148,7 @@ enum EditorCommand: Hashable {
         case .expandSelection, .shrinkSelection: nil
         case .toggleFold, .unfoldAll: nil
         case .snippet: nil
+        case .commandPalette: ("p", [.command, .shift])
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -143,6 +159,26 @@ enum EditorCommand: Hashable {
         case .image: nil
         case .table: nil
         case .find: ("f", .command)
+        }
+    }
+
+    var shortcutLabel: String? {
+        guard let shortcut else { return nil }
+        var label = ""
+        if shortcut.modifiers.contains(.control) { label += "⌃" }
+        if shortcut.modifiers.contains(.option) { label += "⌥" }
+        if shortcut.modifiers.contains(.shift) { label += "⇧" }
+        if shortcut.modifiers.contains(.command) { label += "⌘" }
+        return label + String(shortcut.key.character).uppercased()
+    }
+
+    @MainActor
+    static func paletteMatches(_ query: String, in model: MarkdownEditorModel?) -> [Self] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return palette.filter { command in
+            command.canExecute(in: model) &&
+                (term.isEmpty || command.title.localizedStandardContains(term) ||
+                    command.shortcutLabel?.localizedStandardContains(term) == true)
         }
     }
 
@@ -194,6 +230,7 @@ enum EditorCommand: Hashable {
         case .toggleFold: model.toggleFold()
         case .unfoldAll: model.unfoldAll()
         case .snippet: model.presentSnippetPicker()
+        case .commandPalette: model.showingCommandPalette = true
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)

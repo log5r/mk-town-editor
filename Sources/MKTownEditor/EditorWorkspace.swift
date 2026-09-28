@@ -499,6 +499,9 @@ struct EditorWorkspace: View {
                 editorModel.insertSnippet(snippet)
             }
         }
+        .sheet(isPresented: $editorModel.showingCommandPalette) {
+            CommandPaletteView(model: editorModel)
+        }
         .alert(pasteNeedsSave ? "先に書類を保存" : "画像を挿入できません", isPresented: Binding(
             get: { imageDropError != nil || pasteNeedsSave },
             set: { if !$0 { imageDropError = nil; pasteNeedsSave = false } }

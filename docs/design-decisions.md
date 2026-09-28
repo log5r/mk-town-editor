@@ -227,3 +227,5 @@ Markdownコメントは標準のHTMLコメント`<!-- ... -->`を使用し、イ
 折りたたみは`MarkdownFoldPlan`で見出しセクションまたはコードブロックのヘッダー後の原文範囲を計算し、TextKit 1の`NSLayoutManagerDelegate`でその範囲のグリフを`.null`にする。文字列とUndo履歴は変更せず、行番号欄に折りたたみ印を示す。コピーは標準の原文選択を使用する。選択・検索・ナビゲーションが隠れた範囲へ移動したらその範囲を展開し、本文が編集されたら全折りたたみを解除して古いUTF-16範囲を残さない。参考: [Appleのグリフ生成デリゲート](https://developer.apple.com/documentation/appkit/nslayoutmanagerdelegate)、[nullグリフ](https://developer.apple.com/documentation/appkit/nslayoutmanager/glyphproperty/null)。
 
 スニペットはアプリ設定へ短縮語とテンプレートを保存する。カーソル直前の単独の短縮語にTabを押すか、メニューでテンプレートを選ぶと、同じ`MarkdownEdit`で挿入する。`${1:初期値}`、`${2:初期値}`の番号順に入力範囲を選択し、Tab／Shift-Tabで移動する。`$0`は最後のカーソル位置を指定する。現在の入力範囲内で文字数が変わった場合は後続範囲のUTF-16位置を補正し、範囲外の編集ではセッションを終了する。通常の表セル移動・インデントはスニペット操作がない場合に従来どおり実行する。
+
+コマンドパレットは`EditorCommand`の共通定義を一覧とし、操作名または表示用ショートカットで検索する。各候補は既存の`canExecute`で現在の編集モデルと選択を確認し、選択後は既存の`perform`を呼ぶ。利用不可の操作は候補から除外する。起動はCommand+Shift+Pとメニューから行い、Returnで最初の一致を実行し、Escapeで閉じる。

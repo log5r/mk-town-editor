@@ -9,6 +9,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
     @Published var showingSnippetPicker = false
+    @Published var showingCommandPalette = false
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
