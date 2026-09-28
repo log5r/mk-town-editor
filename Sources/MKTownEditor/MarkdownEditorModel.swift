@@ -16,14 +16,17 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func apply(_ style: MarkdownFormattingStyle) {
-        guard let textView else { return }
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText() else { return }
         let edit = MarkdownFormatter.apply(style, to: textView.string, selection: textView.selectedRange())
-        guard textView.shouldChangeText(in: NSRange(location: 0, length: (textView.string as NSString).length), replacementString: edit.text) else {
+        guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else {
             return
         }
-        textView.string = edit.text
+        textView.breakUndoCoalescing()
+        storage.replaceCharacters(in: edit.range, with: edit.replacement)
         textView.didChangeText()
         textView.setSelectedRange(edit.selection)
+        textView.breakUndoCoalescing()
         textView.window?.makeFirstResponder(textView)
     }
 

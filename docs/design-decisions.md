@@ -17,3 +17,5 @@ CodiMD の特徴のうち、Markdown ソースとレンダリング結果を同�
 プレビューは Markdown をブロック単位に分類し、Foundation の `AttributedString` Markdown パーサーでインライン要素を処理して `NSAttributedString` に変換する。見出し、引用、リスト、コードブロックには AppKit の標準フォント、色、段落スタイルを付ける。Web コンテンツや独自 HTML を埋め込まないため、表示がシステムの文字設定とアクセシビリティに自然に追従する。
 
 書式入力は純粋関数 `MarkdownFormatter` として分離し、UTF-16 ベースの `NSRange` を扱う。これにより `NSTextView` の選択範囲と日本語入力を安全に接続し、UI を起動せず単体テストできる。
+
+書式コマンドは置換対象の `NSRange`、置換文字列、変更後の選択を計画する。`NSTextView` には対象範囲だけを通知して `NSTextStorage` を更新する。全文を `string` に代入すると Undo 履歴が失われるため、書式操作では行わない。IME の未確定文字列がある間と編集が拒否された場合は変更しない。Undo の結合は AppKit のイベント境界に従い、別イベントで実行したコマンドが個別に戻ることをテストする。
