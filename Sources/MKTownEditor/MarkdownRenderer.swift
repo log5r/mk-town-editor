@@ -206,7 +206,8 @@ enum MarkdownRenderer {
         footnotes: MarkdownFootnoteIndex? = nil,
         context: DocumentContext
     ) -> NSMutableAttributedString {
-        let layout = MarkdownImageLayout.parse(resolveReferences(in: markdown, using: references))
+        let layout = MarkdownImageLayout.parse(resolveReferences(
+            in: MarkdownSafeHTML.previewMarkdown(markdown), using: references))
         let resolved = layout.markdown
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,

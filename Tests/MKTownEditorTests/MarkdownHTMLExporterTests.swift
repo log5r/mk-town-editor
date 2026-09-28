@@ -14,6 +14,15 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         XCTAssertFalse(basic.contains("class=\"footnotes\""))
         XCTAssertTrue(basic.contains("[^n]: Note"))
     }
+
+    func testLimitedRawHTMLUsesSafeSubsetInExport() {
+        let html = MarkdownHTMLExporter.render(
+            "<strong>Safe</strong><!-- hidden --><script>alert('bad')</script> done")
+        XCTAssertTrue(html.contains("<strong>Safe</strong>"))
+        XCTAssertFalse(html.contains("hidden"))
+        XCTAssertFalse(html.contains("alert('bad')"))
+        XCTAssertFalse(html.contains("<script>"))
+    }
     func testExportsSharedBlockStructureAndEscapesContent() {
         let markdown = """
         # Head & <tag>
@@ -35,7 +44,8 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         let anchor = MarkdownHeadingIndex(analysis: MarkdownAnalysis(markdown)).anchors[0].slug
         XCTAssertTrue(html.contains("<h1 id=\"\(anchor)\">"))
         XCTAssertTrue(html.contains("&amp;"))
-        XCTAssertTrue(html.contains("&lt;tag&gt;"))
+        XCTAssertTrue(html.contains("tag"))
+        XCTAssertFalse(html.contains("<tag>"))
         XCTAssertTrue(html.contains("<strong>bold</strong>"))
         XCTAssertTrue(html.contains("<ul>"))
         XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked>"))

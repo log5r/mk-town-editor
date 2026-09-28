@@ -84,6 +84,7 @@
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
 		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
 		A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* ExternalDocumentOpen.swift */; };
+		A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* MarkdownSafeHTML.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -167,6 +168,7 @@
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A20000000000000000000062 /* ExternalDocumentOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDocumentOpen.swift; sourceTree = "<group>"; };
+		A20000000000000000000063 /* MarkdownSafeHTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSafeHTML.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -264,6 +266,7 @@
 				A20000000000000000000060 /* EditorShortcuts.swift */,
 				A20000000000000000000061 /* Localizable.xcstrings */,
 				A20000000000000000000062 /* ExternalDocumentOpen.swift */,
+				A20000000000000000000063 /* MarkdownSafeHTML.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -408,6 +411,7 @@
 				A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */,
 				A10000000000000000000060 /* EditorShortcuts.swift in Sources */,
 				A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */,
+				A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

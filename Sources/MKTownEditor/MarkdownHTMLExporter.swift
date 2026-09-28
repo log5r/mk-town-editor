@@ -182,7 +182,8 @@ enum MarkdownHTMLExporter {
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
                                context: DocumentContext) -> String {
         let layout = MarkdownImageLayout.parse(
-            MarkdownRenderer.resolveReferences(in: markdown, using: analysis.references))
+            MarkdownRenderer.resolveReferences(
+                in: MarkdownSafeHTML.previewMarkdown(markdown), using: analysis.references))
         let resolved = layout.markdown
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
