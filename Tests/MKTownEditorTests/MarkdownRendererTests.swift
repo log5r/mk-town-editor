@@ -5,6 +5,20 @@ import XCTest
 
 final class MarkdownRendererTests: XCTestCase {
     @MainActor
+    func testFootnoteReferencesRenderInOrderWithBacklinks() {
+        let markdown = "Body[^b] and `[^b]`.\n\n[^b]: Explanation"
+        let rendered = MarkdownRenderer.render(markdown)
+        XCTAssertTrue(rendered.string.contains("Body1 and [^b]"))
+        XCTAssertTrue(rendered.string.contains("脚注\n1. Explanation ↩"))
+        XCTAssertFalse(rendered.string.contains("[^b]:"))
+        let html = MarkdownHTMLExporter.render(markdown)
+        XCTAssertTrue(html.contains("id=\"fnref-1\" href=\"#fn-1\""))
+        XCTAssertTrue(html.contains("id=\"fn-1\""))
+        XCTAssertTrue(html.contains("href=\"#fnref-1\""))
+        XCTAssertFalse(html.contains("[^b]:"))
+    }
+
+    @MainActor
     func testBareAutolinksExcludePunctuationAndCodeInPreviewAndHTML() {
         let markdown = "Visit www.commonmark.org/help. See https://example.com/a(b)). Mail a+tag@bar.example. `https://code.example`"
         let rendered = MarkdownRenderer.render(markdown)

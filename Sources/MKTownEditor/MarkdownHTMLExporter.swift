@@ -11,8 +11,24 @@ enum MarkdownHTMLExporter {
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })
-        let body = sequence(analysis.rootBlocks, analysis: analysis,
+        var body = sequence(analysis.rootBlocks, analysis: analysis,
                             context: DocumentContext(fileURL: documentURL), anchors: anchors)
+        for note in analysis.footnotes.entries {
+            let token = "<sup><a href=\"#fn-\(note.number)\""
+            if let range = body.range(of: token) {
+                body.replaceSubrange(range, with: "<sup><a id=\"fnref-\(note.number)\" href=\"#fn-\(note.number)\"")
+            }
+        }
+        if !analysis.footnotes.entries.isEmpty {
+            body += "<section class=\"footnotes\"><h2>脚注</h2><ol>"
+            for note in analysis.footnotes.entries {
+                body += "<li id=\"fn-\(note.number)\">" +
+                    inline(note.content, analysis: analysis,
+                           context: DocumentContext(fileURL: documentURL)) +
+                    " <a href=\"#fnref-\(note.number)\" aria-label=\"本文に戻る\">↩</a></li>"
+            }
+            body += "</ol></section>"
+        }
         let title = MarkdownOutline.entries(in: analysis).first.map { visibleText($0.title) }
             ?? documentURL?.deletingPathExtension().lastPathComponent ?? "無題"
         let cover = preset.cover
@@ -41,6 +57,8 @@ enum MarkdownHTMLExporter {
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
         .cover { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
         nav { margin-bottom: 2em; }
+        sup { font-size: 0.75em; }
+        .footnotes { margin-top: 2em; border-top: 1px solid #8888; font-size: 0.9em; }
         @page { margin: \(preset.margin)pt; }
         @media print {
           body { max-width: none; margin: 0; padding: 0; }
@@ -169,10 +187,12 @@ enum MarkdownHTMLExporter {
                 }
                 return
             }
-            var run = escape(text).replacingOccurrences(of: "\n", with: "<br>")
             let intent = (attributes[.inlinePresentationIntent] as? InlinePresentationIntent)
                 ?? (attributes[.inlinePresentationIntent] as? NSNumber)
                     .map { InlinePresentationIntent(rawValue: $0.uintValue) }
+            var run = (intent?.contains(.code) == true || attributes[.link] != nil ? escape(text)
+                : footnoteHTML(text, analysis: analysis))
+                .replacingOccurrences(of: "\n", with: "<br>")
             if intent?.contains(.code) == true { run = "<code>\(run)</code>" }
             if intent?.contains(.stronglyEmphasized) == true { run = "<strong>\(run)</strong>" }
             if intent?.contains(.emphasized) == true { run = "<em>\(run)</em>" }
@@ -184,6 +204,26 @@ enum MarkdownHTMLExporter {
             html += run
         }
         return html
+    }
+
+    private static func footnoteHTML(_ text: String, analysis: MarkdownAnalysis) -> String {
+        let source = text as NSString
+        let expression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        var output = ""
+        var cursor = 0
+        for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+            output += escape(source.substring(with: NSRange(location: cursor,
+                length: match.range.location - cursor)))
+            let id = source.substring(with: match.range(at: 1))
+            if let note = analysis.footnotes.entry(for: id) {
+                output += "<sup><a href=\"#fn-\(note.number)\">\(note.number)</a></sup>"
+            } else {
+                output += escape(source.substring(with: match.range))
+            }
+            cursor = NSMaxRange(match.range)
+        }
+        output += escape(source.substring(from: cursor))
+        return output
     }
 
     private static func imageSource(_ url: URL, context: DocumentContext) -> String? {

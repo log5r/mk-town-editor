@@ -3,6 +3,25 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownAnalysisTests: XCTestCase {
+    func testFootnotesOrderReferencesAndHideDefinitionsFromBody() {
+        let source = "Text[^b] and [^a], again[^b].\n\n[^a]: Alpha\n[^b]: Beta\n    continued\n\n```\n[^code]: Hidden\n```"
+        let analysis = MarkdownAnalysis(source)
+        XCTAssertEqual(analysis.footnotes.entries.map(\.id), ["b", "a"])
+        XCTAssertEqual(analysis.footnotes.entries.map(\.number), [1, 2])
+        XCTAssertEqual(analysis.footnotes.entries[0].content, "Beta\ncontinued")
+        XCTAssertFalse(analysis.blocks.contains { $0.content.contains("Alpha") || $0.content.contains("Beta") })
+        XCTAssertNil(analysis.footnotes.entry(for: "code"))
+        XCTAssertNil(analysis.references["^a"])
+    }
+
+    func testFootnoteDefinitionDirectlyAfterParagraphDoesNotRemainInBody() {
+        let source = "Text[^a]\n[^a]: Note\nFollowing"
+        let analysis = MarkdownAnalysis(source)
+        XCTAssertEqual(analysis.footnotes.entries.map(\.content), ["Note"])
+        XCTAssertFalse(analysis.blocks.contains { $0.content.contains("[^a]:") })
+        XCTAssertTrue(analysis.blocks.contains { $0.content.contains("Following") })
+    }
+
     func testEveryBlockRangePointsIntoOriginalUnicodeSource() {
         let source = "# 題🙂\r\n\r\n- 一\r\n  - 二\r\n"
         let analysis = MarkdownAnalysis(source)

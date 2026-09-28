@@ -14,19 +14,37 @@ enum MarkdownRenderer {
 
     static func render(_ analysis: MarkdownAnalysis,
                        documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        return renderSequence(analysis.rootBlocks, in: analysis, context: documentContext)
+        let output = NSMutableAttributedString(attributedString:
+            renderSequence(analysis.rootBlocks, in: analysis, context: documentContext))
+        if !analysis.footnotes.entries.isEmpty {
+            output.append(NSAttributedString(string: "\n\n脚注\n"))
+            for note in analysis.footnotes.entries {
+                let prefix = NSMutableAttributedString(string: "\(note.number). ")
+                prefix.append(inline(note.content, baseFont: .systemFont(ofSize: 13),
+                    references: analysis.references, context: documentContext))
+                let back = NSMutableAttributedString(string: " ↩")
+                back.addAttribute(.link, value: URL(string: "mktown-footnote-back:///\(note.number)")!,
+                    range: NSRange(location: 1, length: 1))
+                prefix.append(back)
+                prefix.append(NSAttributedString(string: "\n"))
+                output.append(prefix)
+            }
+        }
+        return output
     }
 
     static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                            showTaskPrefix: Bool = true,
                            documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        render(block, references: analysis.references, showTaskPrefix: showTaskPrefix,
+        render(block, references: analysis.references, footnotes: analysis.footnotes,
+               showTaskPrefix: showTaskPrefix,
                context: documentContext)
     }
 
     static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis,
                                 documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references,
+               footnotes: analysis.footnotes,
                context: documentContext)
     }
 
@@ -49,6 +67,7 @@ enum MarkdownRenderer {
             return quote(renderSequence(children, in: analysis, context: context))
         }
         let output = NSMutableAttributedString(attributedString: render(block, references: analysis.references,
+                                                                       footnotes: analysis.footnotes,
                                                                        context: context))
         if !children.isEmpty {
             output.append(NSAttributedString(string: "\n"))
@@ -80,7 +99,8 @@ enum MarkdownRenderer {
     }
 
     private static func render(
-        _ block: MarkdownBlock, references: [String: MarkdownReference], showTaskPrefix: Bool = true,
+        _ block: MarkdownBlock, references: [String: MarkdownReference],
+        footnotes: MarkdownFootnoteIndex, showTaskPrefix: Bool = true,
         context: DocumentContext
     ) -> NSAttributedString {
         switch block.kind {
@@ -102,14 +122,16 @@ enum MarkdownRenderer {
             return inline(
                 paragraphContent(block),
                 baseFont: .systemFont(ofSize: sizes[level - 1], weight: level < 3 ? .bold : .semibold),
-                paragraphSpacing: level < 3 ? 14 : 9, references: references, context: context
+                paragraphSpacing: level < 3 ? 14 : 9, references: references,
+                footnotes: footnotes, context: context
             )
         case .quote:
             return NSAttributedString(string: "")
         case .unorderedList:
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
-                                 baseFont: .systemFont(ofSize: 15), references: references, context: context)
+                                 baseFont: .systemFont(ofSize: 15), references: references,
+                                 footnotes: footnotes, context: context)
             if showTaskPrefix || task == nil {
                 let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
                 content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
@@ -119,7 +141,8 @@ enum MarkdownRenderer {
         case let .orderedList(number):
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
-                                 baseFont: .systemFont(ofSize: 15), references: references, context: context)
+                                 baseFont: .systemFont(ofSize: 15), references: references,
+                                 footnotes: footnotes, context: context)
             let prefix = showTaskPrefix
                 ? task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
                     ?? "\(number).  "
@@ -130,7 +153,7 @@ enum MarkdownRenderer {
             return content
         case .paragraph:
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
-                                 references: references, context: context)
+                                 references: references, footnotes: footnotes, context: context)
             if block.parentID != nil {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
             }
@@ -164,6 +187,7 @@ enum MarkdownRenderer {
         color: NSColor = .textColor,
         paragraphSpacing: CGFloat = 8,
         references: [String: MarkdownReference] = [:],
+        footnotes: MarkdownFootnoteIndex? = nil,
         context: DocumentContext
     ) -> NSMutableAttributedString {
         let resolved = resolveReferences(in: markdown, using: references)
@@ -229,7 +253,33 @@ enum MarkdownRenderer {
         }
 
         MarkdownAutolink.apply(to: result)
+        if let footnotes { applyFootnoteMarkers(to: result, footnotes: footnotes) }
         return result
+    }
+
+    private static func applyFootnoteMarkers(to result: NSMutableAttributedString,
+                                             footnotes: MarkdownFootnoteIndex) {
+        let expression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let source = result.string as NSString
+        let matches = expression.matches(in: result.string,
+            range: NSRange(location: 0, length: source.length))
+        for match in matches.reversed() {
+            let id = source.substring(with: match.range(at: 1))
+            guard let note = footnotes.entry(for: id) else { continue }
+            let intent = result.attribute(.inlinePresentationIntent,
+                at: match.range.location, effectiveRange: nil)
+            let parsedIntent = (intent as? InlinePresentationIntent)
+                ?? (intent as? NSNumber).map { InlinePresentationIntent(rawValue: $0.uintValue) }
+            guard parsedIntent?.contains(.code) != true,
+                  result.attribute(.link, at: match.range.location, effectiveRange: nil) == nil else { continue }
+            let marker = NSMutableAttributedString(string: String(note.number), attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .baselineOffset: 5,
+                .foregroundColor: NSColor.linkColor,
+                .link: URL(string: "mktown-footnote:///\(note.number)")!
+            ])
+            result.replaceCharacters(in: match.range, with: marker)
+        }
     }
 
     static func resolveReferences(
