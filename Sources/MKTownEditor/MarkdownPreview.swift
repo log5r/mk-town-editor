@@ -1,4 +1,5 @@
 import AppKit
+import QuickLookUI
 import SwiftUI
 
 struct PreviewNavigationTarget: Equatable {
@@ -9,6 +10,7 @@ struct PreviewNavigationTarget: Equatable {
 struct MarkdownPreview: View {
     @StateObject private var renderCache = PreviewRenderCache()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
+    @State private var inspectedImage: ImageInspectionItem?
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
@@ -149,28 +151,33 @@ struct MarkdownPreview: View {
                         }
                     }
                     .environment(\.openURL, OpenURLAction { url in
-                    if url.scheme == "mktown-footnote" {
-                        proxy.scrollTo("footnote-\(url.lastPathComponent)", anchor: .center)
-                        return .handled
-                    }
-                    if let fragment = MarkdownHeadingIndex.localFragment(in: url),
-                       let onOpenHeading {
-                        onOpenHeading(fragment)
-                        return .handled
-                    }
-                    if MarkdownDocumentLink(url: url, context: documentContext) != nil,
-                       let onOpenDocument {
-                        onOpenDocument(url)
-                        return .handled
-                    }
-                    return .systemAction
+                        if let imageURL = MarkdownImageInspectionLink.destination(url) {
+                            inspectedImage = ImageInspectionItem(url: imageURL)
+                            return .handled
+                        }
+                        if url.scheme == "mktown-footnote" {
+                            proxy.scrollTo("footnote-\(url.lastPathComponent)", anchor: .center)
+                            return .handled
+                        }
+                        if let fragment = MarkdownHeadingIndex.localFragment(in: url),
+                           let onOpenHeading {
+                            onOpenHeading(fragment)
+                            return .handled
+                        }
+                        if MarkdownDocumentLink(url: url, context: documentContext) != nil,
+                           let onOpenDocument {
+                            onOpenDocument(url)
+                            return .handled
+                        }
+                        return .systemAction
                     })
                 }
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
-                                    remoteRevision: remoteImages.revision)
+                                    remoteRevision: remoteImages.revision,
+                                    onInspectImage: { inspectedImage = ImageInspectionItem(url: $0) })
             }
         }
         }
@@ -183,6 +190,9 @@ struct MarkdownPreview: View {
                     group.addTask { await remoteImages.load(url) }
                 }
             }
+        }
+        .sheet(item: $inspectedImage) { item in
+            ImageInspectionView(url: item.url)
         }
     }
 
@@ -311,6 +321,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let onOpenDocument: ((URL) -> Void)?
     let zoom: Double
     let remoteRevision: Int
+    let onInspectImage: (URL) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -324,6 +335,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         textView.delegate = context.coordinator
         context.coordinator.onOpenHeading = onOpenHeading
         context.coordinator.onOpenDocument = onOpenDocument
+        context.coordinator.onInspectImage = onInspectImage
         context.coordinator.documentContext = documentContext
         textView.isEditable = false
         textView.isSelectable = true
@@ -347,6 +359,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         context.coordinator.onOpenHeading = onOpenHeading
         context.coordinator.onOpenDocument = onOpenDocument
+        context.coordinator.onInspectImage = onInspectImage
         context.coordinator.documentContext = documentContext
         update(textView, coordinator: context.coordinator)
     }
@@ -354,6 +367,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onOpenHeading: ((String) -> Void)?
         var onOpenDocument: ((URL) -> Void)?
+        var onInspectImage: ((URL) -> Void)?
         var documentContext = DocumentContext(fileURL: nil)
         var renderedSource: String?
         var renderedContext: DocumentContext?
@@ -363,6 +377,10 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             let url = link as? URL ?? (link as? String).flatMap(URL.init(string:))
             guard let url else { return false }
+            if let imageURL = MarkdownImageInspectionLink.destination(url) {
+                onInspectImage?(imageURL)
+                return true
+            }
             if let fragment = MarkdownHeadingIndex.localFragment(in: url), let onOpenHeading {
                 onOpenHeading(fragment)
                 return true
@@ -388,5 +406,72 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom
         coordinator.renderedRemoteRevision = remoteRevision
+    }
+}
+
+private struct ImageInspectionItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct ImageInspectionView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var showsOriginalSize = false
+    let url: URL
+
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text(url.lastPathComponent).font(.headline).lineLimit(1)
+                Spacer()
+                if !url.isFileURL {
+                    Toggle("原寸", isOn: $showsOriginalSize)
+                        .toggleStyle(.button)
+                }
+                Button("閉じる") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            if url.isFileURL {
+                QuickLookImageView(url: url)
+            } else if let image = RemoteImageStore.shared.fullImage(for: url) {
+                GeometryReader { geometry in
+                    let scale = showsOriginalSize ? 1 : min(1,
+                        geometry.size.width / max(image.size.width, 1),
+                        geometry.size.height / max(image.size.height, 1))
+                    ScrollView([.horizontal, .vertical]) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .frame(width: image.size.width * scale,
+                                   height: image.size.height * scale)
+                            .frame(minWidth: geometry.size.width,
+                                   minHeight: geometry.size.height)
+                    }
+                }
+            } else {
+                ContentUnavailableView("画像を表示できません", systemImage: "photo",
+                    description: Text("もう一度プレビューを開いてください。"))
+            }
+        }
+        .padding()
+        .frame(minWidth: 620, minHeight: 480)
+    }
+}
+
+private struct QuickLookImageView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> QLPreviewView {
+        let view = QLPreviewView(frame: .zero)!
+        view.previewItem = url as NSURL
+        return view
+    }
+
+    func updateNSView(_ view: QLPreviewView, context: Context) {
+        if view.previewItem?.previewItemURL != url { view.previewItem = url as NSURL }
+    }
+
+    static func dismantleNSView(_ view: QLPreviewView, coordinator: ()) {
+        view.close()
     }
 }

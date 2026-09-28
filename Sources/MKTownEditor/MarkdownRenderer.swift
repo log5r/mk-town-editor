@@ -254,6 +254,10 @@ enum MarkdownRenderer {
                 let value = NSMutableAttributedString(attachment: attachment)
                 value.addAttribute(.alternateDescription, value: alt,
                                    range: NSRange(location: 0, length: value.length))
+                if let link = MarkdownImageInspectionLink.make(fileURL) {
+                    value.addAttribute(.link, value: link,
+                        range: NSRange(location: 0, length: value.length))
+                }
                 replacement = value
             } else if ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
                       let image = RemoteImageStore.shared.image(for: url) {
@@ -265,6 +269,10 @@ enum MarkdownRenderer {
                 let value = NSMutableAttributedString(attachment: attachment)
                 value.addAttribute(.alternateDescription, value: alt,
                                    range: NSRange(location: 0, length: value.length))
+                if let link = MarkdownImageInspectionLink.make(url) {
+                    value.addAttribute(.link, value: link,
+                        range: NSRange(location: 0, length: value.length))
+                }
                 replacement = value
             } else {
                 let status: String
