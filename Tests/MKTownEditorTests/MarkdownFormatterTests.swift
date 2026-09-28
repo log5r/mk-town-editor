@@ -204,4 +204,40 @@ final class MarkdownFormatterTests: XCTestCase {
                                            selection: (source as NSString).range(of: "one** and"))
         XCTAssertEqual(edit.applying(to: source), "**one and** two")
     }
+
+    func testStrikethroughWrapsSelectedUnicodeAndKeepsSelection() {
+        let source = "前🙂後"
+        let edit = MarkdownFormatter.apply(.strikethrough, to: source,
+                                           selection: (source as NSString).range(of: "🙂"))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "前~~🙂~~後")
+        XCTAssertEqual((updated as NSString).substring(with: edit.selection), "🙂")
+    }
+
+    func testStrikethroughPlaceholderIsSelectedAtEmptySelectionAndDocumentEnd() {
+        let source = "前"
+        let edit = MarkdownFormatter.apply(.strikethrough, to: source,
+                                           selection: NSRange(location: (source as NSString).length, length: 0))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "前~~取り消し線~~")
+        XCTAssertEqual((updated as NSString).substring(with: edit.selection), "取り消し線")
+    }
+
+    func testStrikethroughTogglesAndNormalizesMixedSelection() {
+        let source = "~~one~~ and two"
+        let inner = MarkdownFormatter.apply(.strikethrough, to: source,
+                                            selection: (source as NSString).range(of: "one"))
+        XCTAssertEqual(inner.applying(to: source), "one and two")
+
+        let mixed = MarkdownFormatter.apply(.strikethrough, to: source,
+                                            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(mixed.applying(to: source), "~~one and two~~")
+    }
+
+    func testStrikethroughDoesNotRemoveMarkersInsideCode() {
+        let source = "`~~literal~~`"
+        let edit = MarkdownFormatter.apply(.strikethrough, to: source,
+                                           selection: (source as NSString).range(of: "literal"))
+        XCTAssertEqual(edit.applying(to: source), "`~~~~literal~~~~`")
+    }
 }

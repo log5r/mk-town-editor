@@ -3,6 +3,7 @@ import SwiftUI
 enum EditorCommand: Hashable {
     case bold
     case italic
+    case strikethrough
     case inlineCode
     case link
     case heading(level: Int)
@@ -11,12 +12,13 @@ enum EditorCommand: Hashable {
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .inlineCode, .link, .quote, .unorderedList]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .quote, .unorderedList]
 
     var title: String {
         switch self {
         case .bold: "太字"
         case .italic: "斜体"
+        case .strikethrough: "取り消し線"
         case .inlineCode: "インラインコード"
         case .link: "リンク"
         case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
@@ -30,6 +32,7 @@ enum EditorCommand: Hashable {
         switch self {
         case .bold: "bold"
         case .italic: "italic"
+        case .strikethrough: "strikethrough"
         case .inlineCode: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
         case .heading: "number"
@@ -43,6 +46,7 @@ enum EditorCommand: Hashable {
         switch self {
         case .bold: ("b", .command)
         case .italic: ("i", .command)
+        case .strikethrough: ("x", [.command, .shift])
         case .inlineCode: ("`", .command)
         case .link: ("k", .command)
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
@@ -63,6 +67,7 @@ enum EditorCommand: Hashable {
         switch self {
         case .bold: model.apply(.bold)
         case .italic: model.apply(.italic)
+        case .strikethrough: model.apply(.strikethrough)
         case .inlineCode: model.apply(.inlineCode)
         case .link: model.apply(.link)
         case let .heading(level): model.apply(.heading(level: level))

@@ -54,4 +54,19 @@ final class EditorCommandTests: XCTestCase {
         model.disconnect(view)
         XCTAssertFalse(view.makeMarkdownMenu(baseMenu: nil).items.first?.isEnabled == true)
     }
+
+    func testStrikethroughCommandUsesSharedActionAndShortcut() {
+        let view = NSTextView()
+        view.string = "word"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: 4))
+
+        EditorCommand.strikethrough.perform(on: model)
+
+        XCTAssertEqual(view.string, "~~word~~")
+        XCTAssertEqual(EditorCommand.strikethrough.title, "取り消し線")
+        XCTAssertEqual(EditorCommand.strikethrough.shortcut.key, "x")
+        XCTAssertTrue(EditorCommand.strikethrough.shortcut.modifiers.contains(.shift))
+    }
 }
