@@ -44,6 +44,14 @@ private struct ExportPDFActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct PageSetupActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+private struct PrintDocumentActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -78,6 +86,14 @@ extension FocusedValues {
         get { self[ExportPDFActionKey.self] }
         set { self[ExportPDFActionKey.self] = newValue }
     }
+    var pageSetupAction: (() -> Void)? {
+        get { self[PageSetupActionKey.self] }
+        set { self[PageSetupActionKey.self] = newValue }
+    }
+    var printDocumentAction: (() -> Void)? {
+        get { self[PrintDocumentActionKey.self] }
+        set { self[PrintDocumentActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -89,9 +105,18 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.regexSearchAction) private var regexSearchAction
     @FocusedValue(\.exportHTMLAction) private var exportHTMLAction
     @FocusedValue(\.exportPDFAction) private var exportPDFAction
+    @FocusedValue(\.pageSetupAction) private var pageSetupAction
+    @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
+        CommandGroup(replacing: .printItem) {
+            Button("ページ設定…") { pageSetupAction?() }
+                .disabled(pageSetupAction == nil)
+            Button("印刷…") { printDocumentAction?() }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(printDocumentAction == nil)
+        }
         CommandMenu("移動") {
             Button("戻る") { navigationHistoryActions?.goBack() }
                 .keyboardShortcut("[", modifiers: [.command, .option])

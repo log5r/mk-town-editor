@@ -35,4 +35,39 @@ final class MarkdownPDFExporterTests: XCTestCase {
         XCTAssertEqual(bounds.width, 595.28, accuracy: 1)
         XCTAssertEqual(bounds.height, 841.89, accuracy: 1)
     }
+
+    func testPrintSettingsRejectOversizedMargins() {
+        let paper = NSSize(width: 300, height: 400)
+        XCTAssertTrue(MarkdownPrintSettings().isValid(for: paper))
+        var settings = MarkdownPrintSettings()
+        settings.leftMargin = 150
+        settings.rightMargin = 100
+        XCTAssertFalse(settings.isValid(for: paper))
+        settings.rightMargin = .nan
+        XCTAssertFalse(settings.isValid(for: paper))
+    }
+
+    func testPrintLayoutIncludesSelectedHeaderAndFooter() throws {
+        let destination = URL(fileURLWithPath: "/private/tmp/mktown-print-qa.pdf")
+        let info = MarkdownPDFExporter.printInfo(destination: destination)
+        var settings = MarkdownPrintSettings()
+        settings.leftMargin = 64
+        settings.header = true
+        settings.footer = true
+        try settings.apply(to: info)
+        XCTAssertEqual(info.leftMargin, 64)
+        XCTAssertEqual(info.dictionary()[NSPrintInfo.AttributeKey(rawValue: "NSPrintHeaderAndFooter")] as? Bool, true)
+        let view = try MarkdownPDFExporter.printableView("# 印刷確認", documentURL: nil,
+                                                         printInfo: info, title: "印刷書類",
+                                                         header: settings.header, footer: settings.footer)
+        XCTAssertEqual(view.pageHeader.string, "印刷書類")
+        let operation = NSPrintOperation(view: view, printInfo: info)
+        operation.showsPrintPanel = false
+        operation.showsProgressPanel = false
+        XCTAssertTrue(operation.run())
+        let pdf = try XCTUnwrap(PDFDocument(url: destination))
+        XCTAssertTrue((pdf.string ?? "").contains("印刷確認"))
+        XCTAssertTrue((pdf.string ?? "").contains("印刷書類"))
+        XCTAssertTrue((pdf.string ?? "").contains("1 / 1"))
+    }
 }

@@ -4,12 +4,38 @@ import Foundation
 enum MarkdownPDFExportError: LocalizedError {
     case printingFailed
     case emptyOutput
+    case invalidMargins
 
     var errorDescription: String? {
         switch self {
         case .printingFailed: "PDFの作成に失敗しました。"
         case .emptyOutput: "作成したPDFを読み取れません。"
+        case .invalidMargins: "余白が用紙サイズに対して大きすぎます。"
         }
+    }
+}
+
+struct MarkdownPrintSettings {
+    var topMargin: Double = 48
+    var bottomMargin: Double = 48
+    var leftMargin: Double = 48
+    var rightMargin: Double = 48
+    var header = false
+    var footer = false
+
+    func isValid(for paperSize: NSSize) -> Bool {
+        [topMargin, bottomMargin, leftMargin, rightMargin].allSatisfy { $0.isFinite && $0 >= 0 }
+            && paperSize.width - leftMargin - rightMargin >= 100
+            && paperSize.height - topMargin - bottomMargin >= 100
+    }
+
+    func apply(to info: NSPrintInfo) throws {
+        guard isValid(for: info.paperSize) else { throw MarkdownPDFExportError.invalidMargins }
+        info.topMargin = topMargin
+        info.bottomMargin = bottomMargin
+        info.leftMargin = leftMargin
+        info.rightMargin = rightMargin
+        info.dictionary()[NSPrintInfo.AttributeKey(rawValue: "NSPrintHeaderAndFooter")] = header || footer
     }
 }
 
@@ -30,6 +56,23 @@ enum MarkdownPDFExporter {
     }
 
     static func export(_ markdown: String, documentURL: URL?, to destination: URL) throws {
+        let info = printInfo(destination: destination)
+        let textView = try printableView(markdown, documentURL: documentURL, printInfo: info)
+        let operation = NSPrintOperation(view: textView, printInfo: info)
+        operation.showsPrintPanel = false
+        operation.showsProgressPanel = false
+        guard operation.run() else { throw MarkdownPDFExportError.printingFailed }
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: destination.path),
+              let size = attributes[.size] as? NSNumber, size.intValue > 0 else {
+            throw MarkdownPDFExportError.emptyOutput
+        }
+    }
+
+    static func printableView(_ markdown: String, documentURL: URL?, printInfo info: NSPrintInfo,
+                              title: String = "", header: Bool = false, footer: Bool = false) throws -> NSTextView {
+        let width = info.paperSize.width - info.leftMargin - info.rightMargin
+        let height = info.paperSize.height - info.topMargin - info.bottomMargin
+        guard width >= 100, height >= 100 else { throw MarkdownPDFExportError.invalidMargins }
         let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL)
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,
@@ -37,10 +80,11 @@ enum MarkdownPDFExporter {
         ]
         let attributed = try NSAttributedString(data: Data(html.utf8), options: options,
                                                  documentAttributes: nil)
-        let info = printInfo(destination: destination)
-        let width = info.paperSize.width - info.leftMargin - info.rightMargin
         let textView = PDFTextView(frame: NSRect(x: 0, y: 0, width: width, height: 100))
-        textView.printableHeight = info.paperSize.height - info.topMargin - info.bottomMargin
+        textView.printableHeight = height
+        textView.headerTitle = title
+        textView.showsHeader = header
+        textView.showsFooter = footer
         textView.isRichText = true
         textView.isEditable = false
         textView.textContainerInset = .zero
@@ -51,23 +95,45 @@ enum MarkdownPDFExporter {
             layoutManager.ensureLayout(for: container)
             textView.frame.size.height = max(100, ceil(layoutManager.usedRect(for: container).height))
         }
-        let operation = NSPrintOperation(view: textView, printInfo: info)
-        operation.showsPrintPanel = false
-        operation.showsProgressPanel = false
-        guard operation.run() else { throw MarkdownPDFExportError.printingFailed }
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: destination.path),
-              let size = attributes[.size] as? NSNumber, size.intValue > 0 else {
-            throw MarkdownPDFExportError.emptyOutput
-        }
+        return textView
     }
 }
 
 private final class PDFTextView: NSTextView {
     var printableHeight: CGFloat = 740
+    var headerTitle = ""
+    var showsHeader = false
+    var showsFooter = false
     private var pageRects: [NSRect] = []
+
+    override var pageHeader: NSAttributedString {
+        NSAttributedString(string: showsHeader ? headerTitle : "")
+    }
+
+    override var pageFooter: NSAttributedString {
+        guard showsFooter, let operation = NSPrintOperation.current else {
+            return NSAttributedString(string: "")
+        }
+        return NSAttributedString(string: "\(operation.currentPage) / \(operation.pageRange.length)")
+    }
 
     override func knowsPageRange(_ range: NSRangePointer) -> Bool {
         guard let layoutManager, let textStorage else { return false }
+        if let info = NSPrintOperation.current?.printInfo {
+            let width = max(100, info.paperSize.width - info.leftMargin - info.rightMargin)
+            printableHeight = max(100, info.paperSize.height - info.topMargin - info.bottomMargin)
+            if abs(bounds.width - width) > 0.5 {
+                frame.size.width = width
+                textContainer?.containerSize.width = width
+                layoutManager.invalidateLayout(forCharacterRange: NSRange(location: 0,
+                                                                           length: textStorage.length),
+                                               actualCharacterRange: nil)
+            }
+            if let textContainer {
+                layoutManager.ensureLayout(for: textContainer)
+                frame.size.height = max(100, ceil(layoutManager.usedRect(for: textContainer).height))
+            }
+        }
         pageRects = []
         var start: CGFloat = 0
         var glyph = 0
