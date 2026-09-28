@@ -8,6 +8,14 @@ enum MarkdownRenderer {
         return renderSequence(analysis.rootBlocks, in: analysis)
     }
 
+    static func renderLeaf(_ block: MarkdownBlock) -> NSAttributedString {
+        render(block)
+    }
+
+    static func renderTableCell(_ markdown: String) -> NSAttributedString {
+        inline(markdown, baseFont: .systemFont(ofSize: 14))
+    }
+
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis) -> NSAttributedString {
         let output = NSMutableAttributedString()
         for (index, block) in blocks.enumerated() {
@@ -67,6 +75,10 @@ enum MarkdownRenderer {
             var attributes = baseAttributes(font: .monospacedSystemFont(ofSize: 13, weight: .regular))
             attributes[.backgroundColor] = NSColor.controlBackgroundColor
             return NSAttributedString(string: block.content, attributes: attributes)
+        case .table:
+            guard let table = block.table else { return NSAttributedString(string: "") }
+            return NSAttributedString(string: ([table.header] + table.rows)
+                .map { $0.joined(separator: "\t") }.joined(separator: "\n"))
         case let .heading(level):
             let sizes: [CGFloat] = [28, 23, 20, 18, 16, 15]
             return inline(

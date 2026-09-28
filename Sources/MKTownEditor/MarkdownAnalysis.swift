@@ -5,6 +5,19 @@ enum MarkdownLineBreak: Equatable {
     case hard
 }
 
+struct MarkdownTable: Equatable {
+    enum Alignment: Equatable {
+        case leading
+        case center
+        case trailing
+    }
+
+    let header: [String]
+    let alignments: [Alignment]
+    let rows: [[String]]
+    let rowRanges: [NSRange]
+}
+
 struct MarkdownBlock: Equatable {
     enum Kind: Equatable {
         case paragraph
@@ -13,6 +26,7 @@ struct MarkdownBlock: Equatable {
         case unorderedList
         case orderedList(number: Int)
         case codeBlock
+        case table
         case horizontalRule
         case blank
     }
@@ -25,6 +39,7 @@ struct MarkdownBlock: Equatable {
     let codeLanguage: String?
     let codeFenceMarker: Character?
     let codeFenceLength: Int?
+    let table: MarkdownTable?
     let lineBreaks: [MarkdownLineBreak]
     let sourceIndent: String?
     let nestingDepth: Int
@@ -115,6 +130,7 @@ struct MarkdownAnalysis {
                     sourceRange: NSRange(location: firstLine.range.location,
                                          length: NSMaxRange(lastRange) - firstLine.range.location),
                     codeLanguage: nil, codeFenceMarker: nil, codeFenceLength: nil,
+                    table: nil,
                     lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 result.append(contentsOf: parseLines(quoteLines, parentID: quoteID, nextID: &nextID))
@@ -138,7 +154,8 @@ struct MarkdownAnalysis {
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
                     codeLanguage: fence.language, codeFenceMarker: fence.marker,
-                    codeFenceLength: fence.length, lineBreaks: [], sourceIndent: nil, nestingDepth: 0
+                    codeFenceLength: fence.length, table: nil,
+                    lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 listAncestors.removeAll()
                 continue
@@ -173,10 +190,49 @@ struct MarkdownAnalysis {
                     sourceRange: NSRange(location: line.range.location,
                                          length: NSMaxRange(end) - line.range.location),
                     codeLanguage: nil, codeFenceMarker: nil, codeFenceLength: nil,
+                    table: nil,
                     lineBreaks: [], sourceIndent: String(line.text.prefix(while: { $0 == " " || $0 == "\t" })),
                     nestingDepth: listAncestors.last.map { $0.depth + 1 } ?? 0
                 ))
                 index = lastContentIndex + 1
+                continue
+            }
+
+            if index + 1 < lines.count, indentationWidth(line.text) < 4,
+                parseHeading(line.text) == nil, parseList(line.text) == nil,
+                !isThematicBreak(line.text),
+                let table = parseTableHeader(line.text, delimiter: lines[index + 1].text) {
+                let id = nextID
+                nextID += 1
+                index += 2
+                var rows: [[String]] = []
+                var rowRanges: [NSRange] = []
+                while index < lines.count {
+                    let row = lines[index]
+                    if row.text.trimmingCharacters(in: .whitespaces).isEmpty ||
+                        openingFence(row.text) != nil || parseQuote(row.text) != nil ||
+                        parseHeading(row.text) != nil || isThematicBreak(row.text) ||
+                        parseList(row.text) != nil { break }
+                    var cells = splitTableRow(row.text).cells
+                    if cells.count > table.header.count {
+                        cells = Array(cells.prefix(table.header.count))
+                    }
+                    cells += Array(repeating: "", count: table.header.count - cells.count)
+                    rows.append(cells)
+                    rowRanges.append(row.range)
+                    index += 1
+                }
+                let end = lines[index - 1].range
+                result.append(MarkdownBlock(
+                    id: id, parentID: listAncestors.last?.id ?? parentID, kind: .table,
+                    content: "", sourceRange: NSRange(location: line.range.location,
+                        length: NSMaxRange(end) - line.range.location),
+                    codeLanguage: nil, codeFenceMarker: nil, codeFenceLength: nil,
+                    table: MarkdownTable(header: table.header, alignments: table.alignments,
+                                         rows: rows, rowRanges: rowRanges),
+                    lineBreaks: [], sourceIndent: nil,
+                    nestingDepth: listAncestors.last.map { $0.depth + 1 } ?? 0
+                ))
                 continue
             }
 
@@ -211,7 +267,9 @@ struct MarkdownAnalysis {
                 var next = index + 1
                 while next < lines.count && isParagraphContinuation(lines[next].text) &&
                     indentationWidth(lines[next].text) > list.indent &&
-                    indentationWidth(lines[next].text) < list.contentIndent + 4 {
+                    indentationWidth(lines[next].text) < list.contentIndent + 4 &&
+                    !(next + 1 < lines.count &&
+                      parseTableHeader(lines[next].text, delimiter: lines[next + 1].text) != nil) {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
                     parts.append(withoutLeadingIndent(lines[next].text))
                     next += 1
@@ -242,7 +300,9 @@ struct MarkdownAnalysis {
                       !lines[next].text.trimmingCharacters(in: .whitespaces).isEmpty)) &&
                     (!isListContinuation ||
                      (indentationWidth(lines[next].text) > listAncestors.last!.indent &&
-                      indentationWidth(lines[next].text) < listAncestors.last!.contentIndent + 4)) {
+                      indentationWidth(lines[next].text) < listAncestors.last!.contentIndent + 4)) &&
+                    !(next + 1 < lines.count &&
+                      parseTableHeader(lines[next].text, delimiter: lines[next + 1].text) != nil) {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
                     parts.append(!isListContinuation ? lines[next].text :
                         withoutLeadingIndent(lines[next].text))
@@ -263,7 +323,7 @@ struct MarkdownAnalysis {
             result.append(MarkdownBlock(
                 id: id, parentID: blockParentID, kind: kind, content: content,
                 sourceRange: sourceRange, codeLanguage: nil, codeFenceMarker: nil,
-                codeFenceLength: nil, lineBreaks: lineBreaks,
+                codeFenceLength: nil, table: nil, lineBreaks: lineBreaks,
                 sourceIndent: sourceIndent, nestingDepth: nestingDepth
             ))
             index += advance
@@ -374,6 +434,69 @@ struct MarkdownAnalysis {
         guard let marker = trimmed.first, marker == "=" || marker == "-",
               trimmed.allSatisfy({ $0 == marker }) else { return nil }
         return marker == "=" ? 1 : 2
+    }
+
+    private static func parseTableHeader(
+        _ headerLine: String,
+        delimiter: String
+    ) -> (header: [String], alignments: [MarkdownTable.Alignment])? {
+        let header = splitTableRow(headerLine)
+        let delimiterRow = splitTableRow(delimiter)
+        guard header.hasPipe || delimiterRow.hasPipe,
+              !header.cells.isEmpty, header.cells.count == delimiterRow.cells.count else { return nil }
+        var alignments: [MarkdownTable.Alignment] = []
+        for cell in delimiterRow.cells {
+            let value = cell.trimmingCharacters(in: .whitespaces)
+            let afterLeadingColon = value.hasPrefix(":") ? value.dropFirst() : value[...]
+            let core = value.hasSuffix(":") ? afterLeadingColon.dropLast() : afterLeadingColon
+            guard !core.isEmpty, core.allSatisfy({ $0 == "-" }) else { return nil }
+            if value.hasPrefix(":") && value.hasSuffix(":") {
+                alignments.append(.center)
+            } else if value.hasSuffix(":") {
+                alignments.append(.trailing)
+            } else {
+                alignments.append(.leading)
+            }
+        }
+        return (header.cells, alignments)
+    }
+
+    private static func splitTableRow(_ line: String) -> (cells: [String], hasPipe: Bool) {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let characters = Array(trimmed)
+        var cells: [String] = []
+        var current = ""
+        var index = 0
+        var hasPipe = false
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\\" {
+                let start = index
+                while index < characters.count && characters[index] == "\\" { index += 1 }
+                let count = index - start
+                current += String(repeating: "\\", count: count)
+                if count % 2 == 1 && index < characters.count && characters[index] == "|" {
+                    current.append("|")
+                    index += 1
+                }
+                continue
+            }
+            if character == "|" {
+                hasPipe = true
+                cells.append(current.trimmingCharacters(in: .whitespaces))
+                current = ""
+            } else {
+                current.append(character)
+            }
+            index += 1
+        }
+        cells.append(current.trimmingCharacters(in: .whitespaces))
+        if trimmed.first == "|" { cells.removeFirst() }
+        let trailingBackslashes = characters.dropLast().reversed().prefix(while: { $0 == "\\" }).count
+        if trimmed.last == "|", trailingBackslashes % 2 == 0 {
+            cells.removeLast()
+        }
+        return (cells, hasPipe)
     }
 
     private static func isParagraphContinuation(_ line: String) -> Bool {
