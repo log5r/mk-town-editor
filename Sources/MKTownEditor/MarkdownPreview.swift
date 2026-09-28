@@ -39,7 +39,8 @@ struct MarkdownPreview: View {
             ProgressView("プレビューを準備中")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
+            let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown,
+                dialect: documentContext.markdownDialect)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
@@ -565,10 +566,13 @@ private struct DetachedPreviewContent: View {
     @ObservedObject var updates: PreviewUpdateController
 
     var body: some View {
+        let dialect = settingsStore.markdownDialect(for: manager.documentURL)
         VStack(spacing: 0) {
-            PreviewUpdateControls(updates: updates, source: document.text)
+            PreviewUpdateControls(updates: updates, source: document.text, dialect: dialect)
             MarkdownPreview(markdown: updates.state.displayedSource ?? document.text,
-                            documentContext: DocumentContext(fileURL: manager.documentURL),
+                            documentContext: DocumentContext(fileURL: manager.documentURL,
+                                attachmentDirectory: settingsStore.attachmentDirectory(for: manager.documentURL),
+                                markdownDialect: dialect),
                             snapshot: updates.state.isPaused ? updates.snapshot : nil,
                             usesSharedAnalysis: updates.state.isPaused,
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
@@ -615,15 +619,17 @@ final class PreviewUpdateController: ObservableObject {
 
     func sourceChanged() { state.sourceChanged() }
 
-    func pause(source: String, preferredSnapshot: DocumentSnapshot? = nil) {
+    func pause(source: String, dialect: MarkdownDialect = .extended,
+               preferredSnapshot: DocumentSnapshot? = nil) {
         state.pause(at: source)
-        capture(source: source, preferredSnapshot: preferredSnapshot)
+        capture(source: source, dialect: dialect, preferredSnapshot: preferredSnapshot)
     }
 
-    func refresh(source: String, preferredSnapshot: DocumentSnapshot? = nil) {
+    func refresh(source: String, dialect: MarkdownDialect = .extended,
+                 preferredSnapshot: DocumentSnapshot? = nil) {
         guard state.isPaused else { return }
         state.refresh(to: source)
-        capture(source: source, preferredSnapshot: preferredSnapshot)
+        capture(source: source, dialect: dialect, preferredSnapshot: preferredSnapshot)
     }
 
     func resume() {
@@ -634,18 +640,19 @@ final class PreviewUpdateController: ObservableObject {
         snapshot = nil
     }
 
-    private func capture(source: String, preferredSnapshot: DocumentSnapshot?) {
+    private func capture(source: String, dialect: MarkdownDialect,
+                         preferredSnapshot: DocumentSnapshot?) {
         generation += 1
         let requestedGeneration = generation
         task?.cancel()
-        if preferredSnapshot?.source == source {
+        if preferredSnapshot?.source == source && preferredSnapshot?.dialect == dialect {
             snapshot = preferredSnapshot
             task = nil
             return
         }
         snapshot = nil
         task = Task.detached(priority: .userInitiated) { [weak self] in
-            let result = DocumentSnapshot(source: source)
+            let result = DocumentSnapshot(source: source, dialect: dialect)
             await self?.publish(result, generation: requestedGeneration)
         }
     }
@@ -661,6 +668,7 @@ struct PreviewUpdateControls: View {
     @ObservedObject var updates: PreviewUpdateController
     let source: String
     var preferredSnapshot: DocumentSnapshot?
+    var dialect: MarkdownDialect = .extended
 
     var body: some View {
         HStack(spacing: 10) {
@@ -669,7 +677,8 @@ struct PreviewUpdateControls: View {
                     .foregroundStyle(updates.state.isStale ? .orange : .secondary)
                 Spacer()
                 Button("手動更新", systemImage: "arrow.clockwise") {
-                    updates.refresh(source: source, preferredSnapshot: preferredSnapshot)
+                    updates.refresh(source: source, dialect: dialect,
+                                    preferredSnapshot: preferredSnapshot)
                 }
                 Button("自動更新を再開", systemImage: "play.fill") {
                     updates.resume()
@@ -679,7 +688,8 @@ struct PreviewUpdateControls: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("自動更新を停止", systemImage: "pause.fill") {
-                    updates.pause(source: source, preferredSnapshot: preferredSnapshot)
+                    updates.pause(source: source, dialect: dialect,
+                                  preferredSnapshot: preferredSnapshot)
                 }
             }
         }

@@ -23,7 +23,8 @@ enum WorkspaceAttachmentAudit {
             for node in nodes {
                 if let children = node.children { collect(children) }
                 else if node.isEditableDocument { documents.append(node.url) }
-                else if node.url.pathComponents.contains("assets") { assets.append(node.url) }
+                else if node.url.pathComponents.contains("assets") ||
+                    node.url.pathComponents.contains("images") { assets.append(node.url) }
             }
         }
         collect(index.nodes)

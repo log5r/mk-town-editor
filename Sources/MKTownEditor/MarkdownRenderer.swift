@@ -9,7 +9,8 @@ enum MarkdownRenderer {
 
     static func render(_ markdown: String,
                        documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        render(MarkdownAnalysis(markdown), documentContext: documentContext)
+        render(MarkdownAnalysis(markdown, dialect: documentContext.markdownDialect),
+               documentContext: documentContext)
     }
 
     static func render(_ analysis: MarkdownAnalysis,

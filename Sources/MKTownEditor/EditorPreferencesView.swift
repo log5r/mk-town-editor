@@ -35,6 +35,16 @@ struct EditorPreferencesView: View {
             Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
             Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
             Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
+            Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
+                ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
+                    Text(directory.title).tag(directory)
+                }
+            }
+            Picker("Markdown構文", selection: binding(\.markdownDialect, default: .extended)) {
+                ForEach(MarkdownDialect.allCases, id: \.self) { dialect in
+                    Text(dialect.title).tag(dialect)
+                }
+            }
             Section("校正") {
                 Picker("スペルチェックの言語", selection: proofingBinding(\.language)) {
                     ForEach(ProofingLanguage.allCases, id: \.self) { language in
@@ -125,6 +135,73 @@ struct EditorPreferencesView: View {
         var settings = settingsStore.app
         settings.snippets?.removeAll { $0.id == id }
         settingsStore.setAppSettings(settings)
+    }
+}
+
+struct FolderEditorSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var settingsStore: EditorSettingsStore
+    let folderURL: URL
+
+    private var folder: FolderEditorSettings { settingsStore.folderSettings(for: folderURL) }
+
+    var body: some View {
+        Form {
+            Text(folderURL.path).font(.caption).textSelection(.enabled)
+            Text("フォルダの設定はアプリ設定より優先されます。未指定の項目は親フォルダ、次にアプリ設定を使います。")
+                .font(.caption).foregroundStyle(.secondary)
+            widthRow("タブ幅", keyPath: \.tabWidth,
+                     inherited: settingsStore.textStyle(for: folderURL.appendingPathComponent("sample.md")).tabWidth)
+            widthRow("リストの字下げ", keyPath: \.listIndentWidth,
+                     inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).listIndentWidth)
+            widthRow("コードの字下げ", keyPath: \.codeIndentWidth,
+                     inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).codeIndentWidth)
+            Picker("添付ファイルの保存先", selection: optionalBinding(\.attachmentDirectory)) {
+                Text("継承").tag(nil as AttachmentDirectory?)
+                ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
+                    Text(directory.title).tag(Optional(directory))
+                }
+            }
+            Picker("Markdown構文", selection: optionalBinding(\.markdownDialect)) {
+                Text("継承").tag(nil as MarkdownDialect?)
+                ForEach(MarkdownDialect.allCases, id: \.self) { dialect in
+                    Text(dialect.title).tag(Optional(dialect))
+                }
+            }
+            Text("現在の文書に適用: 保存先 \(settingsStore.attachmentDirectory(for: folderURL.appendingPathComponent("sample.md")).title)、構文 \(settingsStore.markdownDialect(for: folderURL.appendingPathComponent("sample.md")).title)")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack { Spacer(); Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction) }
+        }
+        .formStyle(.grouped)
+        .frame(width: 500)
+    }
+
+    private func widthRow(_ title: String,
+                          keyPath: WritableKeyPath<FolderEditorSettings, Int?>,
+                          inherited: Int) -> some View {
+        HStack {
+            Stepper(value: Binding(
+                get: { folder[keyPath: keyPath] ?? inherited },
+                set: { value in update { $0[keyPath: keyPath] = value } }
+            ), in: 2...8) {
+                Text("\(title): \(folder[keyPath: keyPath] ?? inherited) 文字")
+            }
+            Button("継承") { update { $0[keyPath: keyPath] = nil } }
+                .disabled(folder[keyPath: keyPath] == nil)
+        }
+    }
+
+    private func optionalBinding<Value>(
+        _ keyPath: WritableKeyPath<FolderEditorSettings, Value?>
+    ) -> Binding<Value?> {
+        Binding(get: { folder[keyPath: keyPath] },
+                set: { value in update { $0[keyPath: keyPath] = value } })
+    }
+
+    private func update(_ change: (inout FolderEditorSettings) -> Void) {
+        var value = folder
+        change(&value)
+        settingsStore.setFolderSettings(value, for: folderURL)
     }
 }
 

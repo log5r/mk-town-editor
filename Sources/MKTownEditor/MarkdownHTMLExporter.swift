@@ -6,8 +6,9 @@ enum MarkdownHTMLExporter {
     static let coverBreakMarker = "\u{E000}"
 
     static func render(_ markdown: String, documentURL: URL? = nil,
-                       preset: MarkdownExportPreset = .standard, printLayout: Bool = false) -> String {
-        let analysis = MarkdownAnalysis(markdown)
+                       preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
+                       dialect: MarkdownDialect = .extended) -> String {
+        let analysis = MarkdownAnalysis(markdown, dialect: dialect)
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })

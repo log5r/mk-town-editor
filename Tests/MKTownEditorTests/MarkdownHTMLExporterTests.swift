@@ -4,6 +4,16 @@ import XCTest
 
 @MainActor
 final class MarkdownHTMLExporterTests: XCTestCase {
+    func testBasicDialectDoesNotExportExtendedTablesOrFootnotes() {
+        let source = "| A |\n| --- |\n| B |\n\nText[^n]\n\n[^n]: Note"
+        let extended = MarkdownHTMLExporter.render(source)
+        let basic = MarkdownHTMLExporter.render(source, dialect: .basic)
+        XCTAssertTrue(extended.contains("<table>"))
+        XCTAssertTrue(extended.contains("class=\"footnotes\""))
+        XCTAssertFalse(basic.contains("<table>"))
+        XCTAssertFalse(basic.contains("class=\"footnotes\""))
+        XCTAssertTrue(basic.contains("[^n]: Note"))
+    }
     func testExportsSharedBlockStructureAndEscapesContent() {
         let markdown = """
         # Head & <tag>

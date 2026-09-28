@@ -3,6 +3,8 @@ import Foundation
 /// Location-dependent services for one document. The document contents remain in FileDocument.
 struct DocumentContext: Equatable, Sendable {
     let fileURL: URL?
+    var attachmentDirectory: AttachmentDirectory = .assets
+    var markdownDialect: MarkdownDialect = .extended
 
     var directoryURL: URL? {
         guard let fileURL, fileURL.isFileURL else { return nil }

@@ -9,8 +9,10 @@ enum MarkdownRichClipboardError: LocalizedError {
 
 @MainActor
 enum MarkdownRichClipboard {
-    static func payload(for markdown: String, documentURL: URL?) throws -> Payload {
-        let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL)
+    static func payload(for markdown: String, documentURL: URL?,
+                        dialect: MarkdownDialect = .extended) throws -> Payload {
+        let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL,
+                                               dialect: dialect)
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,
             .characterEncoding: String.Encoding.utf8.rawValue
@@ -24,8 +26,9 @@ enum MarkdownRichClipboard {
         return Payload(html: html, rtf: rtf, plainText: plainText)
     }
 
-    static func copy(_ markdown: String, documentURL: URL?, to pasteboard: NSPasteboard) throws {
-        let data = try payload(for: markdown, documentURL: documentURL)
+    static func copy(_ markdown: String, documentURL: URL?, to pasteboard: NSPasteboard,
+                     dialect: MarkdownDialect = .extended) throws {
+        let data = try payload(for: markdown, documentURL: documentURL, dialect: dialect)
         pasteboard.declareTypes([.html, .rtf, .string], owner: nil)
         guard pasteboard.setString(data.html, forType: .html),
               pasteboard.setData(data.rtf, forType: .rtf),

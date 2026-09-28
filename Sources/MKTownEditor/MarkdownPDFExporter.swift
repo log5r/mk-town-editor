@@ -56,10 +56,11 @@ enum MarkdownPDFExporter {
     }
 
     static func export(_ markdown: String, documentURL: URL?, to destination: URL,
-                       preset: MarkdownExportPreset = .standard) throws {
+                       preset: MarkdownExportPreset = .standard,
+                       dialect: MarkdownDialect = .extended) throws {
         let info = printInfo(destination: destination, preset: preset)
         let textView = try printableView(markdown, documentURL: documentURL, printInfo: info,
-                                         preset: preset)
+                                         preset: preset, dialect: dialect)
         let operation = NSPrintOperation(view: textView, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
@@ -72,13 +73,14 @@ enum MarkdownPDFExporter {
 
     static func printableView(_ markdown: String, documentURL: URL?, printInfo info: NSPrintInfo,
                               title: String = "", header: Bool = false, footer: Bool = false,
-                              preset: MarkdownExportPreset = .standard) throws -> NSTextView {
+                              preset: MarkdownExportPreset = .standard,
+                              dialect: MarkdownDialect = .extended) throws -> NSTextView {
         let preferredWidth = CGFloat(preset.bodyWidth) * 0.75
         let width = min(info.paperSize.width - info.leftMargin - info.rightMargin, preferredWidth)
         let height = info.paperSize.height - info.topMargin - info.bottomMargin
         guard width >= 100, height >= 100 else { throw MarkdownPDFExportError.invalidMargins }
         let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL,
-                                               preset: preset, printLayout: true)
+                                               preset: preset, printLayout: true, dialect: dialect)
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,
             .characterEncoding: String.Encoding.utf8.rawValue

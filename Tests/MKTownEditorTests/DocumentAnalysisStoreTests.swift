@@ -3,6 +3,20 @@ import XCTest
 
 @MainActor
 final class DocumentAnalysisStoreTests: XCTestCase {
+    func testSameSourceReanalyzesWhenDialectChanges() async throws {
+        let store = DocumentAnalysisStore()
+        let source = "| A |\n| --- |\n| B |"
+        store.update(source: source, dialect: .extended)
+        for _ in 0..<100 where store.snapshot?.dialect != .extended {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(store.snapshot?.analysis.blocks.contains { $0.kind == .table } == true)
+        store.update(source: source, dialect: .basic)
+        for _ in 0..<100 where store.snapshot?.dialect != .basic {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertFalse(store.snapshot?.analysis.blocks.contains { $0.kind == .table } == true)
+    }
     func testSnapshotSharesSourceAcrossAnalysisStatisticsAndHighlighting() {
         let source = "# 見出し\n\n- [x] 完了"
         let snapshot = DocumentSnapshot(source: source)

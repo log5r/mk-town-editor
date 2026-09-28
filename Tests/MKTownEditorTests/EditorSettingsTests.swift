@@ -85,6 +85,33 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(store.fontSize(for: nil), 14)
     }
 
+    func testFolderEditingOverridesInheritNearestConfiguredValueAndPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        let root = URL(fileURLWithPath: "/tmp/book")
+        let chapter = root.appendingPathComponent("chapter")
+        let document = chapter.appendingPathComponent("README.md")
+        var app = store.app
+        app.tabWidth = 3
+        app.listIndentWidth = 3
+        app.attachmentDirectory = .assets
+        app.markdownDialect = .extended
+        store.setAppSettings(app)
+        store.setFolderSettings(FolderEditorSettings(tabWidth: 6,
+            attachmentDirectory: .images, markdownDialect: .basic), for: root)
+        store.setFolderSettings(FolderEditorSettings(codeIndentWidth: 7), for: chapter)
+
+        XCTAssertEqual(store.textStyle(for: document).tabWidth, 6)
+        XCTAssertEqual(store.layoutOptions(for: document).listIndentWidth, 3)
+        XCTAssertEqual(store.layoutOptions(for: document).codeIndentWidth, 7)
+        XCTAssertEqual(store.attachmentDirectory(for: document), .images)
+        XCTAssertEqual(store.markdownDialect(for: document), .basic)
+        XCTAssertEqual(store.attachmentDirectory(for: nil), .assets)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.folderSettings(for: root).tabWidth, 6)
+        XCTAssertEqual(restored.markdownDialect(for: document), .basic)
+    }
+
     func testSettingsPersistAndFollowRenamedDocument() {
         let defaults = isolatedDefaults()
         let oldURL = URL(fileURLWithPath: "/tmp/work/old.md")
