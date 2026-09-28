@@ -7,6 +7,7 @@ struct EditorWorkspace: View {
     let fileURL: URL?
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @EnvironmentObject private var documentLinkNavigation: DocumentLinkNavigation
+    @EnvironmentObject private var workspaceStore: WorkspaceStore
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
@@ -44,6 +45,13 @@ struct EditorWorkspace: View {
     @State private var plainExportError: String?
     @State private var exportFormat: MarkdownExportFormat?
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
+    @State private var sidebarTab: SidebarTab = .outline
+    @State private var workspaceOpenError: String?
+
+    private enum SidebarTab: String, CaseIterable {
+        case outline = "アウトライン"
+        case files = "ファイル"
+    }
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -68,7 +76,7 @@ struct EditorWorkspace: View {
 
     private var navigationView: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
-            outlineSidebar
+            workspaceSidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 320)
         } detail: {
             VStack(spacing: 0) {
@@ -80,10 +88,10 @@ struct EditorWorkspace: View {
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                Button("アウトライン", systemImage: "sidebar.left") {
+                Button("サイドバー", systemImage: "sidebar.left") {
                     sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
                 }
-                .help("アウトラインを表示または隠す")
+                .help("サイドバーを表示または隠す")
             }
             ToolbarItemGroup(placement: .primaryAction) {
                 ForEach(EditorCommand.toolbar, id: \.self) { command in
@@ -262,6 +270,22 @@ struct EditorWorkspace: View {
         } message: {
             Text(plainExportError ?? "")
         }
+        .alert("ファイルを開けません", isPresented: Binding(
+            get: { workspaceOpenError != nil },
+            set: { if !$0 { workspaceOpenError = nil } }
+        )) {
+            Button("OK") { workspaceOpenError = nil }
+        } message: {
+            Text(workspaceOpenError ?? "")
+        }
+        .alert("フォルダを記憶できません", isPresented: Binding(
+            get: { workspaceStore.errorMessage != nil },
+            set: { if !$0 { workspaceStore.clearError() } }
+        )) {
+            Button("OK") { workspaceStore.clearError() }
+        } message: {
+            Text(workspaceStore.errorMessage ?? "")
+        }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
                             analysis: analysisStore.snapshot?.source == document.text
@@ -307,12 +331,16 @@ struct EditorWorkspace: View {
         .onAppear {
             analysisStore.update(source: document.text)
             receivePendingDocumentLink()
+            workspaceStore.refresh()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
             } else {
                 unsavedMode = legacyMode.flatMap(EditorMode.init(rawValue:)) ?? settingsStore.app.defaultMode
             }
             legacyMode = nil
+        }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            workspaceStore.refresh()
         }
         .onChange(of: fileURL) { oldURL, newURL in
             navigationHistory.moveDocument(from: oldURL, to: newURL)
@@ -386,6 +414,72 @@ struct EditorWorkspace: View {
 
     private var outlineEntries: [MarkdownOutlineEntry] {
         analysisStore.snapshot.map { MarkdownOutline.entries(in: $0.analysis) } ?? []
+    }
+
+    private var workspaceSidebar: some View {
+        VStack(spacing: 0) {
+            Picker("サイドバー", selection: $sidebarTab) {
+                ForEach(SidebarTab.allCases, id: \.self) { tab in
+                    Text(tab.rawValue).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .padding(8)
+            if sidebarTab == .outline { outlineSidebar } else { fileSidebar }
+        }
+    }
+
+    private var fileSidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(workspaceStore.rootURL?.lastPathComponent ?? "フォルダ未選択")
+                    .font(.headline)
+                    .lineLimit(1)
+                Spacer()
+                Button("フォルダを開く…", systemImage: "folder.badge.plus") {
+                    workspaceStore.chooseFolder()
+                }
+                .labelStyle(.iconOnly)
+                .help("ワークスペースのフォルダを選ぶ")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            List {
+                OutlineGroup(workspaceStore.nodes, children: \.children) { node in
+                    if node.isDirectory {
+                        Label(node.name, systemImage: "folder")
+                    } else {
+                        Button {
+                            Task {
+                                if node.isEditableDocument {
+                                    do { try await openDocument(at: node.url) }
+                                    catch { workspaceOpenError = error.localizedDescription }
+                                } else if !NSWorkspace.shared.open(node.url) {
+                                    workspaceOpenError = "添付ファイルを開けませんでした。"
+                                }
+                            }
+                        } label: {
+                            Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            if workspaceStore.isTruncated {
+                Text("項目が多いため一部のみ表示しています")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+            }
+        }
+        .overlay {
+            if workspaceStore.rootURL == nil {
+                ContentUnavailableView("フォルダを開く", systemImage: "folder",
+                                       description: Text("Markdown書類と添付を一覧できます"))
+                    .allowsHitTesting(false)
+            }
+        }
     }
 
     private var outlineSidebar: some View {
