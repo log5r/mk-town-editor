@@ -411,6 +411,14 @@ final class MarkdownEditorModel: ObservableObject {
         return perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
+    @discardableResult
+    func insertFootnote() -> Bool {
+        guard let textView,
+              let edit = MarkdownFootnoteInsertion.plan(in: textView.string,
+                                                        selection: textView.selectedRange()) else { return false }
+        return applyRegexEdit(edit, expectedSource: textView.string)
+    }
+
     private func performFinderAction(_ action: NSTextFinder.Action) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
