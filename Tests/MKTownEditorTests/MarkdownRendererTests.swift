@@ -33,4 +33,11 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(rendered.string, "Title\n\n•  Item")
         XCTAssertNotNil(rendered.attribute(.font, at: 0, effectiveRange: nil))
     }
+
+    @MainActor
+    func testRendererDistinguishesSoftAndHardParagraphBreaks() {
+        let rendered = MarkdownRenderer.render("first\nsecond  \nthird\\\nfourth\n\nnext")
+
+        XCTAssertEqual(rendered.string, "first second\nthird\nfourth\n\nnext")
+    }
 }
