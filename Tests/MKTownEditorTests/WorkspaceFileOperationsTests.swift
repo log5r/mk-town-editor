@@ -34,6 +34,34 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         XCTAssertTrue(updated.contains("[id]: renamed.md"))
     }
 
+    func testOpenUnsavedReferenceIsIncludedAndOriginalFormatIsKept() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let reference = root.appendingPathComponent("reference.md")
+        let destination = root.appendingPathComponent("renamed.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try Data([0xEF, 0xBB, 0xBF] + Array("[link](source.md)\r\n".utf8)).write(to: reference)
+        let openData = Data([0xEF, 0xBB, 0xBF] +
+                            Array("unsaved\r\n[link](source.md)\r\n".utf8))
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                        root: root, openDocuments: [reference: openData])
+        let change = try XCTUnwrap(plan.changes.first { $0.oldURL.lastPathComponent == "reference.md" })
+        XCTAssertEqual(change.linkCount, 1)
+        XCTAssertEqual(change.openOriginalData, openData)
+        XCTAssertEqual(change.updatedOpenText, "unsaved\n[link](renamed.md)\n")
+        try plan.apply()
+        try plan.validateAppliedData()
+        XCTAssertEqual(try Data(contentsOf: reference),
+                       Data([0xEF, 0xBB, 0xBF] +
+                            Array("unsaved\r\n[link](renamed.md)\r\n".utf8)))
+        try plan.rollback()
+        XCTAssertEqual(try Data(contentsOf: reference),
+                       Data([0xEF, 0xBB, 0xBF] + Array("[link](source.md)\r\n".utf8)))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
     func testPlanStopsWhenDocumentChangesBeforeApply() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

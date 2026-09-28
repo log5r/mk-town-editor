@@ -66,10 +66,12 @@ struct WorkspaceFileOperationSheet: View {
             case .createDocument, .createFolder, .rename:
                 TextField("名前", text: $name)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(isWorking)
                     .onChange(of: name) { _, _ in plan = nil }
             case .move:
                 TextField("ワークスペース内の移動先", text: $destinationPath)
                     .textFieldStyle(.roundedBorder)
+                    .disabled(isWorking)
                     .onChange(of: destinationPath) { _, _ in plan = nil }
             case .trash:
                 Text("ファイルをゴミ箱へ移動します。このファイルを指すリンクは更新されません。")
@@ -93,6 +95,11 @@ struct WorkspaceFileOperationSheet: View {
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             }
             if let plan {
+                if plan.changes.contains(where: { $0.openOriginalData != nil && $0.linkCount > 0 }) {
+                    Text("開いている参照元書類の未保存内容も、リンク更新と一緒に保存されます。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Text("\(actionIsTrash ? "影響を受けるリンク" : "更新するリンク"): \(plan.changedLinks)件 / 書類: \(plan.changes.filter { $0.linkCount > 0 }.count)件")
                 List(plan.changes.filter { $0.linkCount > 0 }, id: \.oldURL) { change in
                     VStack(alignment: .leading, spacing: 3) {
@@ -174,11 +181,19 @@ struct WorkspaceFileOperationSheet: View {
             .appendingPathComponent(".trash-preview-\(UUID().uuidString)")
         isWorking = true
         errorMessage = nil
+        let openSnapshots: [URL: Data]
+        do { openSnapshots = needsPlan ? try workspaceStore.openBufferSnapshots(under: rootURL) : [:] }
+        catch {
+            errorMessage = error.localizedDescription
+            isWorking = false
+            return
+        }
         Task {
             do {
                 let result = try await Task.detached(priority: .userInitiated) {
                     try WorkspaceFileOperations.planMove(source: source, destination: destination,
-                                                         root: rootURL)
+                                                         root: rootURL,
+                                                         openDocuments: openSnapshots)
                 }.value
                 if actionIsTrash || destinationURL?.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
                     plan = result
@@ -197,6 +212,7 @@ struct WorkspaceFileOperationSheet: View {
                 guard let plan else { return }
                 guard plan.destinationURL == destinationURL?.resolvingSymlinksInPath() else { return }
                 try checkOpenDocuments(in: plan)
+                try workspaceStore.validateOpenBuffers(in: plan)
             case let .trash(source):
                 try checkOpenDocuments(for: source)
             case .createDocument, .createFolder: break
@@ -210,8 +226,10 @@ struct WorkspaceFileOperationSheet: View {
         let enteredName = name
         let selectedText = template.text
         let movePlan = plan
+        let lockID = movePlan.flatMap { needsPlan ? workspaceStore.lockOpenDocuments(in: $0) : nil }
         isWorking = true
         Task {
+            var appliedMove = false
             do {
                 try await Task.detached(priority: .userInitiated) {
                     switch action {
@@ -231,6 +249,11 @@ struct WorkspaceFileOperationSheet: View {
                         _ = try WorkspaceFileOperations.moveToTrash(source, root: root)
                     }
                 }.value
+                if let movePlan, needsPlan {
+                    appliedMove = true
+                    try movePlan.validateAppliedData()
+                    try workspaceStore.applyOpenBufferChanges(in: movePlan)
+                }
                 switch action {
                 case let .rename(source), let .move(source):
                     if let movePlan { workspaceStore.remapPins(from: source, to: movePlan.destinationURL) }
@@ -240,20 +263,40 @@ struct WorkspaceFileOperationSheet: View {
                 dismiss()
                 onComplete()
             } catch {
-                errorMessage = error.localizedDescription
+                if appliedMove, let movePlan {
+                    do {
+                        try await Task.detached(priority: .userInitiated) {
+                            try movePlan.rollback()
+                        }.value
+                        errorMessage = error.localizedDescription
+                    } catch {
+                        errorMessage = WorkspaceFileOperationError.rollbackFailed.localizedDescription
+                    }
+                } else {
+                    errorMessage = error.localizedDescription
+                }
             }
+            if let lockID { workspaceStore.unlockOpenDocuments(lockID) }
             isWorking = false
         }
     }
 
     private func checkOpenDocuments(in plan: WorkspaceMovePlan) throws {
-        let affected = [plan.sourceURL] + plan.changes.map(\.oldURL)
-        for url in affected { try checkOpenDocuments(for: url) }
+        try checkOpenDocuments(for: plan.sourceURL)
+        let known = Set(plan.changes.compactMap { change in
+            change.openOriginalData == nil ? nil : change.oldURL.resolvingSymlinksInPath().path
+        })
+        let changed = Set(plan.changes.filter { $0.linkCount > 0 }.map {
+            $0.oldURL.resolvingSymlinksInPath().path
+        })
+        for url in allOpenDocumentURLs() {
+            let path = url.resolvingSymlinksInPath().path
+            if changed.contains(path) && !known.contains(path) { throw WorkspaceOpenDocumentError() }
+        }
     }
 
     private func checkOpenDocuments(for url: URL) throws {
-        let openURLs = NSDocumentController.shared.documents.compactMap(\.fileURL) +
-            [currentDocumentURL].compactMap { $0 } + workspaceStore.openDocumentURLs
+        let openURLs = allOpenDocumentURLs()
         let path = url.resolvingSymlinksInPath().path
         if openURLs.contains(where: {
             let openPath = $0.resolvingSymlinksInPath().path
@@ -261,6 +304,11 @@ struct WorkspaceFileOperationSheet: View {
         }) {
             throw WorkspaceOpenDocumentError()
         }
+    }
+
+    private func allOpenDocumentURLs() -> [URL] {
+        NSDocumentController.shared.documents.compactMap(\.fileURL) +
+            [currentDocumentURL].compactMap { $0 } + workspaceStore.openDocumentURLs
     }
 }
 
