@@ -12,6 +12,7 @@ enum EditorCommand: Hashable {
     case orderedList
     case taskList
     case toggleTaskCompletion
+    case codeBlock(language: MarkdownCodeLanguage?)
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
@@ -30,6 +31,7 @@ enum EditorCommand: Hashable {
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
         case .toggleTaskCompletion: "タスクの完了を切り替え"
+        case let .codeBlock(language): language.map { "\($0.title) コードブロック" } ?? "言語なし"
         case .find: "検索…"
         }
     }
@@ -47,11 +49,12 @@ enum EditorCommand: Hashable {
         case .orderedList: "list.number"
         case .taskList: "checklist"
         case .toggleTaskCompletion: "checkmark.square"
+        case .codeBlock: "chevron.left.forwardslash.chevron.right"
         case .find: "magnifyingglass"
         }
     }
 
-    var shortcut: (key: KeyEquivalent, modifiers: EventModifiers) {
+    var shortcut: (key: KeyEquivalent, modifiers: EventModifiers)? {
         switch self {
         case .bold: ("b", .command)
         case .italic: ("i", .command)
@@ -64,6 +67,7 @@ enum EditorCommand: Hashable {
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
         case .toggleTaskCompletion: ("t", [.command, .option])
+        case let .codeBlock(language): language == nil ? ("`", [.command, .option]) : nil
         case .find: ("f", .command)
         }
     }
@@ -88,6 +92,7 @@ enum EditorCommand: Hashable {
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)
         case .toggleTaskCompletion: model.toggleTaskCompletion()
+        case let .codeBlock(language): model.apply(.codeBlock(language: language))
         case .find: model.showFindBar()
         }
     }

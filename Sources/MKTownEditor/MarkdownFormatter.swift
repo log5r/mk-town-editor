@@ -57,6 +57,29 @@ enum MarkdownFormattingStyle {
     case unorderedList
     case orderedList
     case taskList
+    case codeBlock(language: MarkdownCodeLanguage?)
+}
+
+enum MarkdownCodeLanguage: String, CaseIterable, Hashable {
+    case swift
+    case javascript
+    case typescript
+    case python
+    case json
+    case bash
+    case markdown
+
+    var title: String {
+        switch self {
+        case .swift: "Swift"
+        case .javascript: "JavaScript"
+        case .typescript: "TypeScript"
+        case .python: "Python"
+        case .json: "JSON"
+        case .bash: "Bash"
+        case .markdown: "Markdown"
+        }
+    }
 }
 
 struct MarkdownEdit: Equatable {
@@ -103,7 +126,44 @@ enum MarkdownFormatter {
             return convertList(text, selection: safeSelection, target: .ordered)
         case .taskList:
             return convertList(text, selection: safeSelection, target: .task)
+        case let .codeBlock(language):
+            return fencedCodeBlock(text, selection: safeSelection, language: language)
         }
+    }
+
+    private static func fencedCodeBlock(_ text: String, selection: NSRange,
+                                        language: MarkdownCodeLanguage?) -> MarkdownEdit {
+        let source = text as NSString
+        let selected = source.substring(with: selection)
+        var longestRun = 0
+        var currentRun = 0
+        for character in selected.utf16 {
+            if character == 96 {
+                currentRun += 1
+                longestRun = max(longestRun, currentRun)
+            } else {
+                currentRun = 0
+            }
+        }
+        let fence = String(repeating: "`", count: max(3, longestRun + 1))
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        let startsInsideLine = selection.location > 0 &&
+            source.character(at: selection.location - 1) != 10 &&
+            source.character(at: selection.location - 1) != 13
+        let endsInsideLine = NSMaxRange(selection) < source.length &&
+            source.character(at: NSMaxRange(selection)) != 10 &&
+            source.character(at: NSMaxRange(selection)) != 13
+        let leading = startsInsideLine ? newline : ""
+        let trailing = endsInsideLine ? newline : ""
+        let opening = fence + (language?.rawValue ?? "") + newline
+        let contentEnding = selected.hasSuffix("\n") || selected.hasSuffix("\r") ? "" : newline
+        let replacement = leading + opening + selected + contentEnding + fence + trailing
+        return MarkdownEdit(
+            range: selection,
+            replacement: replacement,
+            selection: NSRange(location: selection.location + (leading as NSString).length +
+                               (opening as NSString).length, length: (selected as NSString).length)
+        )
     }
 
     static func toggleTasks(in text: String, selection: NSRange) -> MarkdownEdit? {

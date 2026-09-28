@@ -66,8 +66,8 @@ final class EditorCommandTests: XCTestCase {
 
         XCTAssertEqual(view.string, "~~word~~")
         XCTAssertEqual(EditorCommand.strikethrough.title, "取り消し線")
-        XCTAssertEqual(EditorCommand.strikethrough.shortcut.key, "x")
-        XCTAssertTrue(EditorCommand.strikethrough.shortcut.modifiers.contains(.shift))
+        XCTAssertEqual(EditorCommand.strikethrough.shortcut?.key, "x")
+        XCTAssertTrue(EditorCommand.strikethrough.shortcut?.modifiers.contains(.shift) == true)
     }
 
     func testOrderedListCommandConvertsSelectedBullets() {
@@ -108,5 +108,25 @@ final class EditorCommandTests: XCTestCase {
         EditorCommand.toggleTaskCompletion.perform(on: model)
 
         XCTAssertEqual(view.string, "- [x] first\n- [ ] second")
+    }
+
+    func testCodeBlockContextMenuOffersLanguagesAndRunsSharedCommand() {
+        let view = EditorTextView()
+        view.string = "let x = 1"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+
+        let menu = view.makeMarkdownMenu(baseMenu: nil)
+        let codeMenu = try! XCTUnwrap(menu.items.first(where: { $0.title == "コードブロック" })?.submenu)
+        let expected: [EditorCommand] = [.codeBlock(language: nil)] +
+            MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
+        XCTAssertEqual(codeMenu.items.compactMap { $0.representedObject as? EditorCommand }, expected)
+        let swiftIndex = try! XCTUnwrap(codeMenu.items.firstIndex(where: {
+            $0.representedObject as? EditorCommand == .codeBlock(language: .swift)
+        }))
+        codeMenu.performActionForItem(at: swiftIndex)
+        XCTAssertEqual(view.string, "```swift\nlet x = 1\n```")
     }
 }
