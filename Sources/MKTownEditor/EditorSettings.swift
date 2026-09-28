@@ -100,6 +100,14 @@ struct AppEditorSettings: Codable, Equatable {
     var tabWidth: Int?
     var listIndentWidth: Int?
     var codeIndentWidth: Int?
+    var editorZoom: Double?
+    var previewZoom: Double?
+}
+
+enum EditorZoomSurface: CaseIterable {
+    case editor, preview
+
+    var title: String { self == .editor ? "編集" : "プレビュー" }
 }
 
 struct FolderEditorSettings: Codable, Equatable {
@@ -169,12 +177,35 @@ final class EditorSettingsStore: ObservableObject {
     func textStyle(for documentURL: URL?) -> EditorTextStyle {
         EditorTextStyle(
             fontChoice: values.app.fontChoice ?? .monospacedSystem,
-            fontSize: min(32, max(10, fontSize(for: documentURL))),
-            lineSpacing: min(12, max(0, values.app.lineSpacing)),
+            fontSize: min(32, max(10, fontSize(for: documentURL))) * zoom(for: .editor),
+            lineSpacing: min(12, max(0, values.app.lineSpacing)) * zoom(for: .editor),
             horizontalMargin: min(48, max(8, values.app.horizontalMargin ?? 18)),
             verticalMargin: min(48, max(8, values.app.verticalMargin ?? 18)),
             tabWidth: min(8, max(2, values.app.tabWidth ?? 4))
         )
+    }
+
+    func zoom(for surface: EditorZoomSurface) -> Double {
+        let value = surface == .editor ? values.app.editorZoom : values.app.previewZoom
+        return min(2, max(0.5, value ?? 1))
+    }
+
+    func adjustZoom(for surface: EditorZoomSurface, by amount: Double) {
+        let value = (zoom(for: surface) + amount) * 10
+        setZoom(for: surface, to: (value.rounded() / 10))
+    }
+
+    func resetZoom(for surface: EditorZoomSurface) {
+        setZoom(for: surface, to: 1)
+    }
+
+    private func setZoom(for surface: EditorZoomSurface, to value: Double) {
+        let value = min(2, max(0.5, value))
+        switch surface {
+        case .editor: values.app.editorZoom = value
+        case .preview: values.app.previewZoom = value
+        }
+        save()
     }
 
     func layoutOptions() -> EditorLayoutOptions {

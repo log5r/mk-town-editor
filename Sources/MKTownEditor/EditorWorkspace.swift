@@ -102,6 +102,10 @@ struct EditorWorkspace: View {
             canGoForward: navigationHistory.canGoForward,
             goBack: { goBack() }, goForward: { goForward() }
         ))
+        .focusedSceneValue(\.zoomActions, ZoomActions(
+            adjust: { surface, amount in settingsStore.adjustZoom(for: surface, by: amount) },
+            reset: { surface in settingsStore.resetZoom(for: surface) }
+        ))
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
@@ -235,7 +239,8 @@ struct EditorWorkspace: View {
                                 onOpenHeading: navigateToHeading,
                                 onOpenDocument: openLinkedDocument,
                                 onVisibleBlockChange: synchronizeEditor(to:),
-                                onRevealSource: revealSource)
+                                onRevealSource: revealSource,
+                                zoom: settingsStore.zoom(for: .preview))
                     .frame(minWidth: 280)
             }
         case .preview:
@@ -245,7 +250,8 @@ struct EditorWorkspace: View {
                             navigationTarget: previewNavigationTarget,
                             onOpenHeading: navigateToHeading,
                             onOpenDocument: openLinkedDocument,
-                            onRevealSource: revealSource)
+                            onRevealSource: revealSource,
+                            zoom: settingsStore.zoom(for: .preview))
         }
     }
 
