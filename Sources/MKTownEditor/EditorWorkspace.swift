@@ -26,6 +26,7 @@ struct EditorWorkspace: View {
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
     @State private var synchronizedBlockID: Int?
+    @State private var showingRegexSearch = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -106,6 +107,10 @@ struct EditorWorkspace: View {
             adjust: { surface, amount in settingsStore.adjustZoom(for: surface, by: amount) },
             reset: { surface in settingsStore.resetZoom(for: surface) }
         ))
+        .focusedSceneValue(\.regexSearchAction) {
+            if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+            showingRegexSearch = true
+        }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
@@ -117,6 +122,17 @@ struct EditorWorkspace: View {
             GoToHeadingSheet(entries: analysisStore.snapshot?.source == document.text ? outlineEntries : []) {
                 navigate(to: $0)
             }
+        }
+        .sheet(isPresented: $showingRegexSearch) {
+            RegexSearchSheet(source: document.text, selectedRange: editorModel.selectedRange,
+                             onSelect: { range in
+                                let destination = NavigationPoint(documentURL: fileURL,
+                                                                  utf16Location: range.location)
+                                navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+                                editorModel.selectAndReveal(range)
+                             }, onReplace: { edit, source in
+                                editorModel.applyRegexEdit(edit, expectedSource: source)
+                             })
         }
         .sheet(isPresented: $showingLinkDiagnostics) {
             LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,
