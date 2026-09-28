@@ -73,6 +73,8 @@
 		A10000000000000000000055 /* WorkspaceReplaceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000055 /* WorkspaceReplaceSheet.swift */; };
 		A10000000000000000000056 /* PreviewSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000056 /* PreviewSearch.swift */; };
 		A10000000000000000000057 /* PreviewSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000057 /* PreviewSearchSheet.swift */; };
+		A10000000000000000000058 /* WorkspaceAttachmentAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */; };
+		A10000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -145,6 +147,8 @@
 		A20000000000000000000055 /* WorkspaceReplaceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReplaceSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000056 /* PreviewSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000057 /* PreviewSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSearchSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentAudit.swift; sourceTree = "<group>"; };
+		A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentAuditSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -231,6 +235,8 @@
 				A20000000000000000000055 /* WorkspaceReplaceSheet.swift */,
 				A20000000000000000000056 /* PreviewSearch.swift */,
 				A20000000000000000000057 /* PreviewSearchSheet.swift */,
+				A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */,
+				A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -365,6 +371,8 @@
 				A10000000000000000000055 /* WorkspaceReplaceSheet.swift in Sources */,
 				A10000000000000000000056 /* PreviewSearch.swift in Sources */,
 				A10000000000000000000057 /* PreviewSearchSheet.swift in Sources */,
+				A10000000000000000000058 /* WorkspaceAttachmentAudit.swift in Sources */,
+				A10000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
