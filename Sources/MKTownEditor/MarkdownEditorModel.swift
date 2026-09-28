@@ -282,10 +282,31 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func showFindBar() {
+        performFinderAction(.showFindInterface)
+    }
+
+    func showReplaceBar() {
+        performFinderAction(.showReplaceInterface)
+    }
+
+    func findNext() {
+        performFinderAction(.nextMatch)
+    }
+
+    func findPrevious() {
+        performFinderAction(.previousMatch)
+    }
+
+    func replaceAllMatches() {
+        guard canExecuteCommand else { return }
+        performFinderAction(.replaceAll)
+    }
+
+    private func performFinderAction(_ action: NSTextFinder.Action) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)
         let item = NSMenuItem()
-        item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
-        textView.performFindPanelAction(item)
+        item.tag = action.rawValue
+        textView.performTextFinderAction(item)
     }
 }
