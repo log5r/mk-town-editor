@@ -47,3 +47,5 @@ Setext見出しは、直前に連続する段落行がある場合だけ`=`ま�
 GFM表はヘッダーと区切り行の列数が一致する場合だけ表ブロックにする。区切り行のコロンから列揃えを決め、本文行の不足列は空セルで補い、余分な列は無視する。エスケープされていない`|`を列区切りとし、引用・リスト内でも親ブロックと原文のUTF-16範囲を保持する。表を含むプレビューは縦スクロール領域内に各表専用の横スクロール領域を置く。セル内のインラインMarkdownは既存のパーサーで表示し、見出しとセルの内容には読み上げラベルを付ける。仕様の参照: [GFM Tables](https://github.github.com/gfm/#tables-extension-)。
 
 GFMの`[ ]`・`[x]`・`[X]`はリスト項目の最初の段落の先頭だけでタスク状態として認識する。原文と選択用のUTF-16範囲を変えず、表示時に記号を「☐ 未完了」「☑ 完了」へ置き換える。プレビューはテキストとしてキーボード選択でき、状態名を文字で含むため読み上げ時も区別できる。チェック操作による本文変更は表示機能とは別の編集コマンドとして扱う。仕様の参照: [GFM Task list items](https://github.github.com/gfm/#task-list-items-extension-)。
+
+取り消し線の調査では、FoundationのMarkdownパーサーが`~~文字~~`をインライン意図として解析する一方、`NSAttributedString`への変換結果では意図属性の値が`NSNumber`になり、従来の`InlinePresentationIntent`への直接キャストで取り出せないことが分かった。数値から意図を復元し、取り消し線には`strikethroughStyle`を適用する。同じ経路を通る太字・斜体・インラインコードも回帰テストで確認する。取り消し線の構文は[GFM Strikethrough](https://github.github.com/gfm/#strikethrough-extension-)に従う。
