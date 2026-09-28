@@ -50,6 +50,7 @@ struct EditorWorkspace: View {
     @State private var printRequested = false
     @State private var richCopyError: String?
     @State private var showingPlainExport = false
+    @State private var showingExternalExport = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
     @State private var plainExportError: String?
@@ -278,6 +279,7 @@ struct EditorWorkspace: View {
         }
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
+        .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
@@ -327,6 +329,10 @@ struct EditorWorkspace: View {
                 plainOptions = options
                 plainExportRequested = true
             }
+        }
+        .sheet(isPresented: $showingExternalExport) {
+            ExternalConversionSheet(markdown: document.text, documentURL: fileURL,
+                dialect: settingsStore.markdownDialect(for: fileURL))
         }
         .sheet(item: $exportFormat, onDismiss: {
             guard let request = pendingExport else { return }
