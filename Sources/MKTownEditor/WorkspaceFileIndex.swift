@@ -5,6 +5,14 @@ struct WorkspaceNode: Identifiable, Sendable {
     let url: URL
     let name: String
     let children: [WorkspaceNode]?
+    let modifiedAt: Date?
+
+    init(url: URL, name: String, children: [WorkspaceNode]?, modifiedAt: Date? = nil) {
+        self.url = url
+        self.name = name
+        self.children = children
+        self.modifiedAt = modifiedAt
+    }
 
     var id: URL { url }
     var isDirectory: Bool { children != nil }
@@ -31,21 +39,25 @@ enum WorkspaceFileIndex {
         func descend(_ directory: URL, depth: Int) -> [WorkspaceNode] {
             guard depth < maximumDepth else { truncated = true; return [] }
             guard let urls = try? manager.contentsOfDirectory(
-                at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+                at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey,
+                                                             .contentModificationDateKey],
                 options: [.skipsHiddenFiles]
             ) else { return [] }
             var nodes: [WorkspaceNode] = []
             for url in urls {
                 guard visited < maximumEntries else { truncated = true; break }
-                let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey,
+                                                               .contentModificationDateKey])
                 if values?.isSymbolicLink == true { continue }
                 if values?.isDirectory == true {
                     visited += 1
                     nodes.append(WorkspaceNode(url: url, name: url.lastPathComponent,
-                                               children: descend(url, depth: depth + 1)))
+                                               children: descend(url, depth: depth + 1),
+                                               modifiedAt: values?.contentModificationDate))
                 } else if supportedExtensions.contains(url.pathExtension.lowercased()) {
                     visited += 1
-                    nodes.append(WorkspaceNode(url: url, name: url.lastPathComponent, children: nil))
+                    nodes.append(WorkspaceNode(url: url, name: url.lastPathComponent, children: nil,
+                                               modifiedAt: values?.contentModificationDate))
                 }
             }
             nodes.sort {
@@ -65,6 +77,7 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var nodes: [WorkspaceNode] = []
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var viewSettings = WorkspaceViewSettings()
 
     private let defaults: UserDefaults
     private let bookmarkKey = "workspaceFolderBookmark"
@@ -128,6 +141,12 @@ final class WorkspaceStore: ObservableObject {
         if hasSecurityScope { rootURL?.stopAccessingSecurityScopedResource() }
         hasSecurityScope = url.startAccessingSecurityScopedResource()
         rootURL = url
+        if let data = defaults.data(forKey: settingsKey(for: url)),
+           let saved = try? JSONDecoder().decode(WorkspaceViewSettings.self, from: data) {
+            viewSettings = saved
+        } else {
+            viewSettings = WorkspaceViewSettings()
+        }
         nodes = []
         generation += 1
         isRefreshing = false
@@ -136,6 +155,57 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func clearError() { errorMessage = nil }
+
+    var visibleNodes: [WorkspaceNode] {
+        guard let rootURL else { return [] }
+        return viewSettings.display(nodes, root: rootURL)
+    }
+
+    var availableExtensions: [String] {
+        WorkspaceViewSettings.availableExtensions(in: nodes)
+    }
+
+    func togglePin(_ url: URL) {
+        guard let rootURL else { return }
+        viewSettings.togglePin(url, root: rootURL)
+        saveViewSettings()
+    }
+
+    func remapPins(from source: URL, to destination: URL) {
+        guard let rootURL else { return }
+        viewSettings.remapPins(from: source, to: destination, root: rootURL)
+        saveViewSettings()
+    }
+
+    func removePins(under source: URL) {
+        guard let rootURL else { return }
+        viewSettings.removePins(under: source, root: rootURL)
+        saveViewSettings()
+    }
+
+    func setSortOrder(_ value: WorkspaceViewSettings.SortOrder) {
+        viewSettings.sortOrder = value
+        saveViewSettings()
+    }
+
+    func setFileFilter(_ value: WorkspaceViewSettings.FileFilter) {
+        viewSettings.filter = value
+        saveViewSettings()
+    }
+
+    func setExtensionFilter(_ value: String?) {
+        viewSettings.fileExtension = value
+        saveViewSettings()
+    }
+
+    private func saveViewSettings() {
+        guard let rootURL, let data = try? JSONEncoder().encode(viewSettings) else { return }
+        defaults.set(data, forKey: settingsKey(for: rootURL))
+    }
+
+    private func settingsKey(for root: URL) -> String {
+        "workspaceViewSettings.\(root.resolvingSymlinksInPath().standardizedFileURL.path)"
+    }
 
     func refresh(force: Bool = false) {
         guard let rootURL, !isRefreshing,
