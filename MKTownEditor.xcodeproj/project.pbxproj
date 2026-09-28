@@ -22,6 +22,7 @@
 		A10000000000000000000010 /* DocumentContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DocumentContext.swift */; };
 		A10000000000000000000011 /* EditorSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* EditorSettings.swift */; };
 		A10000000000000000000012 /* EditorCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* EditorCommand.swift */; };
+		A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* MarkdownLinkSyntax.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
 		A20000000000000000000010 /* DocumentContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentContext.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* EditorSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSettings.swift; sourceTree = "<group>"; };
 		A20000000000000000000012 /* EditorCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorCommand.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* MarkdownLinkSyntax.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkSyntax.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +80,7 @@
 				A20000000000000000000010 /* DocumentContext.swift */,
 				A20000000000000000000011 /* EditorSettings.swift */,
 				A20000000000000000000012 /* EditorCommand.swift */,
+				A20000000000000000000013 /* MarkdownLinkSyntax.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -161,6 +164,7 @@
 				A10000000000000000000010 /* DocumentContext.swift in Sources */,
 				A10000000000000000000011 /* EditorSettings.swift in Sources */,
 				A10000000000000000000012 /* EditorCommand.swift in Sources */,
+				A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

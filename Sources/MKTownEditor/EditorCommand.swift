@@ -89,7 +89,7 @@ enum EditorCommand: Hashable {
         case .italic: model.apply(.italic)
         case .strikethrough: model.apply(.strikethrough)
         case .inlineCode: model.apply(.inlineCode)
-        case .link: model.apply(.link)
+        case .link: model.presentLinkEditor()
         case let .heading(level): model.apply(.heading(level: level))
         case .quote: model.apply(.quote)
         case .unorderedList: model.apply(.unorderedList)

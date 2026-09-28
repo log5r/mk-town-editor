@@ -5,6 +5,7 @@ import Combine
 final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
     @Published private(set) var hasActiveEditor = false
+    @Published var linkDraft: MarkdownLinkDraft?
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
@@ -82,11 +83,27 @@ final class MarkdownEditorModel: ObservableObject {
         perform(edit, in: textView, storage: storage, focusEditor: false)
     }
 
+    func presentLinkEditor() {
+        guard canExecuteCommand, let textView else { return }
+        linkDraft = MarkdownLinkSyntax.draft(in: textView.string, selection: textView.selectedRange())
+    }
+
+    func commitLink(label: String, destination: String, title: String) -> Bool {
+        guard let draft = linkDraft, let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownLinkSyntax.edit(in: textView.string, draft: draft,
+                                                 label: label, destination: destination, title: title),
+              perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
+        linkDraft = nil
+        return true
+    }
+
+    @discardableResult
     private func perform(_ edit: MarkdownEdit, in textView: NSTextView,
-                         storage: NSTextStorage, focusEditor: Bool) {
-        guard (storage.string as NSString).substring(with: edit.range) != edit.replacement else { return }
+                         storage: NSTextStorage, focusEditor: Bool) -> Bool {
+        guard (storage.string as NSString).substring(with: edit.range) != edit.replacement else { return true }
         guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else {
-            return
+            return false
         }
         let originalSelection = textView.selectedRange()
         textView.breakUndoCoalescing()
@@ -95,6 +112,7 @@ final class MarkdownEditorModel: ObservableObject {
         textView.setSelectedRange(focusEditor ? edit.selection : originalSelection)
         textView.breakUndoCoalescing()
         if focusEditor { textView.window?.makeFirstResponder(textView) }
+        return true
     }
 
     func showFindBar() {
