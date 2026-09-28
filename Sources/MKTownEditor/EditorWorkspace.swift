@@ -18,6 +18,8 @@ struct EditorWorkspace: View {
     @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
+    @State private var splitRatio = 0.5
+    @State private var splitDragStart: Double?
     @State private var previewNavigationTarget: PreviewNavigationTarget?
     @State private var navigationSequence = 0
     @State private var showingGoToLine = false
@@ -382,6 +384,7 @@ struct EditorWorkspace: View {
             if !workspaceViewActive {
                 workspaceViewActive = true
                 if let fileURL { workspaceStore.registerOpenDocument(fileURL) }
+                restorePosition(for: fileURL)
             }
             analysisStore.update(source: document.text)
             receivePendingDocumentLink()
@@ -394,6 +397,7 @@ struct EditorWorkspace: View {
             legacyMode = nil
         }
         .onDisappear {
+            savePosition(for: fileURL)
             if workspaceViewActive {
                 if let fileURL { workspaceStore.unregisterOpenDocument(fileURL) }
                 workspaceViewActive = false
@@ -401,8 +405,10 @@ struct EditorWorkspace: View {
         }
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             workspaceStore.refresh()
+            savePosition(for: fileURL)
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            savePosition(for: oldURL)
             if workspaceViewActive {
                 if let oldURL { workspaceStore.unregisterOpenDocument(oldURL) }
                 if let newURL { workspaceStore.registerOpenDocument(newURL) }
@@ -422,6 +428,7 @@ struct EditorWorkspace: View {
             case (nil, nil):
                 break
             }
+            restorePosition(for: newURL)
         }
         .onChange(of: document.text) { _, newText in
             analysisStore.update(source: newText)
@@ -445,20 +452,7 @@ struct EditorWorkspace: View {
         case .editor:
             sourceEditor
         case .split:
-            HSplitView {
-                sourceEditor
-                    .frame(minWidth: 280)
-                MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                                onToggleTask: previewTaskAction,
-                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                                navigationTarget: previewNavigationTarget,
-                                onOpenHeading: navigateToHeading,
-                                onOpenDocument: openLinkedDocument,
-                                onVisibleBlockChange: synchronizeEditor(to:),
-                                onRevealSource: revealSource,
-                                zoom: settingsStore.zoom(for: .preview))
-                    .frame(minWidth: 280)
-            }
+            splitEditor
         case .preview:
             MarkdownPreview(markdown: document.text, documentContext: documentContext,
                             onToggleTask: previewTaskAction,
@@ -469,6 +463,74 @@ struct EditorWorkspace: View {
                             onRevealSource: revealSource,
                             zoom: settingsStore.zoom(for: .preview))
         }
+    }
+
+    private var splitEditor: some View {
+        GeometryReader { geometry in
+            let width = max(560, geometry.size.width - 8)
+            let editorWidth = max(280, min(width - 280, width * splitRatio))
+            HStack(spacing: 0) {
+                sourceEditor.frame(width: editorWidth)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width: 1)
+                    .frame(width: 8)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 1)
+                        .onChanged { value in
+                            if splitDragStart == nil { splitDragStart = splitRatio }
+                            let proposed = (splitDragStart ?? splitRatio) + value.translation.width / width
+                            splitRatio = max(280 / width, min(1 - 280 / width, proposed))
+                        }
+                        .onEnded { _ in
+                            splitDragStart = nil
+                            savePosition(for: fileURL)
+                        })
+                    .accessibilityElement()
+                    .accessibilityLabel("編集とプレビューの分割位置")
+                    .accessibilityValue("\(Int(splitRatio * 100))%")
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: splitRatio = min(0.8, splitRatio + 0.05)
+                        case .decrement: splitRatio = max(0.2, splitRatio - 0.05)
+                        @unknown default: break
+                        }
+                        savePosition(for: fileURL)
+                    }
+                MarkdownPreview(markdown: document.text, documentContext: documentContext,
+                                onToggleTask: previewTaskAction,
+                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
+                                navigationTarget: previewNavigationTarget,
+                                onOpenHeading: navigateToHeading,
+                                onOpenDocument: openLinkedDocument,
+                                onVisibleBlockChange: synchronizeEditor(to:),
+                                onRevealSource: revealSource,
+                                zoom: settingsStore.zoom(for: .preview))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private func savePosition(for url: URL?) {
+        guard let url else { return }
+        settingsStore.savePosition(for: url, selection: editorModel.selectedRange,
+                                   scrollX: editorModel.scrollOrigin.x,
+                                   scrollY: editorModel.scrollOrigin.y, splitRatio: splitRatio,
+                                   sidebarTab: sidebarTab.rawValue,
+                                   sidebarVisible: sidebarVisibility != .detailOnly)
+    }
+
+    private func restorePosition(for url: URL?) {
+        guard let url, let state = settingsStore.displayState(for: url) else { return }
+        if let location = state.selectionLocation {
+            editorModel.restorePosition(selection: NSRange(location: location,
+                                                           length: state.selectionLength ?? 0),
+                                        scrollX: state.scrollX ?? 0,
+                                        scrollY: state.scrollY ?? 0)
+        }
+        if let ratio = state.splitRatio { splitRatio = ratio }
+        if let tab = state.sidebarTab.flatMap(SidebarTab.init(rawValue:)) { sidebarTab = tab }
+        if let visible = state.sidebarVisible { sidebarVisibility = visible ? .all : .detailOnly }
     }
 
     private var previewTaskAction: ((Int) -> Void)? {

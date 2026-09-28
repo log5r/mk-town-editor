@@ -4,6 +4,20 @@ import XCTest
 
 @MainActor
 final class MarkdownEditorModelTests: XCTestCase {
+    func testRestoredSelectionIsClampedToCurrentDocument() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "short"
+        let model = MarkdownEditorModel()
+        model.restorePosition(selection: NSRange(location: 40, length: 10),
+                              scrollX: 20, scrollY: 120)
+        model.connect(view)
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 5, length: 0))
+        XCTAssertEqual(model.scrollOrigin.y, 120)
+        XCTAssertEqual(model.scrollOrigin.x, 20)
+        model.restorePosition(selection: NSRange(location: 1, length: 3), scrollY: 0)
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 1, length: 3))
+    }
+
     func testRejectedEditDoesNotChangeTextOrSelection() {
         let view = RejectingTextView()
         view.string = "hello"

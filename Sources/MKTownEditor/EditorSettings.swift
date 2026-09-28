@@ -119,6 +119,13 @@ struct FolderEditorSettings: Codable, Equatable {
 
 struct DocumentDisplayState: Codable, Equatable {
     var mode: EditorMode
+    var selectionLocation: Int? = nil
+    var selectionLength: Int? = nil
+    var scrollY: Double? = nil
+    var scrollX: Double? = nil
+    var splitRatio: Double? = nil
+    var sidebarTab: String? = nil
+    var sidebarVisible: Bool? = nil
 }
 
 private struct StoredEditorSettings: Codable, Equatable {
@@ -233,7 +240,30 @@ final class EditorSettingsStore: ObservableObject {
     }
 
     func setMode(_ mode: EditorMode, for documentURL: URL) {
-        values.documents[Self.key(for: documentURL)] = DocumentDisplayState(mode: mode)
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: mode)
+        state.mode = mode
+        values.documents[key] = state
+        save()
+    }
+
+    func displayState(for documentURL: URL) -> DocumentDisplayState? {
+        values.documents[Self.key(for: documentURL)]
+    }
+
+    func savePosition(for documentURL: URL, selection: NSRange, scrollX: Double, scrollY: Double,
+                      splitRatio: Double, sidebarTab: String, sidebarVisible: Bool) {
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        state.selectionLocation = max(0, selection.location)
+        state.selectionLength = max(0, selection.length)
+        state.scrollY = max(0, scrollY)
+        state.scrollX = max(0, scrollX)
+        state.splitRatio = min(0.8, max(0.2, splitRatio))
+        state.sidebarTab = sidebarTab
+        state.sidebarVisible = sidebarVisible
+        guard values.documents[key] != state else { return }
+        values.documents[key] = state
         save()
     }
 
