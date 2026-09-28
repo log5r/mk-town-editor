@@ -53,8 +53,28 @@ enum MarkdownRenderer {
             applyListIndent(to: content)
             return content
         case .paragraph:
-            return inline(block.content, baseFont: .systemFont(ofSize: 15))
+            return inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
         }
+    }
+
+    private static func paragraphContent(_ block: MarkdownBlock) -> String {
+        let lines = block.content.components(separatedBy: "\n")
+        var result = ""
+        for (index, line) in lines.enumerated() {
+            var content = line
+            if index < block.lineBreaks.count {
+                let trailingSpaces = content.reversed().prefix(while: { $0 == " " }).count
+                while content.last == " " || content.last == "\t" { content.removeLast() }
+                if block.lineBreaks[index] == .hard && trailingSpaces < 2 && content.last == "\\" {
+                    content.removeLast()
+                }
+            }
+            result += content
+            if index < block.lineBreaks.count {
+                result += block.lineBreaks[index] == .hard ? "\n" : " "
+            }
+        }
+        return result
     }
 
     private static func inline(

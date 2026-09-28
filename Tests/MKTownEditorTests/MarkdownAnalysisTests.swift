@@ -37,4 +37,20 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(blocks[1].content, "unfinished")
         XCTAssertEqual(NSMaxRange(blocks[1].sourceRange), (source as NSString).length)
     }
+
+    func testParagraphGroupsLinesAndClassifiesBreaks() {
+        let source = "first\nsecond  \nthird\\\nfourth\n\nnext"
+        let analysis = MarkdownAnalysis(source)
+
+        XCTAssertEqual(analysis.blocks.map(\.kind), [.paragraph, .blank, .paragraph])
+        XCTAssertEqual(analysis.blocks[0].lineBreaks, [.soft, .hard, .hard])
+        XCTAssertEqual((source as NSString).substring(with: analysis.blocks[0].sourceRange),
+                       "first\nsecond  \nthird\\\nfourth\n")
+    }
+
+    func testEvenBackslashesRemainASoftBreak() {
+        let analysis = MarkdownAnalysis("escaped\\\\\nnext")
+
+        XCTAssertEqual(analysis.blocks[0].lineBreaks, [.soft])
+    }
 }

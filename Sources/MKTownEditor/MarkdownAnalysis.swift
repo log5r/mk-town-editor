@@ -1,5 +1,10 @@
 import Foundation
 
+enum MarkdownLineBreak: Equatable {
+    case soft
+    case hard
+}
+
 struct MarkdownBlock: Equatable {
     enum Kind: Equatable {
         case paragraph
@@ -18,6 +23,7 @@ struct MarkdownBlock: Equatable {
     let content: String
     let sourceRange: NSRange
     let codeLanguage: String?
+    let lineBreaks: [MarkdownLineBreak]
 }
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
@@ -73,7 +79,7 @@ struct MarkdownAnalysis {
                     id: result.count, parentID: nil, kind: .codeBlock,
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
-                    codeLanguage: fence.language
+                    codeLanguage: fence.language, lineBreaks: []
                 ))
                 listAncestors.removeAll()
                 quoteAncestors.removeAll()
@@ -84,6 +90,9 @@ struct MarkdownAnalysis {
             var parentID: Int?
             var kind: MarkdownBlock.Kind
             var content = line.text
+            var sourceRange = line.range
+            var lineBreaks: [MarkdownLineBreak] = []
+            var advance = 1
 
             if trimmed.isEmpty {
                 kind = .blank
@@ -113,15 +122,26 @@ struct MarkdownAnalysis {
                 quoteAncestors.removeAll()
             } else {
                 kind = .paragraph
+                var parts = [line.text]
+                var next = index + 1
+                while next < lines.count && isParagraphContinuation(lines[next].text) {
+                    lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
+                    parts.append(lines[next].text)
+                    next += 1
+                }
+                content = parts.joined(separator: "\n")
+                sourceRange = NSRange(location: line.range.location,
+                                      length: NSMaxRange(lines[next - 1].range) - line.range.location)
+                advance = next - index
             }
 
             if !isList(kind) { listAncestors.removeAll() }
             if kind != .quote { quoteAncestors.removeAll() }
             result.append(MarkdownBlock(
                 id: id, parentID: parentID, kind: kind, content: content,
-                sourceRange: line.range, codeLanguage: nil
+                sourceRange: sourceRange, codeLanguage: nil, lineBreaks: lineBreaks
             ))
-            index += 1
+            index += advance
         }
         return result
     }
@@ -169,6 +189,20 @@ struct MarkdownAnalysis {
         let marks = line.prefix(while: { $0 == "#" })
         guard (1...6).contains(marks.count), line.dropFirst(marks.count).hasPrefix(" ") else { return nil }
         return (marks.count, String(line.dropFirst(marks.count + 1)))
+    }
+
+    private static func isParagraphContinuation(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return !trimmed.isEmpty && openingFence(trimmed) == nil && parseQuote(trimmed) == nil &&
+            parseHeading(trimmed) == nil && !["---", "***", "___"].contains(trimmed) &&
+            parseList(line) == nil
+    }
+
+    private static func lineBreak(after line: String) -> MarkdownLineBreak {
+        let trailingSpaces = line.reversed().prefix(while: { $0 == " " }).count
+        if trailingSpaces >= 2 { return .hard }
+        let trailingBackslashes = line.reversed().prefix(while: { $0 == "\\" }).count
+        return trailingBackslashes % 2 == 1 ? .hard : .soft
     }
 
     private static func parseQuote(_ line: String) -> (depth: Int, content: String)? {
