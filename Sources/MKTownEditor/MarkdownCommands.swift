@@ -23,6 +23,7 @@ struct MarkdownCommands: Commands {
         CommandMenu("Markdown") {
             commandButton(.bold)
             commandButton(.italic)
+            commandButton(.strikethrough)
             commandButton(.inlineCode)
             Divider()
             commandButton(.link)

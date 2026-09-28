@@ -49,6 +49,7 @@ enum MarkdownInlineSyntax {
 enum MarkdownFormattingStyle {
     case bold
     case italic
+    case strikethrough
     case inlineCode
     case link
     case heading(level: Int)
@@ -81,6 +82,8 @@ enum MarkdownFormatter {
             return wrap(text, selection: safeSelection, prefix: "**", suffix: "**", placeholder: "太字")
         case .italic:
             return wrap(text, selection: safeSelection, prefix: "_", suffix: "_", placeholder: "斜体")
+        case .strikethrough:
+            return wrap(text, selection: safeSelection, prefix: "~~", suffix: "~~", placeholder: "取り消し線")
         case .inlineCode:
             return wrap(text, selection: safeSelection, prefix: "`", suffix: "`", placeholder: "コード")
         case .link:
