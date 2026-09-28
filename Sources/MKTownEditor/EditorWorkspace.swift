@@ -14,6 +14,7 @@ struct EditorWorkspace: View {
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @StateObject private var detachedPreview = DetachedPreviewWindowManager()
+    @StateObject private var previewUpdates = PreviewUpdateController()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
     @State private var imageDropError: String?
@@ -243,7 +244,7 @@ struct EditorWorkspace: View {
             ToolbarItem(placement: .primaryAction) {
                 Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
                     detachedPreview.show(document: $document, documentURL: fileURL,
-                                         settingsStore: settingsStore)
+                                         settingsStore: settingsStore, updates: previewUpdates)
                 }
                 .help("現在の書類のプレビューを別ウインドウで表示")
             }
@@ -647,6 +648,7 @@ struct EditorWorkspace: View {
             restorePosition(for: newURL)
         }
         .onChange(of: document.text) { _, newText in
+            previewUpdates.sourceChanged()
             analysisStore.update(source: newText)
             previewSearchRange = nil
             synchronizedBlockID = nil
@@ -680,17 +682,7 @@ struct EditorWorkspace: View {
         case .split:
             splitEditor
         case .preview:
-            MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                            onToggleTask: previewTaskAction,
-                            snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                            navigationTarget: previewNavigationTarget,
-                            searchRange: previewSearchRange,
-                            onOpenHeading: navigateToHeading,
-                            onOpenDocument: openLinkedDocument,
-                            onRevealSource: revealSource,
-                            showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                            zoom: settingsStore.zoom(for: .preview),
-                            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+            previewPane(synchronizesScroll: false)
         }
     }
 
@@ -733,18 +725,37 @@ struct EditorWorkspace: View {
     }
 
     private var splitPreview: some View {
-        MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                        onToggleTask: previewTaskAction,
-                        snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                        navigationTarget: previewNavigationTarget,
-                        searchRange: previewSearchRange,
-                        onOpenHeading: navigateToHeading,
-                        onOpenDocument: openLinkedDocument,
-                        onVisibleBlockChange: synchronizeEditor(to:),
-                        onRevealSource: revealSource,
-                        showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                        zoom: settingsStore.zoom(for: .preview),
-                        loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+        previewPane(synchronizesScroll: true)
+    }
+
+    private func previewPane(synchronizesScroll: Bool) -> some View {
+        let displayedSource = previewUpdates.state.displayedSource ?? document.text
+        let isCurrent = displayedSource == document.text
+        let selectedSnapshot = previewUpdates.state.isPaused
+            ? previewUpdates.snapshot : analysisStore.snapshot
+        let matchingSnapshot = selectedSnapshot?.source == displayedSource ? selectedSnapshot : nil
+        let taskAction: ((Int) -> Void)? = isCurrent ? previewTaskAction : nil
+        let headingAction: ((String) -> Void)? = isCurrent
+            ? { fragment in navigateToHeading(fragment) } : nil
+        let scrollAction: ((Int) -> Void)? = synchronizesScroll && isCurrent
+            ? { blockID in synchronizeEditor(to: blockID) } : nil
+        let revealAction: ((NSRange) -> Void)? = isCurrent
+            ? { range in revealSource(range) } : nil
+        let preview = MarkdownPreview(
+            markdown: displayedSource, documentContext: documentContext,
+            onToggleTask: taskAction, snapshot: matchingSnapshot, usesSharedAnalysis: true,
+            navigationTarget: isCurrent ? previewNavigationTarget : nil,
+            searchRange: isCurrent ? previewSearchRange : nil,
+            onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
+            onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
+            showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+            zoom: settingsStore.zoom(for: .preview),
+            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+        return VStack(spacing: 0) {
+            PreviewUpdateControls(updates: previewUpdates, source: document.text,
+                                  preferredSnapshot: analysisStore.snapshot)
+            preview
+        }
     }
 
     private func splitDivider(total: CGFloat, minimum: CGFloat,

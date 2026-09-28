@@ -519,14 +519,14 @@ final class DetachedPreviewWindowManager: NSObject, ObservableObject, NSWindowDe
     var isOpen: Bool { window?.isVisible == true }
 
     func show(document: Binding<MarkdownDocument>, documentURL: URL?,
-              settingsStore: EditorSettingsStore) {
+              settingsStore: EditorSettingsStore, updates: PreviewUpdateController) {
         self.documentURL = documentURL
         if let window, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             return
         }
         let content = DetachedPreviewContent(document: document, manager: self,
-            settingsStore: settingsStore)
+            settingsStore: settingsStore, updates: updates)
         let controller = NSHostingController(rootView: content)
         let window = NSWindow(contentViewController: controller)
         window.title = title
@@ -562,14 +562,132 @@ private struct DetachedPreviewContent: View {
     @Binding var document: MarkdownDocument
     @ObservedObject var manager: DetachedPreviewWindowManager
     @ObservedObject var settingsStore: EditorSettingsStore
+    @ObservedObject var updates: PreviewUpdateController
 
     var body: some View {
-        MarkdownPreview(markdown: document.text,
-                        documentContext: DocumentContext(fileURL: manager.documentURL),
-                        showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                        zoom: settingsStore.zoom(for: .preview),
-                        loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
-            .frame(minWidth: 420, minHeight: 300)
+        VStack(spacing: 0) {
+            PreviewUpdateControls(updates: updates, source: document.text)
+            MarkdownPreview(markdown: updates.state.displayedSource ?? document.text,
+                            documentContext: DocumentContext(fileURL: manager.documentURL),
+                            snapshot: updates.state.isPaused ? updates.snapshot : nil,
+                            usesSharedAnalysis: updates.state.isPaused,
+                            showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+                            zoom: settingsStore.zoom(for: .preview),
+                            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+        }
+        .frame(minWidth: 420, minHeight: 300)
+    }
+}
+
+struct PreviewUpdateState {
+    private(set) var currentRevision = 1
+    private(set) var displayedRevision: Int?
+    private(set) var displayedSource: String?
+
+    var isPaused: Bool { displayedSource != nil }
+    var isStale: Bool { isPaused && displayedRevision != currentRevision }
+
+    mutating func sourceChanged() { currentRevision += 1 }
+
+    mutating func pause(at source: String) {
+        displayedSource = source
+        displayedRevision = currentRevision
+    }
+
+    mutating func refresh(to source: String) {
+        guard isPaused else { return }
+        displayedSource = source
+        displayedRevision = currentRevision
+    }
+
+    mutating func resume() {
+        displayedSource = nil
+        displayedRevision = nil
+    }
+}
+
+@MainActor
+final class PreviewUpdateController: ObservableObject {
+    @Published private(set) var state = PreviewUpdateState()
+    @Published private(set) var snapshot: DocumentSnapshot?
+    private var generation = 0
+    private var task: Task<Void, Never>?
+
+    func sourceChanged() { state.sourceChanged() }
+
+    func pause(source: String, preferredSnapshot: DocumentSnapshot? = nil) {
+        state.pause(at: source)
+        capture(source: source, preferredSnapshot: preferredSnapshot)
+    }
+
+    func refresh(source: String, preferredSnapshot: DocumentSnapshot? = nil) {
+        guard state.isPaused else { return }
+        state.refresh(to: source)
+        capture(source: source, preferredSnapshot: preferredSnapshot)
+    }
+
+    func resume() {
+        state.resume()
+        generation += 1
+        task?.cancel()
+        task = nil
+        snapshot = nil
+    }
+
+    private func capture(source: String, preferredSnapshot: DocumentSnapshot?) {
+        generation += 1
+        let requestedGeneration = generation
+        task?.cancel()
+        if preferredSnapshot?.source == source {
+            snapshot = preferredSnapshot
+            task = nil
+            return
+        }
+        snapshot = nil
+        task = Task.detached(priority: .userInitiated) { [weak self] in
+            let result = DocumentSnapshot(source: source)
+            await self?.publish(result, generation: requestedGeneration)
+        }
+    }
+
+    private func publish(_ result: DocumentSnapshot, generation requestedGeneration: Int) {
+        guard generation == requestedGeneration, state.displayedSource == result.source else { return }
+        snapshot = result
+        task = nil
+    }
+}
+
+struct PreviewUpdateControls: View {
+    @ObservedObject var updates: PreviewUpdateController
+    let source: String
+    var preferredSnapshot: DocumentSnapshot?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if updates.state.isPaused {
+                Text("表示世代 \(updates.state.displayedRevision ?? 1) / 原文世代 \(updates.state.currentRevision)")
+                    .foregroundStyle(updates.state.isStale ? .orange : .secondary)
+                Spacer()
+                Button("手動更新", systemImage: "arrow.clockwise") {
+                    updates.refresh(source: source, preferredSnapshot: preferredSnapshot)
+                }
+                Button("自動更新を再開", systemImage: "play.fill") {
+                    updates.resume()
+                }
+            } else {
+                Text("自動更新・世代 \(updates.state.currentRevision)")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("自動更新を停止", systemImage: "pause.fill") {
+                    updates.pause(source: source, preferredSnapshot: preferredSnapshot)
+                }
+            }
+        }
+        .font(.caption)
+        .buttonStyle(.borderless)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 5)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 }
 

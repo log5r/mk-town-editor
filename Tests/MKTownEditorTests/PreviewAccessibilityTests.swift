@@ -4,6 +4,44 @@ import XCTest
 
 @MainActor
 final class PreviewAccessibilityTests: XCTestCase {
+    func testPreviewUpdateStateTracksDisplayedAndCurrentRevisions() {
+        var state = PreviewUpdateState()
+        XCTAssertFalse(state.isPaused)
+        XCTAssertEqual(state.currentRevision, 1)
+
+        state.pause(at: "old")
+        state.sourceChanged()
+        state.sourceChanged()
+        XCTAssertTrue(state.isStale)
+        XCTAssertEqual(state.displayedSource, "old")
+        XCTAssertEqual(state.displayedRevision, 1)
+        XCTAssertEqual(state.currentRevision, 3)
+
+        state.refresh(to: "new")
+        XCTAssertFalse(state.isStale)
+        XCTAssertEqual(state.displayedSource, "new")
+        XCTAssertEqual(state.displayedRevision, 3)
+        state.resume()
+        XCTAssertNil(state.displayedSource)
+        XCTAssertNil(state.displayedRevision)
+    }
+
+    func testPreviewUpdateControllerFreezesAndRefreshesMatchingAnalysis() async {
+        let updates = PreviewUpdateController()
+        updates.pause(source: "# Frozen", preferredSnapshot: DocumentSnapshot(source: "# Frozen"))
+        updates.sourceChanged()
+        XCTAssertEqual(updates.snapshot?.source, "# Frozen")
+        XCTAssertTrue(updates.state.isStale)
+
+        updates.refresh(source: "# Current", preferredSnapshot: DocumentSnapshot(source: "# Other"))
+        XCTAssertNil(updates.snapshot)
+        for _ in 0..<100 where updates.snapshot == nil {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(updates.snapshot?.source, "# Current")
+        updates.resume()
+        XCTAssertNil(updates.snapshot)
+    }
     func testCodeCopyWritesOnlyCodeContentToPasteboard() throws {
         let analysis = MarkdownAnalysis("```swift\nlet value = 1\nprint(value)\n```")
         let block = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
