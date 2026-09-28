@@ -26,6 +26,34 @@ enum EditorFontChoice: String, Codable, CaseIterable {
     }
 }
 
+enum ProofingLanguage: String, Codable, CaseIterable {
+    case automatic
+    case english
+    case japanese
+
+    var title: String {
+        switch self {
+        case .automatic: "自動判定"
+        case .english: "英語"
+        case .japanese: "日本語"
+        }
+    }
+
+    var spellCheckerIdentifier: String? {
+        switch self {
+        case .automatic: nil
+        case .english: "en"
+        case .japanese: "ja"
+        }
+    }
+}
+
+struct EditorProofingSettings: Codable, Equatable {
+    var language: ProofingLanguage = .automatic
+    var checksSpelling = true
+    var correctsSpelling = true
+}
+
 struct EditorTextStyle: Equatable {
     var fontChoice: EditorFontChoice = .monospacedSystem
     var fontSize: Double = 13
@@ -106,6 +134,7 @@ struct AppEditorSettings: Codable, Equatable {
     var wordCountMode: WordCountMode?
     var readingEstimate: ReadingEstimateSettings?
     var disabledLintRules: Set<MarkdownLintRule>?
+    var proofing: EditorProofingSettings?
 }
 
 enum EditorZoomSurface: CaseIterable {
