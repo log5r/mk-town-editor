@@ -125,6 +125,7 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingRegexSearch) {
             RegexSearchSheet(source: document.text, selectedRange: editorModel.selectedRange,
+                             initialScope: editorModel.selectedRange,
                              onSelect: { range in
                                 let destination = NavigationPoint(documentURL: fileURL,
                                                                   utf16Location: range.location)

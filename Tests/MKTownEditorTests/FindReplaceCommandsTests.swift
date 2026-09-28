@@ -30,6 +30,19 @@ final class FindReplaceCommandsTests: XCTestCase {
 
         XCTAssertTrue(view.actions.isEmpty)
     }
+
+    func testReplaceAllInSelectionUsesStandardActionOnlyWhenSelected() {
+        let view = FinderSpyTextView()
+        view.string = "alpha beta"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.replaceAllInSelection()
+        XCTAssertTrue(view.actions.isEmpty)
+
+        view.setSelectedRange(NSRange(location: 0, length: 5))
+        model.replaceAllInSelection()
+        XCTAssertEqual(view.actions, [.replaceAllInSelection])
+    }
 }
 
 @MainActor

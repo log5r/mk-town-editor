@@ -302,6 +302,11 @@ final class MarkdownEditorModel: ObservableObject {
         performFinderAction(.replaceAll)
     }
 
+    func replaceAllInSelection() {
+        guard canExecuteCommand, (textView?.selectedRange().length ?? 0) > 0 else { return }
+        performFinderAction(.replaceAllInSelection)
+    }
+
     @discardableResult
     func applyRegexEdit(_ edit: MarkdownEdit, expectedSource: String) -> Bool {
         guard let textView, let storage = textView.textStorage,

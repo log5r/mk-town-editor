@@ -49,6 +49,49 @@ final class RegexSearchTests: XCTestCase {
         XCTAssertEqual(RegexSearch.nextMatch(in: matches, after: matches[0]), matches[1])
         XCTAssertEqual(RegexSearch.nextMatch(in: matches, after: matches[1]), matches[0])
     }
+
+    func testSelectionScopeLimitsMatchesAndTracksReplacementLength() throws {
+        let source = "red red red"
+        var scope = try XCTUnwrap(RegexSelectionScope(NSRange(location: 0, length: 7)))
+        XCTAssertEqual(try RegexSearch.matches(in: source, pattern: "red", scope: scope.range).count, 2)
+        let edit = try XCTUnwrap(RegexSearch.replacementEdit(in: source, pattern: "red",
+                                                            template: "R", scope: scope.range))
+        XCTAssertEqual(edit.applying(to: source), "R R red")
+        XCTAssertTrue(scope.apply(edit))
+        XCTAssertEqual(scope.range, NSRange(location: 0, length: 3))
+        XCTAssertEqual(try RegexSearch.matches(in: edit.applying(to: source),
+                                               pattern: "red", scope: scope.range).count, 0)
+    }
+
+    func testScopeMovesForEarlierEditAndRejectsInvalidRange() throws {
+        var scope = try XCTUnwrap(RegexSelectionScope(NSRange(location: 4, length: 3)))
+        let edit = MarkdownEdit(range: NSRange(location: 0, length: 2), replacement: "long",
+                                selection: NSRange(location: 4, length: 0))
+        XCTAssertTrue(scope.apply(edit))
+        XCTAssertEqual(scope.range, NSRange(location: 6, length: 3))
+        XCTAssertThrowsError(try RegexSearch.matches(in: "short", pattern: "o",
+                                                     scope: scope.range)) {
+            XCTAssertEqual($0 as? RegexSearchError, .invalidScope)
+        }
+    }
+
+    func testZeroWidthInsertionAtSelectionStartExtendsScope() throws {
+        let source = "ab"
+        var scope = try XCTUnwrap(RegexSelectionScope(NSRange(location: 1, length: 1)))
+        let edit = try XCTUnwrap(RegexSearch.replacementEdit(in: source, pattern: #"(?=b)"#,
+                                                            template: "|", scope: scope.range))
+        XCTAssertEqual(edit.applying(to: source), "a|b")
+        XCTAssertTrue(scope.apply(edit))
+        XCTAssertEqual(scope.range, NSRange(location: 1, length: 2))
+    }
+
+    func testScopeRejectsEditCrossingSelectionBoundary() throws {
+        var scope = try XCTUnwrap(RegexSelectionScope(NSRange(location: 4, length: 3)))
+        let edit = MarkdownEdit(range: NSRange(location: 2, length: 3), replacement: "x",
+                                selection: NSRange(location: 3, length: 0))
+        XCTAssertFalse(scope.apply(edit))
+        XCTAssertEqual(scope.range, NSRange(location: 4, length: 3))
+    }
 }
 
 @MainActor
