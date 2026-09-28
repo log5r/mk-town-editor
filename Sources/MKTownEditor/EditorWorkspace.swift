@@ -1206,6 +1206,7 @@ struct EditorWorkspace: View {
                            sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
+                           proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
                            isEditable: !workspaceStore.isDocumentLocked(fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage,
                            onVisibleSourceChange: synchronizePreview(to:))

@@ -11,6 +11,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var usesSharedAnalysis = false
     var imageImportMode: ImageImportMode = .managedCopy
     var tableAddsRowOnTab = true
+    var proofing = EditorProofingSettings()
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -44,8 +45,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
-        textView.isAutomaticSpellingCorrectionEnabled = true
-        textView.isContinuousSpellCheckingEnabled = true
+        textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling
+        textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling
         textView.isVerticallyResizable = true
         scrollView.documentView = textView
         layoutOptions.apply(to: textView, in: scrollView)
@@ -82,12 +83,15 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
+        context.coordinator.proofing = proofing
+        context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.isRestoringSession = false
-        textView.onFocused = { [weak textView, weak model] in
+        textView.onFocused = { [weak textView, weak model, weak coordinator = context.coordinator] in
             guard let textView, let model else { return }
             model.editorDidGainFocus(textView)
+            coordinator?.applyProofingLanguage()
         }
         scrollView.onWindowAttached = { [weak textView, weak model, weak coordinator = context.coordinator, weak scrollView] in
             guard let textView, let model, let coordinator, let scrollView else { return }
@@ -115,6 +119,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
+        context.coordinator.proofing = proofing
+        context.coordinator.applyProofing()
         if context.coordinator.appliedLayoutOptions != layoutOptions {
             layoutOptions.apply(to: textView, in: scrollView)
             context.coordinator.appliedLayoutOptions = layoutOptions
@@ -135,6 +141,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         let selection = textView.selectedRange()
         textView.string = text
+        context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.lineNumberRuler?.refresh()
@@ -153,6 +160,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         var appliedLayoutOptions: EditorLayoutOptions?
         var sharedSnapshot: DocumentSnapshot?
         var usesSharedAnalysis = false
+        var proofing = EditorProofingSettings()
+        private var proofingSource: String?
+        private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
@@ -167,6 +177,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             text = textView.string
+            applyProofing()
             refreshSyntax()
             if let scrollView, let options = appliedLayoutOptions {
                 options.synchronizeWidth(of: textView, in: scrollView)
@@ -194,6 +205,30 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView else { return }
             model.selectionDidChange(textView.selectedRange())
+            applyProofing()
+        }
+
+        @MainActor func applyProofingLanguage() {
+            let checker = NSSpellChecker.shared
+            if let language = proofing.language.spellCheckerIdentifier {
+                checker.automaticallyIdentifiesLanguages = !checker.setLanguage(language)
+            } else {
+                checker.automaticallyIdentifiesLanguages = true
+            }
+        }
+
+        @MainActor func applyProofing() {
+            guard let textView else { return }
+            if proofingSource != textView.string {
+                proofingSource = textView.string
+                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: textView.string)
+            }
+            let location = textView.selectedRange().location
+            let protected = MarkdownProofingContext.isProtected(location,
+                in: protectedProofingRanges)
+            textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
+            textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
+            if textView.window?.firstResponder === textView { applyProofingLanguage() }
         }
 
         @MainActor @objc func clipViewBoundsDidChange(_ notification: Notification) {
@@ -204,6 +239,34 @@ struct MarkdownTextEditor: NSViewRepresentable {
                let location = editor.firstVisibleSourceLocation(in: scrollView) {
                 onVisibleSourceChange?(location)
             }
+        }
+    }
+}
+
+enum MarkdownProofingContext {
+    struct ProtectedRange: Equatable {
+        let range: NSRange
+        let includesEnd: Bool
+    }
+
+    private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s)<>\]]+"#)
+
+    static func protectedRanges(in source: String) -> [ProtectedRange] {
+        let analysis = MarkdownAnalysis(source)
+        let code = analysis.blocks.filter { $0.kind == .codeBlock }
+            .map { ProtectedRange(range: $0.sourceRange, includesEnd: false) }
+        let inline = MarkdownInlineSyntax.codeSpanRanges(in: source)
+            .map { ProtectedRange(range: $0, includesEnd: false) }
+        let full = NSRange(location: 0, length: (source as NSString).length)
+        let urls = urlPattern.matches(in: source, range: full)
+            .map { ProtectedRange(range: $0.range, includesEnd: true) }
+        return code + inline + urls
+    }
+
+    static func isProtected(_ location: Int, in ranges: [ProtectedRange]) -> Bool {
+        ranges.contains { item in
+            NSLocationInRange(location, item.range) ||
+                (item.includesEnd && location == NSMaxRange(item.range))
         }
     }
 }

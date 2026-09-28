@@ -33,6 +33,18 @@ struct EditorPreferencesView: View {
                 Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
             }
             Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
+            Section("校正") {
+                Picker("スペルチェックの言語", selection: proofingBinding(\.language)) {
+                    ForEach(ProofingLanguage.allCases, id: \.self) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                Toggle("スペルチェック", isOn: proofingBinding(\.checksSpelling))
+                Toggle("自動訂正", isOn: proofingBinding(\.correctsSpelling))
+                Text("コードとURLでは自動訂正を一時停止します。ユーザー辞書にはmacOSの標準機能を使います。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 430)
@@ -61,5 +73,16 @@ struct EditorPreferencesView: View {
                 settingsStore.setAppSettings(settings)
             }
         )
+    }
+
+    private func proofingBinding<Value>(_ keyPath: WritableKeyPath<EditorProofingSettings, Value>) -> Binding<Value> {
+        Binding(get: { (settingsStore.app.proofing ?? EditorProofingSettings())[keyPath: keyPath] },
+                set: { value in
+                    var settings = settingsStore.app
+                    var proofing = settings.proofing ?? EditorProofingSettings()
+                    proofing[keyPath: keyPath] = value
+                    settings.proofing = proofing
+                    settingsStore.setAppSettings(settings)
+                })
     }
 }

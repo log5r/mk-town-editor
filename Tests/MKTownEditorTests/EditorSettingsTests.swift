@@ -130,6 +130,37 @@ final class EditorSettingsTests: XCTestCase {
                        [.headingHierarchy, .listMarker])
     }
 
+    func testProofingPreferencesPersistAndOldSettingsUseDefaults() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        settings.proofing = EditorProofingSettings(language: .english,
+            checksSpelling: true, correctsSpelling: false)
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.proofing, settings.proofing)
+        let old = try JSONDecoder().decode(AppEditorSettings.self,
+            from: Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8))
+        XCTAssertNil(old.proofing)
+        XCTAssertTrue(EditorProofingSettings().correctsSpelling)
+    }
+
+    func testProofingContextExcludesCodeAndURLsButNotAdjacentProse() {
+        let source = "text `coode` https://exaample.com next\n```\ncoode\n```\nnormal"
+        let text = source as NSString
+        let ranges = MarkdownProofingContext.protectedRanges(in: source)
+        XCTAssertTrue(MarkdownProofingContext.isProtected(text.range(of: "coode").location + 1,
+            in: ranges))
+        let url = text.range(of: "https://exaample.com")
+        XCTAssertTrue(MarkdownProofingContext.isProtected(NSMaxRange(url), in: ranges))
+        XCTAssertFalse(MarkdownProofingContext.isProtected(text.range(of: "next").location,
+            in: ranges))
+        XCTAssertTrue(MarkdownProofingContext.isProtected(text.range(of: "coode", options: [],
+            range: NSRange(location: NSMaxRange(url), length: text.length - NSMaxRange(url))).location,
+            in: ranges))
+        XCTAssertFalse(MarkdownProofingContext.isProtected(text.range(of: "normal").location,
+            in: ranges))
+    }
+
     func testWritingGoalAndSessionBaselinePersistAndFollowRename() {
         let defaults = isolatedDefaults()
         let oldURL = URL(fileURLWithPath: "/tmp/work/draft.md")
