@@ -456,6 +456,7 @@ struct MarkdownCommands: Commands {
             commandButton(.comment)
             commandButton(.expandSelection)
             commandButton(.shrinkSelection)
+            commandButton(.selectNextOccurrence)
             commandButton(.toggleFold)
             commandButton(.unfoldAll)
             commandButton(.snippet)

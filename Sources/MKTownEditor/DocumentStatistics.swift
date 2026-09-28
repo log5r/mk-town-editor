@@ -78,6 +78,13 @@ struct DocumentStatistics: Equatable, Sendable {
     let words: Int
     let lines: Int
 
+    private init(characters: Int, nonWhitespaceCharacters: Int, words: Int, lines: Int) {
+        self.characters = characters
+        self.nonWhitespaceCharacters = nonWhitespaceCharacters
+        self.words = words
+        self.lines = lines
+    }
+
     init(text: String) {
         characters = text.count
         nonWhitespaceCharacters = text.filter { !$0.isWhitespace && !$0.isNewline }.count
@@ -90,6 +97,15 @@ struct DocumentStatistics: Equatable, Sendable {
         guard range.length > 0, range.location >= 0, range.location <= source.length,
               range.length <= source.length - range.location else { return nil }
         return DocumentStatistics(text: source.substring(with: range))
+    }
+
+    static func selection(in text: String, ranges: [NSRange]) -> DocumentStatistics? {
+        let parts = ranges.compactMap { selection(in: text, range: $0) }
+        guard !parts.isEmpty else { return nil }
+        return DocumentStatistics(characters: parts.reduce(0) { $0 + $1.characters },
+                                  nonWhitespaceCharacters: parts.reduce(0) { $0 + $1.nonWhitespaceCharacters },
+                                  words: parts.reduce(0) { $0 + $1.words },
+                                  lines: parts.reduce(0) { $0 + $1.lines })
     }
 
     static func sectionRange(at location: Int, in analysis: MarkdownAnalysis,

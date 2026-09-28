@@ -124,7 +124,7 @@ struct EditorWorkspace: View {
     }
 
     private var selectionStatistics: DocumentStatistics? {
-        DocumentStatistics.selection(in: document.text, range: editorModel.selectedRange)
+        DocumentStatistics.selection(in: document.text, ranges: editorModel.selectedRanges)
     }
 
     private var wordCountMode: WordCountMode {
