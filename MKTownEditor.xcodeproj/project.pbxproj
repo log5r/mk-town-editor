@@ -53,6 +53,7 @@
 		A10000000000000000000035 /* RegexSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* RegexSearchSheet.swift */; };
 		A10000000000000000000036 /* MarkdownHTMLExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000036 /* MarkdownHTMLExporter.swift */; };
 		A10000000000000000000037 /* MarkdownPDFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000037 /* MarkdownPDFExporter.swift */; };
+		A10000000000000000000038 /* MarkdownRichClipboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000038 /* MarkdownRichClipboard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -105,6 +106,7 @@
 		A20000000000000000000035 /* RegexSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearchSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000036 /* MarkdownHTMLExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHTMLExporter.swift; sourceTree = "<group>"; };
 		A20000000000000000000037 /* MarkdownPDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPDFExporter.swift; sourceTree = "<group>"; };
+		A20000000000000000000038 /* MarkdownRichClipboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRichClipboard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -171,6 +173,7 @@
 				A20000000000000000000035 /* RegexSearchSheet.swift */,
 				A20000000000000000000036 /* MarkdownHTMLExporter.swift */,
 				A20000000000000000000037 /* MarkdownPDFExporter.swift */,
+				A20000000000000000000038 /* MarkdownRichClipboard.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -285,6 +288,7 @@
 				A10000000000000000000035 /* RegexSearchSheet.swift in Sources */,
 				A10000000000000000000036 /* MarkdownHTMLExporter.swift in Sources */,
 				A10000000000000000000037 /* MarkdownPDFExporter.swift in Sources */,
+				A10000000000000000000038 /* MarkdownRichClipboard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

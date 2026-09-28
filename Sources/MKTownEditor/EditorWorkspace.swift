@@ -37,6 +37,7 @@ struct EditorWorkspace: View {
     @State private var printSettings = MarkdownPrintSettings()
     @State private var printError: String?
     @State private var printRequested = false
+    @State private var richCopyError: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -125,6 +126,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
+        .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
     }
 
     private var sheetView: some View {
@@ -214,6 +216,14 @@ struct EditorWorkspace: View {
             Button("OK") { printError = nil }
         } message: {
             Text(printError ?? "")
+        }
+        .alert("書式付きコピーに失敗しました", isPresented: Binding(
+            get: { richCopyError != nil },
+            set: { if !$0 { richCopyError = nil } }
+        )) {
+            Button("OK") { richCopyError = nil }
+        } message: {
+            Text(richCopyError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
@@ -493,6 +503,19 @@ struct EditorWorkspace: View {
             _ = operation.run()
         } catch {
             printError = error.localizedDescription
+        }
+    }
+
+    private func copyRichSelection() {
+        guard let textView = editorModel.textView else { return }
+        let source = textView.string as NSString
+        let selection = textView.selectedRange()
+        guard selection.length > 0, NSMaxRange(selection) <= source.length else { return }
+        do {
+            try MarkdownRichClipboard.copy(source.substring(with: selection), documentURL: fileURL,
+                                           to: .general)
+        } catch {
+            richCopyError = error.localizedDescription
         }
     }
 
