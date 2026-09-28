@@ -11,6 +11,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var usesSharedAnalysis = false
     var imageImportMode: ImageImportMode = .managedCopy
     var tableAddsRowOnTab = true
+    var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var onVisibleSourceChange: ((Int) -> Void)?
@@ -31,7 +32,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
-        textView.isEditable = true
+        textView.isEditable = isEditable
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.usesFindBar = true
@@ -107,6 +108,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? EditorTextView else { return }
+        textView.isEditable = isEditable
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste

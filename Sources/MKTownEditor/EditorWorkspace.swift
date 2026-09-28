@@ -60,6 +60,7 @@ struct EditorWorkspace: View {
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
     @State private var workspaceViewActive = false
+    @State private var openBufferID = UUID()
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
@@ -412,7 +413,10 @@ struct EditorWorkspace: View {
         .onAppear {
             if !workspaceViewActive {
                 workspaceViewActive = true
-                if let fileURL { workspaceStore.registerOpenDocument(fileURL) }
+                if let fileURL {
+                    workspaceStore.registerOpenDocument(fileURL)
+                    registerOpenBuffer(for: fileURL)
+                }
                 restorePosition(for: fileURL)
             }
             analysisStore.update(source: document.text)
@@ -429,7 +433,10 @@ struct EditorWorkspace: View {
         .onDisappear {
             savePosition(for: fileURL)
             if workspaceViewActive {
-                if let fileURL { workspaceStore.unregisterOpenDocument(fileURL) }
+                if let fileURL {
+                    workspaceStore.unregisterOpenDocument(fileURL)
+                    workspaceStore.unregisterOpenBuffer(id: openBufferID, url: fileURL)
+                }
                 workspaceViewActive = false
             }
         }
@@ -440,8 +447,14 @@ struct EditorWorkspace: View {
         .onChange(of: fileURL) { oldURL, newURL in
             savePosition(for: oldURL)
             if workspaceViewActive {
-                if let oldURL { workspaceStore.unregisterOpenDocument(oldURL) }
-                if let newURL { workspaceStore.registerOpenDocument(newURL) }
+                if let oldURL {
+                    workspaceStore.unregisterOpenDocument(oldURL)
+                    workspaceStore.unregisterOpenBuffer(id: openBufferID, url: oldURL)
+                }
+                if let newURL {
+                    workspaceStore.registerOpenDocument(newURL)
+                    registerOpenBuffer(for: newURL)
+                }
             }
             navigationHistory.moveDocument(from: oldURL, to: newURL)
             synchronizedBlockID = nil
@@ -1050,8 +1063,16 @@ struct EditorWorkspace: View {
                            sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
+                           isEditable: !workspaceStore.isDocumentLocked(fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage,
                            onVisibleSourceChange: synchronizePreview(to:))
+    }
+
+    private func registerOpenBuffer(for url: URL) {
+        let binding = $document
+        workspaceStore.registerOpenBuffer(id: openBufferID, url: url,
+            encodedData: { binding.wrappedValue.encodedData() },
+            updateText: { binding.wrappedValue.text = $0 })
     }
 
     private func dropImage(_ url: URL, at location: Int) {

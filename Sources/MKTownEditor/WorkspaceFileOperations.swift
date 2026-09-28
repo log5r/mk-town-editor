@@ -11,6 +11,7 @@ enum WorkspaceFileOperationError: LocalizedError {
     case indexTruncated
     case invalidName
     case workspaceChanged
+    case openDocumentChanged(URL)
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +24,7 @@ enum WorkspaceFileOperationError: LocalizedError {
         case .indexTruncated: "ファイル一覧が上限を超えたため、リンク更新を安全に確認できません。"
         case .invalidName: "ファイル名またはフォルダ名を確認してください。"
         case .workspaceChanged: "確認後にワークスペース内の書類が増減しました。もう一度確認してください。"
+        case let .openDocumentChanged(url): "確認後に開いている書類が変更されました: \(url.lastPathComponent)"
         }
     }
 }
@@ -34,6 +36,8 @@ struct WorkspaceDocumentChange: Sendable {
     let updatedData: Data
     let linkCount: Int
     let linkChanges: [WorkspaceLinkChange]
+    let openOriginalData: Data?
+    let updatedOpenText: String?
 }
 
 struct WorkspaceLinkChange: Sendable {
@@ -53,6 +57,7 @@ struct WorkspaceMovePlan: Sendable {
     let destinationURL: URL
     let changes: [WorkspaceDocumentChange]
     let inspectedDocuments: [WorkspaceDocumentSnapshot]
+    let inspectedOpenDocuments: [URL: Data]
 
     var changedLinks: Int { changes.reduce(0) { $0 + $1.linkCount } }
 
@@ -102,10 +107,31 @@ struct WorkspaceMovePlan: Sendable {
             throw error
         }
     }
+
+    func validateAppliedData() throws {
+        for change in changes where change.linkCount > 0 {
+            guard let current = try? Data(contentsOf: change.newURL),
+                  current == change.updatedData else {
+                throw WorkspaceFileOperationError.documentChanged(change.newURL)
+            }
+        }
+    }
+
+    func rollback() throws {
+        var restored = true
+        for change in changes where change.linkCount > 0 {
+            do { try change.originalData.write(to: change.newURL, options: .atomic) }
+            catch { restored = false }
+        }
+        do { try FileManager.default.moveItem(at: destinationURL, to: sourceURL) }
+        catch { restored = false }
+        if !restored { throw WorkspaceFileOperationError.rollbackFailed }
+    }
 }
 
 enum WorkspaceFileOperations {
-    static func planMove(source: URL, destination: URL, root: URL) throws -> WorkspaceMovePlan {
+    static func planMove(source: URL, destination: URL, root: URL,
+                         openDocuments: [URL: Data] = [:]) throws -> WorkspaceMovePlan {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let destination = destination.resolvingSymlinksInPath().standardizedFileURL
         let root = root.resolvingSymlinksInPath().standardizedFileURL
@@ -122,31 +148,46 @@ enum WorkspaceFileOperations {
         let index = WorkspaceFileIndex.scan(root: root)
         guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let documents = markdownFiles(in: index.nodes)
+        let openData = openDocuments.reduce(into: [URL: Data]()) { result, item in
+            result[item.key.resolvingSymlinksInPath().standardizedFileURL] = item.value
+        }
+        let workspaceDocumentPaths = Set(documents.map {
+            $0.resolvingSymlinksInPath().standardizedFileURL.path
+        })
+        let inspectedOpenDocuments = openData.filter {
+            workspaceDocumentPaths.contains($0.key.path)
+        }
         var changes: [WorkspaceDocumentChange] = []
         var inspectedDocuments: [WorkspaceDocumentSnapshot] = []
-        for document in documents {
+        for scannedDocument in documents {
+            let document = scannedDocument.resolvingSymlinksInPath().standardizedFileURL
             guard let original = try? Data(contentsOf: document),
-                  let text = String(data: original, encoding: .utf8) else {
+                  let opened = try? MarkdownDocument(data: openData[document] ?? original) else {
                 throw WorkspaceFileOperationError.unreadableDocument(document)
             }
             inspectedDocuments.append(WorkspaceDocumentSnapshot(
                 url: document, digest: Data(SHA256.hash(data: original))
             ))
             let newURL = mapped(document, from: source, to: destination)
-            let (updated, links) = rewriteLinks(text, documentURL: document,
+            let (updated, links) = rewriteLinks(opened.text, documentURL: document,
                                                 newDocumentURL: newURL,
                                                 source: source, destination: destination)
             if !links.isEmpty || document != newURL {
+                var updatedDocument = opened
+                updatedDocument.text = updated
                 changes.append(WorkspaceDocumentChange(oldURL: document, newURL: newURL,
                                                        originalData: original,
-                                                       updatedData: Data(updated.utf8),
+                                                       updatedData: updatedDocument.encodedData(),
                                                        linkCount: links.count,
-                                                       linkChanges: links))
+                                                       linkChanges: links,
+                                                       openOriginalData: openData[document],
+                                                       updatedOpenText: openData[document] == nil ? nil : updated))
             }
         }
         return WorkspaceMovePlan(rootURL: root, sourceURL: source,
                                  destinationURL: destination, changes: changes,
-                                 inspectedDocuments: inspectedDocuments)
+                                 inspectedDocuments: inspectedDocuments,
+                                 inspectedOpenDocuments: inspectedOpenDocuments)
     }
 
     static func create(name: String, in directory: URL, root: URL, folder: Bool,
