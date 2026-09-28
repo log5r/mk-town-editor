@@ -209,34 +209,35 @@ struct EditorWorkspace: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .navigation) {
+        .toolbar(id: "mktown-editor") {
+            ToolbarItem(id: "sidebar", placement: .navigation) {
                 Button("サイドバー", systemImage: "sidebar.left") {
                     sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
                 }
                 .help("サイドバーを表示または隠す")
             }
-            ToolbarItemGroup(placement: .primaryAction) {
-                ForEach(EditorCommand.toolbar, id: \.self) { command in
+            ForEach(EditorCommand.toolbar, id: \.self) { command in
+                ToolbarItem(id: "command-\(command.toolbarIdentifier)", placement: .primaryAction,
+                            showsByDefault: EditorCommand.defaultToolbar.contains(command)) {
                     formatButton(command)
                 }
             }
 
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "link-diagnostics", placement: .primaryAction) {
                 Button("リンク診断", systemImage: "link") {
                     showingLinkDiagnostics = true
                     checkLinks()
                 }
                 .help("ローカルリンクの参照先を確認")
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "snapshots", placement: .primaryAction) {
                 Button("明示スナップショット", systemImage: "clock.arrow.circlepath") {
                     showingSnapshotHistory = true
                 }
                 .disabled(fileURL == nil)
                 .help("名前を付けた本文履歴を保存・比較・復元")
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "writing-tools", placement: .primaryAction) {
                 Menu("文章ツール", systemImage: "text.badge.checkmark") {
                     Button("Markdown診断") {
                         showingMarkdownLint = true
@@ -247,7 +248,7 @@ struct EditorWorkspace: View {
                 .help("Markdown診断と自動整形")
             }
 
-            ToolbarItem(placement: .principal) {
+            ToolbarItem(id: "display-mode", placement: .principal) {
                 Picker("表示", selection: mode) {
                     ForEach(EditorMode.allCases) { value in
                         Label(value.label, systemImage: value.symbolName)
@@ -259,7 +260,7 @@ struct EditorWorkspace: View {
                 .labelsHidden()
                 .frame(width: 220)
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "split-layout", placement: .primaryAction) {
                 Menu("分割配置", systemImage: "rectangle.split.2x1") {
                     Picker("方向", selection: $splitOrientation) {
                         ForEach(EditorSplitOrientation.allCases, id: \.self) { orientation in
@@ -270,7 +271,7 @@ struct EditorWorkspace: View {
                 }
                 .disabled(mode.wrappedValue != .split)
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(id: "detached-preview", placement: .primaryAction) {
                 Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
                     detachedPreview.show(document: $document, documentURL: fileURL,
                                          settingsStore: settingsStore, updates: previewUpdates)
