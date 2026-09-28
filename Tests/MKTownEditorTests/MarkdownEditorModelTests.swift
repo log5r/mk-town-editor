@@ -185,6 +185,35 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(replacement.selectedRange(), NSRange(location: 1, length: 0))
     }
 
+    func testNavigationInPreviewModeIsRestoredWhenEditorReconnects() {
+        let model = MarkdownEditorModel()
+        let text = (0..<80).map { "line \($0)" }.joined(separator: "\n")
+        model.navigate(to: (text as NSString).length)
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 1_200))
+        view.string = text
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        scrollView.documentView = view
+        model.connect(view, scrollView: scrollView)
+
+        XCTAssertEqual(view.selectedRange(), NSRange(location: (text as NSString).length, length: 0))
+        XCTAssertEqual(model.selectedRange, view.selectedRange())
+        XCTAssertGreaterThan(scrollView.contentView.bounds.origin.y, 0)
+    }
+
+    func testNavigationInEditorMovesCaretWithoutChangingSourceOrUndo() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "first\nsecond"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+
+        model.navigate(to: 6)
+
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 6, length: 0))
+        XCTAssertEqual(view.string, "first\nsecond")
+        XCTAssertFalse(view.undoManager?.canUndo ?? false)
+    }
+
     func testFocusRestoresOnlyForCurrentEditorView() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)

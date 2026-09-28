@@ -1,12 +1,18 @@
 import AppKit
 import SwiftUI
 
+struct PreviewNavigationTarget: Equatable {
+    let blockID: Int
+    let sequence: Int
+}
+
 struct MarkdownPreview: View {
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
     var snapshot: DocumentSnapshot?
     var usesSharedAnalysis = false
+    var navigationTarget: PreviewNavigationTarget?
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -16,34 +22,43 @@ struct MarkdownPreview: View {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) {
                 let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
-                ScrollView(.vertical) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(visibleBlocks, id: \.id) { block in
-                            HStack(alignment: .top, spacing: 8) {
-                                ForEach(0..<quoteDepth(of: block, in: analysis), id: \.self) { _ in
-                                    Rectangle()
-                                        .fill(Color.secondary.opacity(0.5))
-                                        .frame(width: 2)
-                                        .accessibilityHidden(true)
+                ScrollViewReader { proxy in
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(visibleBlocks, id: \.id) { block in
+                                HStack(alignment: .top, spacing: 8) {
+                                    ForEach(0..<quoteDepth(of: block, in: analysis), id: \.self) { _ in
+                                        Rectangle()
+                                            .fill(Color.secondary.opacity(0.5))
+                                            .frame(width: 2)
+                                            .accessibilityHidden(true)
+                                    }
+                                    if let table = block.table {
+                                        tableView(table, in: analysis)
+                                    } else if block.kind == .blank {
+                                        Text(" ").frame(height: 12)
+                                    } else if let task = block.task {
+                                        taskView(block, task: task, in: analysis)
+                                    } else {
+                                        blockText(block, in: analysis)
+                                    }
                                 }
-                                if let table = block.table {
-                                    tableView(table, in: analysis)
-                                } else if block.kind == .blank {
-                                    Text(" ").frame(height: 12)
-                                } else if let task = block.task {
-                                    taskView(block, task: task, in: analysis)
-                                } else {
-                                    blockText(block, in: analysis)
-                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .id(block.id)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 24)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 24)
+                    .focusable()
+                    .onAppear {
+                        if let navigationTarget { proxy.scrollTo(navigationTarget.blockID, anchor: .top) }
+                    }
+                    .onChange(of: navigationTarget) { _, target in
+                        if let target { proxy.scrollTo(target.blockID, anchor: .top) }
+                    }
                 }
-                .focusable()
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis)
