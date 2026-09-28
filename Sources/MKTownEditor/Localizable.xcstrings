@@ -4213,6 +4213,16 @@
         }
       }
     },
+    "未対応HTML要素: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported HTML element: %@"
+          }
+        }
+      }
+    },
     "本文": {
       "localizations": {
         "en": {
