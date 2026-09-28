@@ -463,11 +463,13 @@ final class MarkdownEditorModel: ObservableObject {
         }
     }
 
-    func commitImage(alt: String, destination: String, title: String) -> Bool {
+    func commitImage(alt: String, destination: String, title: String,
+                     width: Int? = nil) -> Bool {
         guard let draft = imageDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
               let edit = MarkdownLinkSyntax.imageEdit(in: textView.string, draft: draft,
-                                                      alt: alt, destination: destination, title: title),
+                                                      alt: alt, destination: destination,
+                                                      title: title, width: width),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         imageDraft = nil
         return true

@@ -92,6 +92,36 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(store.revision, revision)
     }
 
+    func testImageWidthDialectLeavesCodeUntouchedAndCaptionsStandaloneImage() {
+        let source = "`![code](a.png){width=99}` ![図](b.png){width=320px}"
+        let layout = MarkdownImageLayout.parse(source)
+        XCTAssertEqual(layout.markdown, "`![code](a.png){width=99}` ![図](b.png)")
+        XCTAssertEqual(layout.widths, [320])
+        XCTAssertNil(layout.standaloneCaption)
+        XCTAssertEqual(MarkdownImageLayout.parse("![説明](b.png){width=320}").standaloneCaption,
+                       "説明")
+    }
+
+    func testStandaloneImageUsesRequestedWidthAndShowsCaption() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try png.write(to: root.appendingPathComponent("photo.png"))
+        let document = root.appendingPathComponent("note.md")
+        let source = "![説明](photo.png){width=240}"
+        let rendered = MarkdownRenderer.render(source,
+            documentContext: DocumentContext(fileURL: document))
+        let location = (rendered.string as NSString).range(of: "\u{FFFC}").location
+        let attachment = try XCTUnwrap(rendered.attribute(.attachment, at: location,
+            effectiveRange: nil) as? MarkdownImageAttachment)
+        XCTAssertEqual(attachment.bounds.width, 240)
+        XCTAssertTrue(rendered.string.hasSuffix("\n説明"))
+        let html = MarkdownHTMLExporter.render(source, documentURL: document)
+        XCTAssertTrue(html.contains("width=\"240\""))
+        XCTAssertTrue(html.contains("<figcaption>説明</figcaption>"))
+        XCTAssertFalse(html.contains("{width=240}"))
+    }
+
     func testRemoteImageReferencesExcludeCodeAndIncludeReferenceStyle() {
         let markdown = "![shown][pic]\n\n[pic]: https://example.com/a.png\n\n" +
             "`![inline](https://example.com/no.png)`\n\n```md\n" +

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ImageEditorSheet: View {
     let draft: MarkdownImageDraft
     let documentContext: DocumentContext
-    let onSave: @MainActor (String, ImageInput, String) async throws -> Void
+    let onSave: @MainActor (String, ImageInput, String, Int?) async throws -> Void
 
     private enum Source: String, CaseIterable {
         case url = "URL"
@@ -16,13 +16,14 @@ struct ImageEditorSheet: View {
     @State private var alt: String
     @State private var remoteURL = ""
     @State private var title = ""
+    @State private var widthText = ""
     @State private var fileURL: URL?
     @State private var showsFileImporter = false
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     init(draft: MarkdownImageDraft, documentContext: DocumentContext,
-         onSave: @escaping @MainActor (String, ImageInput, String) async throws -> Void) {
+         onSave: @escaping @MainActor (String, ImageInput, String, Int?) async throws -> Void) {
         self.draft = draft
         self.documentContext = documentContext
         self.onSave = onSave
@@ -59,9 +60,13 @@ struct ImageEditorSheet: View {
                 }
                 TextField("代替テキスト", text: $alt)
                 TextField("タイトル（任意）", text: $title)
+                TextField("表示幅（px、任意）", text: $widthText)
+                Text("画像だけの段落では代替テキストをキャプションにも使用します。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .formStyle(.grouped)
-            .frame(height: source == .file && documentContext.directoryURL == nil ? 210 : 180)
+            .frame(height: source == .file && documentContext.directoryURL == nil ? 290 : 260)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -93,6 +98,8 @@ struct ImageEditorSheet: View {
 
     private var canSave: Bool {
         guard !isSaving, !alt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let width = widthText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard width.isEmpty || Int(width).map({ (1...9999).contains($0) }) == true else { return false }
         switch source {
         case .url:
             let candidate = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -117,7 +124,8 @@ struct ImageEditorSheet: View {
         errorMessage = nil
         Task {
             do {
-                try await onSave(alt, input, title)
+                try await onSave(alt, input, title,
+                    Int(widthText.trimmingCharacters(in: .whitespacesAndNewlines)))
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription

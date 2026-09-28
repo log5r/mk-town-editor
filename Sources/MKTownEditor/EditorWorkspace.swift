@@ -485,8 +485,8 @@ struct EditorWorkspace: View {
                             })
         }
         .sheet(item: $editorModel.imageDraft) { draft in
-            ImageEditorSheet(draft: draft, documentContext: documentContext) { alt, input, title in
-                try await insertImage(alt: alt, input: input, title: title)
+            ImageEditorSheet(draft: draft, documentContext: documentContext) { alt, input, title, width in
+                try await insertImage(alt: alt, input: input, title: title, width: width)
             }
         }
         .sheet(item: $editorModel.tableDraft) { _ in
@@ -1277,9 +1277,11 @@ struct EditorWorkspace: View {
                                           in: $document.text, undoManager: undoManager)
     }
 
-    private func insertImage(alt: String, input: ImageInput, title: String) async throws {
+    private func insertImage(alt: String, input: ImageInput, title: String,
+                             width: Int?) async throws {
         let context = documentContext
         try await ImageInsertionService.insert(alt: alt, input: input, title: title,
+                                               width: width,
                                                context: context, model: editorModel,
                                                currentContext: { documentContext })
     }

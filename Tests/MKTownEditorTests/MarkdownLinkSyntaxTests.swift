@@ -97,6 +97,12 @@ final class MarkdownLinkSyntaxTests: XCTestCase {
         let edit = try! XCTUnwrap(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,
             alt: draft.alt, destination: "assets/a b.png", title: "写真"))
         XCTAssertEqual(edit.applying(to: source), "前![🙂](assets/a%20b.png \"写真\")後")
+        let sized = try! XCTUnwrap(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,
+            alt: draft.alt, destination: "assets/a b.png", title: "写真", width: 320))
+        XCTAssertEqual(sized.applying(to: source),
+            "前![🙂](assets/a%20b.png \"写真\"){width=320}後")
+        XCTAssertNil(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,
+            alt: draft.alt, destination: "image.png", title: "", width: 0))
         XCTAssertNil(MarkdownLinkSyntax.imageEdit(in: "変化" + source, draft: draft,
             alt: draft.alt, destination: "assets/a b.png", title: ""))
         XCTAssertNil(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,

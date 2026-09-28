@@ -166,6 +166,7 @@ enum MarkdownRenderer {
             return content
         case .paragraph:
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
+                                 captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
             if block.parentID != nil {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
@@ -199,11 +200,13 @@ enum MarkdownRenderer {
         baseFont: NSFont,
         color: NSColor = .textColor,
         paragraphSpacing: CGFloat = 8,
+        captionStandaloneImage: Bool = false,
         references: [String: MarkdownReference] = [:],
         footnotes: MarkdownFootnoteIndex? = nil,
         context: DocumentContext
     ) -> NSMutableAttributedString {
-        let resolved = resolveReferences(in: markdown, using: references)
+        let layout = MarkdownImageLayout.parse(resolveReferences(in: markdown, using: references))
+        let resolved = layout.markdown
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
@@ -235,22 +238,27 @@ enum MarkdownRenderer {
             result.addAttribute(.font, value: font, range: range)
         }
 
-        var images: [(NSRange, URL, String)] = []
+        var images: [(NSRange, URL, String, CGFloat?)] = []
+        var imageIndex = 0
         result.enumerateAttribute(.imageURL, in: fullRange) { value, range, _ in
             guard let url = value as? URL else { return }
             let alt = (result.attribute(.alternateDescription, at: range.location,
                                         effectiveRange: nil) as? String)
                 ?? result.attributedSubstring(from: range).string
-            images.append((range, url, alt))
+            let width = imageIndex < layout.widths.count ? layout.widths[imageIndex] : nil
+            images.append((range, url, alt, width))
+            imageIndex += 1
         }
-        for (range, url, alt) in images.reversed() {
+        var renderedAttachment = false
+        for (range, url, alt, width) in images.reversed() {
             let replacement: NSAttributedString
             if url.scheme == nil,
                let fileURL = context.resolveLocalResource(url.relativeString),
                let image = ImageResourceManager().previewImage(at: fileURL, alt: alt) {
                 let attachment = MarkdownImageAttachment()
-                attachment.image = image
-                attachment.bounds = NSRect(origin: .zero, size: image.size)
+                renderedAttachment = true
+                attachment.image = sizedImage(image, width: width)
+                attachment.bounds = NSRect(origin: .zero, size: attachment.image?.size ?? image.size)
                 let value = NSMutableAttributedString(attachment: attachment)
                 value.addAttribute(.alternateDescription, value: alt,
                                    range: NSRange(location: 0, length: value.length))
@@ -262,10 +270,11 @@ enum MarkdownRenderer {
             } else if ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
                       let image = RemoteImageStore.shared.image(for: url) {
                 let attachment = MarkdownImageAttachment()
+                renderedAttachment = true
                 let accessibleImage = (image.copy() as? NSImage) ?? image
                 accessibleImage.accessibilityDescription = alt
-                attachment.image = accessibleImage
-                attachment.bounds = NSRect(origin: .zero, size: image.size)
+                attachment.image = sizedImage(accessibleImage, width: width)
+                attachment.bounds = NSRect(origin: .zero, size: attachment.image?.size ?? image.size)
                 let value = NSMutableAttributedString(attachment: attachment)
                 value.addAttribute(.alternateDescription, value: alt,
                                    range: NSRange(location: 0, length: value.length))
@@ -292,9 +301,23 @@ enum MarkdownRenderer {
             result.replaceCharacters(in: range, with: replacement)
         }
 
+        if captionStandaloneImage, let caption = layout.standaloneCaption,
+           renderedAttachment {
+            result.append(NSAttributedString(string: "\n\(caption)", attributes:
+                baseAttributes(font: .systemFont(ofSize: 12), color: .secondaryLabelColor,
+                               paragraphSpacing: paragraphSpacing)))
+        }
+
         MarkdownAutolink.apply(to: result)
         if let footnotes { applyFootnoteMarkers(to: result, footnotes: footnotes) }
         return result
+    }
+
+    private static func sizedImage(_ image: NSImage, width: CGFloat?) -> NSImage {
+        guard let width, image.size.width > 0, image.size.height > 0,
+              let copy = image.copy() as? NSImage else { return image }
+        copy.size = NSSize(width: width, height: image.size.height * width / image.size.width)
+        return copy
     }
 
     private static func applyFootnoteMarkers(to result: NSMutableAttributedString,
@@ -387,14 +410,53 @@ enum MarkdownRenderer {
     }
 }
 
+struct MarkdownImageLayout {
+    let markdown: String
+    let widths: [CGFloat?]
+    let standaloneCaption: String?
+
+    static func parse(_ markdown: String) -> Self {
+        let source = markdown as NSString
+        let codeRanges = MarkdownInlineSyntax.codeSpanRanges(in: markdown)
+        let expression = try! NSRegularExpression(pattern: #"^\{width=([1-9][0-9]{0,3})(?:px)?\}"#)
+        var widths: [CGFloat?] = []
+        var removals: [NSRange] = []
+        var caption: String?
+        let links = MarkdownLinkSyntax.inlineLinks(in: markdown).filter { link in
+            link.isImage && !codeRanges.contains(where: { NSLocationInRange(link.range.location, $0) })
+        }
+        for link in links {
+            let suffixStart = NSMaxRange(link.range)
+            let suffix = source.substring(from: suffixStart)
+            let match = expression.firstMatch(in: suffix,
+                range: NSRange(location: 0, length: (suffix as NSString).length))
+            let width = match.flatMap { Int((suffix as NSString).substring(with: $0.range(at: 1))) }
+            widths.append(width.map(CGFloat.init))
+            if let match {
+                removals.append(NSRange(location: suffixStart, length: match.range.length))
+            }
+            let imageText = source.substring(with: link.range)
+            let attributeText = match.map { (suffix as NSString).substring(with: $0.range) } ?? ""
+            if links.count == 1,
+               markdown.trimmingCharacters(in: .whitespacesAndNewlines) == imageText + attributeText {
+                caption = source.substring(with: link.labelRange)
+            }
+        }
+        let stripped = NSMutableString(string: markdown)
+        for range in removals.reversed() { stripped.replaceCharacters(in: range, with: "") }
+        return Self(markdown: stripped as String, widths: widths, standaloneCaption: caption)
+    }
+}
+
 final class MarkdownImageAttachment: NSTextAttachment {
     override func attachmentBounds(for textContainer: NSTextContainer?,
                                    proposedLineFragment lineFrag: CGRect,
                                    glyphPosition position: CGPoint,
                                    characterIndex charIndex: Int) -> CGRect {
-        let original = image?.size ?? bounds.size
+        let original = bounds.size.width > 0 && bounds.size.height > 0
+            ? bounds.size : image?.size ?? .zero
         guard original.width > 0, original.height > 0 else { return .zero }
-        let availableWidth = max(80, lineFrag.maxX - position.x - 8)
+        let availableWidth = max(1, lineFrag.maxX - position.x - 8)
         let scale = min(1, availableWidth / original.width)
         return CGRect(x: 0, y: 0, width: original.width * scale, height: original.height * scale)
     }

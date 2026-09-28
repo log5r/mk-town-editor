@@ -52,6 +52,8 @@ enum MarkdownHTMLExporter {
         pre { overflow-x: auto; padding: 16px; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); }
         code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
         img { max-width: 100%; height: auto; }
+        figure { margin: 1em 0; }
+        figcaption { color: color-mix(in srgb, currentColor 70%, transparent); font-size: 0.85em; }
         table { border-collapse: collapse; display: block; overflow-x: auto; }
         th, td { border: 1px solid #8888; padding: 5px 10px; }
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
@@ -137,7 +139,14 @@ enum MarkdownHTMLExporter {
             let anchor = escape(anchors[block.id] ?? "section")
             return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context))</h\(level)>\n"
         case .paragraph:
-            return "<p>\(inline(MarkdownRenderer.paragraphContent(block), analysis: analysis, context: context))</p>\n"
+            let content = MarkdownRenderer.paragraphContent(block)
+            let layout = MarkdownImageLayout.parse(
+                MarkdownRenderer.resolveReferences(in: content, using: analysis.references))
+            let rendered = inline(content, analysis: analysis, context: context)
+            if let caption = layout.standaloneCaption {
+                return "<figure>\(rendered)<figcaption>\(escape(caption))</figcaption></figure>\n"
+            }
+            return "<p>\(rendered)</p>\n"
         case .quote:
             let content = sequence(analysis.children(of: block), analysis: analysis,
                                    context: context, anchors: anchors)
@@ -171,7 +180,9 @@ enum MarkdownHTMLExporter {
 
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
                                context: DocumentContext) -> String {
-        let resolved = MarkdownRenderer.resolveReferences(in: markdown, using: analysis.references)
+        let layout = MarkdownImageLayout.parse(
+            MarkdownRenderer.resolveReferences(in: markdown, using: analysis.references))
+        let resolved = layout.markdown
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
@@ -183,12 +194,16 @@ enum MarkdownHTMLExporter {
         MarkdownAutolink.apply(to: value)
         let source = value.string as NSString
         var html = ""
+        var imageIndex = 0
         value.enumerateAttributes(in: NSRange(location: 0, length: value.length)) { attributes, range, _ in
             let text = source.substring(with: range)
             if let image = attributes[.imageURL] as? URL {
                 let alt = (attributes[.alternateDescription] as? String) ?? text
+                let width = imageIndex < layout.widths.count ? layout.widths[imageIndex] : nil
+                imageIndex += 1
                 if let url = imageSource(image, context: context) {
-                    html += "<img src=\"\(escape(url))\" alt=\"\(escape(alt))\">"
+                    let widthAttribute = width.map { " width=\"\(Int($0))\"" } ?? ""
+                    html += "<img src=\"\(escape(url))\" alt=\"\(escape(alt))\"\(widthAttribute)>"
                 } else {
                     html += escape(alt)
                 }
