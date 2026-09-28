@@ -30,6 +30,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         scrollView.drawsBackground = true
 
         let textView = EditorTextView()
+        textView.layoutManager?.delegate = textView
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
@@ -140,6 +141,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             return
         }
         let selection = textView.selectedRange()
+        textView.clearFolds()
         textView.string = text
         context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
@@ -176,6 +178,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
+            (textView as? EditorTextView)?.clearFolds()
             text = textView.string
             applyProofing()
             refreshSyntax()
@@ -204,6 +207,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView else { return }
+            (textView as? EditorTextView)?.unfold(containing: textView.selectedRange())
             model.selectionDidChange(textView.selectedRange())
             applyProofing()
         }
@@ -293,9 +297,49 @@ final class EditorTextView: NSTextView {
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var imagePasteboard: NSPasteboard = .general
+    private(set) var foldedPlans: [MarkdownFoldPlan] = []
+    var foldedHeaderLocations: Set<Int> { Set(foldedPlans.map(\.headerLocation)) }
     private var selectionBeforeImageDrag: NSRange?
     private var imageDropLocation: Int? {
         didSet { needsDisplay = true }
+    }
+
+    func toggleFold(at location: Int) -> Bool {
+        guard let plan = MarkdownFoldPlan.at(location, in: string) else { return false }
+        if let index = foldedPlans.firstIndex(where: { $0.headerLocation == plan.headerLocation }) {
+            foldedPlans.remove(at: index)
+        } else {
+            foldedPlans.append(plan)
+            if NSLocationInRange(selectedRange().location, plan.hiddenRange) {
+                setSelectedRange(NSRange(location: plan.headerLocation, length: 0))
+            }
+        }
+        refreshFolds()
+        return true
+    }
+
+    func clearFolds() {
+        guard !foldedPlans.isEmpty else { return }
+        foldedPlans.removeAll()
+        refreshFolds()
+    }
+
+    func unfold(containing selection: NSRange) {
+        let before = foldedPlans.count
+        foldedPlans.removeAll { plan in
+            selection.length == 0
+                ? NSLocationInRange(selection.location, plan.hiddenRange)
+                : NSIntersectionRange(selection, plan.hiddenRange).length > 0
+        }
+        if foldedPlans.count != before { refreshFolds() }
+    }
+
+    private func refreshFolds() {
+        let length = (string as NSString).length
+        layoutManager?.invalidateGlyphs(forCharacterRange: NSRange(location: 0, length: length),
+            changeInLength: 0, actualCharacterRange: nil)
+        enclosingScrollView?.verticalRulerView?.needsDisplay = true
+        needsDisplay = true
     }
 
     func firstVisibleSourceLocation(in scrollView: NSScrollView) -> Int? {
@@ -483,5 +527,30 @@ final class EditorTextView: NSTextView {
     @objc private func performMarkdownCommand(_ item: NSMenuItem) {
         guard let command = item.representedObject as? EditorCommand else { return }
         command.perform(on: commandModel)
+    }
+}
+
+extension EditorTextView: @preconcurrency NSLayoutManagerDelegate {
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
+                       properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
+                       characterIndexes charIndexes: UnsafePointer<Int>,
+                       font aFont: NSFont, forGlyphRange glyphRange: NSRange) -> Int {
+        guard !foldedPlans.isEmpty else { return 0 }
+        var properties = Array(UnsafeBufferPointer(start: props, count: glyphRange.length))
+        var changed = false
+        for offset in properties.indices where foldedPlans.contains(where: {
+            NSLocationInRange(charIndexes[offset], $0.hiddenRange)
+        }) {
+            properties[offset] = .null
+            changed = true
+        }
+        guard changed else { return 0 }
+        properties.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return }
+            layoutManager.setGlyphs(glyphs, properties: base, characterIndexes: charIndexes,
+                font: aFont, forGlyphRange: glyphRange)
+        }
+        return glyphRange.length
     }
 }

@@ -45,6 +45,44 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertNotEqual((source as NSString).substring(with: next), "[literal](target)")
     }
 
+    func testHeadingAndCodeFoldsHideOnlyFollowingContent() {
+        let source = "# 親\n本文\n## 子\n内容\n# 次\n```swift\nlet x = 1\n```\n後"
+        let parent = try! XCTUnwrap(MarkdownFoldPlan.at(0, in: source))
+        XCTAssertEqual((source as NSString).substring(with: parent.hiddenRange),
+            "本文\n## 子\n内容\n")
+        let codeLocation = (source as NSString).range(of: "let x").location
+        let code = try! XCTUnwrap(MarkdownFoldPlan.at(codeLocation, in: source))
+        XCTAssertEqual((source as NSString).substring(with: code.hiddenRange),
+            "let x = 1\n```\n")
+        XCTAssertEqual(code.headerLocation, (source as NSString).range(of: "```swift").location)
+    }
+
+    func testFoldChangesGlyphsWithoutChangingSourceAndNavigationExpands() {
+        let source = "# 見出し\n隠す本文\n# 次"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = source
+        view.layoutManager?.delegate = view
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let manager = try! XCTUnwrap(view.layoutManager)
+        let container = try! XCTUnwrap(view.textContainer)
+        manager.ensureLayout(for: container)
+        let expandedHeight = manager.usedRect(for: container).height
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        model.toggleFold()
+        XCTAssertEqual(view.foldedPlans.count, 1)
+        XCTAssertEqual(view.string, source)
+        let hidden = (source as NSString).range(of: "隠す本文").location
+        manager.ensureGlyphs(forCharacterRange: NSRange(location: 0, length: (source as NSString).length))
+        let glyph = manager.glyphIndexForCharacter(at: hidden)
+        XCTAssertTrue(manager.propertyForGlyph(at: glyph).contains(.null))
+        manager.ensureLayout(for: container)
+        XCTAssertLessThan(manager.usedRect(for: container).height, expandedHeight)
+        model.navigate(to: hidden)
+        XCTAssertTrue(view.foldedPlans.isEmpty)
+        XCTAssertEqual(view.selectedRange().location, hidden)
+    }
+
     func testRestoredSelectionIsClampedToCurrentDocument() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.string = "short"
