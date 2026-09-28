@@ -47,6 +47,7 @@ struct EditorWorkspace: View {
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
     @State private var workspaceOpenError: String?
+    @State private var showingQuickOpen = false
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
@@ -142,6 +143,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
         .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
+        .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
     }
 
     private var sheetView: some View {
@@ -183,6 +185,14 @@ struct EditorWorkspace: View {
         }) { format in
             MarkdownExportPresetSheet(format: format) { preset in
                 pendingExport = (format, preset)
+            }
+        }
+        .sheet(isPresented: $showingQuickOpen) {
+            WorkspaceQuickOpenSheet { url in
+                Task {
+                    do { try await openDocument(at: url) }
+                    catch { workspaceOpenError = error.localizedDescription }
+                }
             }
         }
         .sheet(isPresented: $showingGoToHeading) {
@@ -441,6 +451,12 @@ struct EditorWorkspace: View {
                 }
                 .labelStyle(.iconOnly)
                 .help("ワークスペースのフォルダを選ぶ")
+                Button("ファイル名で開く…", systemImage: "magnifyingglass") {
+                    showingQuickOpen = true
+                }
+                .labelStyle(.iconOnly)
+                .disabled(workspaceStore.rootURL == nil)
+                .help("ファイル名で書類を探す")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
