@@ -636,6 +636,7 @@ struct EditorWorkspace: View {
                             onOpenHeading: navigateToHeading,
                             onOpenDocument: openLinkedDocument,
                             onRevealSource: revealSource,
+                            showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview))
         }
     }
@@ -681,6 +682,7 @@ struct EditorWorkspace: View {
                                 onOpenDocument: openLinkedDocument,
                                 onVisibleBlockChange: synchronizeEditor(to:),
                                 onRevealSource: revealSource,
+                                showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                                 zoom: settingsStore.zoom(for: .preview))
                     .frame(maxWidth: .infinity)
             }

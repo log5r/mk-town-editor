@@ -19,6 +19,7 @@ struct MarkdownPreview: View {
     var onOpenDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
+    var showsFrontMatter = false
     var zoom: Double = 1
 
     var body: some View {
@@ -29,11 +30,25 @@ struct MarkdownPreview: View {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
-                !analysis.footnotes.entries.isEmpty {
+                !analysis.footnotes.entries.isEmpty ||
+                (showsFrontMatter && analysis.frontMatter != nil) {
                 let layout = PreviewLayoutIndex(analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
+                            if showsFrontMatter, let frontMatter = analysis.frontMatter {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text("フロントマター").font(.headline)
+                                    Text(frontMatter.raw)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .textSelection(.enabled)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(Color.secondary.opacity(0.08))
+                                .cornerRadius(8)
+                                .padding(.bottom, 16)
+                            }
                             ForEach(layout.visibleBlocks, id: \.id) { block in
                                 HStack(alignment: .top, spacing: 8) {
                                     ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
