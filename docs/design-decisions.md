@@ -31,3 +31,5 @@ CodiMD の特徴のうち、Markdown ソースとレンダリング結果を同�
 `DocumentGroup` の構成から渡される `fileURL` を書類画面の `DocumentContext` に反映する。未保存書類では相対リソースを解決せず、保存・移動・別名保存でURLが更新されるたびに基準ディレクトリも変わる。書類本文の読み書きは引き続き `FileDocument` に任せ、URLから本文を再読込しない。参照: [Apple DocumentGroup](https://developer.apple.com/documentation/SwiftUI/DocumentGroup)。
 
 設定は `EditorSettingsStore` で本文と分離して保存する。表示モードは書類ごとの値、最も近い親フォルダの指定、アプリ共通の既定値の順に解決する。フォントサイズもフォルダ指定からアプリ共通値へフォールバックする。以前の `SceneStorage` の表示モードは、書類ごとの設定が未登録のときに限り一度取り込む。未保存書類の表示モードはその画面内に保持し、保存時に書類の設定へ移す。
+
+書式・検索の操作名、ショートカット、実行処理は `EditorCommand` に集約する。メニュー、ツールバー、右クリックメニューはこの定義を使い、編集ビューがない場合や編集不可・IME変換中は無効化する。実行時にはその画面の `MarkdownEditorModel` を渡し、別ウインドウの書類を変更しない。
