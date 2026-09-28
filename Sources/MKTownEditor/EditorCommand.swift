@@ -21,6 +21,7 @@ enum EditorCommand: Hashable {
     case comment
     case expandSelection
     case shrinkSelection
+    case selectNextOccurrence
     case toggleFold
     case unfoldAll
     case snippet
@@ -61,6 +62,7 @@ enum EditorCommand: Hashable {
         case .image: "image"
         case .table: "table"
         case .footnote: "footnote"
+        case .selectNextOccurrence: "select-next-occurrence"
         default: "other-\(String(describing: self))"
         }
     }
@@ -73,10 +75,10 @@ enum EditorCommand: Hashable {
         .renumberList, .indentList, .outdentList, .toggleTaskCompletion,
         .codeBlock(language: nil), .horizontalRule, .comment,
         .tableOfContents, .duplicateLines, .moveLinesUp, .moveLinesDown,
-        .deleteLines, .expandSelection, .shrinkSelection, .toggleFold,
+        .deleteLines, .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .selectNextOccurrence, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -100,6 +102,7 @@ enum EditorCommand: Hashable {
         case .comment: String(localized: "コメントにする／解除")
         case .expandSelection: String(localized: "選択範囲を拡大")
         case .shrinkSelection: String(localized: "選択範囲を縮小")
+        case .selectNextOccurrence: String(localized: "次の同じ文字列を選択")
         case .toggleFold: String(localized: "見出し・コードを折りたたむ／展開")
         case .unfoldAll: String(localized: "すべて展開")
         case .snippet: String(localized: "スニペットを挿入…")
@@ -140,6 +143,7 @@ enum EditorCommand: Hashable {
         case .comment: "text.bubble"
         case .expandSelection: "arrow.up.left.and.arrow.down.right"
         case .shrinkSelection: "arrow.down.right.and.arrow.up.left"
+        case .selectNextOccurrence: "text.cursor"
         case .toggleFold: "chevron.right"
         case .unfoldAll: "chevron.down"
         case .snippet: "text.insert"
@@ -175,7 +179,7 @@ enum EditorCommand: Hashable {
         case .renumberList: nil
         case .duplicateLines, .moveLinesUp, .moveLinesDown, .deleteLines: nil
         case .comment: nil
-        case .expandSelection, .shrinkSelection: nil
+        case .expandSelection, .shrinkSelection, .selectNextOccurrence: nil
         case .toggleFold, .unfoldAll: nil
         case .snippet: nil
         case .commandPalette: ("p", [.command, .shift])
@@ -215,8 +219,17 @@ enum EditorCommand: Hashable {
 
     @MainActor
     func canExecute(in model: MarkdownEditorModel?) -> Bool {
+        if model?.canExecuteMultiSelectionCommand == true {
+            switch self {
+            case .bold, .italic, .strikethrough, .inlineCode,
+                 .commandPalette, .find, .unfoldAll: return true
+            case .selectNextOccurrence: return model?.canAddNextOccurrence == true
+            default: return false
+            }
+        }
         guard model?.canExecuteCommand == true else { return false }
         switch self {
+        case .selectNextOccurrence: return model?.canAddNextOccurrence == true
         case .indentList:
             guard let view = model?.textView else { return false }
             return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
@@ -263,6 +276,7 @@ enum EditorCommand: Hashable {
         case .comment: model.apply(.comment)
         case .expandSelection: model.expandSelection()
         case .shrinkSelection: model.shrinkSelection()
+        case .selectNextOccurrence: model.addNextOccurrence()
         case .toggleFold: model.toggleFold()
         case .unfoldAll: model.unfoldAll()
         case .snippet: model.presentSnippetPicker()

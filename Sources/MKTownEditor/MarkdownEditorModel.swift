@@ -4,6 +4,7 @@ import Combine
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
+    @Published private(set) var selectedRanges = [NSRange(location: 0, length: 0)]
     @Published private(set) var hasActiveEditor = false
     @Published var linkDraft: MarkdownLinkDraft?
     @Published var imageDraft: MarkdownImageDraft?
@@ -34,13 +35,14 @@ final class MarkdownEditorModel: ObservableObject {
         self.textView = textView
         hasActiveEditor = true
         let length = (textView.string as NSString).length
-        let location = min(selectedRange.location, length)
-        let restoredRange = NSRange(
-            location: location,
-            length: min(selectedRange.length, length - location)
-        )
-        textView.setSelectedRange(restoredRange)
-        selectedRange = restoredRange
+        let restored = selectedRanges.map { range in
+            let location = min(max(0, range.location), length)
+            return NSRange(location: location, length: min(max(0, range.length), length - location))
+        }
+        textView.setSelectedRanges(restored.map(NSValue.init(range:)), affinity: .upstream,
+                                   stillSelecting: false)
+        selectedRanges = restored
+        selectedRange = restored[0]
         if let scrollView { restoreScroll(in: scrollView) }
         if pendingNavigationLocation != nil {
             textView.scrollRangeToVisible(textView.selectedRange())
@@ -51,6 +53,7 @@ final class MarkdownEditorModel: ObservableObject {
     func disconnect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         guard self.textView === textView else { return }
         selectedRange = textView.selectedRange()
+        selectedRanges = textView.selectedRanges.map(\.rangeValue)
         if let scrollView { scrollOrigin = scrollView.contentView.bounds.origin }
         if let window = textView.window {
             shouldRestoreFocus = window.firstResponder === textView
@@ -69,6 +72,7 @@ final class MarkdownEditorModel: ObservableObject {
         let range = NSRange(location: location,
                             length: min(max(0, selection.length), length - location))
         selectedRange = range
+        selectedRanges = [range]
         scrollOrigin = NSPoint(x: max(0, scrollX), y: max(0, scrollY))
         if let textView {
             textView.setSelectedRange(range)
@@ -91,9 +95,13 @@ final class MarkdownEditorModel: ObservableObject {
         textView.window?.makeFirstResponder(textView)
     }
 
-    func selectionDidChange(_ range: NSRange) {
+    func selectionDidChange(_ range: NSRange) { selectionDidChange([range]) }
+
+    func selectionDidChange(_ ranges: [NSRange]) {
+        guard let range = ranges.first else { return }
         let unchanged = selectedRange == range
         selectedRange = range
+        selectedRanges = ranges
         if range == expectedSelection {
             expectedSelection = nil
         } else if !unchanged {
@@ -164,7 +172,7 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func advanceSnippetPlaceholder(backwards: Bool) -> Bool {
-        guard let textView, !textView.hasMarkedText(),
+        guard let textView, textView.selectedRanges.count == 1, !textView.hasMarkedText(),
               var session = snippetSession else { return false }
         guard updateSnippetSession(&session, to: textView.string) else {
             snippetSession = nil
@@ -225,6 +233,7 @@ final class MarkdownEditorModel: ObservableObject {
         let location = max(0, sourceLocation)
         guard let textView else {
             selectedRange = NSRange(location: location, length: 0)
+            selectedRanges = [selectedRange]
             pendingNavigationLocation = location
             return
         }
@@ -235,12 +244,14 @@ final class MarkdownEditorModel: ObservableObject {
         textView.scrollRangeToVisible(range)
         textView.window?.makeFirstResponder(textView)
         selectedRange = range
+        selectedRanges = [range]
     }
 
     func selectAndReveal(_ sourceRange: NSRange) {
         let location = max(0, sourceRange.location)
         guard let textView else {
             selectedRange = NSRange(location: location, length: max(0, sourceRange.length))
+            selectedRanges = [selectedRange]
             pendingNavigationLocation = location
             return
         }
@@ -253,6 +264,7 @@ final class MarkdownEditorModel: ObservableObject {
         textView.scrollRangeToVisible(range)
         textView.window?.makeFirstResponder(textView)
         selectedRange = range
+        selectedRanges = [range]
     }
 
     func scrollToTop(sourceLocation: Int) {
@@ -272,14 +284,58 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     var canExecuteCommand: Bool {
-        hasActiveEditor && textView?.isEditable == true && textView?.hasMarkedText() == false
+        hasActiveEditor && textView?.isEditable == true && textView?.hasMarkedText() == false &&
+            textView?.selectedRanges.count == 1
+    }
+
+    var canExecuteMultiSelectionCommand: Bool {
+        hasActiveEditor && textView?.isEditable == true && textView?.hasMarkedText() == false &&
+            (textView?.selectedRanges.count ?? 0) > 1
+    }
+
+    var canAddNextOccurrence: Bool {
+        guard let textView, !textView.hasMarkedText() else { return false }
+        return MarkdownSelectionOccurrences.addingNext(in: textView.string,
+            selections: textView.selectedRanges.map(\.rangeValue)) != nil
+    }
+
+    func addNextOccurrence() {
+        guard let textView, !textView.hasMarkedText(),
+              let selections = MarkdownSelectionOccurrences.addingNext(in: textView.string,
+                  selections: textView.selectedRanges.map(\.rangeValue)) else { return }
+        textView.setSelectedRanges(selections.map(NSValue.init(range:)),
+                                   affinity: .upstream, stillSelecting: false)
+        if let last = selections.last { textView.scrollRangeToVisible(last) }
+        textView.window?.makeFirstResponder(textView)
     }
 
     func apply(_ style: MarkdownFormattingStyle) {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText() else { return }
+        let ranges = textView.selectedRanges.map(\.rangeValue)
+        if ranges.count > 1 {
+            guard let plan = MarkdownMultiSelectionPlan.make(style: style, source: textView.string,
+                                                             selections: ranges) else { return }
+            perform(plan, in: textView, storage: storage)
+            return
+        }
         let edit = MarkdownFormatter.apply(style, to: textView.string, selection: textView.selectedRange())
         perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
+    private func perform(_ plan: MarkdownMultiSelectionPlan, in textView: NSTextView,
+                         storage: NSTextStorage) {
+        let edit = plan.edit
+        guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
+        textView.breakUndoCoalescing()
+        storage.replaceCharacters(in: edit.range, with: edit.replacement)
+        selectionHistory.removeAll()
+        selectionHistoryText = nil
+        textView.didChangeText()
+        textView.setSelectedRanges(plan.selections.map(NSValue.init(range:)),
+                                   affinity: .upstream, stillSelecting: false)
+        textView.breakUndoCoalescing()
+        textView.window?.makeFirstResponder(textView)
     }
 
     func toggleTaskCompletion() {
@@ -293,7 +349,7 @@ final class MarkdownEditorModel: ObservableObject {
     /// Returns true when Return belongs to a Markdown line, even if AppKit rejects the edit.
     func continueListOrQuote() -> Bool {
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownLineContinuation.edit(in: textView.string,
                                                        selection: textView.selectedRange()) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
@@ -303,7 +359,7 @@ final class MarkdownEditorModel: ObservableObject {
     @discardableResult
     func changeIndentation(_ direction: MarkdownIndentation.Direction) -> Bool {
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownIndentation.edit(in: textView.string,
                                                   selection: textView.selectedRange(),
                                                   direction: direction,
@@ -316,7 +372,7 @@ final class MarkdownEditorModel: ObservableObject {
     func completeSymbol(_ typed: String, replacementRange: NSRange) -> Bool {
         guard replacementRange.location == NSNotFound,
               let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownSymbolCompletion.edit(in: textView.string,
                                                        selection: textView.selectedRange(),
                                                        typed: typed) else { return false }
@@ -381,7 +437,7 @@ final class MarkdownEditorModel: ObservableObject {
     @discardableResult
     func pasteURLAsLink(_ pastedText: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownURLPaste.edit(in: textView.string,
                                                selection: textView.selectedRange(),
                                                pastedText: pastedText) else { return false }
@@ -434,7 +490,7 @@ final class MarkdownEditorModel: ObservableObject {
 
     func moveTableCell(backwards: Bool) -> Bool {
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let action = MarkdownTableEditing.tabAction(in: textView.string,
                   selection: textView.selectedRange(), backwards: backwards,
                   addsRowAtEnd: tableAddsRowOnTab) else { return false }
@@ -443,6 +499,7 @@ final class MarkdownEditorModel: ObservableObject {
             textView.setSelectedRange(range)
             textView.scrollRangeToVisible(range)
             selectedRange = range
+            selectedRanges = [range]
         case let .edit(edit):
             perform(edit, in: textView, storage: storage, focusEditor: true)
         }

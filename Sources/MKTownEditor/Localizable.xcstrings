@@ -4453,6 +4453,16 @@
         }
       }
     },
+    "次の同じ文字列を選択": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select Next Occurrence"
+          }
+        }
+      }
+    },
     "次へ": {
       "localizations": {
         "en": {

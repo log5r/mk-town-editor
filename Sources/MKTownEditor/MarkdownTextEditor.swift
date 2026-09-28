@@ -153,7 +153,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             context.coordinator.refreshSyntax()
             return
         }
-        let selection = textView.selectedRange()
+        let selections = textView.selectedRanges.map(\.rangeValue)
         textView.clearFolds()
         textView.string = text
         textView.refreshInvisibles()
@@ -162,8 +162,15 @@ struct MarkdownTextEditor: NSViewRepresentable {
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.lineNumberRuler?.refresh()
         let length = (text as NSString).length
-        let location = min(selection.location, length)
-        textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
+        var restored: [NSRange] = []
+        for selection in selections {
+            let location = min(max(0, selection.location), length)
+            let range = NSRange(location: location,
+                                length: min(max(0, selection.length), length - location))
+            if !restored.contains(range) { restored.append(range) }
+        }
+        textView.setSelectedRanges(restored.map(NSValue.init(range:)), affinity: .upstream,
+                                   stillSelecting: false)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -223,7 +230,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView else { return }
             (textView as? EditorTextView)?.unfold(containing: textView.selectedRange())
-            model.selectionDidChange(textView.selectedRange())
+            model.selectionDidChange(textView.selectedRanges.map(\.rangeValue))
             applyProofing()
         }
 
@@ -408,7 +415,7 @@ final class EditorTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        guard isEditable, !hasMarkedText() else {
+        guard isEditable, !hasMarkedText(), selectedRanges.count == 1 else {
             super.paste(sender)
             return
         }
