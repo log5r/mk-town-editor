@@ -76,6 +76,21 @@ enum MarkdownLinkSyntax {
                             selection: NSRange(location: draft.range.location + (link as NSString).length, length: 0))
     }
 
+    static func referenceEdit(in text: String, draft: MarkdownLinkDraft,
+                              label: String, referenceID: String) -> MarkdownEdit? {
+        let source = text as NSString
+        guard text == draft.originalDocumentText,
+              draft.range.location <= source.length,
+              NSMaxRange(draft.range) <= source.length,
+              source.substring(with: draft.range) == draft.originalText,
+              !label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !referenceID.isEmpty else { return nil }
+        let visible = label == draft.originalLabel ? draft.rawLabel ?? escapeLabel(label) : escapeLabel(label)
+        let link = "[\(visible)][\(escapeLabel(referenceID))]"
+        return MarkdownEdit(range: draft.range, replacement: link,
+                            selection: NSRange(location: draft.range.location + (link as NSString).length, length: 0))
+    }
+
     static func makeLink(label: String, destination: String, title: String = "",
                          rawLabel: String? = nil) -> String {
         makeInline(prefix: "", label: label, destination: destination, title: title,
