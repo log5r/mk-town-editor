@@ -74,6 +74,8 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertNil(decoded.tabWidth)
         XCTAssertNil(decoded.listIndentWidth)
         XCTAssertNil(decoded.codeIndentWidth)
+        XCTAssertNil(decoded.editorZoom)
+        XCTAssertNil(decoded.previewZoom)
     }
 
     func testTextStyleResolvesFolderSizeAndAppAppearance() {
@@ -131,6 +133,26 @@ final class EditorSettingsTests: XCTestCase {
             wrapsLines: false, listIndentWidth: 4, codeIndentWidth: 8
         ))
         XCTAssertEqual(restored.textStyle(for: nil).tabWidth, 6)
+    }
+
+    func testEditorAndPreviewZoomPersistIndependentlyAndClamp() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(store.zoom(for: .editor), 1)
+        XCTAssertEqual(store.zoom(for: .preview), 1)
+
+        store.adjustZoom(for: .editor, by: 0.3)
+        store.adjustZoom(for: .preview, by: -0.2)
+        XCTAssertEqual(store.textStyle(for: nil).fontSize, 13 * 1.3, accuracy: 0.001)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.zoom(for: .editor), 1.3, accuracy: 0.001)
+        XCTAssertEqual(restored.zoom(for: .preview), 0.8, accuracy: 0.001)
+
+        store.adjustZoom(for: .preview, by: 10)
+        XCTAssertEqual(store.zoom(for: .preview), 2)
+        store.resetZoom(for: .editor)
+        XCTAssertEqual(store.zoom(for: .editor), 1)
+        XCTAssertEqual(store.zoom(for: .preview), 2)
     }
 
     private func isolatedDefaults() -> UserDefaults {

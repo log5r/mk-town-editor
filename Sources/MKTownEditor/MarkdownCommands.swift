@@ -23,6 +23,15 @@ private struct NavigationHistoryActionsKey: FocusedValueKey {
     typealias Value = NavigationHistoryActions
 }
 
+struct ZoomActions {
+    let adjust: (EditorZoomSurface, Double) -> Void
+    let reset: (EditorZoomSurface) -> Void
+}
+
+private struct ZoomActionsKey: FocusedValueKey {
+    typealias Value = ZoomActions
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -41,6 +50,10 @@ extension FocusedValues {
         get { self[NavigationHistoryActionsKey.self] }
         set { self[NavigationHistoryActionsKey.self] = newValue }
     }
+    var zoomActions: ZoomActions? {
+        get { self[ZoomActionsKey.self] }
+        set { self[ZoomActionsKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -48,6 +61,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.goToLineAction) private var goToLineAction
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
     @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
+    @FocusedValue(\.zoomActions) private var zoomActions
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -66,13 +80,28 @@ struct MarkdownCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(goToHeadingAction == nil)
         }
-        CommandMenu("文字表示") {
-            Button("文字を拡大") { settingsStore.adjustFontSize(by: 1) }
+        CommandMenu("表示倍率") {
+            Text("編集: \(Int((settingsStore.zoom(for: .editor) * 100).rounded()))%")
+            Button("編集を拡大") { zoomActions?.adjust(.editor, 0.1) }
                 .keyboardShortcut("+", modifiers: .command)
-            Button("文字を縮小") { settingsStore.adjustFontSize(by: -1) }
+                .disabled(zoomActions == nil)
+            Button("編集を縮小") { zoomActions?.adjust(.editor, -0.1) }
                 .keyboardShortcut("-", modifiers: .command)
-            Button("標準サイズ") { settingsStore.resetFontSize() }
+                .disabled(zoomActions == nil)
+            Button("編集を標準サイズに戻す") { zoomActions?.reset(.editor) }
                 .keyboardShortcut("0", modifiers: .command)
+                .disabled(zoomActions == nil)
+            Divider()
+            Text("プレビュー: \(Int((settingsStore.zoom(for: .preview) * 100).rounded()))%")
+            Button("プレビューを拡大") { zoomActions?.adjust(.preview, 0.1) }
+                .keyboardShortcut("+", modifiers: [.command, .option])
+                .disabled(zoomActions == nil)
+            Button("プレビューを縮小") { zoomActions?.adjust(.preview, -0.1) }
+                .keyboardShortcut("-", modifiers: [.command, .option])
+                .disabled(zoomActions == nil)
+            Button("プレビューを標準サイズに戻す") { zoomActions?.reset(.preview) }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+                .disabled(zoomActions == nil)
         }
         CommandGroup(after: .textEditing) {
             Divider()

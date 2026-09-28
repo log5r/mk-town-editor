@@ -46,6 +46,7 @@
 		A10000000000000000000028 /* MarkdownURLPaste.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* MarkdownURLPaste.swift */; };
 		A10000000000000000000029 /* MarkdownLinkDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */; };
 		A10000000000000000000030 /* PreviewScrollSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* PreviewScrollSync.swift */; };
+		A10000000000000000000031 /* PreviewTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* PreviewTypography.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -91,6 +92,7 @@
 		A20000000000000000000028 /* MarkdownURLPaste.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownURLPaste.swift; sourceTree = "<group>"; };
 		A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkDiagnostics.swift; sourceTree = "<group>"; };
 		A20000000000000000000030 /* PreviewScrollSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewScrollSync.swift; sourceTree = "<group>"; };
+		A20000000000000000000031 /* PreviewTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTypography.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -150,6 +152,7 @@
 				A20000000000000000000028 /* MarkdownURLPaste.swift */,
 				A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */,
 				A20000000000000000000030 /* PreviewScrollSync.swift */,
+				A20000000000000000000031 /* PreviewTypography.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -257,6 +260,7 @@
 				A10000000000000000000028 /* MarkdownURLPaste.swift in Sources */,
 				A10000000000000000000029 /* MarkdownLinkDiagnostics.swift in Sources */,
 				A10000000000000000000030 /* PreviewScrollSync.swift in Sources */,
+				A10000000000000000000031 /* PreviewTypography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

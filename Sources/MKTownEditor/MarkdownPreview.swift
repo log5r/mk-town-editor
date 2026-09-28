@@ -17,6 +17,7 @@ struct MarkdownPreview: View {
     var onOpenDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
+    var zoom: Double = 1
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -98,15 +99,16 @@ struct MarkdownPreview: View {
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
-                                    onOpenDocument: onOpenDocument)
+                                    onOpenDocument: onOpenDocument, zoom: zoom)
             }
         }
     }
 
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let rendered = MarkdownRenderer.renderLeaf(block, in: analysis,
-                                                   documentContext: documentContext)
+        let rendered = PreviewTypography.scaled(
+            MarkdownRenderer.renderLeaf(block, in: analysis, documentContext: documentContext),
+            by: zoom)
         if case let .heading(level) = block.kind {
             Text(AttributedString(rendered))
                 .textSelection(.enabled)
@@ -132,9 +134,9 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
-                                                               showTaskPrefix: false,
-                                                               documentContext: documentContext)))
+            Text(AttributedString(PreviewTypography.scaled(
+                MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: false,
+                                            documentContext: documentContext), by: zoom)))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -176,8 +178,9 @@ struct MarkdownPreview: View {
     ) -> some View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
-                Text(AttributedString(MarkdownRenderer.renderTableCell(cells[column], in: analysis,
-                                                                       documentContext: documentContext)))
+                Text(AttributedString(PreviewTypography.scaled(
+                    MarkdownRenderer.renderTableCell(cells[column], in: analysis,
+                                                     documentContext: documentContext), by: zoom)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -235,6 +238,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let analysis: MarkdownAnalysis?
     let onOpenHeading: ((String) -> Void)?
     let onOpenDocument: ((URL) -> Void)?
+    let zoom: Double
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -299,6 +303,6 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     private func update(_ textView: NSTextView) {
         let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
             ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
-        textView.textStorage?.setAttributedString(rendered)
+        textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
     }
 }
