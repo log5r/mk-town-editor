@@ -82,4 +82,24 @@ final class MarkdownLinkSyntaxTests: XCTestCase {
         XCTAssertEqual(rendered.attribute(.link, at: 0, effectiveRange: nil) as? URL,
                        URL(string: "https://example.com/a%20b(c)"))
     }
+
+    func testImageSyntaxSharesDestinationAndTitleEscaping() {
+        XCTAssertEqual(MarkdownLinkSyntax.makeImage(alt: "a]b", destination: "assets/a b(c).png",
+                                                      title: "A \"title\""),
+                       "![a\\]b](assets/a%20b\\(c\\).png \"A \\\"title\\\"\")")
+    }
+
+    func testImageDraftUsesSelectedTextAndRejectsStaleDocument() {
+        let source = "前🙂後"
+        let draft = MarkdownLinkSyntax.imageDraft(in: source,
+            selection: (source as NSString).range(of: "🙂"))
+        XCTAssertEqual(draft.alt, "🙂")
+        let edit = try! XCTUnwrap(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,
+            alt: draft.alt, destination: "assets/a b.png", title: "写真"))
+        XCTAssertEqual(edit.applying(to: source), "前![🙂](assets/a%20b.png \"写真\")後")
+        XCTAssertNil(MarkdownLinkSyntax.imageEdit(in: "変化" + source, draft: draft,
+            alt: draft.alt, destination: "assets/a b.png", title: ""))
+        XCTAssertNil(MarkdownLinkSyntax.imageEdit(in: source, draft: draft,
+            alt: " ", destination: "assets/a b.png", title: ""))
+    }
 }

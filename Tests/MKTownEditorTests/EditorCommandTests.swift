@@ -162,4 +162,17 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(model.linkDraft?.label, "selected")
         XCTAssertFalse(model.linkDraft?.isExisting ?? true)
     }
+
+    func testImageCommandOpensDraftWithSelectedAltText() {
+        let view = NSTextView()
+        view.string = "図🙂"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+
+        EditorCommand.image.perform(on: model)
+
+        XCTAssertEqual(view.string, "図🙂")
+        XCTAssertEqual(model.imageDraft?.alt, "図🙂")
+    }
 }

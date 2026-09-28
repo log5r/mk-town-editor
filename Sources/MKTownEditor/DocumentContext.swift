@@ -1,7 +1,7 @@
 import Foundation
 
 /// Location-dependent services for one document. The document contents remain in FileDocument.
-struct DocumentContext: Equatable {
+struct DocumentContext: Equatable, Sendable {
     let fileURL: URL?
 
     var directoryURL: URL? {

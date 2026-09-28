@@ -64,6 +64,11 @@ struct EditorWorkspace: View {
                 editorModel.commitLink(label: label, destination: destination, title: title)
             }
         }
+        .sheet(item: $editorModel.imageDraft) { draft in
+            ImageEditorSheet(draft: draft, documentContext: documentContext) { alt, input, title in
+                try await insertImage(alt: alt, input: input, title: title)
+            }
+        }
         .onAppear {
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -120,6 +125,13 @@ struct EditorWorkspace: View {
             selection: NSRange(location: sourceLocation, length: 0)) else { return }
         previewTaskUndoTarget.replaceText(edit.applying(to: document.text),
                                           in: $document.text, undoManager: undoManager)
+    }
+
+    private func insertImage(alt: String, input: ImageInput, title: String) async throws {
+        let context = documentContext
+        try await ImageInsertionService.insert(alt: alt, input: input, title: title,
+                                               context: context, model: editorModel,
+                                               currentContext: { documentContext })
     }
 
     private var statusBar: some View {
