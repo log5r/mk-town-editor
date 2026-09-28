@@ -96,4 +96,11 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertEqual(before.string, "Text1")
         XCTAssertEqual(after.string, "Text2")
     }
+
+    func testCalloutAppearsAsOneVisibleBlock() throws {
+        let analysis = MarkdownAnalysis("> [!NOTE]\n> Paragraph\n> - item")
+        let layout = PreviewLayoutIndex(analysis)
+        XCTAssertEqual(layout.visibleBlocks.count, 1)
+        XCTAssertEqual(layout.visibleBlocks.first?.calloutKind, .note)
+    }
 }

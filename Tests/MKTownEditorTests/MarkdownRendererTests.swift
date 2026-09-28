@@ -19,6 +19,18 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     @MainActor
+    func testCalloutRendersLabelAndIconSemanticsInPreviewAndHTML() {
+        let source = "> [!TIP]\n> Try this"
+        let rendered = MarkdownRenderer.render(source)
+        XCTAssertTrue(rendered.string.contains("ヒント"))
+        XCTAssertTrue(rendered.string.contains("Try this"))
+        XCTAssertFalse(rendered.string.contains("[!TIP]"))
+        let html = MarkdownHTMLExporter.render(source)
+        XCTAssertTrue(html.contains("<aside class=\"callout\" aria-label=\"ヒント\""))
+        XCTAssertFalse(html.contains("[!TIP]"))
+    }
+
+    @MainActor
     func testBareAutolinksExcludePunctuationAndCodeInPreviewAndHTML() {
         let markdown = "Visit www.commonmark.org/help. See https://example.com/a(b)). Mail a+tag@bar.example. `https://code.example`"
         let rendered = MarkdownRenderer.render(markdown)

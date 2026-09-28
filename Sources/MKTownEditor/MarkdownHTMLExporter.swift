@@ -55,6 +55,8 @@ enum MarkdownHTMLExporter {
         table { border-collapse: collapse; display: block; overflow-x: auto; }
         th, td { border: 1px solid #8888; padding: 5px 10px; }
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
+        .callout { border-left: 3px solid currentColor; background: color-mix(in srgb, currentColor 6%, transparent);
+                   padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
         .cover { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
         nav { margin-bottom: 2em; }
         sup { font-size: 0.75em; }
@@ -137,7 +139,12 @@ enum MarkdownHTMLExporter {
         case .paragraph:
             return "<p>\(inline(MarkdownRenderer.paragraphContent(block), analysis: analysis, context: context))</p>\n"
         case .quote:
-            return "<blockquote>\n\(sequence(analysis.children(of: block), analysis: analysis, context: context, anchors: anchors))</blockquote>\n"
+            let content = sequence(analysis.children(of: block), analysis: analysis,
+                                   context: context, anchors: anchors)
+            if let callout = block.calloutKind {
+                return "<aside class=\"callout\" aria-label=\"\(escape(callout.title))\"><strong>\(escape(callout.title))</strong>\n\(content)</aside>\n"
+            }
+            return "<blockquote>\n\(content)</blockquote>\n"
         case .codeBlock:
             let language = block.codeLanguage.map { " class=\"language-\(escape($0))\"" } ?? ""
             return "<pre><code\(language)>\(escape(block.content))</code></pre>\n"

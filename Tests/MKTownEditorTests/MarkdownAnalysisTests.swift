@@ -39,6 +39,16 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertTrue(analysis.footnotes.definitionRanges.isEmpty)
     }
 
+    func testGitHubCalloutKeepsQuoteStructureButRemovesMarkerFromBody() throws {
+        let analysis = MarkdownAnalysis("> [!WARNING]\n> Be careful\n> - item\n\n> ordinary")
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind == .warning })
+        XCTAssertEqual(callout.kind, .quote)
+        XCTAssertTrue(analysis.children(of: callout).contains { $0.content.contains("Be careful") })
+        XCTAssertFalse(analysis.children(of: callout).contains { $0.content.contains("[!WARNING]") })
+        XCTAssertEqual(analysis.blocks.filter { $0.kind == .quote }.count, 2)
+        XCTAssertNil(MarkdownCalloutKind.parse("[!UNKNOWN]"))
+    }
+
     func testEveryBlockRangePointsIntoOriginalUnicodeSource() {
         let source = "# 題🙂\r\n\r\n- 一\r\n  - 二\r\n"
         let analysis = MarkdownAnalysis(source)

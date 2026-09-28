@@ -7,7 +7,16 @@ struct PreviewLayoutIndex {
 
     init(_ analysis: MarkdownAnalysis) {
         let byID = Dictionary(uniqueKeysWithValues: analysis.blocks.map { ($0.id, $0) })
-        visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
+        visibleBlocks = analysis.blocks.filter { block in
+            if block.calloutKind != nil { return true }
+            if block.kind == .quote { return false }
+            var parent = block.parentID
+            while let id = parent, let ancestor = byID[id] {
+                if ancestor.calloutKind != nil { return false }
+                parent = ancestor.parentID
+            }
+            return true
+        }
         var depths: [Int: Int] = [:]
         for block in analysis.blocks {
             var depth = 0

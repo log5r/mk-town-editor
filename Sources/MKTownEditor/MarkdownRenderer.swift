@@ -48,6 +48,11 @@ enum MarkdownRenderer {
                context: documentContext)
     }
 
+    static func renderCallout(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                              documentContext: DocumentContext) -> NSAttributedString {
+        renderTree(block, in: analysis, context: documentContext)
+    }
+
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
                                        context: DocumentContext) -> NSAttributedString {
         let output = NSMutableAttributedString()
@@ -64,7 +69,15 @@ enum MarkdownRenderer {
                                    context: DocumentContext) -> NSAttributedString {
         let children = analysis.children(of: block)
         if block.kind == .quote {
-            return quote(renderSequence(children, in: analysis, context: context))
+            let content = renderSequence(children, in: analysis, context: context)
+            if let callout = block.calloutKind {
+                let result = NSMutableAttributedString(string: "\(callout.title)\n",
+                    attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                                               color: .labelColor))
+                result.append(content)
+                return quote(result)
+            }
+            return quote(content)
         }
         let output = NSMutableAttributedString(attributedString: render(block, references: analysis.references,
                                                                        footnotes: analysis.footnotes,
