@@ -11,10 +11,11 @@ enum EditorCommand: Hashable {
     case unorderedList
     case orderedList
     case taskList
+    case toggleTaskCompletion
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .quote, .unorderedList, .orderedList, .taskList]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .quote, .unorderedList, .orderedList, .taskList, .toggleTaskCompletion]
 
     var title: String {
         switch self {
@@ -28,6 +29,7 @@ enum EditorCommand: Hashable {
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
+        case .toggleTaskCompletion: "タスクの完了を切り替え"
         case .find: "検索…"
         }
     }
@@ -44,6 +46,7 @@ enum EditorCommand: Hashable {
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
+        case .toggleTaskCompletion: "checkmark.square"
         case .find: "magnifyingglass"
         }
     }
@@ -60,6 +63,7 @@ enum EditorCommand: Hashable {
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
+        case .toggleTaskCompletion: ("t", [.command, .option])
         case .find: ("f", .command)
         }
     }
@@ -83,6 +87,7 @@ enum EditorCommand: Hashable {
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)
+        case .toggleTaskCompletion: model.toggleTaskCompletion()
         case .find: model.showFindBar()
         }
     }

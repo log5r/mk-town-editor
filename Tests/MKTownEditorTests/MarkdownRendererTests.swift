@@ -136,6 +136,40 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     @MainActor
+    func testTaskContentCanRenderBesideInteractivePreviewControl() {
+        let markdown = "- [x] **done**"
+        let analysis = MarkdownAnalysis(markdown)
+        let block = try! XCTUnwrap(analysis.blocks.first(where: { $0.task != nil }))
+
+        let content = MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: false)
+        XCTAssertEqual(content.string, "done")
+        let range = (content.string as NSString).range(of: "done")
+        XCTAssertNotNil(content.attribute(.font, at: range.location, effectiveRange: nil))
+
+        let numbered = MarkdownAnalysis("3. [ ] next")
+        let numberedTask = try! XCTUnwrap(numbered.blocks.first(where: { $0.task != nil }))
+        XCTAssertEqual(MarkdownRenderer.renderLeaf(numberedTask, in: numbered,
+                                                   showTaskPrefix: false).string, "3.  next")
+    }
+
+    @MainActor
+    func testTaskPreviewBuildsNativeBlockLayout() {
+        let preview = MarkdownPreview(markdown: "- [ ] item\n1. [x] done",
+                                      documentContext: DocumentContext(fileURL: nil),
+                                      onToggleTask: { _ in })
+        let host = NSHostingView(rootView: preview)
+        host.frame = NSRect(x: 0, y: 0, width: 400, height: 240)
+        host.layoutSubtreeIfNeeded()
+
+        func descendants(of view: NSView) -> [NSView] {
+            view.subviews.flatMap { [$0] + descendants(of: $0) }
+        }
+        XCTAssertTrue(descendants(of: host).contains(where: { $0 is NSScrollView }))
+        XCTAssertFalse(descendants(of: host).contains(where: { $0 is NSTextView }))
+    }
+
+
+    @MainActor
     func testGFMStrikethroughRendersWithAttribute() {
         let output = MarkdownRenderer.render("before ~~削除🙂~~ after")
         let range = (output.string as NSString).range(of: "削除🙂")

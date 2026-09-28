@@ -38,6 +38,7 @@ struct MarkdownCommands: Commands {
             commandButton(.unorderedList)
             commandButton(.orderedList)
             commandButton(.taskList)
+            commandButton(.toggleTaskCompletion)
         }
     }
 

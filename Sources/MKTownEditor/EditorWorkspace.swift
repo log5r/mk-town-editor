@@ -4,7 +4,9 @@ struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
     @EnvironmentObject private var settingsStore: EditorSettingsStore
+    @Environment(\.undoManager) private var undoManager
     @StateObject private var editorModel = MarkdownEditorModel()
+    @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
 
@@ -90,16 +92,29 @@ struct EditorWorkspace: View {
             HSplitView {
                 sourceEditor
                     .frame(minWidth: 280)
-                MarkdownPreview(markdown: document.text, documentContext: documentContext)
+                MarkdownPreview(markdown: document.text, documentContext: documentContext,
+                                onToggleTask: toggleTask)
                     .frame(minWidth: 280)
             }
         case .preview:
-            MarkdownPreview(markdown: document.text, documentContext: documentContext)
+            MarkdownPreview(markdown: document.text, documentContext: documentContext,
+                            onToggleTask: toggleTask)
         }
     }
 
     private var sourceEditor: some View {
         MarkdownTextEditor(text: $document.text, model: editorModel)
+    }
+
+    private func toggleTask(at sourceLocation: Int) {
+        if editorModel.hasActiveEditor {
+            editorModel.toggleTask(at: sourceLocation)
+            return
+        }
+        guard let edit = MarkdownFormatter.toggleTasks(in: document.text,
+            selection: NSRange(location: sourceLocation, length: 0)) else { return }
+        previewTaskUndoTarget.replaceText(edit.applying(to: document.text),
+                                          in: $document.text, undoManager: undoManager)
     }
 
     private var statusBar: some View {
@@ -127,5 +142,20 @@ struct EditorWorkspace: View {
         }
         .help(command.title)
         .disabled(!command.canExecute(in: editorModel))
+    }
+}
+
+@MainActor
+final class PreviewTaskUndoTarget {
+    func replaceText(_ newText: String, in text: Binding<String>, undoManager: UndoManager?) {
+        let previous = text.wrappedValue
+        guard previous != newText else { return }
+        text.wrappedValue = newText
+        if let undoManager {
+            undoManager.registerUndo(withTarget: self) { [weak undoManager] target in
+                target.replaceText(previous, in: text, undoManager: undoManager)
+            }
+            undoManager.setActionName("タスクの完了切替")
+        }
     }
 }

@@ -4,10 +4,11 @@ import SwiftUI
 struct MarkdownPreview: View {
     let markdown: String
     let documentContext: DocumentContext
+    var onToggleTask: ((Int) -> Void)? = nil
 
     var body: some View {
         let analysis = MarkdownAnalysis(markdown)
-        if analysis.blocks.contains(where: { $0.kind == .table }) {
+        if analysis.blocks.contains(where: { $0.kind == .table || $0.task != nil }) {
             let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -22,6 +23,8 @@ struct MarkdownPreview: View {
                                 tableView(table, in: analysis)
                             } else if block.kind == .blank {
                                 Text(" ").frame(height: 12)
+                            } else if let task = block.task {
+                                taskView(block, task: task, in: analysis)
                             } else {
                                 Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis)))
                                     .textSelection(.enabled)
@@ -38,6 +41,26 @@ struct MarkdownPreview: View {
         } else {
             MarkdownTextPreview(markdown: markdown)
         }
+    }
+
+    private func taskView(_ block: MarkdownBlock, task: MarkdownTask,
+                          in analysis: MarkdownAnalysis) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Toggle(task.isChecked ? "完了" : "未完了", isOn: Binding(
+                get: { task.isChecked },
+                set: { _ in onToggleTask?(block.sourceRange.location) }
+            ))
+            .toggleStyle(.checkbox)
+            .help(task.isChecked ? "未完了にする" : "完了にする")
+            .accessibilityLabel(task.content.isEmpty ? "タスクの完了" : "\(task.content) の完了")
+            .disabled(onToggleTask == nil)
+
+            Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
+                                                               showTaskPrefix: false)))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func quoteDepth(of block: MarkdownBlock, in analysis: MarkdownAnalysis) -> Int {
