@@ -3,13 +3,21 @@ import SwiftUI
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
+    @EnvironmentObject private var settingsStore: EditorSettingsStore
     @StateObject private var editorModel = MarkdownEditorModel()
-    @SceneStorage("editorMode") private var storedMode = EditorMode.split.rawValue
+    @SceneStorage("editorMode") private var legacyMode: String?
+    @State private var unsavedMode: EditorMode = .split
 
     private var mode: Binding<EditorMode> {
         Binding(
-            get: { EditorMode(rawValue: storedMode) ?? .split },
-            set: { storedMode = $0.rawValue }
+            get: { fileURL.map(settingsStore.mode(for:)) ?? unsavedMode },
+            set: { newMode in
+                if let fileURL {
+                    settingsStore.setMode(newMode, for: fileURL)
+                } else {
+                    unsavedMode = newMode
+                }
+            }
         )
     }
 
@@ -49,6 +57,28 @@ struct EditorWorkspace: View {
             }
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
+        .onAppear {
+            if let fileURL {
+                settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
+            } else {
+                unsavedMode = legacyMode.flatMap(EditorMode.init(rawValue:)) ?? settingsStore.app.defaultMode
+            }
+            legacyMode = nil
+        }
+        .onChange(of: fileURL) { oldURL, newURL in
+            switch (oldURL, newURL) {
+            case let (oldURL?, newURL?):
+                settingsStore.moveDocumentState(from: oldURL, to: newURL)
+            case let (nil, newURL?):
+                if !settingsStore.hasDocumentState(for: newURL) {
+                    settingsStore.setMode(unsavedMode, for: newURL)
+                }
+            case let (oldURL?, nil):
+                unsavedMode = settingsStore.mode(for: oldURL)
+            case (nil, nil):
+                break
+            }
+        }
     }
 
     @ViewBuilder

@@ -1,6 +1,6 @@
 import Foundation
 
-enum EditorMode: String, CaseIterable, Identifiable {
+enum EditorMode: String, CaseIterable, Identifiable, Codable {
     case editor
     case split
     case preview
