@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
@@ -27,6 +29,7 @@ struct EditorWorkspace: View {
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
     @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
+    @State private var htmlExportError: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -111,6 +114,7 @@ struct EditorWorkspace: View {
             if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
             showingRegexSearch = true
         }
+        .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
@@ -158,6 +162,14 @@ struct EditorWorkspace: View {
             Button("OK") { documentLinkError = nil }
         } message: {
             Text(documentLinkError ?? "")
+        }
+        .alert("HTMLを書き出せません", isPresented: Binding(
+            get: { htmlExportError != nil },
+            set: { if !$0 { htmlExportError = nil } }
+        )) {
+            Button("OK") { htmlExportError = nil }
+        } message: {
+            Text(htmlExportError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
@@ -370,6 +382,22 @@ struct EditorWorkspace: View {
             guard document.text == source else { return }
             linkDiagnostics = diagnostics
             isCheckingLinks = false
+        }
+    }
+
+    private func exportHTML() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.html]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".html"
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL)
+            do {
+                try html.write(to: destination, atomically: true, encoding: .utf8)
+            } catch {
+                htmlExportError = error.localizedDescription
+            }
         }
     }
 

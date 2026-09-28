@@ -36,6 +36,10 @@ private struct RegexSearchActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ExportHTMLActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -62,6 +66,10 @@ extension FocusedValues {
         get { self[RegexSearchActionKey.self] }
         set { self[RegexSearchActionKey.self] = newValue }
     }
+    var exportHTMLAction: (() -> Void)? {
+        get { self[ExportHTMLActionKey.self] }
+        set { self[ExportHTMLActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -71,6 +79,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
     @FocusedValue(\.zoomActions) private var zoomActions
     @FocusedValue(\.regexSearchAction) private var regexSearchAction
+    @FocusedValue(\.exportHTMLAction) private var exportHTMLAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -111,6 +120,10 @@ struct MarkdownCommands: Commands {
             Button("プレビューを標準サイズに戻す") { zoomActions?.reset(.preview) }
                 .keyboardShortcut("0", modifiers: [.command, .option])
                 .disabled(zoomActions == nil)
+        }
+        CommandMenu("書き出し") {
+            Button("HTML…") { exportHTMLAction?() }
+                .disabled(exportHTMLAction == nil)
         }
         CommandGroup(after: .textEditing) {
             Divider()

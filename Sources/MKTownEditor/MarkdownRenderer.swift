@@ -138,7 +138,7 @@ enum MarkdownRenderer {
         }
     }
 
-    private static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
+    static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
         let lines = (content ?? block.content).components(separatedBy: "\n")
         var result = ""
         for (index, line) in lines.enumerated() {
@@ -231,7 +231,7 @@ enum MarkdownRenderer {
         return result
     }
 
-    private static func resolveReferences(
+    static func resolveReferences(
         in markdown: String, using references: [String: MarkdownReference]
     ) -> String {
         guard !references.isEmpty else { return markdown }
