@@ -69,4 +69,17 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(EditorCommand.strikethrough.shortcut.key, "x")
         XCTAssertTrue(EditorCommand.strikethrough.shortcut.modifiers.contains(.shift))
     }
+
+    func testOrderedListCommandConvertsSelectedBullets() {
+        let view = NSTextView()
+        view.string = "- one\n- two"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+
+        EditorCommand.orderedList.perform(on: model)
+
+        XCTAssertEqual(view.string, "1. one\n2. two")
+        XCTAssertEqual(EditorCommand.orderedList.title, "番号付きリスト")
+    }
 }
