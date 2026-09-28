@@ -156,6 +156,16 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    func commitReferenceLink(label: String, referenceID: String) -> Bool {
+        guard let draft = linkDraft, let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownLinkSyntax.referenceEdit(in: textView.string, draft: draft,
+                                                          label: label, referenceID: referenceID),
+              perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
+        linkDraft = nil
+        return true
+    }
+
     func presentImageEditor() {
         guard canExecuteCommand, let textView else { return }
         imageDraft = MarkdownLinkSyntax.imageDraft(in: textView.string, selection: textView.selectedRange())

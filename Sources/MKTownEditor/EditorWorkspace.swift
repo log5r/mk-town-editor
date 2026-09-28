@@ -119,9 +119,14 @@ struct EditorWorkspace: View {
             Text(documentLinkError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
-            LinkEditorSheet(draft: draft, documentContext: documentContext) { label, destination, title in
-                editorModel.commitLink(label: label, destination: destination, title: title)
-            }
+            LinkEditorSheet(draft: draft, documentContext: documentContext,
+                            analysis: analysisStore.snapshot?.source == document.text
+                                ? analysisStore.snapshot?.analysis : nil,
+                            onSave: { label, destination, title in
+                                editorModel.commitLink(label: label, destination: destination, title: title)
+                            }, onSaveReference: { label, referenceID in
+                                editorModel.commitReferenceLink(label: label, referenceID: referenceID)
+                            })
         }
         .sheet(item: $editorModel.imageDraft) { draft in
             ImageEditorSheet(draft: draft, documentContext: documentContext) { alt, input, title in
@@ -458,19 +463,28 @@ final class PreviewTaskUndoTarget {
 private struct LinkEditorSheet: View {
     let draft: MarkdownLinkDraft
     let documentContext: DocumentContext
+    let analysis: MarkdownAnalysis?
     let onSave: (String, String, String) -> Bool
+    let onSaveReference: (String, String) -> Bool
     @Environment(\.dismiss) private var dismiss
+    private enum LinkForm: String, CaseIterable { case inline = "URL", reference = "参照ID" }
+    @State private var form: LinkForm = .inline
     @State private var label: String
     @State private var destination: String
     @State private var title: String
+    @State private var referenceID = ""
     @State private var showsSaveError = false
     @State private var fileCandidates: [FilePathSuggestion] = []
+    @State private var headingSuggestions: [HeadingLinkSuggestion] = []
 
-    init(draft: MarkdownLinkDraft, documentContext: DocumentContext,
-         onSave: @escaping (String, String, String) -> Bool) {
+    init(draft: MarkdownLinkDraft, documentContext: DocumentContext, analysis: MarkdownAnalysis?,
+         onSave: @escaping (String, String, String) -> Bool,
+         onSaveReference: @escaping (String, String) -> Bool) {
         self.draft = draft
         self.documentContext = documentContext
+        self.analysis = analysis
         self.onSave = onSave
+        self.onSaveReference = onSaveReference
         _label = State(initialValue: draft.label)
         _destination = State(initialValue: draft.destination)
         _title = State(initialValue: draft.title)
@@ -480,20 +494,37 @@ private struct LinkEditorSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(draft.isExisting ? "リンクを編集" : "リンクを挿入")
                 .font(.headline)
+            let referenceIDs = analysis.map(MarkdownLinkCompletion.referenceIDs(in:)) ?? []
+            if !referenceIDs.isEmpty {
+                Picker("リンク形式", selection: $form) {
+                    ForEach(LinkForm.allCases, id: \.self) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
             Form {
                 TextField("表示名", text: $label)
-                TextField("URL", text: $destination)
-                TextField("タイトル（任意）", text: $title)
+                if form == .inline {
+                    TextField("URL", text: $destination)
+                    TextField("タイトル（任意）", text: $title)
+                } else {
+                    Picker("参照ID", selection: $referenceID) {
+                        Text("選択してください").tag("")
+                        ForEach(referenceIDs, id: \.self) { id in Text(id).tag(id) }
+                    }
+                }
             }
             .formStyle(.grouped)
             .frame(height: 180)
-            let suggestions = FilePathCompletion.matches(destination, in: fileCandidates)
-            if !suggestions.isEmpty {
+            let fileSuggestions = form == .inline
+                ? FilePathCompletion.matches(destination, in: fileCandidates) : []
+            if !fileSuggestions.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("この書類のフォルダ内")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    ForEach(suggestions) { suggestion in
+                    ForEach(fileSuggestions) { suggestion in
                         Button {
                             destination = suggestion.path
                         } label: {
@@ -507,7 +538,26 @@ private struct LinkEditorSheet: View {
                 .padding(8)
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
             }
-            if documentContext.directoryURL == nil {
+            if form == .inline && !headingSuggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("見出し")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(Array(headingSuggestions.prefix(8))) { suggestion in
+                        Button {
+                            destination = suggestion.destination
+                        } label: {
+                            Label(suggestion.title, systemImage: "number")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("見出し候補、\(suggestion.title)")
+                    }
+                }
+                .padding(8)
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if form == .inline && documentContext.directoryURL == nil {
                 Text("ファイルへの相対リンクを補完するには、先に書類を保存してください。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -521,7 +571,10 @@ private struct LinkEditorSheet: View {
                 Button("キャンセル") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(draft.isExisting ? "更新" : "挿入") {
-                    if onSave(label, destination, title) {
+                    let saved = form == .inline
+                        ? onSave(label, destination, title)
+                        : onSaveReference(label, referenceID)
+                    if saved {
                         dismiss()
                     } else {
                         showsSaveError = true
@@ -529,7 +582,9 @@ private struct LinkEditorSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                          destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                          (form == .inline
+                           ? destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                           : referenceID.isEmpty))
             }
         }
         .frame(width: 480)
@@ -542,6 +597,15 @@ private struct LinkEditorSheet: View {
             fileCandidates = await Task.detached(priority: .userInitiated) {
                 FilePathCompletion.scan(in: directory)
             }.value
+        }
+        .task(id: destination) {
+            guard let analysis else { headingSuggestions = []; return }
+            let query = destination
+            let context = documentContext
+            let suggestions = await Task.detached(priority: .userInitiated) {
+                MarkdownLinkCompletion.headings(for: query, current: analysis, context: context)
+            }.value
+            if !Task.isCancelled { headingSuggestions = suggestions }
         }
     }
 }
