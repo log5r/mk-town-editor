@@ -52,6 +52,7 @@ struct EditorWorkspace: View {
     @State private var showingPlainExport = false
     @State private var showingExternalExport = false
     @State private var showingRichImport = false
+    @State private var showingPortablePackage = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
     @State private var plainExportError: String?
@@ -282,6 +283,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
         .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
         .focusedSceneValue(\.importRichTextAction) { showingRichImport = true }
+        .focusedSceneValue(\.exportPortablePackageAction) { showingPortablePackage = true }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
@@ -349,6 +351,10 @@ struct EditorWorkspace: View {
                     undoManager: undoManager, actionName: "HTML・RTFを取り込む")
                 return true
             }
+        }
+        .sheet(isPresented: $showingPortablePackage) {
+            PortablePackageSheet(source: document.text, documentURL: fileURL,
+                                 dialect: settingsStore.markdownDialect(for: fileURL))
         }
         .sheet(item: $exportFormat, onDismiss: {
             guard let request = pendingExport else { return }

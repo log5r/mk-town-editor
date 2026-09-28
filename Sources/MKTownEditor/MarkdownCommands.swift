@@ -52,6 +52,10 @@ private struct ImportRichTextActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ExportPortablePackageActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 private struct PageSetupActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -146,6 +150,10 @@ extension FocusedValues {
         get { self[ImportRichTextActionKey.self] }
         set { self[ImportRichTextActionKey.self] = newValue }
     }
+    var exportPortablePackageAction: (() -> Void)? {
+        get { self[ExportPortablePackageActionKey.self] }
+        set { self[ExportPortablePackageActionKey.self] = newValue }
+    }
     var pageSetupAction: (() -> Void)? {
         get { self[PageSetupActionKey.self] }
         set { self[PageSetupActionKey.self] = newValue }
@@ -199,6 +207,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportPDFAction) private var exportPDFAction
     @FocusedValue(\.exportExternalAction) private var exportExternalAction
     @FocusedValue(\.importRichTextAction) private var importRichTextAction
+    @FocusedValue(\.exportPortablePackageAction) private var exportPortablePackageAction
     @FocusedValue(\.pageSetupAction) private var pageSetupAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @FocusedValue(\.copyRichAction) private var copyRichAction
@@ -319,6 +328,8 @@ struct MarkdownCommands: Commands {
                 .disabled(exportPDFAction == nil)
             Button("DOCX・ODT・EPUB…") { exportExternalAction?() }
                 .disabled(exportExternalAction == nil)
+            Button("添付を含むパッケージ…") { exportPortablePackageAction?() }
+                .disabled(exportPortablePackageAction == nil)
             Button("テキスト…") { exportPlainTextAction?() }
                 .disabled(exportPlainTextAction == nil)
         }
