@@ -283,4 +283,27 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(list.children(of: list.rootBlocks[0]).map(\.kind), [.table])
         XCTAssertEqual(list.children(of: list.rootBlocks[0])[0].table?.rows, [["1", "2"]])
     }
+
+    func testGFMTaskMarkersExposeStateWithoutChangingSourceRanges() {
+        let source = "- [ ] 未完了🙂\n  - [x] 子\n1. [X] 完了\n- [ ]foo\n- [y] invalid"
+        let blocks = MarkdownAnalysis(source).blocks
+
+        XCTAssertEqual(blocks.map(\.task), [
+            MarkdownTask(isChecked: false, content: "未完了🙂"),
+            MarkdownTask(isChecked: true, content: "子"),
+            MarkdownTask(isChecked: true, content: "完了"),
+            nil, nil
+        ])
+        XCTAssertEqual(blocks[1].parentID, blocks[0].id)
+        XCTAssertEqual((source as NSString).substring(with: blocks[0].sourceRange), "- [ ] 未完了🙂\n")
+        XCTAssertEqual((source as NSString).substring(with: blocks[2].sourceRange), "1. [X] 完了\n")
+    }
+
+    func testTaskMarkerOnlyAppliesAtStartOfFirstListParagraph() {
+        let blocks = MarkdownAnalysis("- text [x] later\n- [x]done\n- [ ]  \n  continues").rootBlocks
+
+        XCTAssertNil(blocks[0].task)
+        XCTAssertNil(blocks[1].task)
+        XCTAssertEqual(blocks[2].task, MarkdownTask(isChecked: false, content: "\ncontinues"))
+    }
 }
