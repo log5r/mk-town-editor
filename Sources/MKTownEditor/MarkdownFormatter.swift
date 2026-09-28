@@ -11,8 +11,13 @@ enum MarkdownFormattingStyle {
 }
 
 struct MarkdownEdit: Equatable {
-    let text: String
+    let range: NSRange
+    let replacement: String
     let selection: NSRange
+
+    func applying(to text: String) -> String {
+        (text as NSString).replacingCharacters(in: range, with: replacement)
+    }
 }
 
 enum MarkdownFormatter {
@@ -52,11 +57,11 @@ enum MarkdownFormatter {
         let selected = nsText.substring(with: selection)
         let content = selected.isEmpty ? placeholder : selected
         let replacement = prefix + content + suffix
-        let updated = nsText.replacingCharacters(in: selection, with: replacement)
         let prefixLength = (prefix as NSString).length
         let contentLength = (content as NSString).length
         return MarkdownEdit(
-            text: updated,
+            range: selection,
+            replacement: replacement,
             selection: NSRange(location: selection.location + prefixLength, length: contentLength)
         )
     }
@@ -66,9 +71,8 @@ enum MarkdownFormatter {
         let selected = nsText.substring(with: selection)
         let label = selected.isEmpty ? "リンク" : selected
         let replacement = "[\(label)](https://)"
-        let updated = nsText.replacingCharacters(in: selection, with: replacement)
         let urlStart = selection.location + ("[\(label)](" as NSString).length
-        return MarkdownEdit(text: updated, selection: NSRange(location: urlStart, length: 8))
+        return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))
     }
 
     private static func prefixLines(_ text: String, selection: NSRange, prefix: String) -> MarkdownEdit {
@@ -81,9 +85,9 @@ enum MarkdownFormatter {
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map { prefix + $0 }
             .joined(separator: "\n") + (endsWithNewline ? "\n" : "")
-        let updated = nsText.replacingCharacters(in: lineRange, with: replacement)
         return MarkdownEdit(
-            text: updated,
+            range: lineRange,
+            replacement: replacement,
             selection: NSRange(location: lineRange.location, length: (replacement as NSString).length)
         )
     }
