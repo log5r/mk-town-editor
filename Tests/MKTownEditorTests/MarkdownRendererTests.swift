@@ -90,4 +90,12 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(MarkdownRenderer.render("- item\n      **code**\n- next").string,
                        "•  item\n**code**\n•  next")
     }
+
+    @MainActor
+    func testSetextAndATXClosingMarkersRenderAsHeadings() {
+        let rendered = MarkdownRenderer.render("first\nsecond\n---\n## title ###")
+
+        XCTAssertEqual(rendered.string, "first second\ntitle")
+        XCTAssertNotNil(rendered.attribute(.font, at: 0, effectiveRange: nil))
+    }
 }

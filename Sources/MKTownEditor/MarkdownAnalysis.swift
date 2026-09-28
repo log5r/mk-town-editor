@@ -199,10 +199,10 @@ struct MarkdownAnalysis {
                     blockParentID = parent.id
                     nestingDepth = parent.depth + 1
                 }
-            } else if let heading = parseHeading(trimmed) {
+            } else if let heading = parseHeading(line.text) {
                 kind = .heading(level: heading.level)
                 content = heading.content
-            } else if ["---", "***", "___"].contains(trimmed) {
+            } else if isThematicBreak(line.text) {
                 kind = .horizontalRule
                 content = ""
             } else if let list = parseList(line.text) {
@@ -246,6 +246,11 @@ struct MarkdownAnalysis {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
                     parts.append(!isListContinuation ? lines[next].text :
                         withoutLeadingIndent(lines[next].text))
+                    next += 1
+                }
+                if !isListContinuation, next < lines.count,
+                    let level = setextUnderlineLevel(lines[next].text) {
+                    kind = .heading(level: level)
                     next += 1
                 }
                 content = parts.joined(separator: "\n")
@@ -334,15 +339,48 @@ struct MarkdownAnalysis {
     }
 
     private static func parseHeading(_ line: String) -> (level: Int, content: String)? {
-        let marks = line.prefix(while: { $0 == "#" })
-        guard (1...6).contains(marks.count), line.dropFirst(marks.count).hasPrefix(" ") else { return nil }
-        return (marks.count, String(line.dropFirst(marks.count + 1)))
+        let indentation = line.prefix(while: { $0 == " " }).count
+        guard indentation <= 3 else { return nil }
+        let remainder = line.dropFirst(indentation)
+        let marks = remainder.prefix(while: { $0 == "#" })
+        guard (1...6).contains(marks.count) else { return nil }
+        let afterOpening = remainder.dropFirst(marks.count)
+        guard afterOpening.isEmpty || afterOpening.first == " " || afterOpening.first == "\t" else { return nil }
+        var content = String(afterOpening).trimmingCharacters(in: .whitespaces)
+        let closingCount = content.reversed().prefix(while: { $0 == "#" }).count
+        if closingCount > 0 {
+            let beforeClosing = content.dropLast(closingCount)
+            if beforeClosing.last == " " || beforeClosing.last == "\t" {
+                content = String(beforeClosing).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        return (marks.count, content)
+    }
+
+    private static func isThematicBreak(_ line: String) -> Bool {
+        let indentation = line.prefix(while: { $0 == " " }).count
+        guard indentation <= 3 else { return false }
+        let marks = line.dropFirst(indentation).filter { $0 != " " && $0 != "\t" }
+        guard marks.count >= 3, let marker = marks.first, marker == "-" || marker == "*" || marker == "_" else {
+            return false
+        }
+        return marks.allSatisfy { $0 == marker }
+    }
+
+    private static func setextUnderlineLevel(_ line: String) -> Int? {
+        let indentation = line.prefix(while: { $0 == " " }).count
+        guard indentation <= 3 else { return nil }
+        let trimmed = line.dropFirst(indentation).trimmingCharacters(in: .whitespaces)
+        guard let marker = trimmed.first, marker == "=" || marker == "-",
+              trimmed.allSatisfy({ $0 == marker }) else { return nil }
+        return marker == "=" ? 1 : 2
     }
 
     private static func isParagraphContinuation(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         return !trimmed.isEmpty && openingFence(line) == nil && parseQuote(line) == nil &&
-            parseHeading(trimmed) == nil && !["---", "***", "___"].contains(trimmed) &&
+            parseHeading(line) == nil && !isThematicBreak(line) &&
+            setextUnderlineLevel(line) == nil &&
             parseList(line) == nil
     }
 
