@@ -39,4 +39,21 @@ final class WorkspaceSearchTests: XCTestCase {
         XCTAssertEqual(results[0].line, 1)
         XCTAssertEqual(results[0].sourceRange.length, ("first\nsecond" as NSString).length)
     }
+
+    func testStructuralScopeSeparatesHeadingBodyAndCode() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = "# target\n\nbody target\n\n> quoted target\n\n```swift\ntarget\n```\n"
+        try source.write(to: root.appendingPathComponent("structure.md"),
+                         atomically: true, encoding: .utf8)
+        func search(_ scope: WorkspaceSearchScope) throws -> [WorkspaceSearchResult] {
+            try WorkspaceSearch.search(root: root,
+                options: WorkspaceSearchOptions(query: "target", scope: scope))
+        }
+        XCTAssertEqual(try search(.all).count, 4)
+        XCTAssertEqual(try search(.headings).map(\.line), [1])
+        XCTAssertEqual(try search(.body).map(\.line), [3, 5])
+        XCTAssertEqual(try search(.code).map(\.line), [8])
+    }
 }

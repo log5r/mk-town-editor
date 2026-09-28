@@ -7,6 +7,7 @@ struct WorkspaceSearchSheet: View {
     @State private var query = ""
     @State private var include = "*.md, *.markdown, *.txt"
     @State private var exclude = ""
+    @State private var scope: WorkspaceSearchScope = .all
     @State private var results: [WorkspaceSearchResult] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
@@ -28,6 +29,11 @@ struct WorkspaceSearchSheet: View {
                 TextField("除外: archive/*", text: $exclude)
             }
             .textFieldStyle(.roundedBorder)
+            Picker("構造", selection: $scope) {
+                ForEach(WorkspaceSearchScope.allCases) { value in
+                    Text(value.title).tag(value)
+                }
+            }
             Text("対象・除外はカンマ区切りのファイルパスパターンです。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -77,7 +83,7 @@ struct WorkspaceSearchSheet: View {
         isSearching = true
         let options = WorkspaceSearchOptions(query: query,
             includePatterns: patterns(in: include).isEmpty ? ["*"] : patterns(in: include),
-            excludePatterns: patterns(in: exclude))
+            excludePatterns: patterns(in: exclude), scope: scope)
         let worker = Task.detached(priority: .userInitiated) {
             try WorkspaceSearch.search(root: root, options: options)
         }
