@@ -30,6 +30,8 @@ struct EditorWorkspace: View {
     @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
+    @State private var pdfExportError: String?
+    @State private var isExportingPDF = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -52,7 +54,7 @@ struct EditorWorkspace: View {
         DocumentContext(fileURL: fileURL)
     }
 
-    var body: some View {
+    private var navigationView: some View {
         NavigationSplitView(columnVisibility: $sidebarVisibility) {
             outlineSidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 320)
@@ -115,6 +117,11 @@ struct EditorWorkspace: View {
             showingRegexSearch = true
         }
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
+        .focusedSceneValue(\.exportPDFAction) { exportPDF() }
+    }
+
+    private var sheetView: some View {
+        navigationView
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
@@ -147,6 +154,10 @@ struct EditorWorkspace: View {
                 navigate(to: diagnostic.sourceRange.location)
             }
         }
+    }
+
+    private var alertView: some View {
+        sheetView
         .alert("見出しが見つかりません", isPresented: Binding(
             get: { missingHeading != nil },
             set: { if !$0 { missingHeading = nil } }
@@ -170,6 +181,14 @@ struct EditorWorkspace: View {
             Button("OK") { htmlExportError = nil }
         } message: {
             Text(htmlExportError ?? "")
+        }
+        .alert("PDFを書き出せません", isPresented: Binding(
+            get: { pdfExportError != nil },
+            set: { if !$0 { pdfExportError = nil } }
+        )) {
+            Button("OK") { pdfExportError = nil }
+        } message: {
+            Text(pdfExportError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
@@ -209,6 +228,10 @@ struct EditorWorkspace: View {
                  ? "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。"
                  : imageDropError ?? "")
         }
+    }
+
+    var body: some View {
+        alertView
         .onAppear {
             analysisStore.update(source: document.text)
             receivePendingDocumentLink()
@@ -397,6 +420,31 @@ struct EditorWorkspace: View {
                 try html.write(to: destination, atomically: true, encoding: .utf8)
             } catch {
                 htmlExportError = error.localizedDescription
+            }
+        }
+    }
+
+    private func exportPDF() {
+        guard !isExportingPDF else { return }
+        isExportingPDF = true
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".pdf"
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else {
+                isExportingPDF = false
+                return
+            }
+            let source = document.text
+            let sourceURL = fileURL
+            Task { @MainActor in
+                defer { isExportingPDF = false }
+                do {
+                    try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination)
+                } catch {
+                    pdfExportError = error.localizedDescription
+                }
             }
         }
     }

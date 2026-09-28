@@ -26,6 +26,12 @@ enum MarkdownHTMLExporter {
         table { border-collapse: collapse; display: block; overflow-x: auto; }
         th, td { border: 1px solid #8888; padding: 5px 10px; }
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
+        @media print {
+          body { max-width: none; margin: 0; padding: 0; }
+          h1, h2, h3, h4, h5, h6 { break-after: avoid-page; }
+          pre, blockquote, img, tr { break-inside: avoid-page; }
+          table { display: table; overflow: visible; max-width: 100%; }
+        }
         </style>
         </head>
         <body>

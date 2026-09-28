@@ -40,6 +40,10 @@ private struct ExportHTMLActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ExportPDFActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -70,6 +74,10 @@ extension FocusedValues {
         get { self[ExportHTMLActionKey.self] }
         set { self[ExportHTMLActionKey.self] = newValue }
     }
+    var exportPDFAction: (() -> Void)? {
+        get { self[ExportPDFActionKey.self] }
+        set { self[ExportPDFActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -80,6 +88,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.zoomActions) private var zoomActions
     @FocusedValue(\.regexSearchAction) private var regexSearchAction
     @FocusedValue(\.exportHTMLAction) private var exportHTMLAction
+    @FocusedValue(\.exportPDFAction) private var exportPDFAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -124,6 +133,8 @@ struct MarkdownCommands: Commands {
         CommandMenu("書き出し") {
             Button("HTML…") { exportHTMLAction?() }
                 .disabled(exportHTMLAction == nil)
+            Button("PDF…") { exportPDFAction?() }
+                .disabled(exportPDFAction == nil)
         }
         CommandGroup(after: .textEditing) {
             Divider()
