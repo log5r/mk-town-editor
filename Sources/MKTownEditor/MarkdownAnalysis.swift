@@ -5,6 +5,40 @@ enum MarkdownLineBreak: Hashable, Sendable {
     case hard
 }
 
+enum MarkdownCalloutKind: String, CaseIterable, Sendable {
+    case note = "NOTE"
+    case tip = "TIP"
+    case important = "IMPORTANT"
+    case warning = "WARNING"
+    case caution = "CAUTION"
+
+    var title: String {
+        switch self {
+        case .note: "メモ"
+        case .tip: "ヒント"
+        case .important: "重要"
+        case .warning: "警告"
+        case .caution: "注意"
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .note: "info.circle"
+        case .tip: "lightbulb"
+        case .important: "exclamationmark.circle"
+        case .warning: "exclamationmark.triangle"
+        case .caution: "hand.raised"
+        }
+    }
+
+    static func parse(_ firstLine: String) -> MarkdownCalloutKind? {
+        let marker = firstLine.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard marker.hasPrefix("[!"), marker.hasSuffix("]") else { return nil }
+        return MarkdownCalloutKind(rawValue: String(marker.dropFirst(2).dropLast()))
+    }
+}
+
 struct MarkdownTable: Equatable, Sendable {
     enum Alignment: Hashable, Sendable {
         case leading
@@ -182,6 +216,11 @@ struct MarkdownBlock: Equatable, Sendable {
         }
         return MarkdownTask(isChecked: marker == "x" || marker == "X", content: String(remainder))
     }
+
+    var calloutKind: MarkdownCalloutKind? {
+        guard kind == .quote else { return nil }
+        return MarkdownCalloutKind.parse(content.components(separatedBy: "\n").first ?? "")
+    }
 }
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
@@ -306,7 +345,9 @@ struct MarkdownAnalysis: Sendable {
                     table: nil,
                     lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
-                result.append(contentsOf: parseLines(quoteLines, parentID: quoteID,
+                let contentLines = MarkdownCalloutKind.parse(quoteLines.first?.text ?? "") == nil
+                    ? quoteLines : Array(quoteLines.dropFirst())
+                result.append(contentsOf: parseLines(contentLines, parentID: quoteID,
                                                      nextID: &nextID, references: &references))
                 listAncestors.removeAll()
                 continue

@@ -57,7 +57,20 @@ struct MarkdownPreview: View {
                                             .frame(width: 2)
                                             .accessibilityHidden(true)
                                     }
-                                    if let table = block.table {
+                                    if let callout = block.calloutKind {
+                                        HStack(alignment: .top, spacing: 8) {
+                                            Image(systemName: callout.symbolName)
+                                                .accessibilityHidden(true)
+                                            Text(AttributedString(MarkdownRenderer.renderCallout(block,
+                                                in: analysis, documentContext: documentContext)))
+                                                .textSelection(.enabled)
+                                        }
+                                        .padding(12)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.accentColor.opacity(0.08))
+                                        .cornerRadius(8)
+                                        .accessibilityLabel("\(callout.title)。\(block.content)")
+                                    } else if let table = block.table {
                                         tableView(table, in: analysis)
                                     } else if block.kind == .blank {
                                         Text(" ").frame(height: 12)
