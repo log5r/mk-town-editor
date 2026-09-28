@@ -4,6 +4,20 @@ import XCTest
 
 @MainActor
 final class EditorCommandTests: XCTestCase {
+    func testCommandPaletteSearchesNamesAndShortcutsAndFiltersUnavailableCommands() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "本文"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        XCTAssertEqual(EditorCommand.bold.shortcutLabel, "⌘B")
+        XCTAssertEqual(EditorCommand.paletteMatches("⌘B", in: model), [.bold])
+        XCTAssertEqual(EditorCommand.paletteMatches("見出し 3", in: model), [.heading(level: 3)])
+        XCTAssertFalse(EditorCommand.paletteMatches("", in: model).contains(.indentList))
+        XCTAssertFalse(EditorCommand.paletteMatches("", in: model).contains(.snippet))
+        model.snippets = [EditorSnippet(trigger: "sig", template: "文字")]
+        XCTAssertTrue(EditorCommand.paletteMatches("スニペット", in: model).contains(.snippet))
+    }
+
     func testCommandActsOnlyOnThePassedDocumentModel() {
         let firstView = NSTextView()
         firstView.string = "first"
