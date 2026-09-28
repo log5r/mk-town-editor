@@ -12,6 +12,9 @@ final class MarkdownEditorModel: ObservableObject {
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
     private var pendingNavigationLocation: Int?
+    private var selectionHistory: [NSRange] = []
+    private var selectionHistoryText: String?
+    private var expectedSelection: NSRange?
     var listIndentWidth = 2
     var codeIndentWidth = 4
     var tableAddsRowOnTab = true
@@ -79,7 +82,34 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func selectionDidChange(_ range: NSRange) {
+        let unchanged = selectedRange == range
         selectedRange = range
+        if range == expectedSelection {
+            expectedSelection = nil
+        } else if !unchanged {
+            selectionHistory.removeAll()
+            selectionHistoryText = nil
+        }
+    }
+
+    func expandSelection() {
+        guard let textView, !textView.hasMarkedText() else { return }
+        if selectionHistoryText != textView.string { selectionHistory.removeAll() }
+        let current = textView.selectedRange()
+        guard let next = MarkdownSelectionExpansion.next(in: textView.string,
+            selection: current) else { return }
+        selectionHistoryText = textView.string
+        selectionHistory.append(current)
+        expectedSelection = next
+        selectAndReveal(next)
+    }
+
+    func shrinkSelection() {
+        guard let textView, !textView.hasMarkedText(),
+              selectionHistoryText == textView.string,
+              let previous = selectionHistory.popLast() else { return }
+        expectedSelection = previous
+        selectAndReveal(previous)
     }
 
     func navigate(to sourceLocation: Int) {
@@ -366,6 +396,8 @@ final class MarkdownEditorModel: ObservableObject {
         let originalSelection = textView.selectedRange()
         textView.breakUndoCoalescing()
         storage.replaceCharacters(in: edit.range, with: edit.replacement)
+        selectionHistory.removeAll()
+        selectionHistoryText = nil
         textView.didChangeText()
         textView.setSelectedRange(focusEditor ? edit.selection : originalSelection)
         textView.breakUndoCoalescing()

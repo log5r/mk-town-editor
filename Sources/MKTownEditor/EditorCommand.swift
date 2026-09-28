@@ -18,6 +18,8 @@ enum EditorCommand: Hashable {
     case moveLinesDown
     case deleteLines
     case comment
+    case expandSelection
+    case shrinkSelection
     case unorderedList
     case orderedList
     case taskList
@@ -52,6 +54,8 @@ enum EditorCommand: Hashable {
         case .moveLinesDown: "行を下へ移動"
         case .deleteLines: "行を削除"
         case .comment: "コメントにする／解除"
+        case .expandSelection: "選択範囲を拡大"
+        case .shrinkSelection: "選択範囲を縮小"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -85,6 +89,8 @@ enum EditorCommand: Hashable {
         case .moveLinesDown: "arrow.down"
         case .deleteLines: "trash"
         case .comment: "text.bubble"
+        case .expandSelection: "arrow.up.left.and.arrow.down.right"
+        case .shrinkSelection: "arrow.down.right.and.arrow.up.left"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -115,6 +121,7 @@ enum EditorCommand: Hashable {
         case .renumberList: nil
         case .duplicateLines, .moveLinesUp, .moveLinesDown, .deleteLines: nil
         case .comment: nil
+        case .expandSelection, .shrinkSelection: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -169,6 +176,8 @@ enum EditorCommand: Hashable {
         case .moveLinesDown: model.apply(.moveLinesDown)
         case .deleteLines: model.apply(.deleteLines)
         case .comment: model.apply(.comment)
+        case .expandSelection: model.expandSelection()
+        case .shrinkSelection: model.shrinkSelection()
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)
