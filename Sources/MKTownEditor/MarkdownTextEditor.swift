@@ -250,12 +250,21 @@ final class EditorTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        guard isEditable, !hasMarkedText(), let onImagePaste,
-              let data = Self.imageData(in: imagePasteboard) else {
+        guard isEditable, !hasMarkedText() else {
             super.paste(sender)
             return
         }
-        onImagePaste(data)
+        if let onImagePaste, let data = Self.imageData(in: imagePasteboard) {
+            onImagePaste(data)
+            return
+        }
+        if let value = imagePasteboard.string(forType: .string),
+           commandModel?.pasteURLAsLink(value) == true { return }
+        super.paste(sender)
+    }
+
+    @objc private func pasteURLAsPlainText(_ sender: Any?) {
+        super.paste(sender)
     }
 
     static func imageData(in pasteboard: NSPasteboard) -> Data? {
@@ -345,6 +354,15 @@ final class EditorTextView: NSTextView {
 
     func makeMarkdownMenu(baseMenu: NSMenu?) -> NSMenu {
         let menu = (baseMenu?.copy() as? NSMenu) ?? NSMenu()
+        if selectedRange().length > 0,
+           let value = imagePasteboard.string(forType: .string),
+           MarkdownURLPaste.validURL(value) != nil {
+            if !menu.items.isEmpty { menu.addItem(.separator()) }
+            let plainPaste = NSMenuItem(title: "URL をそのまま貼り付け", action: #selector(pasteURLAsPlainText(_:)),
+                                       keyEquivalent: "")
+            plainPaste.target = self
+            menu.addItem(plainPaste)
+        }
         if !menu.items.isEmpty { menu.addItem(.separator()) }
         for command in EditorCommand.context {
             add(command, to: menu)
