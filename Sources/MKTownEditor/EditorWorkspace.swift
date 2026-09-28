@@ -38,6 +38,10 @@ struct EditorWorkspace: View {
     @State private var printError: String?
     @State private var printRequested = false
     @State private var richCopyError: String?
+    @State private var showingPlainExport = false
+    @State private var plainExportRequested = false
+    @State private var plainOptions = MarkdownPlainTextOptions()
+    @State private var plainExportError: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -127,6 +131,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
+        .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
     }
 
     private var sheetView: some View {
@@ -146,6 +151,16 @@ struct EditorWorkspace: View {
             MarkdownPrintSettingsSheet(settings: printSettings, paperSize: printInfo.paperSize) { settings in
                 printSettings = settings
                 printRequested = true
+            }
+        }
+        .sheet(isPresented: $showingPlainExport, onDismiss: {
+            guard plainExportRequested else { return }
+            plainExportRequested = false
+            exportPlainText()
+        }) {
+            MarkdownPlainTextExportSheet(options: plainOptions) { options in
+                plainOptions = options
+                plainExportRequested = true
             }
         }
         .sheet(isPresented: $showingGoToHeading) {
@@ -224,6 +239,14 @@ struct EditorWorkspace: View {
             Button("OK") { richCopyError = nil }
         } message: {
             Text(richCopyError ?? "")
+        }
+        .alert("テキストを書き出せません", isPresented: Binding(
+            get: { plainExportError != nil },
+            set: { if !$0 { plainExportError = nil } }
+        )) {
+            Button("OK") { plainExportError = nil }
+        } message: {
+            Text(plainExportError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
@@ -519,6 +542,22 @@ struct EditorWorkspace: View {
         }
     }
 
+    private func exportPlainText() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".txt"
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            let text = MarkdownPlainTextExporter.render(document.text, options: plainOptions)
+            do {
+                try text.write(to: destination, atomically: true, encoding: .utf8)
+            } catch {
+                plainExportError = error.localizedDescription
+            }
+        }
+    }
+
     private var currentNavigationPoint: NavigationPoint {
         NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
     }
@@ -711,6 +750,33 @@ private struct MarkdownPrintSettingsSheet: View {
             }
         }
         .frame(width: 360)
+        .padding(20)
+    }
+}
+
+private struct MarkdownPlainTextExportSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var options: MarkdownPlainTextOptions
+    let onExport: (MarkdownPlainTextOptions) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("テキスト書き出し").font(.headline)
+            Toggle("リンク先のURLを残す", isOn: $options.linkDestinations)
+            Toggle("脚注を残す", isOn: $options.footnotes)
+            Toggle("画像の説明を残す", isOn: $options.imageDescriptions)
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("続ける…") {
+                    dismiss()
+                    onExport(options)
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .frame(width: 320)
         .padding(20)
     }
 }
