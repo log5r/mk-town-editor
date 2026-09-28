@@ -54,4 +54,19 @@ final class DocumentStatisticsTests: XCTestCase {
         XCTAssertEqual(WordCountMode.english.count(in: "Hello, world!"), 2)
         XCTAssertEqual(WordCountMode.english.count(in: ""), 0)
     }
+
+    func testReadingAndSpeakingEstimatesUseLanguageSpecificUnitsAndRates() {
+        var settings = ReadingEstimateSettings()
+        settings.japaneseReadingRate = 4
+        settings.japaneseSpeakingRate = 2
+        XCTAssertEqual(settings.estimatedMinutes(for: "日本語です。", spoken: false), 2)
+        XCTAssertEqual(settings.estimatedMinutes(for: "日本語です。", spoken: true), 3)
+        XCTAssertNil(settings.estimatedMinutes(for: "  \n", spoken: false))
+
+        settings.language = .english
+        settings.englishReadingRate = 2
+        settings.englishSpeakingRate = 1
+        XCTAssertEqual(settings.estimatedMinutes(for: "One, two, three!", spoken: false), 2)
+        XCTAssertEqual(settings.estimatedMinutes(for: "One, two, three!", spoken: true), 3)
+    }
 }

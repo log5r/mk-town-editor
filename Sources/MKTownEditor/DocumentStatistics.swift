@@ -39,6 +39,39 @@ enum WordCountMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum ReadingLanguage: String, Codable, CaseIterable, Sendable {
+    case japanese
+    case english
+
+    var title: String { self == .japanese ? "日本語" : "英語" }
+    var unit: String { self == .japanese ? "文字/分" : "語/分" }
+}
+
+struct ReadingEstimateSettings: Codable, Equatable, Sendable {
+    var language: ReadingLanguage = .japanese
+    var japaneseReadingRate = 600
+    var japaneseSpeakingRate = 300
+    var englishReadingRate = 200
+    var englishSpeakingRate = 130
+
+    var readingRate: Int {
+        language == .japanese ? japaneseReadingRate : englishReadingRate
+    }
+
+    var speakingRate: Int {
+        language == .japanese ? japaneseSpeakingRate : englishSpeakingRate
+    }
+
+    func estimatedMinutes(for text: String, spoken: Bool) -> Int? {
+        let amount = language == .japanese
+            ? DocumentStatistics(text: text).nonWhitespaceCharacters
+            : WordCountMode.english.count(in: text)
+        guard amount > 0 else { return nil }
+        let rate = max(1, spoken ? speakingRate : readingRate)
+        return (amount + rate - 1) / rate
+    }
+}
+
 struct DocumentStatistics: Equatable, Sendable {
     let characters: Int
     let nonWhitespaceCharacters: Int
