@@ -56,6 +56,7 @@ struct EditorWorkspace: View {
     @State private var previewSearchQuery = ""
     @State private var previewSearchCaseSensitive = false
     @State private var previewSearchRange: NSRange?
+    @State private var showingStatistics = false
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -87,7 +88,26 @@ struct EditorWorkspace: View {
     }
 
     private var statistics: DocumentStatistics {
-        analysisStore.snapshot?.statistics ?? DocumentStatistics(text: document.text)
+        if let snapshot = analysisStore.snapshot, snapshot.source == document.text {
+            return snapshot.statistics
+        }
+        return DocumentStatistics(text: document.text)
+    }
+
+    private var selectionStatistics: DocumentStatistics? {
+        DocumentStatistics.selection(in: document.text, range: editorModel.selectedRange)
+    }
+
+    private var sectionStatistics: (title: String, value: DocumentStatistics)? {
+        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return nil }
+        let entries = MarkdownOutline.entries(in: snapshot.analysis)
+        guard let heading = MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
+                                                           in: entries),
+              let range = DocumentStatistics.sectionRange(
+                at: editorModel.selectedRange.location, in: snapshot.analysis,
+                documentLength: (document.text as NSString).length) else { return nil }
+        let section = (document.text as NSString).substring(with: range)
+        return (heading.title, DocumentStatistics(text: section))
     }
 
     private var documentContext: DocumentContext {
@@ -1133,15 +1153,62 @@ struct EditorWorkspace: View {
             Spacer()
             Text("\(statistics.lines) 行")
             Text("\(statistics.words) 語")
-            Text("\(statistics.characters) 文字")
+            if let selectionStatistics {
+                Text("選択 \(selectionStatistics.characters) 文字")
+            } else if let sectionStatistics {
+                Text("節 \(sectionStatistics.value.characters) 文字")
+            }
+            Button("\(statistics.characters) 文字") { showingStatistics = true }
+                .buttonStyle(.plain)
+                .help("文字数の内訳を表示")
+                .accessibilityLabel("\(statusAccessibilityLabel)。内訳を表示")
+                .popover(isPresented: $showingStatistics, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("文字数の内訳").font(.headline)
+                        statisticsRow("全文", value: statistics)
+                        if let selectionStatistics {
+                            statisticsRow("選択範囲", value: selectionStatistics)
+                        } else {
+                            Text("選択範囲なし")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let sectionStatistics {
+                            statisticsRow("セクション: \(sectionStatistics.title)",
+                                          value: sectionStatistics.value)
+                        }
+                        Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .frame(width: 340, alignment: .leading)
+                }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
         .frame(height: 28)
         .background(.bar)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("文書統計。\(statistics.lines) 行、\(statistics.words) 語、\(statistics.characters) 文字")
+        .accessibilityElement(children: .contain)
+    }
+
+    private var statusAccessibilityLabel: String {
+        var value = "文書統計。\(statistics.lines) 行、\(statistics.words) 語、全文 \(statistics.characters) 文字"
+        if let selectionStatistics {
+            value += "、選択範囲 \(selectionStatistics.characters) 文字"
+        } else if let sectionStatistics {
+            value += "、セクション \(sectionStatistics.value.characters) 文字"
+        }
+        return value
+    }
+
+    private func statisticsRow(_ title: String, value: DocumentStatistics) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.subheadline.weight(.semibold))
+            Text("空白込み \(value.characters) 文字 / 空白除外 \(value.nonWhitespaceCharacters) 文字")
+                .font(.caption)
+        }
     }
 
     private func formatButton(_ command: EditorCommand) -> some View {
