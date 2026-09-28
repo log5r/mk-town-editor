@@ -97,6 +97,17 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    func completeSymbol(_ typed: String, replacementRange: NSRange) -> Bool {
+        guard replacementRange.location == NSNotFound,
+              let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownSymbolCompletion.edit(in: textView.string,
+                                                       selection: textView.selectedRange(),
+                                                       typed: typed) else { return false }
+        perform(edit, in: textView, storage: storage, focusEditor: true)
+        return true
+    }
+
     func toggleTask(at sourceLocation: Int) {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
