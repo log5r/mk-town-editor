@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct ImageEditorSheet: View {
     let draft: MarkdownImageDraft
     let documentContext: DocumentContext
-    let onSave: @MainActor (String, ImageInput, String, Int?) async throws -> Void
+    let onSave: @MainActor (String, ImageInput, String, Int?, ImageTransformOptions?) async throws -> Void
 
     private enum Source: String, CaseIterable {
         case url = "URL"
@@ -17,13 +17,18 @@ struct ImageEditorSheet: View {
     @State private var remoteURL = ""
     @State private var title = ""
     @State private var widthText = ""
+    @State private var createsDerivedImage = false
+    @State private var maxWidthText = ""
+    @State private var maxHeightText = ""
+    @State private var outputFormat: ImageOutputFormat = .png
+    @State private var outputQuality = 0.85
     @State private var fileURL: URL?
     @State private var showsFileImporter = false
     @State private var isSaving = false
     @State private var errorMessage: String?
 
     init(draft: MarkdownImageDraft, documentContext: DocumentContext,
-         onSave: @escaping @MainActor (String, ImageInput, String, Int?) async throws -> Void) {
+         onSave: @escaping @MainActor (String, ImageInput, String, Int?, ImageTransformOptions?) async throws -> Void) {
         self.draft = draft
         self.documentContext = documentContext
         self.onSave = onSave
@@ -64,9 +69,29 @@ struct ImageEditorSheet: View {
                 Text("画像だけの段落では代替テキストをキャプションにも使用します。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if source == .file {
+                    Toggle("派生画像を作成する", isOn: $createsDerivedImage)
+                    if createsDerivedImage {
+                        TextField("出力の最大幅（px、任意）", text: $maxWidthText)
+                        TextField("出力の最大高さ（px、任意）", text: $maxHeightText)
+                        Picker("出力形式", selection: $outputFormat) {
+                            ForEach(ImageOutputFormat.allCases, id: \.self) { format in
+                                Text(format.rawValue).tag(format)
+                            }
+                        }
+                        if outputFormat != .png {
+                            Slider(value: $outputQuality, in: 0.1...1) {
+                                Text("画質")
+                            }
+                            Text("画質 \(Int(outputQuality * 100))%")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             .formStyle(.grouped)
-            .frame(height: source == .file && documentContext.directoryURL == nil ? 290 : 260)
+            .frame(height: source == .file ? (createsDerivedImage ? 470 : 310) : 260)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -100,6 +125,13 @@ struct ImageEditorSheet: View {
         guard !isSaving, !alt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         let width = widthText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard width.isEmpty || Int(width).map({ (1...9999).contains($0) }) == true else { return false }
+        if source == .file && createsDerivedImage {
+            for value in [maxWidthText, maxHeightText] {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard trimmed.isEmpty || Int(trimmed).map({ (1...10_000).contains($0) }) == true
+                else { return false }
+            }
+        }
         switch source {
         case .url:
             let candidate = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -122,10 +154,14 @@ struct ImageEditorSheet: View {
         }
         isSaving = true
         errorMessage = nil
+        let transform = source == .file && createsDerivedImage ? ImageTransformOptions(
+            maxWidth: Int(maxWidthText.trimmingCharacters(in: .whitespacesAndNewlines)),
+            maxHeight: Int(maxHeightText.trimmingCharacters(in: .whitespacesAndNewlines)),
+            format: outputFormat, quality: outputQuality) : nil
         Task {
             do {
                 try await onSave(alt, input, title,
-                    Int(widthText.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    Int(widthText.trimmingCharacters(in: .whitespacesAndNewlines)), transform)
                 dismiss()
             } catch {
                 errorMessage = error.localizedDescription

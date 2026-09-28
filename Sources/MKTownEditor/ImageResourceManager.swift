@@ -143,6 +143,41 @@ enum ImageImportMode: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum ImageOutputFormat: String, CaseIterable, Sendable {
+    case png = "PNG"
+    case jpeg = "JPEG"
+    case heic = "HEIC"
+
+    var type: UTType {
+        switch self {
+        case .png: .png
+        case .jpeg: .jpeg
+        case .heic: .heic
+        }
+    }
+
+    var fileExtension: String {
+        switch self {
+        case .png: "png"
+        case .jpeg: "jpg"
+        case .heic: "heic"
+        }
+    }
+}
+
+struct ImageTransformOptions: Sendable {
+    let maxWidth: Int?
+    let maxHeight: Int?
+    let format: ImageOutputFormat
+    let quality: Double
+
+    var isValid: Bool {
+        (maxWidth.map { (1...10_000).contains($0) } ?? true) &&
+        (maxHeight.map { (1...10_000).contains($0) } ?? true) &&
+        (0...1).contains(quality)
+    }
+}
+
 struct ImportedImage: Sendable {
     let relativePath: String
     let createdFileURL: URL?
@@ -255,6 +290,66 @@ struct ImageResourceManager {
         throw ImageResourceError.noAvailableName
     }
 
+    func deriveImage(at fileURL: URL, for context: DocumentContext,
+                     options: ImageTransformOptions) throws -> ImportedImage {
+        guard let directoryURL = context.directoryURL else { throw ImageResourceError.unsavedDocument }
+        guard options.isValid else { throw ImageResourceError.invalidImage }
+        let hasAccess = fileURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { fileURL.stopAccessingSecurityScopedResource() } }
+        guard fileURL.isFileURL,
+              let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+              CGImageSourceGetType(source) != nil,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let pixelWidth = properties[kCGImagePropertyPixelWidth] as? Int,
+              let pixelHeight = properties[kCGImagePropertyPixelHeight] as? Int,
+              pixelWidth > 0, pixelHeight > 0 else { throw ImageResourceError.invalidImage }
+        let orientation = (properties[kCGImagePropertyOrientation] as? Int) ?? 1
+        let rotated = (5...8).contains(orientation)
+        let width = rotated ? pixelHeight : pixelWidth
+        let height = rotated ? pixelWidth : pixelHeight
+        let scale = min(1,
+            Double(options.maxWidth ?? width) / Double(width),
+            Double(options.maxHeight ?? height) / Double(height),
+            10_000 / Double(max(width, height)))
+        let outputSize = max(1, Int(ceil(Double(max(width, height)) * scale)))
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: outputSize
+        ] as CFDictionary) else { throw ImageResourceError.invalidImage }
+        let assets = try assetsDirectory(beside: directoryURL.standardizedFileURL.resolvingSymlinksInPath())
+        let staging = assets.appendingPathComponent(".derive-\(UUID().uuidString)")
+        defer { try? fileManager.removeItem(at: staging) }
+        guard let destination = CGImageDestinationCreateWithURL(staging as CFURL,
+            options.format.type.identifier as CFString, 1, nil) else {
+            throw ImageResourceError.invalidImage
+        }
+        let encoding: CFDictionary = options.format == .png ? [:] as CFDictionary : [
+            kCGImageDestinationLossyCompressionQuality: options.quality
+        ] as CFDictionary
+        CGImageDestinationAddImage(destination, image, encoding)
+        guard CGImageDestinationFinalize(destination) else { throw ImageResourceError.invalidImage }
+        if let existing = try matchingImage(for: staging, in: assets) {
+            return ImportedImage(relativePath: "assets/\(existing.lastPathComponent)",
+                                 createdFileURL: nil)
+        }
+        let base = fileURL.deletingPathExtension().lastPathComponent + "-edited"
+        let ext = options.format.fileExtension
+        for suffix in 1...10_000 {
+            let name = suffix == 1 ? "\(base).\(ext)" : "\(base)-\(suffix).\(ext)"
+            let target = assets.appendingPathComponent(name)
+            if fileManager.fileExists(atPath: target.path) { continue }
+            do {
+                try fileManager.moveItem(at: staging, to: target)
+                return ImportedImage(relativePath: "assets/\(name)", createdFileURL: target)
+            } catch {
+                if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
+                throw error
+            }
+        }
+        throw ImageResourceError.noAvailableName
+    }
+
     func savePastedImage(_ data: Data, for context: DocumentContext,
                          now: Date = Date()) throws -> ImportedImage {
         guard let directoryURL = context.directoryURL else { throw ImageResourceError.unsavedDocument }
@@ -333,6 +428,7 @@ struct ImageResourceManager {
 enum ImageInsertionService {
     @MainActor
     static func insert(alt: String, input: ImageInput, title: String, width: Int? = nil,
+                       transform: ImageTransformOptions? = nil,
                        context: DocumentContext, model: MarkdownEditorModel,
                        currentContext: () -> DocumentContext) async throws {
         let imported: ImportedImage?
@@ -343,7 +439,11 @@ enum ImageInsertionService {
             destination = url
         case let .file(url):
             let result = try await Task.detached(priority: .userInitiated) {
-                try ImageResourceManager().importImage(at: url, for: context)
+                if let transform {
+                    return try ImageResourceManager().deriveImage(at: url, for: context,
+                                                                  options: transform)
+                }
+                return try ImageResourceManager().importImage(at: url, for: context)
             }.value
             imported = result
             destination = result.relativePath

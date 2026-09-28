@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import ImageIO
 import XCTest
 @testable import MKTownEditor
 
@@ -120,6 +121,47 @@ final class ImageResourceManagerTests: XCTestCase {
         XCTAssertNil(imported.createdFileURL)
         XCTAssertEqual(context.resolveLocalResource(imported.relativePath), image)
         XCTAssertFalse(FileManager.default.fileExists(atPath: documents.appendingPathComponent("assets").path))
+    }
+
+    func testDerivedImageResizesWithoutChangingSourceAndReusesOutput() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let original = root.appendingPathComponent("photo.png")
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40,
+            pixelsHigh: 20, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let sourceData = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        try sourceData.write(to: original)
+        let context = DocumentContext(fileURL: root.appendingPathComponent("note.md"))
+        let options = ImageTransformOptions(maxWidth: 10, maxHeight: nil,
+            format: .jpeg, quality: 0.7)
+        let manager = ImageResourceManager()
+
+        let first = try manager.deriveImage(at: original, for: context, options: options)
+        let second = try manager.deriveImage(at: original, for: context, options: options)
+
+        XCTAssertEqual(first.relativePath, "assets/photo-edited.jpg")
+        XCTAssertEqual(second.relativePath, first.relativePath)
+        XCTAssertNil(second.createdFileURL)
+        XCTAssertEqual(try Data(contentsOf: original), sourceData)
+        let output = try XCTUnwrap(first.createdFileURL)
+        let image = try XCTUnwrap(CGImageSourceCreateWithURL(output as CFURL, nil))
+        XCTAssertEqual(CGImageSourceGetType(image) as String?, "public.jpeg")
+        let properties = CGImageSourceCopyPropertiesAtIndex(image, 0, nil) as? [CFString: Any]
+        XCTAssertEqual(properties?[kCGImagePropertyPixelWidth] as? Int, 10)
+        XCTAssertEqual(properties?[kCGImagePropertyPixelHeight] as? Int, 5)
+    }
+
+    func testDerivedImageRejectsInvalidOptionsAndUnsavedDocument() throws {
+        let options = ImageTransformOptions(maxWidth: 0, maxHeight: nil,
+            format: .png, quality: 1)
+        XCTAssertThrowsError(try ImageResourceManager().deriveImage(
+            at: URL(fileURLWithPath: "/tmp/missing.png"),
+            for: DocumentContext(fileURL: nil), options: options)) {
+            XCTAssertEqual($0 as? ImageResourceError, .unsavedDocument)
+        }
+        XCTAssertFalse(options.isValid)
     }
 }
 
