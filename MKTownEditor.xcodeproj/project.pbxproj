@@ -33,6 +33,7 @@
 		A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* MarkdownTableInsertion.swift */; };
 		A1000000000000000000001C /* TableInsertionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* TableInsertionSheet.swift */; };
 		A1000000000000000000001D /* EditorPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* EditorPreferencesView.swift */; };
+		A1000000000000000000001E /* DocumentAnalysisStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* DocumentAnalysisStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +66,7 @@
 		A2000000000000000000001B /* MarkdownTableInsertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTableInsertion.swift; sourceTree = "<group>"; };
 		A2000000000000000000001C /* TableInsertionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableInsertionSheet.swift; sourceTree = "<group>"; };
 		A2000000000000000000001D /* EditorPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPreferencesView.swift; sourceTree = "<group>"; };
+		A2000000000000000000001E /* DocumentAnalysisStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAnalysisStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -111,6 +113,7 @@
 				A2000000000000000000001B /* MarkdownTableInsertion.swift */,
 				A2000000000000000000001C /* TableInsertionSheet.swift */,
 				A2000000000000000000001D /* EditorPreferencesView.swift */,
+				A2000000000000000000001E /* DocumentAnalysisStore.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -205,6 +208,7 @@
 				A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */,
 				A1000000000000000000001C /* TableInsertionSheet.swift in Sources */,
 				A1000000000000000000001D /* EditorPreferencesView.swift in Sources */,
+				A1000000000000000000001E /* DocumentAnalysisStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

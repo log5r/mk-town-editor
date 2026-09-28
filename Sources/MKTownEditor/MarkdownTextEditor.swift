@@ -7,6 +7,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
     let model: MarkdownEditorModel
     var textStyle: EditorTextStyle = EditorTextStyle()
     var layoutOptions: EditorLayoutOptions = EditorLayoutOptions()
+    var sharedSnapshot: DocumentSnapshot?
+    var usesSharedAnalysis = false
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -73,7 +75,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
         textView.registerForDraggedTypes([.fileURL])
-        MarkdownSyntaxHighlighter.apply(to: textView)
+        context.coordinator.sharedSnapshot = sharedSnapshot
+        context.coordinator.usesSharedAnalysis = usesSharedAnalysis
+        context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.isRestoringSession = false
         textView.onFocused = { [weak textView, weak model] in
@@ -102,6 +106,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        context.coordinator.sharedSnapshot = sharedSnapshot
+        context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         if context.coordinator.appliedLayoutOptions != layoutOptions {
             layoutOptions.apply(to: textView, in: scrollView)
             context.coordinator.appliedLayoutOptions = layoutOptions
@@ -115,10 +121,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
             context.coordinator.lineNumberRuler?.refresh()
         }
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
-        guard textView.string != text else { return }
+        guard textView.string != text else {
+            context.coordinator.refreshSyntax()
+            return
+        }
         let selection = textView.selectedRange()
         textView.string = text
-        MarkdownSyntaxHighlighter.apply(to: textView)
+        context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.lineNumberRuler?.refresh()
         let length = (text as NSString).length
@@ -134,6 +143,11 @@ struct MarkdownTextEditor: NSViewRepresentable {
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var appliedTextStyle: EditorTextStyle?
         var appliedLayoutOptions: EditorLayoutOptions?
+        var sharedSnapshot: DocumentSnapshot?
+        var usesSharedAnalysis = false
+        private var highlightedSource: String?
+        private var highlightedSnapshotSource: String?
+        private var highlightedWithSharedAnalysis: Bool?
         var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
@@ -144,11 +158,28 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             text = textView.string
-            MarkdownSyntaxHighlighter.apply(to: textView)
+            refreshSyntax()
             if let scrollView, let options = appliedLayoutOptions {
                 options.synchronizeWidth(of: textView, in: scrollView)
             }
             lineNumberRuler?.refresh()
+        }
+
+        @MainActor func refreshSyntax() {
+            guard let textView, !textView.hasMarkedText() else { return }
+            let source = textView.string
+            let snapshotSource = sharedSnapshot?.source
+            guard highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
+                    highlightedWithSharedAnalysis != usesSharedAnalysis else { return }
+            if usesSharedAnalysis {
+                let spans = snapshotSource == source ? sharedSnapshot?.syntaxSpans : nil
+                MarkdownSyntaxHighlighter.apply(to: textView, spans: spans ?? [])
+            } else {
+                MarkdownSyntaxHighlighter.apply(to: textView)
+            }
+            highlightedSource = source
+            highlightedSnapshotSource = snapshotSource
+            highlightedWithSharedAnalysis = usesSharedAnalysis
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

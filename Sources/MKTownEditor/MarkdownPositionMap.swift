@@ -1,13 +1,13 @@
 import Foundation
 
 /// A one-based source location. Columns count UTF-8 bytes, as Markdown parsers commonly do.
-struct MarkdownSourcePosition: Hashable {
+struct MarkdownSourcePosition: Hashable, Sendable {
     let line: Int
     let utf8Column: Int
 }
 
 /// Converts parser locations to NSTextView's UTF-16 offsets without splitting a Unicode scalar.
-struct MarkdownPositionMap {
+struct MarkdownPositionMap: Sendable {
     private let offsetsByPosition: [MarkdownSourcePosition: Int]
     private let positionsByUTF16Offset: [Int: MarkdownSourcePosition]
 

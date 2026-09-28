@@ -9,7 +9,11 @@ enum MarkdownRenderer {
 
     static func render(_ markdown: String,
                        documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        let analysis = MarkdownAnalysis(markdown)
+        render(MarkdownAnalysis(markdown), documentContext: documentContext)
+    }
+
+    static func render(_ analysis: MarkdownAnalysis,
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         return renderSequence(analysis.rootBlocks, in: analysis, context: documentContext)
     }
 
