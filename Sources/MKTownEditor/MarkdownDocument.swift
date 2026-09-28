@@ -8,7 +8,7 @@ struct MarkdownDocument: FileDocument {
 
     var text: String
 
-    init(text: String = MarkdownDocument.starterText) {
+    init(text: String = WorkspaceDocumentTemplate.starter.text) {
         self.text = text
     }
 
@@ -33,10 +33,4 @@ struct MarkdownDocument: FileDocument {
         }
         return value
     }
-
-    private static let starterText = """
-    # 無題
-
-    Markdown で書き始めましょう。
-    """
 }
