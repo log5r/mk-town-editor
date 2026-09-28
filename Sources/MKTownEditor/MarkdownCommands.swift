@@ -106,6 +106,18 @@ struct MarkdownCommands: Commands {
         CommandGroup(after: .textEditing) {
             Divider()
             commandButton(.find)
+            Button("次を検索") { editorModel?.findNext() }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(editorModel == nil)
+            Button("前を検索") { editorModel?.findPrevious() }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(editorModel == nil)
+            Button("置換…") { editorModel?.showReplaceBar() }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+                .disabled(editorModel == nil)
+            Button("すべて置換") { editorModel?.replaceAllMatches() }
+                .keyboardShortcut("r", modifiers: [.command, .option, .shift])
+                .disabled(editorModel?.canExecuteCommand != true)
         }
 
         CommandMenu("Markdown") {
