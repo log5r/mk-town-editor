@@ -26,7 +26,8 @@ struct MarkdownPreview: View {
                             } else if let task = block.task {
                                 taskView(block, task: task, in: analysis)
                             } else {
-                                Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis)))
+                                Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
+                                                                                 documentContext: documentContext)))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -39,7 +40,7 @@ struct MarkdownPreview: View {
                 .padding(.vertical, 24)
             }
         } else {
-            MarkdownTextPreview(markdown: markdown)
+            MarkdownTextPreview(markdown: markdown, documentContext: documentContext)
         }
     }
 
@@ -56,7 +57,8 @@ struct MarkdownPreview: View {
             .disabled(onToggleTask == nil)
 
             Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
-                                                               showTaskPrefix: false)))
+                                                               showTaskPrefix: false,
+                                                               documentContext: documentContext)))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -97,7 +99,8 @@ struct MarkdownPreview: View {
     ) -> some View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
-                Text(AttributedString(MarkdownRenderer.renderTableCell(cells[column], in: analysis)))
+                Text(AttributedString(MarkdownRenderer.renderTableCell(cells[column], in: analysis,
+                                                                       documentContext: documentContext)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -122,6 +125,7 @@ struct MarkdownPreview: View {
 
 private struct MarkdownTextPreview: NSViewRepresentable {
     let markdown: String
+    let documentContext: DocumentContext
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -154,6 +158,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     }
 
     private func update(_ textView: NSTextView) {
-        textView.textStorage?.setAttributedString(MarkdownRenderer.render(markdown))
+        textView.textStorage?.setAttributedString(MarkdownRenderer.render(markdown,
+                                                                         documentContext: documentContext))
     }
 }

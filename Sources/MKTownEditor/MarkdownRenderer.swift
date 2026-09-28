@@ -7,24 +7,30 @@ enum MarkdownRenderer {
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
     )
 
-    static func render(_ markdown: String) -> NSAttributedString {
+    static func render(_ markdown: String,
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         let analysis = MarkdownAnalysis(markdown)
-        return renderSequence(analysis.rootBlocks, in: analysis)
+        return renderSequence(analysis.rootBlocks, in: analysis, context: documentContext)
     }
 
     static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
-                           showTaskPrefix: Bool = true) -> NSAttributedString {
-        render(block, references: analysis.references, showTaskPrefix: showTaskPrefix)
+                           showTaskPrefix: Bool = true,
+                           documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
+        render(block, references: analysis.references, showTaskPrefix: showTaskPrefix,
+               context: documentContext)
     }
 
-    static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis) -> NSAttributedString {
-        inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references)
+    static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis,
+                                documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
+        inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references,
+               context: documentContext)
     }
 
-    private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis) -> NSAttributedString {
+    private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
+                                       context: DocumentContext) -> NSAttributedString {
         let output = NSMutableAttributedString()
         for (index, block) in blocks.enumerated() {
-            output.append(renderTree(block, in: analysis))
+            output.append(renderTree(block, in: analysis, context: context))
             if index < blocks.count - 1 {
                 output.append(NSAttributedString(string: "\n"))
             }
@@ -32,15 +38,17 @@ enum MarkdownRenderer {
         return output
     }
 
-    private static func renderTree(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> NSAttributedString {
+    private static func renderTree(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                                   context: DocumentContext) -> NSAttributedString {
         let children = analysis.children(of: block)
         if block.kind == .quote {
-            return quote(renderSequence(children, in: analysis))
+            return quote(renderSequence(children, in: analysis, context: context))
         }
-        let output = NSMutableAttributedString(attributedString: render(block, references: analysis.references))
+        let output = NSMutableAttributedString(attributedString: render(block, references: analysis.references,
+                                                                       context: context))
         if !children.isEmpty {
             output.append(NSAttributedString(string: "\n"))
-            output.append(renderSequence(children, in: analysis))
+            output.append(renderSequence(children, in: analysis, context: context))
         }
         return output
     }
@@ -68,7 +76,8 @@ enum MarkdownRenderer {
     }
 
     private static func render(
-        _ block: MarkdownBlock, references: [String: MarkdownReference], showTaskPrefix: Bool = true
+        _ block: MarkdownBlock, references: [String: MarkdownReference], showTaskPrefix: Bool = true,
+        context: DocumentContext
     ) -> NSAttributedString {
         switch block.kind {
         case .blank:
@@ -91,14 +100,14 @@ enum MarkdownRenderer {
             return inline(
                 paragraphContent(block),
                 baseFont: .systemFont(ofSize: sizes[level - 1], weight: level < 3 ? .bold : .semibold),
-                paragraphSpacing: level < 3 ? 14 : 9, references: references
+                paragraphSpacing: level < 3 ? 14 : 9, references: references, context: context
             )
         case .quote:
             return NSAttributedString(string: "")
         case .unorderedList:
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
-                                 baseFont: .systemFont(ofSize: 15), references: references)
+                                 baseFont: .systemFont(ofSize: 15), references: references, context: context)
             if showTaskPrefix || task == nil {
                 let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
                 content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
@@ -108,7 +117,7 @@ enum MarkdownRenderer {
         case let .orderedList(number):
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
-                                 baseFont: .systemFont(ofSize: 15), references: references)
+                                 baseFont: .systemFont(ofSize: 15), references: references, context: context)
             let prefix = showTaskPrefix
                 ? task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
                     ?? "\(number).  "
@@ -119,7 +128,7 @@ enum MarkdownRenderer {
             return content
         case .paragraph:
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
-                                 references: references)
+                                 references: references, context: context)
             if block.parentID != nil {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
             }
@@ -152,7 +161,8 @@ enum MarkdownRenderer {
         baseFont: NSFont,
         color: NSColor = .textColor,
         paragraphSpacing: CGFloat = 8,
-        references: [String: MarkdownReference] = [:]
+        references: [String: MarkdownReference] = [:],
+        context: DocumentContext
     ) -> NSMutableAttributedString {
         let resolved = resolveReferences(in: markdown, using: references)
         let options = AttributedString.MarkdownParsingOptions(
@@ -186,6 +196,36 @@ enum MarkdownRenderer {
             result.addAttribute(.font, value: font, range: range)
         }
 
+        var images: [(NSRange, URL, String)] = []
+        result.enumerateAttribute(.imageURL, in: fullRange) { value, range, _ in
+            guard let url = value as? URL else { return }
+            let alt = (result.attribute(.alternateDescription, at: range.location,
+                                        effectiveRange: nil) as? String)
+                ?? result.attributedSubstring(from: range).string
+            images.append((range, url, alt))
+        }
+        for (range, url, alt) in images.reversed() {
+            let replacement: NSAttributedString
+            if url.scheme == nil,
+               let fileURL = context.resolveLocalResource(url.relativeString),
+               let image = ImageResourceManager().previewImage(at: fileURL, alt: alt) {
+                let attachment = MarkdownImageAttachment()
+                attachment.image = image
+                attachment.bounds = NSRect(origin: .zero, size: image.size)
+                let value = NSMutableAttributedString(attachment: attachment)
+                value.addAttribute(.alternateDescription, value: alt,
+                                   range: NSRange(location: 0, length: value.length))
+                replacement = value
+            } else {
+                let value = NSMutableAttributedString(string: "画像: \(alt)",
+                                                      attributes: baseAttributes(font: baseFont, color: color,
+                                                                                 paragraphSpacing: paragraphSpacing))
+                value.addAttribute(.link, value: url, range: NSRange(location: 0, length: value.length))
+                replacement = value
+            }
+            result.replaceCharacters(in: range, with: replacement)
+        }
+
         return result
     }
 
@@ -212,9 +252,10 @@ enum MarkdownRenderer {
                 ? label : source.substring(with: explicitRange)
             guard let reference = references[MarkdownAnalysis.normalizedReferenceLabel(key)] else { continue }
             let isImage = match.range(at: 1).length > 0
-            let title = isImage ? "画像: \(label)" : label
-            result.replaceCharacters(in: match.range,
-                                     with: "[\(title)](<\(reference.destination)>)")
+            let replacement = isImage
+                ? "![\(label)](<\(reference.destination)>)"
+                : "[\(label)](<\(reference.destination)>)"
+            result.replaceCharacters(in: match.range, with: replacement)
         }
         return result as String
     }
@@ -250,5 +291,18 @@ enum MarkdownRenderer {
         paragraph.lineSpacing = 3
         paragraph.paragraphSpacing = 4
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+    }
+}
+
+final class MarkdownImageAttachment: NSTextAttachment {
+    override func attachmentBounds(for textContainer: NSTextContainer?,
+                                   proposedLineFragment lineFrag: CGRect,
+                                   glyphPosition position: CGPoint,
+                                   characterIndex charIndex: Int) -> CGRect {
+        let original = image?.size ?? bounds.size
+        guard original.width > 0, original.height > 0 else { return .zero }
+        let availableWidth = max(80, lineFrag.maxX - position.x - 8)
+        let scale = min(1, availableWidth / original.width)
+        return CGRect(x: 0, y: 0, width: original.width * scale, height: original.height * scale)
     }
 }
