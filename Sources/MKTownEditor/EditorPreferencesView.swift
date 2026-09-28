@@ -34,6 +34,7 @@ struct EditorPreferencesView: View {
             }
             Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
             Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
+            Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
             Section("校正") {
                 Picker("スペルチェックの言語", selection: proofingBinding(\.language)) {
                     ForEach(ProofingLanguage.allCases, id: \.self) { language in

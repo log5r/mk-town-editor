@@ -82,13 +82,14 @@ final class PreviewRenderCache: ObservableObject {
     private var footnotes: [FootnoteSignature]?
     private var context: DocumentContext?
     private var zoom: Double?
+    private var remoteRevision: Int?
     private(set) var renderCount = 0
 
     func render(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                 context: DocumentContext, zoom: Double,
-                showsTaskPrefix: Bool = true) -> NSAttributedString {
+                showsTaskPrefix: Bool = true, remoteRevision: Int = 0) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
-                context: context, zoom: zoom)
+                context: context, zoom: zoom, remoteRevision: remoteRevision)
         let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
         if let cached = blocks[signature] { return cached }
         let rendered = PreviewTypography.scaled(
@@ -102,9 +103,9 @@ final class PreviewRenderCache: ObservableObject {
 
     func renderCell(_ markdown: String,
                     in analysis: MarkdownAnalysis, context: DocumentContext,
-                    zoom: Double) -> NSAttributedString {
+                    zoom: Double, remoteRevision: Int = 0) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
-                context: context, zoom: zoom)
+                context: context, zoom: zoom, remoteRevision: remoteRevision)
         if let cached = cells[markdown] { return cached }
         let rendered = PreviewTypography.scaled(
             MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context),
@@ -117,7 +118,8 @@ final class PreviewRenderCache: ObservableObject {
 
     private func prepare(references newReferences: [String: MarkdownReference],
                          footnotes newFootnotes: MarkdownFootnoteIndex,
-                         context newContext: DocumentContext, zoom newZoom: Double) {
+                         context newContext: DocumentContext, zoom newZoom: Double,
+                         remoteRevision newRemoteRevision: Int) {
         let signatures = newReferences.mapValues {
             ReferenceSignature(destination: $0.destination, title: $0.title)
         }
@@ -125,13 +127,15 @@ final class PreviewRenderCache: ObservableObject {
             FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
         }
         guard references != signatures || footnotes != noteSignatures ||
-              context != newContext || zoom != newZoom else { return }
+              context != newContext || zoom != newZoom ||
+              remoteRevision != newRemoteRevision else { return }
         blocks.removeAll()
         cells.removeAll()
         references = signatures
         footnotes = noteSignatures
         context = newContext
         zoom = newZoom
+        remoteRevision = newRemoteRevision
     }
 
     private func trimIfNeeded() {

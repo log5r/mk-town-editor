@@ -1,7 +1,99 @@
 import AppKit
+import Combine
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
+
+@MainActor
+final class RemoteImageStore: ObservableObject {
+    static let shared = RemoteImageStore()
+    @Published private(set) var revision = 0
+    private let images = NSCache<NSURL, NSImage>()
+    private var failed = Set<URL>()
+    private var inFlight = Set<URL>()
+    private(set) var isEnabled = false
+    private let fetch: @Sendable (URL) async throws -> Data
+
+    init(fetch: @escaping @Sendable (URL) async throws -> Data = { url in
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode), data.count <= 10_000_000 else {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }) {
+        self.fetch = fetch
+        images.totalCostLimit = 40_000_000
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        guard isEnabled != enabled else { return }
+        isEnabled = enabled
+        if !enabled {
+            images.removeAllObjects()
+            failed.removeAll()
+        }
+        revision += 1
+    }
+
+    func image(for url: URL) -> NSImage? {
+        guard isEnabled else { return nil }
+        return images.object(forKey: url as NSURL)
+    }
+
+    func hasFailed(_ url: URL) -> Bool { isEnabled && failed.contains(url) }
+
+    static func referencedURLs(in markdown: String) -> Set<URL> {
+        let analysis = MarkdownAnalysis(markdown)
+        let masked = NSMutableString(string: markdown)
+        let codeBlocks = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
+        for range in codeBlocks.sorted(by: { $0.location > $1.location }) {
+            masked.replaceCharacters(in: range, with: String(repeating: " ", count: range.length))
+        }
+        for range in MarkdownInlineSyntax.codeSpanRanges(in: masked as String)
+            .sorted(by: { $0.location > $1.location }) {
+            masked.replaceCharacters(in: range, with: String(repeating: " ", count: range.length))
+        }
+        let resolved = MarkdownRenderer.resolveReferences(in: masked as String,
+            using: analysis.references)
+        return Set(MarkdownLinkSyntax.inlineLinks(in: resolved)
+            .filter(\.isImage)
+            .compactMap { URL(string: $0.destination) }
+            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
+    }
+
+    func load(_ url: URL) async {
+        guard isEnabled, ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              images.object(forKey: url as NSURL) == nil,
+              !failed.contains(url), !inFlight.contains(url) else { return }
+        inFlight.insert(url)
+        defer { inFlight.remove(url) }
+        do {
+            let data = try await fetch(url)
+            guard isEnabled, !Task.isCancelled, data.count <= 10_000_000,
+                  let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  CGImageSourceGetType(source) != nil,
+                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 960
+                  ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+            let scale = min(1, 480 / CGFloat(thumbnail.width), 320 / CGFloat(thumbnail.height))
+            let image = NSImage(cgImage: thumbnail,
+                size: NSSize(width: CGFloat(thumbnail.width) * scale,
+                             height: CGFloat(thumbnail.height) * scale))
+            images.setObject(image, forKey: url as NSURL,
+                cost: thumbnail.width * thumbnail.height * 4)
+            revision += 1
+        } catch {
+            guard isEnabled, !Task.isCancelled else { return }
+            failed.insert(url)
+            revision += 1
+        }
+    }
+}
 
 enum ImageInput: Sendable {
     case remote(String)
