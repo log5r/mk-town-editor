@@ -337,6 +337,13 @@ final class MarkdownEditorModel: ObservableObject {
         linkDraft = MarkdownLinkSyntax.draft(in: textView.string, selection: textView.selectedRange())
     }
 
+    func convertLinkForm() {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              let edit = MarkdownReferenceConversion.edit(in: textView.string,
+                  selection: textView.selectedRange()) else { return }
+        _ = perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func commitLink(label: String, destination: String, title: String) -> Bool {
         guard let draft = linkDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),

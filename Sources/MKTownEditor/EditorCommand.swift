@@ -6,6 +6,7 @@ enum EditorCommand: Hashable {
     case strikethrough
     case inlineCode
     case link
+    case convertLinkForm
     case footnote
     case heading(level: Int)
     case quote
@@ -39,7 +40,7 @@ enum EditorCommand: Hashable {
     static let toolbar: [Self] = [.bold, .italic, .link]
     static let palette: [Self] = [
         .bold, .italic, .strikethrough, .inlineCode, .removeFormatting,
-        .link, .footnote, .image, .table, .snippet,
+        .link, .convertLinkForm, .footnote, .image, .table, .snippet,
         .heading(level: 0), .heading(level: 1), .heading(level: 2),
         .heading(level: 3), .heading(level: 4), .heading(level: 5), .heading(level: 6),
         .quote, .plainBlock, .unorderedList, .orderedList, .taskList,
@@ -49,7 +50,7 @@ enum EditorCommand: Hashable {
         .deleteLines, .expandSelection, .shrinkSelection, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .link, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -58,6 +59,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: "取り消し線"
         case .inlineCode: "インラインコード"
         case .link: "リンク"
+        case .convertLinkForm: "参照形式／インライン形式を変換"
         case .footnote: "脚注を挿入"
         case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
         case .quote: "引用"
@@ -97,6 +99,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: "strikethrough"
         case .inlineCode: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
+        case .convertLinkForm: "arrow.left.arrow.right"
         case .footnote: "text.badge.plus"
         case .heading: "number"
         case .quote: "text.quote"
@@ -136,6 +139,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: ("x", [.command, .shift])
         case .inlineCode: ("`", .command)
         case .link: ("k", .command)
+        case .convertLinkForm: nil
         case .footnote: nil
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
         case .quote: (">", [.command, .shift])
@@ -198,6 +202,10 @@ enum EditorCommand: Hashable {
             guard let view = model?.textView else { return false }
             return MarkdownFormatter.commentEdit(in: view.string,
                 selection: view.selectedRange()) != nil
+        case .convertLinkForm:
+            guard let view = model?.textView else { return false }
+            return MarkdownReferenceConversion.edit(in: view.string,
+                selection: view.selectedRange()) != nil
         case .snippet:
             return !(model?.snippets.isEmpty ?? true)
         default: return true
@@ -213,6 +221,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: model.apply(.strikethrough)
         case .inlineCode: model.apply(.inlineCode)
         case .link: model.presentLinkEditor()
+        case .convertLinkForm: model.convertLinkForm()
         case .footnote: model.insertFootnote()
         case let .heading(level): model.apply(.heading(level: level))
         case .quote: model.apply(.quote)

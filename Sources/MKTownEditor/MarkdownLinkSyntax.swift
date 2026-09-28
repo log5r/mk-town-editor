@@ -137,6 +137,13 @@ enum MarkdownLinkSyntax {
         makeInline(prefix: "!", label: alt, destination: destination, title: title)
     }
 
+    static func referenceTarget(destination: String, title: String) -> String {
+        let titlePart = title.isEmpty ? "" : " \"\(escapeTitle(title))\""
+        return escapeDestination(destination) + titlePart
+    }
+
+    static func unescapedLabel(_ label: String) -> String { unescape(label) }
+
     private static func makeInline(prefix: String, label: String, destination: String,
                                    title: String, rawLabel: String? = nil) -> String {
         let linkLabel = rawLabel ?? escapeLabel(label)
@@ -320,6 +327,84 @@ enum MarkdownLinkSyntax {
     private static func isASCIIPunctuation(_ value: unichar) -> Bool {
         (33...47).contains(value) || (58...64).contains(value) ||
             (91...96).contains(value) || (123...126).contains(value)
+    }
+}
+
+enum MarkdownReferenceConversion {
+    private static let reference = try! NSRegularExpression(
+        pattern: #"(?<!!)\[((?:\\.|[^\\\]\n])+)\](?:\[((?:\\.|[^\\\]\n])*)\])?"#)
+
+    static func edit(in text: String, selection: NSRange) -> MarkdownEdit? {
+        let source = text as NSString
+        guard selection.location >= 0, NSMaxRange(selection) <= source.length else { return nil }
+        let analysis = MarkdownAnalysis(text)
+        let code = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
+            MarkdownInlineSyntax.codeSpanRanges(in: text)
+        func contains(_ range: NSRange) -> Bool {
+            selection.length == 0
+                ? selection.location >= range.location && selection.location < NSMaxRange(range)
+                : selection.location >= range.location && NSMaxRange(selection) <= NSMaxRange(range)
+        }
+        if let link = MarkdownLinkSyntax.inlineLinks(in: text).first(where: { link in
+            !link.isImage && contains(link.range) &&
+                !code.contains(where: { NSLocationInRange(link.range.location, $0) })
+        }) {
+            let draft = MarkdownLinkSyntax.draft(in: text, selection: selection)
+            guard draft.isExisting, draft.range == link.range else { return nil }
+            let matching = analysis.references.keys.sorted().first { key in
+                guard let value = analysis.references[key] else { return false }
+                return value.destination.replacingOccurrences(of: "%20", with: " ") == draft.destination &&
+                    (value.title ?? "") == draft.title
+            }
+            var id = matching ?? draft.label
+                .replacingOccurrences(of: "[", with: "-")
+                .replacingOccurrences(of: "]", with: "-")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if id.isEmpty { id = "link" }
+            let needsDefinition = matching == nil
+            if needsDefinition {
+                let base = id
+                var suffix = 2
+                while analysis.references[MarkdownAnalysis.normalizedReferenceLabel(id)] != nil {
+                    id = "\(base)-\(suffix)"
+                    suffix += 1
+                }
+            }
+            let newLink = "[\(draft.rawLabel ?? draft.label)][\(id)]"
+            if !needsDefinition {
+                return MarkdownEdit(range: link.range, replacement: newLink,
+                    selection: NSRange(location: link.range.location + (newLink as NSString).length,
+                                       length: 0))
+            }
+            let suffix = source.substring(from: NSMaxRange(link.range))
+            let separator = text.hasSuffix("\n") ? "\n" : "\n\n"
+            let target = MarkdownLinkSyntax.referenceTarget(
+                destination: draft.destination, title: draft.title)
+            let definition = "[\(id)]: \(target)"
+            return MarkdownEdit(range: NSRange(location: link.range.location,
+                                               length: source.length - link.range.location),
+                replacement: newLink + suffix + separator + definition,
+                selection: NSRange(location: link.range.location + (newLink as NSString).length,
+                                   length: 0))
+        }
+        for match in reference.matches(in: text,
+            range: NSRange(location: 0, length: source.length)) where contains(match.range) {
+            if code.contains(where: { NSLocationInRange(match.range.location, $0) }) { continue }
+            let end = NSMaxRange(match.range)
+            if end < source.length && [40, 58].contains(source.character(at: end)) { continue }
+            let label = source.substring(with: match.range(at: 1))
+            let explicit = match.range(at: 2)
+            let id = explicit.location == NSNotFound || explicit.length == 0
+                ? label : source.substring(with: explicit)
+            guard let definition = analysis.references[MarkdownAnalysis.normalizedReferenceLabel(id)]
+            else { continue }
+            let newLink = MarkdownLinkSyntax.makeLink(label: MarkdownLinkSyntax.unescapedLabel(label),
+                destination: definition.destination, title: definition.title ?? "")
+            return MarkdownEdit(range: match.range, replacement: newLink,
+                selection: NSRange(location: match.range.location + (newLink as NSString).length,
+                                   length: 0))
+        }
+        return nil
     }
 }
 
