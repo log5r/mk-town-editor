@@ -166,6 +166,28 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(plain.applying(to: "本文"), "本文")
     }
 
+    func testRenumberListAtCaretKeepsStartAndRenumbersOnlySiblingItems() {
+        let source = "4. 親\n  7. 子\n  9. 子\n8. 次\n\n2. 別"
+        let caret = (source as NSString).range(of: "親").location
+        let edit = MarkdownFormatter.apply(.renumberList, to: source,
+            selection: NSRange(location: caret, length: 0))
+        XCTAssertEqual(edit.applying(to: source), "4. 親\n  7. 子\n  9. 子\n5. 次\n\n2. 別")
+    }
+
+    func testRenumberSelectedNestedListWithoutChangingOuterSequence() {
+        let source = "4. 親\r\n  7) 子🙂\r\n  9) 次\r\n8. 親"
+        let selected = (source as NSString).range(of: "子🙂\r\n  9) 次")
+        let edit = MarkdownFormatter.apply(.renumberList, to: source, selection: selected)
+        XCTAssertEqual(edit.applying(to: source), "4. 親\r\n  7) 子🙂\r\n  8) 次\r\n8. 親")
+    }
+
+    func testRenumberListOutsideOrderedItemIsNoOp() {
+        let source = "- bullet\n本文"
+        let edit = MarkdownFormatter.apply(.renumberList, to: source,
+            selection: NSRange(location: 1, length: 0))
+        XCTAssertEqual(edit.applying(to: source), source)
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
