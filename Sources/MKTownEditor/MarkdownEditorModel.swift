@@ -6,6 +6,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
     @Published private(set) var hasActiveEditor = false
     @Published var linkDraft: MarkdownLinkDraft?
+    @Published var imageDraft: MarkdownImageDraft?
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
@@ -95,6 +96,21 @@ final class MarkdownEditorModel: ObservableObject {
                                                  label: label, destination: destination, title: title),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         linkDraft = nil
+        return true
+    }
+
+    func presentImageEditor() {
+        guard canExecuteCommand, let textView else { return }
+        imageDraft = MarkdownLinkSyntax.imageDraft(in: textView.string, selection: textView.selectedRange())
+    }
+
+    func commitImage(alt: String, destination: String, title: String) -> Bool {
+        guard let draft = imageDraft, let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownLinkSyntax.imageEdit(in: textView.string, draft: draft,
+                                                      alt: alt, destination: destination, title: title),
+              perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
+        imageDraft = nil
         return true
     }
 

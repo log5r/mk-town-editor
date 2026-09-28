@@ -13,7 +13,39 @@ struct MarkdownLinkDraft: Identifiable {
     var title: String
 }
 
+struct MarkdownImageDraft: Identifiable {
+    let id = UUID()
+    let range: NSRange
+    let originalDocumentText: String
+    let originalText: String
+    let alt: String
+}
+
 enum MarkdownLinkSyntax {
+    static func imageDraft(in text: String, selection: NSRange) -> MarkdownImageDraft {
+        let source = text as NSString
+        let location = min(max(selection.location, 0), source.length)
+        let range = NSRange(location: location,
+                            length: min(max(selection.length, 0), source.length - location))
+        let selected = source.substring(with: range)
+        return MarkdownImageDraft(range: range, originalDocumentText: text,
+                                  originalText: selected, alt: selected)
+    }
+
+    static func imageEdit(in text: String, draft: MarkdownImageDraft,
+                          alt: String, destination: String, title: String) -> MarkdownEdit? {
+        let source = text as NSString
+        guard text == draft.originalDocumentText,
+              draft.range.location <= source.length,
+              NSMaxRange(draft.range) <= source.length,
+              source.substring(with: draft.range) == draft.originalText,
+              !alt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let image = makeImage(alt: alt, destination: destination, title: title)
+        return MarkdownEdit(range: draft.range, replacement: image,
+                            selection: NSRange(location: draft.range.location + (image as NSString).length, length: 0))
+    }
+
     static func draft(in text: String, selection: NSRange) -> MarkdownLinkDraft {
         let source = text as NSString
         let location = min(max(selection.location, 0), source.length)
@@ -46,10 +78,20 @@ enum MarkdownLinkSyntax {
 
     static func makeLink(label: String, destination: String, title: String = "",
                          rawLabel: String? = nil) -> String {
+        makeInline(prefix: "", label: label, destination: destination, title: title,
+                   rawLabel: rawLabel)
+    }
+
+    static func makeImage(alt: String, destination: String, title: String = "") -> String {
+        makeInline(prefix: "!", label: alt, destination: destination, title: title)
+    }
+
+    private static func makeInline(prefix: String, label: String, destination: String,
+                                   title: String, rawLabel: String? = nil) -> String {
         let linkLabel = rawLabel ?? escapeLabel(label)
         let escapedDestination = escapeDestination(destination)
         let titlePart = title.isEmpty ? "" : " \"\(escapeTitle(title))\""
-        return "[\(linkLabel)](\(escapedDestination)\(titlePart))"
+        return "\(prefix)[\(linkLabel)](\(escapedDestination)\(titlePart))"
     }
 
     static func escapeDestination(_ destination: String) -> String {
