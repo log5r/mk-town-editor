@@ -97,6 +97,37 @@ enum MarkdownSectionMove {
     }
 }
 
+enum MarkdownSectionLevel {
+    static func edit(in text: String, headingLocation: Int, by delta: Int) -> MarkdownEdit? {
+        guard delta == -1 || delta == 1 else { return nil }
+        let source = text as NSString
+        let entries = MarkdownOutline.entries(in: MarkdownAnalysis(text))
+        guard let index = entries.firstIndex(where: {
+            $0.sourceRange.location == headingLocation
+        }) else { return nil }
+        let end = entries.dropFirst(index + 1).first {
+            $0.level <= entries[index].level
+        }?.sourceRange.location ?? source.length
+        let selected = entries.dropFirst(index).prefix { $0.sourceRange.location < end }
+        guard selected.allSatisfy({ (1...6).contains($0.level + delta) }) else { return nil }
+        let sectionStart = entries[index].sourceRange.location
+        let range = NSRange(location: sectionStart, length: end - sectionStart)
+        let replacement = NSMutableString(string: source.substring(with: range))
+        for entry in selected.reversed() {
+            let original = source.substring(with: entry.sourceRange)
+            let lineEnding = original.hasSuffix("\r\n") ? "\r\n" :
+                original.hasSuffix("\n") ? "\n" : original.hasSuffix("\r") ? "\r" : ""
+            let prefix = String(repeating: "#", count: entry.level + delta) + " "
+            let updated = prefix + entry.title + lineEnding
+            replacement.replaceCharacters(in: NSRange(
+                location: entry.sourceRange.location - sectionStart,
+                length: entry.sourceRange.length), with: updated)
+        }
+        return MarkdownEdit(range: range, replacement: replacement as String,
+            selection: NSRange(location: sectionStart, length: 0))
+    }
+}
+
 enum MarkdownSelectionExpansion {
     static func next(in text: String, selection: NSRange) -> NSRange? {
         let length = (text as NSString).length

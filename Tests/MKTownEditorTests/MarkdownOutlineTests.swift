@@ -73,4 +73,37 @@ final class MarkdownOutlineTests: XCTestCase {
         XCTAssertNil(MarkdownSectionMove.edit(in: source,
             headingLocation: other, direction: .down))
     }
+
+    func testSectionLevelChangesParentAndChildrenButNotFollowingSection() throws {
+        let source = "# Parent\n## Child\ntext\n### Deep\nmore\n# Next\nend"
+        let location = (source as NSString).range(of: "# Parent").location
+        let edit = try XCTUnwrap(MarkdownSectionLevel.edit(in: source,
+            headingLocation: location, by: 1))
+        XCTAssertEqual(edit.applying(to: source),
+            "## Parent\n### Child\ntext\n#### Deep\nmore\n# Next\nend")
+        XCTAssertNil(MarkdownSectionLevel.edit(in: source,
+            headingLocation: location, by: -1))
+        let deep = (source as NSString).range(of: "### Deep").location
+        let promoted = try XCTUnwrap(MarkdownSectionLevel.edit(in: source,
+            headingLocation: deep, by: -1))
+        XCTAssertTrue(try XCTUnwrap(promoted.applying(to: source)).contains("## Deep\nmore"))
+    }
+
+    func testSectionLevelConvertsSetextAndRejectsH6Overflow() throws {
+        let source = "Title\n=====\n## Child\n###### Deep\n"
+        let start = 0
+        XCTAssertNil(MarkdownSectionLevel.edit(in: source,
+            headingLocation: start, by: 1))
+        let child = (source as NSString).range(of: "## Child").location
+        XCTAssertNil(MarkdownSectionLevel.edit(in: source,
+            headingLocation: child, by: 1))
+        let simple = "Title\n=====\nbody\n"
+        let edit = try XCTUnwrap(MarkdownSectionLevel.edit(in: simple,
+            headingLocation: 0, by: 1))
+        XCTAssertEqual(edit.applying(to: simple), "## Title\nbody\n")
+        let crlf = "## 親\r\n### 子\r\n本文"
+        let crlfEdit = try XCTUnwrap(MarkdownSectionLevel.edit(in: crlf,
+            headingLocation: 0, by: -1))
+        XCTAssertEqual(crlfEdit.applying(to: crlf), "# 親\r\n## 子\r\n本文")
+    }
 }

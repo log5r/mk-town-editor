@@ -351,6 +351,13 @@ final class MarkdownEditorModel: ObservableObject {
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
+    func changeSectionLevel(at headingLocation: Int, by delta: Int) {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              let edit = MarkdownSectionLevel.edit(in: textView.string,
+                  headingLocation: headingLocation, by: delta) else { return }
+        _ = perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func commitLink(label: String, destination: String, title: String) -> Bool {
         guard let draft = linkDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),

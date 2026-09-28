@@ -984,6 +984,19 @@ struct EditorWorkspace: View {
                 .disabled(editorModel.textView == nil ||
                     MarkdownSectionMove.edit(in: document.text,
                         headingLocation: entry.sourceRange.location, direction: .down) == nil)
+                Divider()
+                Button("見出しと子見出しを昇格") {
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: -1)
+                }
+                .disabled(editorModel.textView == nil ||
+                    MarkdownSectionLevel.edit(in: document.text,
+                        headingLocation: entry.sourceRange.location, by: -1) == nil)
+                Button("見出しと子見出しを降格") {
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: 1)
+                }
+                .disabled(editorModel.textView == nil ||
+                    MarkdownSectionLevel.edit(in: document.text,
+                        headingLocation: entry.sourceRange.location, by: 1) == nil)
             }
             .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
             .disabled(analysisStore.snapshot?.source != document.text)
