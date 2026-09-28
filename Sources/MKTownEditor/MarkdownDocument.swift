@@ -7,16 +7,23 @@ struct MarkdownDocument: FileDocument {
     static let writableContentTypes: [UTType] = [markdownType]
 
     var text: String
+    var format = MarkdownTextFormat()
 
     init(text: String = WorkspaceDocumentTemplate.starter.text) {
         self.text = text
+    }
+
+    init(data: Data) throws {
+        let result = try MarkdownTextFormat.read(data)
+        text = result.text
+        format = result.format
     }
 
     init(configuration: ReadConfiguration) throws {
         guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        text = try Self.decode(data)
+        self = try Self(data: data)
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
@@ -24,13 +31,10 @@ struct MarkdownDocument: FileDocument {
     }
 
     func encodedData() -> Data {
-        Data(text.utf8)
+        format.encode(text)
     }
 
     static func decode(_ data: Data) throws -> String {
-        guard let value = String(data: data, encoding: .utf8) else {
-            throw CocoaError(.fileReadInapplicableStringEncoding)
-        }
-        return value
+        try MarkdownTextFormat.read(data).text
     }
 }

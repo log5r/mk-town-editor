@@ -68,6 +68,16 @@ private struct OpenEncodingImportActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct TextFormatActions {
+    let format: MarkdownTextFormat
+    let setNewline: (MarkdownTextFormat.Newline) -> Void
+    let setBOM: (Bool) -> Void
+}
+
+private struct TextFormatActionsKey: FocusedValueKey {
+    typealias Value = TextFormatActions
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -126,6 +136,10 @@ extension FocusedValues {
         get { self[OpenEncodingImportActionKey.self] }
         set { self[OpenEncodingImportActionKey.self] = newValue }
     }
+    var textFormatActions: TextFormatActions? {
+        get { self[TextFormatActionsKey.self] }
+        set { self[TextFormatActionsKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -143,6 +157,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
     @FocusedValue(\.openQuickFileAction) private var openQuickFileAction
     @FocusedValue(\.openEncodingImportAction) private var openEncodingImportAction
+    @FocusedValue(\.textFormatActions) private var textFormatActions
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
@@ -186,6 +201,33 @@ struct MarkdownCommands: Commands {
         CommandMenu("文字コード") {
             Button("文字コードを指定して取り込む…") { openEncodingImportAction?() }
                 .disabled(openEncodingImportAction == nil)
+            Divider()
+            Text("改行形式")
+            ForEach(MarkdownTextFormat.Newline.allCases) { newline in
+                Button {
+                    textFormatActions?.setNewline(newline)
+                } label: {
+                    if textFormatActions?.format.newline == newline {
+                        Label(newline.title, systemImage: "checkmark")
+                    } else {
+                        Text(newline.title)
+                    }
+                }
+                .disabled(textFormatActions == nil)
+            }
+            Divider()
+            Button {
+                if let format = textFormatActions?.format {
+                    textFormatActions?.setBOM(!format.hasUTF8BOM)
+                }
+            } label: {
+                if textFormatActions?.format.hasUTF8BOM == true {
+                    Label("UTF-8 BOM", systemImage: "checkmark")
+                } else {
+                    Text("UTF-8 BOM")
+                }
+            }
+            .disabled(textFormatActions == nil)
         }
         CommandMenu("表示倍率") {
             Text("編集: \(Int((settingsStore.zoom(for: .editor) * 100).rounded()))%")
