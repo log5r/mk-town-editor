@@ -5,10 +5,47 @@ import Combine
 final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
     weak var textView: NSTextView?
+    private(set) var scrollOrigin = NSPoint.zero
+    private(set) var shouldRestoreFocus = false
 
-    func connect(_ textView: NSTextView) {
+    func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        let length = (textView.string as NSString).length
+        let location = min(selectedRange.location, length)
+        textView.setSelectedRange(NSRange(
+            location: location,
+            length: min(selectedRange.length, length - location)
+        ))
+        if let scrollView { restoreScroll(in: scrollView) }
+    }
+
+    func disconnect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
+        guard self.textView === textView else { return }
         selectedRange = textView.selectedRange()
+        if let scrollView { scrollOrigin = scrollView.contentView.bounds.origin }
+        if let window = textView.window {
+            shouldRestoreFocus = window.firstResponder === textView
+        }
+        self.textView = nil
+    }
+
+    func scrollDidChange(_ origin: NSPoint) {
+        scrollOrigin = origin
+    }
+
+    func restoreScroll(in scrollView: NSScrollView) {
+        scrollView.contentView.scroll(to: scrollOrigin)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    func editorDidGainFocus(_ textView: NSTextView) {
+        guard self.textView === textView else { return }
+        shouldRestoreFocus = true
+    }
+
+    func restoreFocusIfNeeded(_ textView: NSTextView) {
+        guard self.textView === textView, shouldRestoreFocus else { return }
+        textView.window?.makeFirstResponder(textView)
     }
 
     func selectionDidChange(_ range: NSRange) {

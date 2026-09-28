@@ -10,14 +10,14 @@ struct MarkdownTextEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = EditorScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = true
 
-        let textView = NSTextView()
+        let textView = EditorTextView()
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
@@ -43,8 +43,36 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         scrollView.documentView = textView
         context.coordinator.textView = textView
-        model.connect(textView)
+        context.coordinator.scrollView = scrollView
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.clipViewBoundsDidChange(_:)),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
+        context.coordinator.isRestoringSession = true
+        model.connect(textView, scrollView: scrollView)
+        context.coordinator.isRestoringSession = false
+        textView.onFocused = { [weak textView, weak model] in
+            guard let textView, let model else { return }
+            model.editorDidGainFocus(textView)
+        }
+        scrollView.onWindowAttached = { [weak textView, weak model, weak coordinator = context.coordinator, weak scrollView] in
+            guard let textView, let model, let coordinator, let scrollView else { return }
+            coordinator.isRestoringSession = true
+            model.restoreScroll(in: scrollView)
+            coordinator.isRestoringSession = false
+            model.restoreFocusIfNeeded(textView)
+        }
         return scrollView
+    }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        NotificationCenter.default.removeObserver(coordinator, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+        if let textView = scrollView.documentView as? NSTextView {
+            coordinator.model.disconnect(textView, scrollView: scrollView)
+        }
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -54,13 +82,16 @@ struct MarkdownTextEditor: NSViewRepresentable {
         let selection = textView.selectedRange()
         textView.string = text
         let length = (text as NSString).length
-        textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+        let location = min(selection.location, length)
+        textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
-        private let model: MarkdownEditorModel
+        let model: MarkdownEditorModel
         weak var textView: NSTextView?
+        weak var scrollView: NSScrollView?
+        var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
             _text = text
@@ -76,5 +107,29 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView else { return }
             model.selectionDidChange(textView.selectedRange())
         }
+
+        @MainActor @objc func clipViewBoundsDidChange(_ notification: Notification) {
+            guard let scrollView, !isRestoringSession else { return }
+            model.scrollDidChange(scrollView.contentView.bounds.origin)
+        }
+    }
+}
+
+private final class EditorScrollView: NSScrollView {
+    var onWindowAttached: (() -> Void)?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil { onWindowAttached?() }
+    }
+}
+
+private final class EditorTextView: NSTextView {
+    var onFocused: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome { onFocused?() }
+        return didBecome
     }
 }

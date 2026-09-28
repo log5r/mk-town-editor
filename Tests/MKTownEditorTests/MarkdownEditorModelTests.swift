@@ -7,9 +7,9 @@ final class MarkdownEditorModelTests: XCTestCase {
     func testRejectedEditDoesNotChangeTextOrSelection() {
         let view = RejectingTextView()
         view.string = "hello"
-        view.setSelectedRange(NSRange(location: 1, length: 2))
         let model = MarkdownEditorModel()
         model.connect(view)
+        view.setSelectedRange(NSRange(location: 1, length: 2))
 
         model.apply(.bold)
 
@@ -49,6 +49,87 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "**hello**")
         view.undoManager?.undo()
         XCTAssertEqual(view.string, "hello")
+    }
+
+    func testDisconnectAndReconnectRestoreSelectionWithoutKeepingOldView() {
+        let oldView = NSTextView()
+        oldView.string = "前🙂後"
+        let model = MarkdownEditorModel()
+        model.connect(oldView)
+        oldView.setSelectedRange(NSRange(location: 1, length: 2))
+        model.selectionDidChange(oldView.selectedRange())
+        model.disconnect(oldView)
+        XCTAssertNil(model.textView)
+
+        let newView = NSTextView()
+        newView.string = oldView.string
+        model.connect(newView)
+        model.disconnect(oldView)
+
+        XCTAssertTrue(model.textView === newView)
+        XCTAssertEqual(newView.selectedRange(), NSRange(location: 1, length: 2))
+    }
+
+    func testReconnectClampsSelectionAfterExternalTextChange() {
+        let view = NSTextView()
+        view.string = "long text"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 5, length: 4))
+        model.disconnect(view)
+
+        let replacement = NSTextView()
+        replacement.string = "短"
+        model.connect(replacement)
+
+        XCTAssertEqual(replacement.selectedRange(), NSRange(location: 1, length: 0))
+    }
+
+    func testFocusRestoresOnlyForCurrentEditorView() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.disconnect(view)
+        XCTAssertTrue(model.shouldRestoreFocus)
+
+        let replacement = NSTextView(frame: view.frame)
+        window.contentView = replacement
+        model.connect(replacement)
+        model.restoreFocusIfNeeded(view)
+        XCTAssertFalse(window.firstResponder === view)
+        model.restoreFocusIfNeeded(replacement)
+        XCTAssertTrue(window.firstResponder === replacement)
+    }
+
+    func testReconnectRestoresScrollPosition() {
+        let model = MarkdownEditorModel()
+        let oldView = NSTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 1_000))
+        let oldScrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        oldScrollView.documentView = oldView
+        model.connect(oldView, scrollView: oldScrollView)
+        oldScrollView.contentView.scroll(to: NSPoint(x: 0, y: 200))
+        model.disconnect(oldView, scrollView: oldScrollView)
+
+        let newView = NSTextView(frame: oldView.frame)
+        let newScrollView = NSScrollView(frame: oldScrollView.frame)
+        newScrollView.documentView = newView
+        model.connect(newView, scrollView: newScrollView)
+
+        XCTAssertEqual(newScrollView.contentView.bounds.origin.y, 200)
+    }
+
+    func testFocusStateSurvivesViewRemovalBeforeDisconnect() {
+        let model = MarkdownEditorModel()
+        let view = NSTextView()
+        model.connect(view)
+        model.editorDidGainFocus(view)
+
+        model.disconnect(view)
+
+        XCTAssertTrue(model.shouldRestoreFocus)
     }
 }
 
