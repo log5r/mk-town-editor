@@ -98,6 +98,23 @@ struct EditorWorkspace: View {
         DocumentStatistics.selection(in: document.text, range: editorModel.selectedRange)
     }
 
+    private var wordCountMode: WordCountMode {
+        settingsStore.app.wordCountMode ?? .whitespace
+    }
+
+    private var displayedWordCount: Int {
+        if wordCountMode == .whitespace { return statistics.words }
+        return wordCountMode.count(in: document.text)
+    }
+
+    private var wordCountBinding: Binding<WordCountMode> {
+        Binding(get: { wordCountMode }, set: { mode in
+            var settings = settingsStore.app
+            settings.wordCountMode = mode
+            settingsStore.setAppSettings(settings)
+        })
+    }
+
     private var sectionStatistics: (title: String, value: DocumentStatistics)? {
         guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return nil }
         let entries = MarkdownOutline.entries(in: snapshot.analysis)
@@ -1152,7 +1169,8 @@ struct EditorWorkspace: View {
             Text("Markdown")
             Spacer()
             Text("\(statistics.lines) 行")
-            Text("\(statistics.words) 語")
+            Text("\(displayedWordCount) 語")
+                .help(wordCountMode.title)
             if let selectionStatistics {
                 Text("選択 \(selectionStatistics.characters) 文字")
             } else if let sectionStatistics {
@@ -1165,6 +1183,14 @@ struct EditorWorkspace: View {
                 .popover(isPresented: $showingStatistics, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("文字数の内訳").font(.headline)
+                        Picker("語数の数え方", selection: wordCountBinding) {
+                            ForEach(WordCountMode.allCases, id: \.self) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        Text("\(displayedWordCount) 語。\(wordCountMode.explanation)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         statisticsRow("全文", value: statistics)
                         if let selectionStatistics {
                             statisticsRow("選択範囲", value: selectionStatistics)
@@ -1194,7 +1220,7 @@ struct EditorWorkspace: View {
     }
 
     private var statusAccessibilityLabel: String {
-        var value = "文書統計。\(statistics.lines) 行、\(statistics.words) 語、全文 \(statistics.characters) 文字"
+        var value = "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字"
         if let selectionStatistics {
             value += "、選択範囲 \(selectionStatistics.characters) 文字"
         } else if let sectionStatistics {
