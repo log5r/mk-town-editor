@@ -77,4 +77,17 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(MarkdownRenderer.render("> first\nsecond\n>\noutside").string,
                        "│  first second\n│  \noutside")
     }
+
+    @MainActor
+    func testIndentedAndFencedCodeRenderLiteralMarkdown() {
+        let output = MarkdownRenderer.render("    **literal**\n\n    _again_\n\n~~~~python\n# text\n~~~~~")
+
+        XCTAssertEqual(output.string, "**literal**\n\n_again_\n\n# text")
+    }
+
+    @MainActor
+    func testIndentedCodeInsideListKeepsLiteralContent() {
+        XCTAssertEqual(MarkdownRenderer.render("- item\n      **code**\n- next").string,
+                       "•  item\n**code**\n•  next")
+    }
 }
