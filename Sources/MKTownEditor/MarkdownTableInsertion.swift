@@ -54,6 +54,7 @@ enum MarkdownTableOperation: Equatable {
     case insertColumn
     case deleteColumn
     case alignColumn(MarkdownTable.Alignment)
+    case formatTable
 }
 
 enum MarkdownTableTabAction: Equatable {
@@ -248,6 +249,79 @@ enum MarkdownTableEditing {
             }
             return MarkdownEdit(range: range, replacement: replacement,
                                 selection: NSRange(location: location, length: 0))
+        case .formatTable:
+            let selectedColumn = column
+            let sourceLines = ranges.map { lineContent(source.substring(with: $0)) }
+            let values = sourceLines.map { line -> [String]? in
+                guard let rowCells = cells(in: line.content, expected: table.header.count) else { return nil }
+                let raw = line.content as NSString
+                return rowCells.map { raw.substring(with: $0).trimmingCharacters(in: .whitespaces) }
+            }
+            guard values.allSatisfy({ $0 != nil }) else { return nil }
+            let rows = values.compactMap { $0 }
+            let widths = table.header.indices.map { column in
+                let minimum = switch table.alignments[column] {
+                case .leading: 3
+                case .center: 5
+                case .trailing: 4
+                }
+                return max(minimum, rows.enumerated().filter { $0.offset != 1 }
+                    .map { displayWidth($0.element[column]) }.max() ?? 0)
+            }
+            var replacement = ""
+            var selectedLocation = 0
+            var selectedLength = 0
+            for (index, line) in sourceLines.enumerated() {
+                let prefix = tablePrefix(line.content)
+                var rebuilt = prefix + "|"
+                for column in widths.indices {
+                    let value = rows[index][column]
+                    let formatted: String
+                    let contentLeading: Int
+                    if index == 1 {
+                        let width = widths[column]
+                        switch table.alignments[column] {
+                        case .leading: formatted = String(repeating: "-", count: width)
+                        case .center: formatted = ":" + String(repeating: "-", count: max(1, width - 2)) + ":"
+                        case .trailing: formatted = String(repeating: "-", count: max(1, width - 1)) + ":"
+                        }
+                        contentLeading = 0
+                    } else {
+                        let padding = max(0, widths[column] - displayWidth(value))
+                        let leading: Int
+                        switch table.alignments[column] {
+                        case .leading: leading = 0
+                        case .center: leading = padding / 2
+                        case .trailing: leading = padding
+                        }
+                        formatted = String(repeating: " ", count: leading) + value +
+                            String(repeating: " ", count: padding - leading)
+                        contentLeading = leading
+                    }
+                    if index == rowIndex && column == selectedColumn {
+                        selectedLocation = (replacement as NSString).length + (rebuilt as NSString).length +
+                            1 + contentLeading
+                        selectedLength = ((index == 1 ? formatted : value) as NSString).length
+                    }
+                    rebuilt += " " + formatted + " |"
+                }
+                replacement += rebuilt + line.ending
+            }
+            return MarkdownEdit(range: block.sourceRange, replacement: replacement,
+                                selection: NSRange(location: block.sourceRange.location + selectedLocation,
+                                                   length: selectedLength))
+        }
+    }
+
+    private static func displayWidth(_ text: String) -> Int {
+        text.reduce(0) { width, character in
+            guard let scalar = character.unicodeScalars.first else { return width }
+            let value = scalar.value
+            let wide = (0x1100...0x115F).contains(value) || (0x2E80...0xA4CF).contains(value) ||
+                (0xAC00...0xD7A3).contains(value) || (0xF900...0xFAFF).contains(value) ||
+                (0xFE10...0xFE6F).contains(value) || (0xFF00...0xFF60).contains(value) ||
+                (0xFFE0...0xFFE6).contains(value) || (0x1F300...0x1FAFF).contains(value)
+            return width + (wide ? 2 : 1)
         }
     }
 
