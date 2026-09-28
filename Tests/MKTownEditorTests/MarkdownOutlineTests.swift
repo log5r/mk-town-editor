@@ -24,4 +24,17 @@ final class MarkdownOutlineTests: XCTestCase {
         let source = "```\n# code\n```\n\nplain"
         XCTAssertTrue(MarkdownOutline.entries(in: MarkdownAnalysis(source)).isEmpty)
     }
+
+    func testCurrentSectionFollowsCaretAcrossNestedHeadingsAndDuplicateNames() {
+        let text = "intro\n# Parent\nbody\n## Child\nmore\n# Parent\nend"
+        let entries = MarkdownOutline.entries(in: MarkdownAnalysis(text))
+        let source = text as NSString
+
+        XCTAssertNil(MarkdownOutline.currentSection(at: 0, in: entries))
+        XCTAssertEqual(MarkdownOutline.currentSection(at: source.range(of: "body").location,
+                                                     in: entries)?.id, entries[0].id)
+        XCTAssertEqual(MarkdownOutline.currentSection(at: source.range(of: "more").location,
+                                                     in: entries)?.id, entries[1].id)
+        XCTAssertEqual(MarkdownOutline.currentSection(at: source.length, in: entries)?.id, entries[2].id)
+    }
 }

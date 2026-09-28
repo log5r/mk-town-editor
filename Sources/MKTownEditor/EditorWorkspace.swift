@@ -173,7 +173,9 @@ struct EditorWorkspace: View {
     }
 
     private var outlineSidebar: some View {
-        List(outlineEntries) { entry in
+        let entries = outlineEntries
+        let highlightedID = currentSectionID
+        return List(entries) { entry in
             Button {
                 navigate(to: entry)
             } label: {
@@ -182,8 +184,10 @@ struct EditorWorkspace: View {
                     .padding(.leading, CGFloat(entry.level - 1) * 12)
             }
             .buttonStyle(.plain)
+            .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
             .disabled(analysisStore.snapshot?.source != document.text)
             .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
+            .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
         }
         .listStyle(.sidebar)
         .navigationTitle("アウトライン")
@@ -192,6 +196,12 @@ struct EditorWorkspace: View {
                 ContentUnavailableView("見出しがありません", systemImage: "list.bullet.indent")
             }
         }
+    }
+
+    private var currentSectionID: Int? {
+        guard analysisStore.snapshot?.source == document.text else { return nil }
+        return MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
+                                              in: outlineEntries)?.id
     }
 
     private func navigate(to entry: MarkdownOutlineEntry) {
