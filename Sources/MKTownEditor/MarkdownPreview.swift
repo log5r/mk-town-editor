@@ -14,6 +14,7 @@ struct MarkdownPreview: View {
     var snapshot: DocumentSnapshot?
     var usesSharedAnalysis = false
     var navigationTarget: PreviewNavigationTarget?
+    var searchRange: NSRange?
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
@@ -51,6 +52,9 @@ struct MarkdownPreview: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(searchRange.map {
+                                    NSLocationInRange($0.location, block.sourceRange)
+                                } == true ? Color.accentColor.opacity(0.12) : Color.clear)
                                 .id(block.id)
                                 .background(GeometryReader { geometry in
                                     Color.clear.preference(key: PreviewBlockOriginsKey.self,

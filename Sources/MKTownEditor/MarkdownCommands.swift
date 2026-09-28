@@ -86,6 +86,16 @@ private struct TextFormatActionsKey: FocusedValueKey {
     typealias Value = TextFormatActions
 }
 
+struct PreviewSearchActions {
+    let show: () -> Void
+    let next: () -> Void
+    let previous: () -> Void
+}
+
+private struct PreviewSearchActionsKey: FocusedValueKey {
+    typealias Value = PreviewSearchActions
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -156,6 +166,10 @@ extension FocusedValues {
         get { self[TextFormatActionsKey.self] }
         set { self[TextFormatActionsKey.self] = newValue }
     }
+    var previewSearchActions: PreviewSearchActions? {
+        get { self[PreviewSearchActionsKey.self] }
+        set { self[PreviewSearchActionsKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -176,6 +190,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.replaceWorkspaceAction) private var replaceWorkspaceAction
     @FocusedValue(\.openEncodingImportAction) private var openEncodingImportAction
     @FocusedValue(\.textFormatActions) private var textFormatActions
+    @FocusedValue(\.previewSearchActions) private var previewSearchActions
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
@@ -285,13 +300,24 @@ struct MarkdownCommands: Commands {
         }
         CommandGroup(after: .textEditing) {
             Divider()
-            commandButton(.find)
-            Button("次を検索") { editorModel?.findNext() }
+            if let previewSearchActions {
+                Button("検索…") { previewSearchActions.show() }
+                    .keyboardShortcut("f", modifiers: .command)
+            } else {
+                commandButton(.find)
+            }
+            Button("次を検索") {
+                if let previewSearchActions { previewSearchActions.next() }
+                else { editorModel?.findNext() }
+            }
                 .keyboardShortcut("g", modifiers: .command)
-                .disabled(editorModel == nil)
-            Button("前を検索") { editorModel?.findPrevious() }
+                .disabled(previewSearchActions == nil && editorModel == nil)
+            Button("前を検索") {
+                if let previewSearchActions { previewSearchActions.previous() }
+                else { editorModel?.findPrevious() }
+            }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
-                .disabled(editorModel == nil)
+                .disabled(previewSearchActions == nil && editorModel == nil)
             Button("置換…") { editorModel?.showReplaceBar() }
                 .keyboardShortcut("f", modifiers: [.command, .option])
                 .disabled(editorModel == nil)
