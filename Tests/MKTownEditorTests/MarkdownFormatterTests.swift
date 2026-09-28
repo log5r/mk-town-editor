@@ -367,4 +367,53 @@ final class MarkdownFormatterTests: XCTestCase {
             selection: NSRange(location: previewLocation, length: 0))?.applying(to: source),
             "> - [x] quoted\n\n```\n- [ ] literal\n```\n\n- plain")
     }
+
+    func testCodeBlockInsertionAtEmptyDocumentPlacesCaretInsideFence() {
+        let edit = MarkdownFormatter.apply(.codeBlock(language: nil), to: "",
+                                           selection: NSRange(location: 0, length: 0))
+        XCTAssertEqual(edit.applying(to: ""), "```\n\n```")
+        XCTAssertEqual(edit.selection, NSRange(location: 4, length: 0))
+    }
+
+    func testCodeBlockWrapsSelectedTextAndUsesChosenLanguage() {
+        let source = "print(\"🙂\")"
+        let edit = MarkdownFormatter.apply(.codeBlock(language: .swift), to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "```swift\nprint(\"🙂\")\n```")
+        XCTAssertEqual((updated as NSString).substring(with: edit.selection), source)
+    }
+
+    func testCodeBlockFenceExceedsEveryBacktickRunInSelection() {
+        let source = "before ``` middle ```` after"
+        let edit = MarkdownFormatter.apply(.codeBlock(language: .markdown), to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "`````markdown\n\(source)\n`````")
+        let code = MarkdownAnalysis(updated).rootBlocks.first
+        XCTAssertEqual(code?.kind, .codeBlock)
+        XCTAssertEqual(code?.content, source)
+        XCTAssertEqual(code?.codeLanguage, "markdown")
+    }
+
+    func testCodeBlockCreatesLineBoundariesAroundPartialLineSelection() {
+        let source = "preCODEpost"
+        let edit = MarkdownFormatter.apply(.codeBlock(language: .python), to: source,
+                                           selection: (source as NSString).range(of: "CODE"))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "pre\n```python\nCODE\n```\npost")
+        XCTAssertEqual((updated as NSString).substring(with: edit.selection), "CODE")
+    }
+
+    func testCodeBlockPreservesCRLFAndAvoidsExtraContentLine() {
+        let source = "pre\r\n🙂\r\npost"
+        let edit = MarkdownFormatter.apply(.codeBlock(language: .json), to: source,
+                                           selection: (source as NSString).range(of: "🙂"))
+        XCTAssertEqual(edit.applying(to: source), "pre\r\n```json\r\n🙂\r\n```\r\npost")
+
+        let multiline = "one\n"
+        let full = MarkdownFormatter.apply(.codeBlock(language: nil), to: multiline,
+                                           selection: NSRange(location: 0, length: (multiline as NSString).length))
+        XCTAssertEqual(full.applying(to: multiline), "```\none\n```")
+    }
 }

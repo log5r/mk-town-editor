@@ -39,12 +39,24 @@ struct MarkdownCommands: Commands {
             commandButton(.orderedList)
             commandButton(.taskList)
             commandButton(.toggleTaskCompletion)
+            Menu("コードブロック") {
+                commandButton(.codeBlock(language: nil))
+                Divider()
+                ForEach(MarkdownCodeLanguage.allCases, id: \.self) { language in
+                    commandButton(.codeBlock(language: language))
+                }
+            }
         }
     }
 
+    @ViewBuilder
     private func commandButton(_ command: EditorCommand) -> some View {
-        Button(command.title) { command.perform(on: editorModel) }
-            .keyboardShortcut(command.shortcut.key, modifiers: command.shortcut.modifiers)
+        let button = Button(command.title) { command.perform(on: editorModel) }
             .disabled(!command.canExecute(in: editorModel))
+        if let shortcut = command.shortcut {
+            button.keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
+        } else {
+            button
+        }
     }
 }

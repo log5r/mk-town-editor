@@ -99,6 +99,23 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.selectedRange(), NSRange(location: 22, length: 0))
     }
 
+    func testCodeBlockCommandIsUndoable() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "print(1)"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: 8))
+
+        model.apply(.codeBlock(language: .swift))
+        XCTAssertEqual(view.string, "```swift\nprint(1)\n```")
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "print(1)")
+    }
+
     func testDisconnectAndReconnectRestoreSelectionWithoutKeepingOldView() {
         let oldView = NSTextView()
         oldView.string = "前🙂後"

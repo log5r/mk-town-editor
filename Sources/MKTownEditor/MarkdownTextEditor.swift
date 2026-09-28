@@ -145,6 +145,14 @@ final class EditorTextView: NSTextView {
         for command in EditorCommand.context {
             add(command, to: menu)
         }
+        let codeItem = NSMenuItem(title: "コードブロック", action: nil, keyEquivalent: "")
+        let codeMenu = NSMenu(title: "コードブロック")
+        add(.codeBlock(language: nil), to: codeMenu)
+        for language in MarkdownCodeLanguage.allCases {
+            add(.codeBlock(language: language), to: codeMenu)
+        }
+        codeItem.submenu = codeMenu
+        menu.addItem(codeItem)
         let headingItem = NSMenuItem(title: "見出しレベル", action: nil, keyEquivalent: "")
         let headingMenu = NSMenu(title: "見出しレベル")
         for level in 0...6 {
