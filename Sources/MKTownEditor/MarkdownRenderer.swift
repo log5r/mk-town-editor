@@ -228,6 +228,7 @@ enum MarkdownRenderer {
             result.replaceCharacters(in: range, with: replacement)
         }
 
+        MarkdownAutolink.apply(to: result)
         return result
     }
 

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct MarkdownLinkDraft: Identifiable {
@@ -314,5 +315,104 @@ enum MarkdownLinkSyntax {
     private static func isASCIIPunctuation(_ value: unichar) -> Bool {
         (33...47).contains(value) || (58...64).contains(value) ||
             (91...96).contains(value) || (123...126).contains(value)
+    }
+}
+
+@MainActor
+enum MarkdownAutolink {
+    private static let urlPattern = try! NSRegularExpression(
+        pattern: #"(?:https?://|www\.)[^\s<>]+"#, options: [.caseInsensitive]
+    )
+    private static let emailPattern = try! NSRegularExpression(
+        pattern: #"[A-Z0-9._+\-]+@[A-Z0-9_\-]+(?:\.[A-Z0-9_\-]+)+"#,
+        options: [.caseInsensitive]
+    )
+
+    static func apply(to value: NSMutableAttributedString) {
+        let source = value.string as NSString
+        let full = NSRange(location: 0, length: source.length)
+        var found: [(range: NSRange, url: URL)] = []
+        for match in urlPattern.matches(in: value.string, range: full) {
+            guard allowedStart(match.range.location, in: source) else { continue }
+            let range = trimmedRange(match.range, in: source)
+            guard range.length > 0, !hasExistingLinkOrCode(in: range, value: value) else { continue }
+            let candidate = source.substring(with: range)
+            let urlText = candidate.lowercased().hasPrefix("www.") ? "http://" + candidate : candidate
+            guard let url = URL(string: urlText), let host = url.host,
+                  validDomain(host) else { continue }
+            found.append((range, url))
+        }
+        for match in emailPattern.matches(in: value.string, range: full) {
+            let prefix = match.range.location >= 7
+                ? source.substring(with: NSRange(location: match.range.location - 7, length: 7)) : ""
+            let range = prefix.lowercased() == "mailto:"
+                ? NSRange(location: match.range.location - 7, length: match.range.length + 7)
+                : match.range
+            guard !found.contains(where: { NSIntersectionRange($0.range, range).length > 0 }),
+                  !hasExistingLinkOrCode(in: range, value: value) else { continue }
+            let email = source.substring(with: match.range)
+            let domain = String(email.split(separator: "@").last ?? "")
+            guard validEmailDomain(domain), let url = URL(string: "mailto:" + email) else { continue }
+            found.append((range, url))
+        }
+        for item in found {
+            value.addAttribute(.link, value: item.url, range: item.range)
+        }
+    }
+
+    private static func allowedStart(_ location: Int, in source: NSString) -> Bool {
+        guard location > 0 else { return true }
+        let previous = source.character(at: location - 1)
+        return (UnicodeScalar(previous).map(CharacterSet.whitespacesAndNewlines.contains) ?? false) ||
+            [42, 95, 126, 40].contains(Int(previous))
+    }
+
+    private static func trimmedRange(_ original: NSRange, in source: NSString) -> NSRange {
+        var length = original.length
+        while length > 0 {
+            let candidate = source.substring(with: NSRange(location: original.location, length: length))
+            guard let last = candidate.last else { break }
+            if "?!.,:*_~;".contains(last) {
+                length -= String(last).utf16.count
+            } else if last == ")" && candidate.filter({ $0 == ")" }).count >
+                        candidate.filter({ $0 == "(" }).count {
+                length -= 1
+            } else { break }
+        }
+        return NSRange(location: original.location, length: length)
+    }
+
+    private static func validDomain(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts.allSatisfy({ !$0.isEmpty }),
+              parts.suffix(2).allSatisfy({ !$0.contains("_") }) else { return false }
+        return parts.allSatisfy { part in
+            part.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+        }
+    }
+
+    private static func validEmailDomain(_ domain: String) -> Bool {
+        let parts = domain.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count >= 2, parts.allSatisfy({ !$0.isEmpty }),
+              let last = domain.last, last != "-", last != "_" else { return false }
+        return parts.allSatisfy { part in
+            part.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }
+        }
+    }
+
+    private static func hasExistingLinkOrCode(in range: NSRange,
+                                              value: NSAttributedString) -> Bool {
+        var excluded = false
+        value.enumerateAttributes(in: range) { attributes, _, stop in
+            let intent = (attributes[.inlinePresentationIntent] as? InlinePresentationIntent)
+                ?? (attributes[.inlinePresentationIntent] as? NSNumber)
+                    .map { InlinePresentationIntent(rawValue: $0.uintValue) }
+            if attributes[.link] != nil || attributes[.imageURL] != nil ||
+                intent?.contains(.code) == true {
+                excluded = true
+                stop.pointee = true
+            }
+        }
+        return excluded
     }
 }

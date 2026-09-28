@@ -154,7 +154,8 @@ enum MarkdownHTMLExporter {
         guard let parsed = try? AttributedString(markdown: resolved, options: options) else {
             return escape(resolved)
         }
-        let value = NSAttributedString(parsed)
+        let value = NSMutableAttributedString(parsed)
+        MarkdownAutolink.apply(to: value)
         let source = value.string as NSString
         var html = ""
         value.enumerateAttributes(in: NSRange(location: 0, length: value.length)) { attributes, range, _ in
