@@ -58,6 +58,10 @@ enum MarkdownFormattingStyle {
     case removeFormatting
     case tableOfContents
     case renumberList
+    case duplicateLines
+    case moveLinesUp
+    case moveLinesDown
+    case deleteLines
     case unorderedList
     case orderedList
     case taskList
@@ -133,6 +137,14 @@ enum MarkdownFormatter {
             return tableOfContents(text, selection: safeSelection)
         case .renumberList:
             return renumberList(text, selection: safeSelection)
+        case .duplicateLines:
+            return editLines(text, selection: safeSelection, operation: .duplicate)
+        case .moveLinesUp:
+            return editLines(text, selection: safeSelection, operation: .moveUp)
+        case .moveLinesDown:
+            return editLines(text, selection: safeSelection, operation: .moveDown)
+        case .deleteLines:
+            return editLines(text, selection: safeSelection, operation: .delete)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -478,6 +490,72 @@ enum MarkdownFormatter {
         }
         return MarkdownEdit(range: range, replacement: replacement,
             selection: NSRange(location: first, length: (replacement as NSString).length))
+    }
+
+    private enum LineOperation { case duplicate, moveUp, moveDown, delete }
+
+    private static func editLines(_ text: String, selection: NSRange,
+                                  operation: LineOperation) -> MarkdownEdit {
+        let source = text as NSString
+        let endInsideSelection = selection.length > 0 ? selection.length - 1 : 0
+        let lines = source.lineRange(for: NSRange(location: selection.location,
+            length: endInsideSelection))
+        let selected = source.substring(with: lines)
+        let selectedParts = splitLineEnding(selected)
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        switch operation {
+        case .duplicate:
+            let inserted = (selectedParts.ending.isEmpty ? newline : "") + selected
+            let start = NSMaxRange(lines)
+            return MarkdownEdit(range: NSRange(location: start, length: 0), replacement: inserted,
+                selection: NSRange(location: start +
+                    (selectedParts.ending.isEmpty ? (newline as NSString).length : 0),
+                    length: (selected as NSString).length))
+        case .delete:
+            var removed = lines
+            if NSMaxRange(lines) == source.length && selectedParts.ending.isEmpty && lines.location > 0 {
+                let before = source.substring(to: lines.location)
+                let separatorLength = before.hasSuffix("\r\n") ? 2 : 1
+                removed = NSRange(location: lines.location - separatorLength,
+                    length: lines.length + separatorLength)
+            }
+            return MarkdownEdit(range: removed, replacement: "",
+                selection: NSRange(location: removed.location, length: 0))
+        case .moveUp:
+            guard lines.location > 0 else { return unchangedEdit(text, selection: selection) }
+            let previous = source.lineRange(for: NSRange(location: lines.location - 1, length: 0))
+            let before = splitLineEnding(source.substring(with: previous))
+            let replacement = selectedParts.body + before.ending + before.body + selectedParts.ending
+            return MarkdownEdit(range: NSRange(location: previous.location,
+                length: NSMaxRange(lines) - previous.location), replacement: replacement,
+                selection: NSRange(location: previous.location,
+                    length: ((selectedParts.body + before.ending) as NSString).length))
+        case .moveDown:
+            guard NSMaxRange(lines) < source.length else {
+                return unchangedEdit(text, selection: selection)
+            }
+            let next = source.lineRange(for: NSRange(location: NSMaxRange(lines), length: 0))
+            let after = splitLineEnding(source.substring(with: next))
+            let replacement = after.body + selectedParts.ending + selectedParts.body + after.ending
+            let movedStart = lines.location + ((after.body + selectedParts.ending) as NSString).length
+            return MarkdownEdit(range: NSRange(location: lines.location,
+                length: NSMaxRange(next) - lines.location), replacement: replacement,
+                selection: NSRange(location: movedStart,
+                    length: ((selectedParts.body + after.ending) as NSString).length))
+        }
+    }
+
+    private static func splitLineEnding(_ text: String) -> (body: String, ending: String) {
+        if text.hasSuffix("\r\n") { return (String(text.dropLast(2)), "\r\n") }
+        if text.hasSuffix("\n") || text.hasSuffix("\r") {
+            return (String(text.dropLast()), String(text.suffix(1)))
+        }
+        return (text, "")
+    }
+
+    private static func unchangedEdit(_ text: String, selection: NSRange) -> MarkdownEdit {
+        MarkdownEdit(range: selection, replacement: (text as NSString).substring(with: selection),
+            selection: selection)
     }
 
     private static func removeFormatting(_ text: String, selection: NSRange) -> MarkdownEdit {

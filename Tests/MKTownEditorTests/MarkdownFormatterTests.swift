@@ -188,6 +188,46 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.applying(to: source), source)
     }
 
+    func testDuplicateSelectedLinesPreservesCRLFAndSelectsCopy() {
+        let source = "前\r\n🙂\r\n二\r\n後"
+        let selection = (source as NSString).range(of: "🙂\r\n二\r\n")
+        let edit = MarkdownFormatter.apply(.duplicateLines, to: source, selection: selection)
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "前\r\n🙂\r\n二\r\n🙂\r\n二\r\n後")
+        XCTAssertEqual((updated as NSString).substring(with: edit.selection), "🙂\r\n二\r\n")
+    }
+
+    func testDuplicateFinalLineWithoutNewlineAddsSeparator() {
+        let source = "前\n最後"
+        let edit = MarkdownFormatter.apply(.duplicateLines, to: source,
+            selection: (source as NSString).range(of: "最後"))
+        XCTAssertEqual(edit.applying(to: source), "前\n最後\n最後")
+    }
+
+    func testMoveLinesUpAndDownAtDocumentEnd() {
+        let source = "前\n🙂\n後"
+        let up = MarkdownFormatter.apply(.moveLinesUp, to: source,
+            selection: (source as NSString).range(of: "後"))
+        XCTAssertEqual(up.applying(to: source), "前\n後\n🙂")
+
+        let down = MarkdownFormatter.apply(.moveLinesDown, to: source,
+            selection: (source as NSString).range(of: "🙂"))
+        XCTAssertEqual(down.applying(to: source), "前\n後\n🙂")
+        XCTAssertEqual((down.applying(to: source) as NSString).substring(with: down.selection), "🙂")
+    }
+
+    func testDeleteFinalLineRemovesPreviousSeparatorAndExactSelectedLines() {
+        let source = "前\r\n🙂"
+        let last = MarkdownFormatter.apply(.deleteLines, to: source,
+            selection: (source as NSString).range(of: "🙂"))
+        XCTAssertEqual(last.applying(to: source), "前")
+
+        let multi = "one\ntwo\nthree"
+        let first = MarkdownFormatter.apply(.deleteLines, to: multi,
+            selection: NSRange(location: 0, length: 4))
+        XCTAssertEqual(first.applying(to: multi), "two\nthree")
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
