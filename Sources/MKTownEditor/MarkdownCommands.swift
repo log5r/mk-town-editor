@@ -380,6 +380,7 @@ struct MarkdownCommands: Commands {
             commandButton(.plainBlock)
             commandButton(.removeFormatting)
             commandButton(.tableOfContents)
+            commandButton(.renumberList)
             commandButton(.unorderedList)
             commandButton(.orderedList)
             commandButton(.taskList)

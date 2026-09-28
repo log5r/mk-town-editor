@@ -57,6 +57,7 @@ enum MarkdownFormattingStyle {
     case plainBlock
     case removeFormatting
     case tableOfContents
+    case renumberList
     case unorderedList
     case orderedList
     case taskList
@@ -130,6 +131,8 @@ enum MarkdownFormatter {
             return removeFormatting(text, selection: safeSelection)
         case .tableOfContents:
             return tableOfContents(text, selection: safeSelection)
+        case .renumberList:
+            return renumberList(text, selection: safeSelection)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -416,6 +419,65 @@ enum MarkdownFormatter {
         return MarkdownEdit(range: selection, replacement: replacement,
             selection: NSRange(location: selection.location + (prefix as NSString).length,
                 length: (lines as NSString).length))
+    }
+
+    private static let orderedMarkerExpression = try! NSRegularExpression(
+        pattern: #"^((?:[ \t]*>[ \t]*)*[ \t]*)([0-9]{1,9})([.)])(?=[ \t]+)"#)
+
+    private static func renumberList(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let source = text as NSString
+        let blocks = MarkdownAnalysis(text).blocks
+        let selectedIDs = Set(blocks.filter { block in
+            guard case .orderedList = block.kind else { return false }
+            return selection.length == 0
+                ? selection.location >= block.sourceRange.location &&
+                    selection.location <= NSMaxRange(block.sourceRange)
+                : NSIntersectionRange(selection, block.sourceRange).length > 0
+        }.map(\.id))
+        guard !selectedIDs.isEmpty else {
+            return MarkdownEdit(range: selection, replacement: source.substring(with: selection),
+                selection: selection)
+        }
+        var changes: [(range: NSRange, number: String)] = []
+        for parent in Set(blocks.map(\.parentID)) {
+            let siblings = blocks.filter { $0.parentID == parent }
+            var run: [MarkdownBlock] = []
+            func finishRun() {
+                defer { run.removeAll() }
+                guard !run.isEmpty, run.contains(where: { selectedIDs.contains($0.id) }),
+                      case let .orderedList(start) = run[0].kind else { return }
+                for (offset, block) in run.enumerated() {
+                    let line = source.substring(with: source.lineRange(for:
+                        NSRange(location: block.sourceRange.location, length: 0)))
+                    guard let marker = orderedMarkerExpression.firstMatch(in: line,
+                        range: NSRange(location: 0, length: (line as NSString).length)) else { continue }
+                    let numberRange = NSRange(location: block.sourceRange.location + marker.range(at: 2).location,
+                        length: marker.range(at: 2).length)
+                    changes.append((numberRange, String(start + offset)))
+                }
+            }
+            for sibling in siblings {
+                if case .orderedList = sibling.kind {
+                    run.append(sibling)
+                } else {
+                    finishRun()
+                }
+            }
+            finishRun()
+        }
+        guard let first = changes.map(\.range.location).min(),
+              let last = changes.map({ NSMaxRange($0.range) }).max() else {
+            return MarkdownEdit(range: selection, replacement: source.substring(with: selection),
+                selection: selection)
+        }
+        let range = NSRange(location: first, length: last - first)
+        var replacement = source.substring(with: range)
+        for change in changes.sorted(by: { $0.range.location > $1.range.location }) {
+            let local = NSRange(location: change.range.location - first, length: change.range.length)
+            replacement = (replacement as NSString).replacingCharacters(in: local, with: change.number)
+        }
+        return MarkdownEdit(range: range, replacement: replacement,
+            selection: NSRange(location: first, length: (replacement as NSString).length))
     }
 
     private static func removeFormatting(_ text: String, selection: NSRange) -> MarkdownEdit {
