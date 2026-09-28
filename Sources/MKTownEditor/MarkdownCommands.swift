@@ -16,6 +16,14 @@ struct MarkdownCommands: Commands {
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
+        CommandMenu("文字表示") {
+            Button("文字を拡大") { settingsStore.adjustFontSize(by: 1) }
+                .keyboardShortcut("+", modifiers: .command)
+            Button("文字を縮小") { settingsStore.adjustFontSize(by: -1) }
+                .keyboardShortcut("-", modifiers: .command)
+            Button("標準サイズ") { settingsStore.resetFontSize() }
+                .keyboardShortcut("0", modifiers: .command)
+        }
         CommandGroup(after: .textEditing) {
             Divider()
             commandButton(.find)

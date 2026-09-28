@@ -12,5 +12,8 @@ struct MKTownEditorApp: App {
         .commands {
             MarkdownCommands(settingsStore: settingsStore)
         }
+        Settings {
+            EditorPreferencesView(settingsStore: settingsStore)
+        }
     }
 }

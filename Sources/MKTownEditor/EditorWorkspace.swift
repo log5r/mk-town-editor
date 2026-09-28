@@ -139,6 +139,7 @@ struct EditorWorkspace: View {
 
     private var sourceEditor: some View {
         MarkdownTextEditor(text: $document.text, model: editorModel,
+                           textStyle: settingsStore.textStyle(for: fileURL),
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage)
     }

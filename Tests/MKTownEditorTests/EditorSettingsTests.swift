@@ -68,6 +68,49 @@ final class EditorSettingsTests: XCTestCase {
         let data = Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8)
         let decoded = try JSONDecoder().decode(AppEditorSettings.self, from: data)
         XCTAssertNil(decoded.imageImportMode)
+        XCTAssertNil(decoded.fontChoice)
+        XCTAssertNil(decoded.horizontalMargin)
+        XCTAssertNil(decoded.verticalMargin)
+    }
+
+    func testTextStyleResolvesFolderSizeAndAppAppearance() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var app = store.app
+        app.fontChoice = .menlo
+        app.fontSize = 15
+        app.lineSpacing = 5
+        app.horizontalMargin = 24
+        app.verticalMargin = 20
+        store.setAppSettings(app)
+        let folder = URL(fileURLWithPath: "/tmp/work")
+        let document = folder.appendingPathComponent("README.md")
+        store.setFolderSettings(FolderEditorSettings(fontSize: 19), for: folder)
+
+        XCTAssertEqual(store.textStyle(for: document), EditorTextStyle(
+            fontChoice: .menlo, fontSize: 19, lineSpacing: 5,
+            horizontalMargin: 24, verticalMargin: 20
+        ))
+        XCTAssertEqual(store.textStyle(for: nil).fontSize, 15)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).textStyle(for: document).fontChoice, .menlo)
+    }
+
+    func testFontSizeCommandsPreserveFontAndSpacing() {
+        let store = EditorSettingsStore(defaults: isolatedDefaults())
+        var app = store.app
+        app.fontChoice = .system
+        app.lineSpacing = 7
+        app.fontSize = 31
+        store.setAppSettings(app)
+
+        store.adjustFontSize(by: 3)
+        XCTAssertEqual(store.app.fontSize, 32)
+        store.adjustFontSize(by: -50)
+        XCTAssertEqual(store.app.fontSize, 10)
+        store.resetFontSize()
+        XCTAssertEqual(store.app.fontSize, 13)
+        XCTAssertEqual(store.app.fontChoice, .system)
+        XCTAssertEqual(store.app.lineSpacing, 7)
     }
 
     private func isolatedDefaults() -> UserDefaults {
