@@ -155,6 +155,11 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
         .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
+        .focusedSceneValue(\.textFormatActions, TextFormatActions(
+            format: document.format,
+            setNewline: { document.format.newline = $0 },
+            setBOM: { document.format.hasUTF8BOM = $0 }
+        ))
     }
 
     private var sheetView: some View {
