@@ -1,5 +1,50 @@
+import AppKit
 import Combine
 import Foundation
+
+enum EditorFontChoice: String, Codable, CaseIterable {
+    case monospacedSystem
+    case system
+    case menlo
+
+    var title: String {
+        switch self {
+        case .monospacedSystem: "システム等幅"
+        case .system: "システム"
+        case .menlo: "Menlo"
+        }
+    }
+
+    @MainActor
+    func font(size: CGFloat) -> NSFont {
+        switch self {
+        case .monospacedSystem: .monospacedSystemFont(ofSize: size, weight: .regular)
+        case .system: .systemFont(ofSize: size)
+        case .menlo: NSFont(name: "Menlo-Regular", size: size)
+            ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+        }
+    }
+}
+
+struct EditorTextStyle: Equatable {
+    var fontChoice: EditorFontChoice = .monospacedSystem
+    var fontSize: Double = 13
+    var lineSpacing: Double = 3
+    var horizontalMargin: Double = 18
+    var verticalMargin: Double = 18
+
+    @MainActor
+    func apply(to textView: NSTextView) {
+        textView.font = fontChoice.font(size: CGFloat(fontSize))
+        textView.textContainerInset = NSSize(width: horizontalMargin, height: verticalMargin)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = CGFloat(lineSpacing)
+        textView.defaultParagraphStyle = paragraph
+        var typing = textView.typingAttributes
+        typing[.paragraphStyle] = paragraph
+        textView.typingAttributes = typing
+    }
+}
 
 struct AppEditorSettings: Codable, Equatable {
     var defaultMode: EditorMode = .split
@@ -7,6 +52,9 @@ struct AppEditorSettings: Codable, Equatable {
     var lineSpacing: Double = 3
     var wrapsLines = true
     var imageImportMode: ImageImportMode?
+    var fontChoice: EditorFontChoice?
+    var horizontalMargin: Double?
+    var verticalMargin: Double?
 }
 
 struct FolderEditorSettings: Codable, Equatable {
@@ -71,6 +119,26 @@ final class EditorSettingsStore: ObservableObject {
         guard let documentURL else { return values.app.imageImportMode ?? .managedCopy }
         return nearestFolderValue(for: documentURL, \.imageImportMode)
             ?? values.app.imageImportMode ?? .managedCopy
+    }
+
+    func textStyle(for documentURL: URL?) -> EditorTextStyle {
+        EditorTextStyle(
+            fontChoice: values.app.fontChoice ?? .monospacedSystem,
+            fontSize: min(32, max(10, fontSize(for: documentURL))),
+            lineSpacing: min(12, max(0, values.app.lineSpacing)),
+            horizontalMargin: min(48, max(8, values.app.horizontalMargin ?? 18)),
+            verticalMargin: min(48, max(8, values.app.verticalMargin ?? 18))
+        )
+    }
+
+    func adjustFontSize(by amount: Double) {
+        values.app.fontSize = min(32, max(10, values.app.fontSize + amount))
+        save()
+    }
+
+    func resetFontSize() {
+        values.app.fontSize = 13
+        save()
     }
 
     func setImageImportMode(_ mode: ImageImportMode) {

@@ -32,6 +32,7 @@
 		A1000000000000000000001A /* MarkdownSymbolCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* MarkdownSymbolCompletion.swift */; };
 		A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* MarkdownTableInsertion.swift */; };
 		A1000000000000000000001C /* TableInsertionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* TableInsertionSheet.swift */; };
+		A1000000000000000000001D /* EditorPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* EditorPreferencesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +64,7 @@
 		A2000000000000000000001A /* MarkdownSymbolCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSymbolCompletion.swift; sourceTree = "<group>"; };
 		A2000000000000000000001B /* MarkdownTableInsertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTableInsertion.swift; sourceTree = "<group>"; };
 		A2000000000000000000001C /* TableInsertionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableInsertionSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000001D /* EditorPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPreferencesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +110,7 @@
 				A2000000000000000000001A /* MarkdownSymbolCompletion.swift */,
 				A2000000000000000000001B /* MarkdownTableInsertion.swift */,
 				A2000000000000000000001C /* TableInsertionSheet.swift */,
+				A2000000000000000000001D /* EditorPreferencesView.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -201,6 +204,7 @@
 				A1000000000000000000001A /* MarkdownSymbolCompletion.swift in Sources */,
 				A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */,
 				A1000000000000000000001C /* TableInsertionSheet.swift in Sources */,
+				A1000000000000000000001D /* EditorPreferencesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct MarkdownTextEditor: NSViewRepresentable {
     @Binding var text: String
     let model: MarkdownEditorModel
+    var textStyle: EditorTextStyle = EditorTextStyle()
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -30,10 +31,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.allowsUndo = true
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
-        textView.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        textStyle.apply(to: textView)
+        context.coordinator.appliedTextStyle = textStyle
         textView.textColor = .textColor
         textView.backgroundColor = .textBackgroundColor
-        textView.textContainerInset = NSSize(width: 18, height: 18)
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -95,6 +96,11 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        if context.coordinator.appliedTextStyle != textStyle {
+            textStyle.apply(to: textView)
+            context.coordinator.appliedTextStyle = textStyle
+            context.coordinator.lineNumberRuler?.refresh()
+        }
         guard textView.string != text else { return }
         let selection = textView.selectedRange()
         textView.string = text
@@ -111,6 +117,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
+        var appliedTextStyle: EditorTextStyle?
         var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
