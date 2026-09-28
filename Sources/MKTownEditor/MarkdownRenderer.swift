@@ -92,9 +92,7 @@ enum MarkdownRenderer {
                 attributes: baseAttributes(font: .systemFont(ofSize: 13), color: .separatorColor)
             )
         case .codeBlock:
-            var attributes = baseAttributes(font: .monospacedSystemFont(ofSize: 13, weight: .regular))
-            attributes[.backgroundColor] = NSColor.controlBackgroundColor
-            return NSAttributedString(string: block.content, attributes: attributes)
+            return CodeSyntaxHighlighter.render(block.content, language: block.codeLanguage)
         case .table:
             guard let table = block.table else { return NSAttributedString(string: "") }
             return NSAttributedString(string: ([table.header] + table.rows)
