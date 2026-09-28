@@ -234,7 +234,8 @@ struct EditorWorkspace: View {
                                 navigationTarget: previewNavigationTarget,
                                 onOpenHeading: navigateToHeading,
                                 onOpenDocument: openLinkedDocument,
-                                onVisibleBlockChange: synchronizeEditor(to:))
+                                onVisibleBlockChange: synchronizeEditor(to:),
+                                onRevealSource: revealSource)
                     .frame(minWidth: 280)
             }
         case .preview:
@@ -243,7 +244,8 @@ struct EditorWorkspace: View {
                             snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                             navigationTarget: previewNavigationTarget,
                             onOpenHeading: navigateToHeading,
-                            onOpenDocument: openLinkedDocument)
+                            onOpenDocument: openLinkedDocument,
+                            onRevealSource: revealSource)
         }
     }
 
@@ -368,7 +370,6 @@ struct EditorWorkspace: View {
     private func goBack() {
         guard let destination = navigationHistory.goBack(from: currentNavigationPoint),
               destination.documentURL == fileURL else { return }
-        revealEditorForUnstructuredPreview()
         editorModel.navigate(to: destination.utf16Location)
         scrollPreview(to: destination.utf16Location)
     }
@@ -376,7 +377,6 @@ struct EditorWorkspace: View {
     private func goForward() {
         guard let destination = navigationHistory.goForward(from: currentNavigationPoint),
               destination.documentURL == fileURL else { return }
-        revealEditorForUnstructuredPreview()
         editorModel.navigate(to: destination.utf16Location)
         scrollPreview(to: destination.utf16Location)
     }
@@ -408,11 +408,12 @@ struct EditorWorkspace: View {
         editorModel.scrollToTop(sourceLocation: block.sourceRange.location)
     }
 
-    private func revealEditorForUnstructuredPreview() {
-        guard mode.wrappedValue == .preview,
-              let snapshot = analysisStore.snapshot,
-              !PreviewAccessibility.requiresStructuredView(snapshot.analysis.blocks) else { return }
-        mode.wrappedValue = .editor
+    private func revealSource(_ range: NSRange) {
+        guard analysisStore.snapshot?.source == document.text else { return }
+        let destination = NavigationPoint(documentURL: fileURL, utf16Location: range.location)
+        navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+        editorModel.selectAndReveal(range)
     }
 
     private var sourceEditor: some View {
