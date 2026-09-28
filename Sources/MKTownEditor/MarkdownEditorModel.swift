@@ -22,10 +22,12 @@ final class MarkdownEditorModel: ObservableObject {
         hasActiveEditor = true
         let length = (textView.string as NSString).length
         let location = min(selectedRange.location, length)
-        textView.setSelectedRange(NSRange(
+        let restoredRange = NSRange(
             location: location,
             length: min(selectedRange.length, length - location)
-        ))
+        )
+        textView.setSelectedRange(restoredRange)
+        selectedRange = restoredRange
         if let scrollView { restoreScroll(in: scrollView) }
         if pendingNavigationLocation != nil {
             textView.scrollRangeToVisible(textView.selectedRange())
@@ -46,6 +48,19 @@ final class MarkdownEditorModel: ObservableObject {
 
     func scrollDidChange(_ origin: NSPoint) {
         scrollOrigin = origin
+    }
+
+    func restorePosition(selection: NSRange, scrollX: Double = 0, scrollY: Double) {
+        let length = textView.map { ($0.string as NSString).length } ?? Int.max
+        let location = min(max(0, selection.location), length)
+        let range = NSRange(location: location,
+                            length: min(max(0, selection.length), length - location))
+        selectedRange = range
+        scrollOrigin = NSPoint(x: max(0, scrollX), y: max(0, scrollY))
+        if let textView {
+            textView.setSelectedRange(range)
+            if let scrollView = textView.enclosingScrollView { restoreScroll(in: scrollView) }
+        }
     }
 
     func restoreScroll(in scrollView: NSScrollView) {

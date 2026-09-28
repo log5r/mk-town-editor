@@ -38,6 +38,36 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertFalse(restored.hasDocumentState(for: oldURL))
     }
 
+    func testDocumentPositionPersistsAndModeChangeKeepsIt() throws {
+        let defaults = isolatedDefaults()
+        let url = URL(fileURLWithPath: "/tmp/work/position.md")
+        let store = EditorSettingsStore(defaults: defaults)
+        store.savePosition(for: url, selection: NSRange(location: 42, length: 5), scrollX: 12,
+                           scrollY: 123, splitRatio: 0.65,
+                           sidebarTab: "ファイル", sidebarVisible: true)
+        store.setMode(.preview, for: url)
+        let restored = try XCTUnwrap(EditorSettingsStore(defaults: defaults).displayState(for: url))
+        XCTAssertEqual(restored.mode, .preview)
+        XCTAssertEqual(restored.selectionLocation, 42)
+        XCTAssertEqual(restored.selectionLength, 5)
+        XCTAssertEqual(restored.scrollY, 123)
+        XCTAssertEqual(restored.scrollX, 12)
+        XCTAssertEqual(restored.splitRatio, 0.65)
+        XCTAssertEqual(restored.sidebarTab, "ファイル")
+        XCTAssertEqual(restored.sidebarVisible, true)
+        store.moveDocumentState(from: url, to: url.deletingLastPathComponent()
+            .appendingPathComponent("renamed.md"))
+        XCTAssertNil(store.displayState(for: url))
+    }
+
+    func testOldDocumentStateDecodesWithPositionDefaults() throws {
+        let state = try JSONDecoder().decode(DocumentDisplayState.self,
+                                             from: Data(#"{"mode":"split"}"#.utf8))
+        XCTAssertNil(state.selectionLocation)
+        XCTAssertNil(state.splitRatio)
+        XCTAssertNil(state.sidebarTab)
+    }
+
     func testLegacySceneModeMigratesOnlyWhenDocumentHasNoState() {
         let store = EditorSettingsStore(defaults: isolatedDefaults())
         let document = URL(fileURLWithPath: "/tmp/work/README.md")
