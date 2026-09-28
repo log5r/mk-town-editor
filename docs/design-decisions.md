@@ -131,3 +131,5 @@ Returnキーでのリスト・引用継続は`NSTextView.insertNewline`から編
 構造化プレビューは`LazyVStack`で可視付近のブロックを生成する。解析結果は既存の文書スナップショットを使い、描画属性は表示に必要な内容の組でキャッシュする。原文位置やブロックIDが変わっても同じ内容なら再描画せず、見出し・本文・表セル等が変わった項目だけ作り直す。参照定義の行位置は描画結果に影響しないため、定義のURL・タイトルが変わった時だけキャッシュを破棄する。書類URL・倍率が変わった時も破棄し、保存件数は最大4000で抑える。引用の深さは一度作った親ID索引から求める。構造化プレビューが使われない内部のネイティブ表示では、本文・書類URL・倍率が前回と同じなら`setAttributedString`を繰り返さない。
 
 検索・置換は`NSTextView`で有効にした標準検索バーを使う。検索・次／前・置換画面・すべて置換を`NSTextFinder.Action`のタグで`performTextFinderAction`へ渡し、標準の検索条件とUndoを利用する。メニューには置換とすべて置換を明示し、置換画面はOption+Command+Fで開く。IME変換中は一括置換を実行しない。参照: [Apple NSTextFinder](https://developer.apple.com/documentation/appkit/nstextfinder)、[置換画面アクション](https://developer.apple.com/documentation/appkit/nstextfinder/action/showreplaceinterface)。
+
+大文字小文字・単語単位などの検索条件はAppKitの標準検索バーが提供し、条件メタデータは検索用ペーストボードに保持される。[確認記録](find-bar-verification.md)にSDK/APIの根拠と実機確認の残件を記す。
