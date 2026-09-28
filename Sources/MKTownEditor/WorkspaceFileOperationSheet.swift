@@ -29,6 +29,7 @@ enum WorkspaceFileAction: Identifiable, Sendable {
 struct WorkspaceFileOperationSheet: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var workspaceStore: WorkspaceStore
+    @EnvironmentObject private var settingsStore: EditorSettingsStore
     @State private var name: String
     @State private var destinationPath: String
     @State private var template: WorkspaceDocumentTemplate = .blank
@@ -257,6 +258,7 @@ struct WorkspaceFileOperationSheet: View {
                 switch action {
                 case let .rename(source), let .move(source):
                     if let movePlan { workspaceStore.remapPins(from: source, to: movePlan.destinationURL) }
+                    if let movePlan { settingsStore.moveBookmarks(under: source, to: movePlan.destinationURL) }
                 case let .trash(source): workspaceStore.removePins(under: source)
                 case .createDocument, .createFolder: break
                 }

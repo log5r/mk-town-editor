@@ -72,6 +72,7 @@ struct EditorWorkspace: View {
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
+        case bookmarks = "ブックマーク"
         case files = "ファイル"
     }
 
@@ -756,7 +757,72 @@ struct EditorWorkspace: View {
             }
             .pickerStyle(.segmented)
             .padding(8)
-            if sidebarTab == .outline { outlineSidebar } else { fileSidebar }
+            switch sidebarTab {
+            case .outline: outlineSidebar
+            case .bookmarks: bookmarksSidebar
+            case .files: fileSidebar
+            }
+        }
+    }
+
+    private var bookmarksSidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("ブックマーク").font(.headline)
+                Spacer()
+                Button("現在位置を追加", systemImage: "bookmark.fill") {
+                    guard let fileURL else { return }
+                    settingsStore.addBookmark(DocumentBookmark.capture(in: document.text,
+                        at: editorModel.selectedRange.location, documentURL: fileURL))
+                }
+                .labelStyle(.iconOnly)
+                .disabled(fileURL == nil)
+                .help("現在のカーソル位置をブックマーク")
+            }
+            .padding(12)
+            List(settingsStore.bookmarks) { bookmark in
+                Button { openBookmark(bookmark) } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(bookmark.title).lineLimit(1)
+                        Text(bookmark.documentURL.lastPathComponent)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button("ブックマークを削除", role: .destructive) {
+                        settingsStore.removeBookmark(bookmark.id)
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+            .overlay {
+                if settingsStore.bookmarks.isEmpty {
+                    ContentUnavailableView("ブックマークがありません", systemImage: "bookmark")
+                }
+            }
+        }
+    }
+
+    private func openBookmark(_ bookmark: DocumentBookmark) {
+        if bookmark.documentURL == fileURL {
+            navigate(to: bookmark.resolvedLocation(in: document.text))
+            return
+        }
+        Task {
+            do {
+                let snapshots = try workspaceStore.openBufferSnapshots()
+                let data = try snapshots[bookmark.documentURL]
+                    ?? Data(contentsOf: bookmark.documentURL)
+                let text = try MarkdownDocument.decode(data)
+                let location = bookmark.resolvedLocation(in: text)
+                documentLinkNavigation.requestPosition(in: bookmark.documentURL,
+                    range: NSRange(location: location, length: 0))
+                try await openDocument(at: bookmark.documentURL)
+            } catch {
+                documentLinkNavigation.cancelPosition(for: bookmark.documentURL)
+                workspaceOpenError = error.localizedDescription
+            }
         }
     }
 

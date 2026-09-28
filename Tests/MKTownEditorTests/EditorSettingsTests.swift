@@ -4,6 +4,34 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testBookmarksPersistAndFollowDocumentRename() {
+        let defaults = isolatedDefaults()
+        let original = URL(fileURLWithPath: "/tmp/work/old.md")
+        let renamed = URL(fileURLWithPath: "/tmp/work/new.md")
+        let store = EditorSettingsStore(defaults: defaults)
+        let bookmark = DocumentBookmark.capture(in: "# 見出し\n本文", at: 7,
+            documentURL: original)
+        store.addBookmark(bookmark)
+        store.moveDocumentState(from: original, to: renamed)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.bookmarks.first?.documentURL, renamed)
+        XCTAssertEqual(restored.bookmarks.first?.id, bookmark.id)
+        restored.removeBookmark(bookmark.id)
+        XCTAssertTrue(EditorSettingsStore(defaults: defaults).bookmarks.isEmpty)
+    }
+
+    func testBookmarksFollowWorkspaceFolderMove() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        let original = URL(fileURLWithPath: "/tmp/work/old/chapter.md")
+        store.addBookmark(DocumentBookmark.capture(in: "本文", at: 1,
+            documentURL: original))
+        store.moveBookmarks(under: URL(fileURLWithPath: "/tmp/work/old"),
+            to: URL(fileURLWithPath: "/tmp/work/new"))
+        XCTAssertEqual(store.bookmarks.first?.documentURL,
+            URL(fileURLWithPath: "/tmp/work/new/chapter.md"))
+    }
+
     func testUserSnippetsPersistWithoutChangingDocument() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
