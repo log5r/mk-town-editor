@@ -1,97 +1,11 @@
 import AppKit
 import Foundation
 
-struct MarkdownBlock: Equatable {
-    enum Kind: Equatable {
-        case paragraph
-        case heading(level: Int)
-        case quote
-        case unorderedList
-        case orderedList(number: Int)
-        case codeBlock
-        case horizontalRule
-        case blank
-    }
-
-    let kind: Kind
-    let content: String
-}
-
-enum MarkdownBlockParser {
-    static func parse(_ markdown: String) -> [MarkdownBlock] {
-        let lines = markdown.components(separatedBy: .newlines)
-        var blocks: [MarkdownBlock] = []
-        var codeLines: [String] = []
-        var isInCodeBlock = false
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-            if trimmed.hasPrefix("```") {
-                if isInCodeBlock {
-                    blocks.append(MarkdownBlock(kind: .codeBlock, content: codeLines.joined(separator: "\n")))
-                    codeLines.removeAll(keepingCapacity: true)
-                }
-                isInCodeBlock.toggle()
-                continue
-            }
-
-            if isInCodeBlock {
-                codeLines.append(line)
-                continue
-            }
-
-            blocks.append(parseLine(line, trimmed: trimmed))
-        }
-
-        if isInCodeBlock {
-            blocks.append(MarkdownBlock(kind: .codeBlock, content: codeLines.joined(separator: "\n")))
-        }
-
-        return blocks
-    }
-
-    private static func parseLine(_ line: String, trimmed: String) -> MarkdownBlock {
-        guard !trimmed.isEmpty else {
-            return MarkdownBlock(kind: .blank, content: "")
-        }
-
-        let headingMarks = trimmed.prefix(while: { $0 == "#" })
-        if (1...6).contains(headingMarks.count), trimmed.dropFirst(headingMarks.count).hasPrefix(" ") {
-            let content = String(trimmed.dropFirst(headingMarks.count + 1))
-            return MarkdownBlock(kind: .heading(level: headingMarks.count), content: content)
-        }
-
-        if trimmed == "---" || trimmed == "***" || trimmed == "___" {
-            return MarkdownBlock(kind: .horizontalRule, content: "")
-        }
-
-        if trimmed.hasPrefix("> ") {
-            return MarkdownBlock(kind: .quote, content: String(trimmed.dropFirst(2)))
-        }
-
-        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") {
-            return MarkdownBlock(kind: .unorderedList, content: String(trimmed.dropFirst(2)))
-        }
-
-        if let markerRange = trimmed.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
-            let marker = trimmed[markerRange]
-            let number = Int(marker.prefix(while: { $0.isNumber })) ?? 1
-            return MarkdownBlock(
-                kind: .orderedList(number: number),
-                content: String(trimmed[markerRange.upperBound...])
-            )
-        }
-
-        return MarkdownBlock(kind: .paragraph, content: line)
-    }
-}
-
 @MainActor
 enum MarkdownRenderer {
     static func render(_ markdown: String) -> NSAttributedString {
         let output = NSMutableAttributedString()
-        let blocks = MarkdownBlockParser.parse(markdown)
+        let blocks = MarkdownAnalysis(markdown).blocks
 
         for (index, block) in blocks.enumerated() {
             let rendered = render(block)

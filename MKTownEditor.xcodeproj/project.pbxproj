@@ -18,6 +18,7 @@
 		A1000000000000000000000A /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* MarkdownRenderer.swift */; };
 		A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* MarkdownTextEditor.swift */; };
 		A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* MarkdownPositionMap.swift */; };
+		A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* MarkdownAnalysis.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +36,7 @@
 		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000E /* MarkdownPositionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPositionMap.swift; sourceTree = "<group>"; };
+		A2000000000000000000000F /* MarkdownAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownAnalysis.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +68,7 @@
 				A2000000000000000000000A /* MarkdownRenderer.swift */,
 				A2000000000000000000000B /* MarkdownTextEditor.swift */,
 				A2000000000000000000000E /* MarkdownPositionMap.swift */,
+				A2000000000000000000000F /* MarkdownAnalysis.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -145,6 +148,7 @@
 				A1000000000000000000000A /* MarkdownRenderer.swift in Sources */,
 				A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */,
 				A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */,
+				A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

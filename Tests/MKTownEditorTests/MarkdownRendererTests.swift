@@ -4,7 +4,7 @@ import XCTest
 
 final class MarkdownRendererTests: XCTestCase {
     func testParserRecognizesCommonBlockTypes() {
-        let blocks = MarkdownBlockParser.parse("# Title\n> Quote\n- Item\n2. Second\n---")
+        let blocks = MarkdownAnalysis("# Title\n> Quote\n- Item\n2. Second\n---").blocks
 
         XCTAssertEqual(blocks.map(\.kind), [
             .heading(level: 1),
@@ -16,11 +16,14 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     func testParserKeepsFencedCodeTogether() {
-        let blocks = MarkdownBlockParser.parse("```swift\nlet value = 1\nprint(value)\n```")
+        let source = "```swift\nlet value = 1\nprint(value)\n```"
+        let blocks = MarkdownAnalysis(source).blocks
 
-        XCTAssertEqual(blocks, [
-            MarkdownBlock(kind: .codeBlock, content: "let value = 1\nprint(value)")
-        ])
+        XCTAssertEqual(blocks.count, 1)
+        XCTAssertEqual(blocks[0].kind, .codeBlock)
+        XCTAssertEqual(blocks[0].content, "let value = 1\nprint(value)")
+        XCTAssertEqual(blocks[0].codeLanguage, "swift")
+        XCTAssertEqual(blocks[0].sourceRange, NSRange(location: 0, length: (source as NSString).length))
     }
 
     @MainActor
