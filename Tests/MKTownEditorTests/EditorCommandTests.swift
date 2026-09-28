@@ -129,4 +129,23 @@ final class EditorCommandTests: XCTestCase {
         codeMenu.performActionForItem(at: swiftIndex)
         XCTAssertEqual(view.string, "```swift\nlet x = 1\n```")
     }
+
+    func testHorizontalRuleCommandWorksFromSharedContextMenu() {
+        let view = EditorTextView()
+        view.string = "beforeafter"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.setSelectedRange(NSRange(location: 6, length: 0))
+
+        let menu = view.makeMarkdownMenu(baseMenu: nil)
+        let index = try! XCTUnwrap(menu.items.firstIndex(where: {
+            $0.representedObject as? EditorCommand == .horizontalRule
+        }))
+        menu.performActionForItem(at: index)
+
+        XCTAssertEqual(view.string, "before\n\n***\n\nafter")
+        XCTAssertEqual(EditorCommand.horizontalRule.title, "区切り線")
+        XCTAssertNil(EditorCommand.horizontalRule.shortcut)
+    }
 }

@@ -46,6 +46,7 @@ struct MarkdownCommands: Commands {
                     commandButton(.codeBlock(language: language))
                 }
             }
+            commandButton(.horizontalRule)
         }
     }
 

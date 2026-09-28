@@ -58,6 +58,7 @@ enum MarkdownFormattingStyle {
     case orderedList
     case taskList
     case codeBlock(language: MarkdownCodeLanguage?)
+    case horizontalRule
 }
 
 enum MarkdownCodeLanguage: String, CaseIterable, Hashable {
@@ -128,7 +129,36 @@ enum MarkdownFormatter {
             return convertList(text, selection: safeSelection, target: .task)
         case let .codeBlock(language):
             return fencedCodeBlock(text, selection: safeSelection, language: language)
+        case .horizontalRule:
+            return horizontalRule(text, selection: safeSelection)
         }
+    }
+
+    private static func horizontalRule(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let source = text as NSString
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        let before = source.substring(to: selection.location)
+        let after = source.substring(from: NSMaxRange(selection))
+        let leading: String
+        if before.isEmpty || before.hasSuffix(newline + newline) {
+            leading = ""
+        } else if before.hasSuffix(newline) {
+            leading = newline
+        } else {
+            leading = newline + newline
+        }
+        let trailing: String
+        if after.isEmpty || after.hasPrefix(newline + newline) {
+            trailing = ""
+        } else if after.hasPrefix(newline) {
+            trailing = newline
+        } else {
+            trailing = newline + newline
+        }
+        let replacement = leading + "***" + trailing
+        return MarkdownEdit(range: selection, replacement: replacement,
+                            selection: NSRange(location: selection.location +
+                                               (replacement as NSString).length, length: 0))
     }
 
     private static func fencedCodeBlock(_ text: String, selection: NSRange,
