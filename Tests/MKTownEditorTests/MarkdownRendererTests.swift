@@ -40,4 +40,27 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertEqual(rendered.string, "first second\nthird\nfourth\n\nnext")
     }
+
+    @MainActor
+    func testNestedListAndContinuationAreVisuallyIndented() {
+        let rendered = MarkdownRenderer.render("- parent\n  - child\n\n    continuation")
+        let source = rendered.string as NSString
+        let parent = rendered.attribute(.paragraphStyle, at: source.range(of: "parent").location,
+                                        effectiveRange: nil) as? NSParagraphStyle
+        let child = rendered.attribute(.paragraphStyle, at: source.range(of: "child").location,
+                                       effectiveRange: nil) as? NSParagraphStyle
+        let continuation = rendered.attribute(.paragraphStyle, at: source.range(of: "continuation").location,
+                                              effectiveRange: nil) as? NSParagraphStyle
+
+        XCTAssertEqual(rendered.string, "•  parent\n•  child\n\ncontinuation")
+        XCTAssertGreaterThan(child?.firstLineHeadIndent ?? 0, parent?.firstLineHeadIndent ?? 0)
+        XCTAssertGreaterThan(continuation?.firstLineHeadIndent ?? 0, child?.firstLineHeadIndent ?? 0)
+    }
+
+    @MainActor
+    func testListParagraphContinuesOnNextLineWithoutExtraBullet() {
+        let rendered = MarkdownRenderer.render("- parent\n  continued\n  - child")
+
+        XCTAssertEqual(rendered.string, "•  parent continued\n•  child")
+    }
 }

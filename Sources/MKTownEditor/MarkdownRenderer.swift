@@ -43,17 +43,21 @@ enum MarkdownRenderer {
             content.insert(NSAttributedString(string: "│  ", attributes: baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)), at: 0)
             return content
         case .unorderedList:
-            let content = inline(block.content, baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
             content.insert(NSAttributedString(string: "•  ", attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
-            applyListIndent(to: content)
+            applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case let .orderedList(number):
-            let content = inline(block.content, baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
             content.insert(NSAttributedString(string: "\(number).  ", attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
-            applyListIndent(to: content)
+            applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
-            return inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
+            if block.parentID != nil {
+                applyContinuationIndent(to: content, depth: block.nestingDepth)
+            }
+            return content
         }
     }
 
@@ -127,10 +131,19 @@ enum MarkdownRenderer {
         ]
     }
 
-    private static func applyListIndent(to text: NSMutableAttributedString) {
+    private static func applyListIndent(to text: NSMutableAttributedString, depth: Int) {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.firstLineHeadIndent = 12
-        paragraph.headIndent = 32
+        paragraph.firstLineHeadIndent = CGFloat(12 + depth * 24)
+        paragraph.headIndent = CGFloat(32 + depth * 24)
+        paragraph.lineSpacing = 3
+        paragraph.paragraphSpacing = 4
+        text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+    }
+
+    private static func applyContinuationIndent(to text: NSMutableAttributedString, depth: Int) {
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.firstLineHeadIndent = CGFloat(8 + depth * 24)
+        paragraph.headIndent = paragraph.firstLineHeadIndent
         paragraph.lineSpacing = 3
         paragraph.paragraphSpacing = 4
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
