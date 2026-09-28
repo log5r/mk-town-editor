@@ -344,6 +344,13 @@ final class MarkdownEditorModel: ObservableObject {
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
+    func moveSection(at headingLocation: Int, direction: SectionMoveDirection) {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              let edit = MarkdownSectionMove.edit(in: textView.string,
+                  headingLocation: headingLocation, direction: direction) else { return }
+        _ = perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func commitLink(label: String, destination: String, title: String) -> Bool {
         guard let draft = linkDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
