@@ -131,6 +131,18 @@ final class MarkdownEditorModelTests: XCTestCase {
 
         XCTAssertTrue(model.shouldRestoreFocus)
     }
+
+    func testPlainTextHeadingCommandDoesNotCreateAnEdit() {
+        let view = ChangeCountingTextView()
+        view.string = "本文"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+
+        model.apply(.heading(level: 0))
+
+        XCTAssertEqual(view.string, "本文")
+        XCTAssertEqual(view.changeRequests, 0)
+    }
 }
 
 private final class RejectingTextView: NSTextView {
@@ -142,5 +154,14 @@ private final class RejectingTextView: NSTextView {
 private final class MarkedTextView: NSTextView {
     override func hasMarkedText() -> Bool {
         true
+    }
+}
+
+private final class ChangeCountingTextView: NSTextView {
+    var changeRequests = 0
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        changeRequests += 1
+        return super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
     }
 }

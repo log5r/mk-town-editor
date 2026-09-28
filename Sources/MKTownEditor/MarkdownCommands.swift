@@ -34,8 +34,15 @@ struct MarkdownCommands: Commands {
             Divider()
             Button("リンク") { editorModel?.apply(.link) }
                 .keyboardShortcut("k", modifiers: .command)
-            Button("見出し") { editorModel?.apply(.heading) }
-                .keyboardShortcut("1", modifiers: [.command, .option])
+            Menu("見出しレベル") {
+                Button("本文") { editorModel?.apply(.heading(level: 0)) }
+                    .keyboardShortcut("0", modifiers: [.command, .option])
+                Divider()
+                ForEach(1...6, id: \.self) { level in
+                    Button("見出し \(level)") { editorModel?.apply(.heading(level: level)) }
+                        .keyboardShortcut(KeyEquivalent(Character(String(level))), modifiers: [.command, .option])
+                }
+            }
             Button("引用") { editorModel?.apply(.quote) }
                 .keyboardShortcut(">", modifiers: [.command, .shift])
             Button("箇条書き") { editorModel?.apply(.unorderedList) }
