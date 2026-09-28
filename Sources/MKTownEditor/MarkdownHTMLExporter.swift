@@ -3,13 +3,26 @@ import Foundation
 
 @MainActor
 enum MarkdownHTMLExporter {
-    static func render(_ markdown: String, documentURL: URL? = nil) -> String {
+    static let coverBreakMarker = "\u{E000}"
+
+    static func render(_ markdown: String, documentURL: URL? = nil,
+                       preset: MarkdownExportPreset = .standard, printLayout: Bool = false) -> String {
         let analysis = MarkdownAnalysis(markdown)
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })
         let body = sequence(analysis.rootBlocks, analysis: analysis,
                             context: DocumentContext(fileURL: documentURL), anchors: anchors)
+        let title = MarkdownOutline.entries(in: analysis).first.map { visibleText($0.title) }
+            ?? documentURL?.deletingPathExtension().lastPathComponent ?? "無題"
+        let cover = preset.cover
+            ? "<section class=\"cover\"><h1>\(escape(title))</h1></section>\n" +
+                (printLayout ? "<p>\(coverBreakMarker)</p>\n" : "") : ""
+        let tableOfContents = preset.tableOfContents
+            ? "<nav aria-label=\"目次\"><h2>目次</h2><ol>" +
+                MarkdownHeadingIndex(analysis: analysis).anchors.map {
+                    "<li><a href=\"#\(escape($0.slug))\">\(escape(visibleText($0.entry.title)))</a></li>"
+                }.joined() + "</ol></nav>\n" : ""
         return """
         <!doctype html>
         <html lang="ja">
@@ -18,16 +31,20 @@ enum MarkdownHTMLExporter {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
         :root { color-scheme: light dark; }
-        body { box-sizing: border-box; max-width: 800px; margin: 0 auto; padding: 32px 24px;
-               font: 16px/1.65 -apple-system, BlinkMacSystemFont, sans-serif; overflow-wrap: anywhere; }
+        body { box-sizing: border-box; max-width: \(preset.bodyWidth)px; margin: 0 auto; padding: 32px 24px;
+               font: \(preset.fontSize)px/1.65 \(preset.font.cssFamily); overflow-wrap: anywhere; }
         pre { overflow-x: auto; padding: 16px; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); }
         code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
         img { max-width: 100%; height: auto; }
         table { border-collapse: collapse; display: block; overflow-x: auto; }
         th, td { border: 1px solid #8888; padding: 5px 10px; }
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
+        .cover { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+        nav { margin-bottom: 2em; }
+        @page { margin: \(preset.margin)pt; }
         @media print {
           body { max-width: none; margin: 0; padding: 0; }
+          .cover { break-after: page; }
           h1, h2, h3, h4, h5, h6 { break-after: avoid-page; }
           pre, blockquote, img, tr { break-inside: avoid-page; }
           table { display: table; overflow: visible; max-width: 100%; }
@@ -35,6 +52,7 @@ enum MarkdownHTMLExporter {
         </style>
         </head>
         <body>
+        \(cover)\(tableOfContents)
         \(body)
         </body>
         </html>
@@ -198,5 +216,14 @@ enum MarkdownHTMLExporter {
             .replacingOccurrences(of: ">", with: "&gt;")
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
+    private static func visibleText(_ markdown: String) -> String {
+        let options = AttributedString.MarkdownParsingOptions(
+            interpretedSyntax: .inlineOnlyPreservingWhitespace,
+            failurePolicy: .returnPartiallyParsedIfPossible
+        )
+        return (try? AttributedString(markdown: markdown, options: options))
+            .map { String($0.characters) } ?? markdown
     }
 }

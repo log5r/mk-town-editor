@@ -42,6 +42,8 @@ struct EditorWorkspace: View {
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
     @State private var plainExportError: String?
+    @State private var exportFormat: MarkdownExportFormat?
+    @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -161,6 +163,18 @@ struct EditorWorkspace: View {
             MarkdownPlainTextExportSheet(options: plainOptions) { options in
                 plainOptions = options
                 plainExportRequested = true
+            }
+        }
+        .sheet(item: $exportFormat, onDismiss: {
+            guard let request = pendingExport else { return }
+            pendingExport = nil
+            switch request.0 {
+            case .html: saveHTML(preset: request.1)
+            case .pdf: savePDF(preset: request.1)
+            }
+        }) { format in
+            MarkdownExportPresetSheet(format: format) { preset in
+                pendingExport = (format, preset)
             }
         }
         .sheet(isPresented: $showingGoToHeading) {
@@ -467,13 +481,18 @@ struct EditorWorkspace: View {
     }
 
     private func exportHTML() {
+        exportFormat = .html
+    }
+
+    private func saveHTML(preset: MarkdownExportPreset) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".html"
         panel.begin { response in
             guard response == .OK, let destination = panel.url else { return }
-            let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL)
+            let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL,
+                                                   preset: preset)
             do {
                 try html.write(to: destination, atomically: true, encoding: .utf8)
             } catch {
@@ -483,6 +502,11 @@ struct EditorWorkspace: View {
     }
 
     private func exportPDF() {
+        guard !isExportingPDF else { return }
+        exportFormat = .pdf
+    }
+
+    private func savePDF(preset: MarkdownExportPreset) {
         guard !isExportingPDF else { return }
         isExportingPDF = true
         let panel = NSSavePanel()
@@ -499,7 +523,8 @@ struct EditorWorkspace: View {
             Task { @MainActor in
                 defer { isExportingPDF = false }
                 do {
-                    try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination)
+                    try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination,
+                                                   preset: preset)
                 } catch {
                     pdfExportError = error.localizedDescription
                 }
