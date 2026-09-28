@@ -4,6 +4,15 @@ private struct MarkdownEditorModelKey: FocusedValueKey {
     typealias Value = MarkdownEditorModel
 }
 
+struct FocusModeActions {
+    let isActive: Bool
+    let toggle: () -> Void
+}
+
+private struct FocusModeActionsKey: FocusedValueKey {
+    typealias Value = FocusModeActions
+}
+
 private struct GoToLineActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -113,6 +122,10 @@ private struct PreviewSearchActionsKey: FocusedValueKey {
 }
 
 extension FocusedValues {
+    var focusModeActions: FocusModeActions? {
+        get { self[FocusModeActionsKey.self] }
+        set { self[FocusModeActionsKey.self] = newValue }
+    }
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
         set { self[MarkdownEditorModelKey.self] = newValue }
@@ -205,6 +218,7 @@ extension FocusedValues {
 }
 
 struct MarkdownCommands: Commands {
+    @FocusedValue(\.focusModeActions) private var focusModeActions
     @FocusedValue(\.markdownEditorModel) private var editorModel
     @FocusedValue(\.goToLineAction) private var goToLineAction
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
@@ -257,6 +271,13 @@ struct MarkdownCommands: Commands {
             Button("見出しへ移動…") { goToHeadingAction?() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(goToHeadingAction == nil)
+        }
+        CommandMenu("集中モード") {
+            Button(focusModeActions?.isActive == true ? "集中モードを終了" : "集中モードを開始") {
+                focusModeActions?.toggle()
+            }
+            .keyboardShortcut("j", modifiers: [.command, .shift])
+            .disabled(focusModeActions == nil)
         }
         CommandMenu("ワークスペース") {
             Button("フォルダを開く…") { workspaceStore.chooseFolder() }

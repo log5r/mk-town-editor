@@ -20,6 +20,7 @@ struct EditorWorkspace: View {
     @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
+    @State private var focusMode = FocusModeState()
     @State private var splitRatio = 0.5
     @State private var splitOrientation: EditorSplitOrientation = .sideBySide
     @State private var previewFirst = false
@@ -190,10 +191,23 @@ struct EditorWorkspace: View {
         } detail: {
             VStack(spacing: 0) {
                 editorContent
-                Divider()
-                statusBar
+                if !focusMode.isActive {
+                    Divider()
+                    statusBar
+                }
             }
             .frame(minWidth: 720, minHeight: 480)
+            .overlay(alignment: .topTrailing) {
+                if focusMode.isActive {
+                    Button("集中モードを終了", systemImage: "arrow.down.right.and.arrow.up.left") {
+                        toggleFocusMode()
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.plain)
+                    .padding(12)
+                    .help("集中モードを終了")
+                }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .navigation) {
@@ -264,6 +278,9 @@ struct EditorWorkspace: View {
                 .help("現在の書類のプレビューを別ウインドウで表示")
             }
         }
+        .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
+        .focusedSceneValue(\.focusModeActions, FocusModeActions(
+            isActive: focusMode.isActive, toggle: toggleFocusMode))
         .focusedSceneValue(\.markdownEditorModel, editorModel)
         .focusedSceneValue(\.goToLineAction) { showingGoToLine = true }
         .focusedSceneValue(\.goToHeadingAction) { showingGoToHeading = true }
@@ -876,9 +893,14 @@ struct EditorWorkspace: View {
                                    scrollX: editorModel.scrollOrigin.x,
                                    scrollY: editorModel.scrollOrigin.y, splitRatio: splitRatio,
                                    sidebarTab: sidebarTab.rawValue,
-                                   sidebarVisible: sidebarVisibility != .detailOnly,
+                                   sidebarVisible: (focusMode.savedSidebarVisibility ?? sidebarVisibility) != .detailOnly,
                                    splitOrientation: splitOrientation,
                                    previewFirst: previewFirst)
+    }
+
+    private func toggleFocusMode() {
+        sidebarVisibility = focusMode.toggle(sidebarVisibility: sidebarVisibility)
+        savePosition(for: fileURL)
     }
 
     private func restorePosition(for url: URL?) {

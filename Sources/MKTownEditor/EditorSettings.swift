@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import SwiftUI
 
 enum EditorFontChoice: String, Codable, CaseIterable {
     case monospacedSystem
@@ -200,6 +201,20 @@ enum EditorZoomSurface: CaseIterable {
 enum EditorSplitOrientation: String, Codable, CaseIterable {
     case sideBySide = "左右"
     case stacked = "上下"
+}
+
+struct FocusModeState {
+    private(set) var savedSidebarVisibility: NavigationSplitViewVisibility?
+    var isActive: Bool { savedSidebarVisibility != nil }
+
+    mutating func toggle(sidebarVisibility: NavigationSplitViewVisibility) -> NavigationSplitViewVisibility {
+        if let savedSidebarVisibility {
+            self.savedSidebarVisibility = nil
+            return savedSidebarVisibility
+        }
+        savedSidebarVisibility = sidebarVisibility
+        return .detailOnly
+    }
 }
 
 enum EditorSplitSizing {
