@@ -9,9 +9,9 @@ enum EditorMode: String, CaseIterable, Identifiable, Codable {
 
     var label: String {
         switch self {
-        case .editor: "編集"
-        case .split: "分割"
-        case .preview: "プレビュー"
+        case .editor: String(localized: "編集")
+        case .split: String(localized: "分割")
+        case .preview: String(localized: "プレビュー")
         }
     }
 

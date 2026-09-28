@@ -8,9 +8,9 @@ struct MarkdownExportPreset: Codable, Equatable, Identifiable {
 
         var title: String {
             switch self {
-            case .system: "システム"
-            case .serif: "明朝体"
-            case .monospaced: "等幅"
+            case .system: String(localized: "システム")
+            case .serif: String(localized: "明朝体")
+            case .monospaced: String(localized: "等幅")
             }
         }
 
@@ -80,6 +80,6 @@ struct MarkdownExportPresetStore {
 
     enum PresetError: LocalizedError {
         case invalid
-        var errorDescription: String? { "書き出し設定を確認してください。" }
+        var errorDescription: String? { String(localized: "書き出し設定を確認してください。") }
     }
 }

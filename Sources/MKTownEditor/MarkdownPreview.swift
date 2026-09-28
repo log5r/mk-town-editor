@@ -329,15 +329,15 @@ enum PreviewAccessibility {
     }
 
     static func headingLabel(level: Int, text: String) -> String {
-        "見出しレベル \(level)、\(text)"
+        String(localized: "見出しレベル \(level)、\(text)")
     }
 
     static func taskLabel(_ content: String) -> String {
-        content.isEmpty ? "タスクの完了" : "\(content) の完了"
+        content.isEmpty ? String(localized: "タスクの完了") : String(localized: "\(content) の完了")
     }
 
     static func tableCellLabel(header: String, value: String, rowNumber: Int) -> String {
-        rowNumber == 0 ? "列見出し \(header)" : "\(header) 列、\(rowNumber) 行目、\(value)"
+        rowNumber == 0 ? String(localized: "列見出し \(header)") : String(localized: "\(header) 列、\(rowNumber) 行目、\(value)")
     }
 }
 
@@ -563,7 +563,7 @@ final class DetachedPreviewWindowManager: NSObject, ObservableObject, NSWindowDe
     }
 
     private var title: String {
-        "プレビュー — \(documentURL?.lastPathComponent ?? "無題")"
+        String(localized: "プレビュー — \(documentURL?.lastPathComponent ?? String(localized: "無題"))")
     }
 }
 

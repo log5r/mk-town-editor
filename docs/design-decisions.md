@@ -281,3 +281,5 @@ HTML・RTF取り込みはファイルを最大10MBまで読み、AppKitの属性
 ツールバーはSwiftUIの[カスタマイズ可能なtoolbar](https://developer.apple.com/documentation/swiftui/view/toolbar%28id%3Acontent%3A%29)と`ToolbarCommands`を使う。太字・斜体・リンクを初期表示し、他の書式・挿入項目は利用者が標準の編集画面から追加する。各項目は固定IDを持ち、メニュー・コンテキストメニューと同じ`EditorCommand`を実行するので、プレビュー専用や別ウインドウで編集不可のときはコマンドの共通有効条件を使う。カスタマイズ状態の保存はmacOSに任せ、本文や文書ごとの設定へ混ぜない。
 
 ショートカット設定は共通の`EditorCommand`一覧から生成し、コマンドIDごとの変更値だけをアプリ設定へ保存する。キーは印字可能な1文字とし、CommandまたはControlを必須とする。保存前に他コマンドの現在値、書類・検索・ウインドウ操作の固定キー、macOSで標準的に使うCommand+Q/W/H/Mなどを検査する。変更はMarkdownメニューとコマンドパレットの表示・検索へ同時に反映し、「既定に戻す」で変更値だけを削除する。既存の本文見出し切替とプレビュー倍率のCommand+Option+0が重複していたため、プレビュー倍率のリセットをCommand+Option+Shift+0へ移した。ユーザー定義値はアプリ設定の移行可能な任意フィールドとし、既存設定を読み込んでも既定キーを保持する。
+
+UIの原文言語は日本語とし、`Localizable.xcstrings`に英語訳を置く。SwiftUIの静的ラベルはXcodeの文字列抽出に任せ、動的なコマンド名、設定値、AppKitメニュー、エラー文、VoiceOver読み上げ文には`String(localized:)`を明示する。永続化されるenumの`rawValue`は変更せず、表示用の`title`を分ける。テンプレートと挿入時の仮文字列は作成時の言語で本文へ入るため、その後の表示言語変更で既存文書を書き換えない。Xcodeの`-exportLocalizations`で抽出結果を更新し、カタログテストで英語訳の欠落、未翻訳の日本語、置換引数の種類を検出する。Xcodeビルド後の`en.lproj/Localizable.strings`でも英語リソースを確認した。

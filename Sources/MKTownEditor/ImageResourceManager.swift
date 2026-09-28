@@ -137,8 +137,8 @@ enum ImageImportMode: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .managedCopy: "assets にコピー"
-        case .relativeReference: "元ファイルを参照"
+        case .managedCopy: String(localized: "assets にコピー")
+        case .relativeReference: String(localized: "元ファイルを参照")
         }
     }
 }
@@ -192,11 +192,11 @@ enum ImageResourceError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unsavedDocument: "ファイル画像を挿入するには、先に文書を保存してください。"
-        case .invalidImage: "選択したファイルは対応する画像ではありません。"
-        case .invalidAttachment: "選択したファイルを添付できません。"
-        case .noAvailableName: "画像の保存名を決められません。"
-        case .unsafeAssetsDirectory: "画像保存先の assets フォルダを確認してください。"
+        case .unsavedDocument: String(localized: "ファイル画像を挿入するには、先に文書を保存してください。")
+        case .invalidImage: String(localized: "選択したファイルは対応する画像ではありません。")
+        case .invalidAttachment: String(localized: "選択したファイルを添付できません。")
+        case .noAvailableName: String(localized: "画像の保存名を決められません。")
+        case .unsafeAssetsDirectory: String(localized: "画像保存先の assets フォルダを確認してください。")
         }
     }
 }
@@ -205,7 +205,7 @@ enum ImageInsertionError: LocalizedError {
     case documentChanged
 
     var errorDescription: String? {
-        "本文が変更されたため画像を挿入できません。もう一度挿入してください。"
+        String(localized: "本文が変更されたため画像を挿入できません。もう一度挿入してください。")
     }
 }
 
@@ -470,7 +470,7 @@ enum ImageInsertionService {
         }.value
         let alt = fileURL.deletingPathExtension().lastPathComponent
         guard !Task.isCancelled, currentContext() == context,
-              model.commitDroppedImage(draft, alt: alt.isEmpty ? "画像" : alt,
+              model.commitDroppedImage(draft, alt: alt.isEmpty ? String(localized: "画像") : alt,
                                        destination: imported.relativePath) else {
             ImageResourceManager().rollback(imported)
             throw ImageInsertionError.documentChanged
@@ -485,7 +485,7 @@ enum ImageInsertionService {
             try ImageResourceManager().savePastedImage(imageData, for: context)
         }.value
         guard !Task.isCancelled, currentContext() == context,
-              model.commitDroppedImage(draft, alt: "スクリーンショット",
+              model.commitDroppedImage(draft, alt: String(localized: "スクリーンショット"),
                                        destination: imported.relativePath) else {
             ImageResourceManager().rollback(imported)
             throw ImageInsertionError.documentChanged

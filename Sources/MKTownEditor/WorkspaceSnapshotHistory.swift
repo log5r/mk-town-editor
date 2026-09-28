@@ -239,7 +239,7 @@ struct WorkspaceSnapshotHistorySheet: View {
     private func excerpt(_ text: String, lines: Range<Int>) -> String {
         let parts = text.components(separatedBy: "\n")
         let value = parts[lines].prefix(3).joined(separator: " ⏎ ")
-        return value.isEmpty ? "（なし）" : String(value.prefix(180))
+        return value.isEmpty ? String(localized: "（なし）") : String(value.prefix(180))
     }
 
     private func loadEntries() {
@@ -311,6 +311,6 @@ struct WorkspaceSnapshotHistorySheet: View {
 
     private func apply(_ restored: String) {
         errorMessage = onApply(restored, currentText)
-            ? nil : "本文が変更されたか編集中のため、復元できませんでした。"
+            ? nil : String(localized: "本文が変更されたか編集中のため、復元できませんでした。")
     }
 }

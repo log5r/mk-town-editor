@@ -4,7 +4,7 @@ import Foundation
 enum MarkdownRichClipboardError: LocalizedError {
     case writeFailed
 
-    var errorDescription: String? { "クリップボードへ書き込めませんでした。" }
+    var errorDescription: String? { String(localized: "クリップボードへ書き込めませんでした。") }
 }
 
 @MainActor

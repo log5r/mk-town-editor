@@ -35,7 +35,7 @@ enum WorkspaceOpenBufferError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .conflictingWindows(url):
-            "複数ウインドウの書類内容が一致しません: \(url.lastPathComponent)"
+            String(localized: "複数ウインドウの書類内容が一致しません: \(url.lastPathComponent)")
         }
     }
 }
@@ -219,7 +219,7 @@ final class WorkspaceStore: ObservableObject {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "開く"
+        panel.prompt = String(localized: "開く")
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
             self?.setRoot(url)

@@ -22,12 +22,12 @@ enum ExternalConversionError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .toolMissing: "Pandocが見つかりません。公式サイトから任意で導入し、実行ファイルを指定してください。"
-        case .toolNotExecutable: "指定したPandocを実行できません。ファイルと実行権限を確認してください。"
-        case let .conversionFailed(message): "変換に失敗しました: \(message)"
-        case .emptyOutput: "変換器が空のファイルを返しました。"
-        case .destinationChanged: "書き出し先が変換中に変更されました。もう一度保存先を選んでください。"
-        case .cancelled: "変換を中止しました。"
+        case .toolMissing: String(localized: "Pandocが見つかりません。公式サイトから任意で導入し、実行ファイルを指定してください。")
+        case .toolNotExecutable: String(localized: "指定したPandocを実行できません。ファイルと実行権限を確認してください。")
+        case let .conversionFailed(message): String(localized: "変換に失敗しました: \(message)")
+        case .emptyOutput: String(localized: "変換器が空のファイルを返しました。")
+        case .destinationChanged: String(localized: "書き出し先が変換中に変更されました。もう一度保存先を選んでください。")
+        case .cancelled: String(localized: "変換を中止しました。")
         }
     }
 }
@@ -112,7 +112,7 @@ struct ExternalDocumentConverter: Sendable {
             let message = String(decoding: errorData.prefix(2000), as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             throw ExternalConversionError.conversionFailed(
-                message.isEmpty ? "終了コード \(process.terminationStatus)" : message)
+                message.isEmpty ? String(localized: "終了コード \(process.terminationStatus)") : message)
         }
         guard manager.fileExists(atPath: output.path),
               let size = try output.resourceValues(forKeys: [.fileSizeKey]).fileSize,

@@ -80,41 +80,41 @@ enum EditorCommand: Hashable {
 
     var title: String {
         switch self {
-        case .bold: "太字"
-        case .italic: "斜体"
-        case .strikethrough: "取り消し線"
-        case .inlineCode: "インラインコード"
-        case .link: "リンク"
-        case .convertLinkForm: "参照形式／インライン形式を変換"
-        case .footnote: "脚注を挿入"
-        case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
-        case .quote: "引用"
-        case .plainBlock: "本文に戻す"
-        case .removeFormatting: "書式を除去"
-        case .tableOfContents: "目次を生成・更新"
-        case .renumberList: "番号付きリストを再採番"
-        case .duplicateLines: "行を複製"
-        case .moveLinesUp: "行を上へ移動"
-        case .moveLinesDown: "行を下へ移動"
-        case .deleteLines: "行を削除"
-        case .comment: "コメントにする／解除"
-        case .expandSelection: "選択範囲を拡大"
-        case .shrinkSelection: "選択範囲を縮小"
-        case .toggleFold: "見出し・コードを折りたたむ／展開"
-        case .unfoldAll: "すべて展開"
-        case .snippet: "スニペットを挿入…"
-        case .commandPalette: "コマンドパレット…"
-        case .unorderedList: "箇条書き"
-        case .orderedList: "番号付きリスト"
-        case .taskList: "タスクリスト"
-        case .indentList: "インデントを増やす"
-        case .outdentList: "インデントを減らす"
-        case .toggleTaskCompletion: "タスクの完了を切り替え"
-        case let .codeBlock(language): language.map { "\($0.title) コードブロック" } ?? "言語なし"
-        case .horizontalRule: "区切り線"
-        case .image: "画像…"
-        case .table: "表…"
-        case .find: "検索…"
+        case .bold: String(localized: "太字")
+        case .italic: String(localized: "斜体")
+        case .strikethrough: String(localized: "取り消し線")
+        case .inlineCode: String(localized: "インラインコード")
+        case .link: String(localized: "リンク")
+        case .convertLinkForm: String(localized: "参照形式／インライン形式を変換")
+        case .footnote: String(localized: "脚注を挿入")
+        case let .heading(level): level == 0 ? String(localized: "本文") : String(localized: "見出し \(level)")
+        case .quote: String(localized: "引用")
+        case .plainBlock: String(localized: "本文に戻す")
+        case .removeFormatting: String(localized: "書式を除去")
+        case .tableOfContents: String(localized: "目次を生成・更新")
+        case .renumberList: String(localized: "番号付きリストを再採番")
+        case .duplicateLines: String(localized: "行を複製")
+        case .moveLinesUp: String(localized: "行を上へ移動")
+        case .moveLinesDown: String(localized: "行を下へ移動")
+        case .deleteLines: String(localized: "行を削除")
+        case .comment: String(localized: "コメントにする／解除")
+        case .expandSelection: String(localized: "選択範囲を拡大")
+        case .shrinkSelection: String(localized: "選択範囲を縮小")
+        case .toggleFold: String(localized: "見出し・コードを折りたたむ／展開")
+        case .unfoldAll: String(localized: "すべて展開")
+        case .snippet: String(localized: "スニペットを挿入…")
+        case .commandPalette: String(localized: "コマンドパレット…")
+        case .unorderedList: String(localized: "箇条書き")
+        case .orderedList: String(localized: "番号付きリスト")
+        case .taskList: String(localized: "タスクリスト")
+        case .indentList: String(localized: "インデントを増やす")
+        case .outdentList: String(localized: "インデントを減らす")
+        case .toggleTaskCompletion: String(localized: "タスクの完了を切り替え")
+        case let .codeBlock(language): language.map { String(localized: "\($0.title) コードブロック") } ?? String(localized: "言語なし")
+        case .horizontalRule: String(localized: "区切り線")
+        case .image: String(localized: "画像…")
+        case .table: String(localized: "表…")
+        case .find: String(localized: "検索…")
         }
     }
 

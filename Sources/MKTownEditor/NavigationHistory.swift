@@ -72,7 +72,7 @@ struct DocumentBookmark: Codable, Equatable, Identifiable {
             length: max(0, lineEnd - lineStart)))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return Self(documentURL: documentURL.resolvingSymlinksInPath().standardizedFileURL,
-            title: String(label.prefix(60)).isEmpty ? "行 \(line)" : String(label.prefix(60)),
+            title: String(label.prefix(60)).isEmpty ? String(localized: "行 \(line)") : String(label.prefix(60)),
             utf16Location: safe, snippet: source.substring(with: range),
             snippetOffset: safe - range.location, sectionSlug: section?.slug,
             sectionOffset: section.map { safe - $0.entry.sourceRange.location })

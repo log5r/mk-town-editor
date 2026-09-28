@@ -174,13 +174,13 @@ enum MarkdownFormatter {
 
         switch style {
         case .bold:
-            return wrap(text, selection: safeSelection, prefix: "**", suffix: "**", placeholder: "太字")
+            return wrap(text, selection: safeSelection, prefix: "**", suffix: "**", placeholder: String(localized: "太字"))
         case .italic:
-            return wrap(text, selection: safeSelection, prefix: "_", suffix: "_", placeholder: "斜体")
+            return wrap(text, selection: safeSelection, prefix: "_", suffix: "_", placeholder: String(localized: "斜体"))
         case .strikethrough:
-            return wrap(text, selection: safeSelection, prefix: "~~", suffix: "~~", placeholder: "取り消し線")
+            return wrap(text, selection: safeSelection, prefix: "~~", suffix: "~~", placeholder: String(localized: "取り消し線"))
         case .inlineCode:
-            return wrap(text, selection: safeSelection, prefix: "`", suffix: "`", placeholder: "コード")
+            return wrap(text, selection: safeSelection, prefix: "`", suffix: "`", placeholder: String(localized: "コード"))
         case .link:
             return link(text, selection: safeSelection)
         case let .heading(level):
@@ -460,7 +460,7 @@ enum MarkdownFormatter {
     private static func link(_ text: String, selection: NSRange) -> MarkdownEdit {
         let nsText = text as NSString
         let selected = nsText.substring(with: selection)
-        let label = selected.isEmpty ? "リンク" : selected
+        let label = selected.isEmpty ? String(localized: "リンク") : selected
         let replacement = MarkdownLinkSyntax.makeLink(label: label, destination: "https://")
         let urlStart = selection.location + (replacement as NSString).range(of: "https://").location
         return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))

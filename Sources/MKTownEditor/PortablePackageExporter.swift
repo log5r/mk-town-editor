@@ -23,14 +23,14 @@ enum PortablePackageError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unsavedDocument: "画像の相対パスを解決するため、先に書類を保存してください。"
-        case .invalidName: "パッケージ名にはフォルダ名に使える文字を指定してください。"
-        case .destinationExists: "同じ名前の出力が既にあります。別の名前を指定してください。"
-        case let .missingResource(path): "参照ファイルが見つかりません: \(path)"
-        case let .externalImage(path): "外部画像はパッケージに含められません: \(path)"
-        case .resourceTooLarge: "参照ファイルの合計が500MBを超えています。"
-        case let .archiveFailed(message): "ZIPの作成に失敗しました: \(message)"
-        case .cancelled: "書き出しを中止しました。"
+        case .unsavedDocument: String(localized: "画像の相対パスを解決するため、先に書類を保存してください。")
+        case .invalidName: String(localized: "パッケージ名にはフォルダ名に使える文字を指定してください。")
+        case .destinationExists: String(localized: "同じ名前の出力が既にあります。別の名前を指定してください。")
+        case let .missingResource(path): String(localized: "参照ファイルが見つかりません: \(path)")
+        case let .externalImage(path): String(localized: "外部画像はパッケージに含められません: \(path)")
+        case .resourceTooLarge: String(localized: "参照ファイルの合計が500MBを超えています。")
+        case let .archiveFailed(message): String(localized: "ZIPの作成に失敗しました: \(message)")
+        case .cancelled: String(localized: "書き出しを中止しました。")
         }
     }
 }

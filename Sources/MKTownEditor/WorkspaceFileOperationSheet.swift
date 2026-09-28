@@ -50,8 +50,8 @@ struct WorkspaceFileOperationSheet: View {
         self.onComplete = onComplete
         let initialName: String
         switch action {
-        case .createDocument: initialName = "新規書類.md"
-        case .createFolder: initialName = "新規フォルダ"
+        case .createDocument: initialName = String(localized: "新規書類.md")
+        case .createFolder: initialName = String(localized: "新規フォルダ")
         default: initialName = action.sourceURL?.lastPathComponent ?? ""
         }
         _name = State(initialValue: initialName)
@@ -140,11 +140,11 @@ struct WorkspaceFileOperationSheet: View {
 
     private var title: String {
         switch action {
-        case .createDocument: "Markdown書類を作成"
-        case .createFolder: "フォルダを作成"
-        case .rename: "名前を変更"
-        case .move: "ファイルを移動"
-        case .trash: "ゴミ箱へ移動"
+        case .createDocument: String(localized: "Markdown書類を作成")
+        case .createFolder: String(localized: "フォルダを作成")
+        case .rename: String(localized: "名前を変更")
+        case .move: String(localized: "ファイルを移動")
+        case .trash: String(localized: "ゴミ箱へ移動")
         }
     }
 
@@ -315,5 +315,5 @@ struct WorkspaceFileOperationSheet: View {
 }
 
 private struct WorkspaceOpenDocumentError: LocalizedError {
-    var errorDescription: String? { "対象の書類が開いています。保存して閉じてから操作してください。" }
+    var errorDescription: String? { String(localized: "対象の書類が開いています。保存して閉じてから操作してください。") }
 }

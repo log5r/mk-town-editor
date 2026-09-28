@@ -10,8 +10,8 @@ enum EditorFontChoice: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .monospacedSystem: "システム等幅"
-        case .system: "システム"
+        case .monospacedSystem: String(localized: "システム等幅")
+        case .system: String(localized: "システム")
         case .menlo: "Menlo"
         }
     }
@@ -34,9 +34,9 @@ enum ProofingLanguage: String, Codable, CaseIterable {
 
     var title: String {
         switch self {
-        case .automatic: "自動判定"
-        case .english: "英語"
-        case .japanese: "日本語"
+        case .automatic: String(localized: "自動判定")
+        case .english: String(localized: "英語")
+        case .japanese: String(localized: "日本語")
         }
     }
 
@@ -55,8 +55,8 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .extended: "拡張（表・脚注・フロントマター）"
-        case .basic: "基本（表・脚注・フロントマターなし）"
+        case .extended: String(localized: "拡張（表・脚注・フロントマター）")
+        case .basic: String(localized: "基本（表・脚注・フロントマターなし）")
         }
     }
 }
@@ -65,7 +65,7 @@ enum PreviewTheme: String, Codable, CaseIterable, Sendable {
     case system
     case paper
 
-    var title: String { self == .system ? "システム" : "紙色" }
+    var title: String { self == .system ? String(localized: "システム") : String(localized: "紙色") }
 
     var background: NSColor? {
         self == .paper ? NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1) : nil
@@ -196,12 +196,14 @@ struct AppEditorSettings: Codable, Equatable {
 enum EditorZoomSurface: CaseIterable {
     case editor, preview
 
-    var title: String { self == .editor ? "編集" : "プレビュー" }
+    var title: String { self == .editor ? String(localized: "編集") : String(localized: "プレビュー") }
 }
 
 enum EditorSplitOrientation: String, Codable, CaseIterable {
     case sideBySide = "左右"
     case stacked = "上下"
+
+    var title: String { self == .sideBySide ? String(localized: "左右") : String(localized: "上下") }
 }
 
 struct FocusModeState {

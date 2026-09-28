@@ -458,8 +458,8 @@ final class MarkdownEditorModel: ObservableObject {
             selection: selection, delimitedText: clipboard) else {
             if let window = textView.window {
                 let alert = NSAlert()
-                alert.messageText = "TSV・CSVを表に変換できません"
-                alert.informativeText = "区切り文字、引用符、行の内容を確認してください。"
+                alert.messageText = String(localized: "TSV・CSVを表に変換できません")
+                alert.informativeText = String(localized: "区切り文字、引用符、行の内容を確認してください。")
                 alert.beginSheetModal(for: window)
             }
             return
@@ -475,8 +475,8 @@ final class MarkdownEditorModel: ObservableObject {
             return
         }
         let alert = NSAlert()
-        alert.messageText = "セル内改行を変換します"
-        alert.informativeText = "Markdown表ではセル内改行を直接表せないため、<br>に置き換えます。"
+        alert.messageText = String(localized: "セル内改行を変換します")
+        alert.informativeText = String(localized: "Markdown表ではセル内改行を直接表せないため、<br>に置き換えます。")
         alert.addButton(withTitle: "変換")
         alert.addButton(withTitle: "キャンセル")
         alert.beginSheetModal(for: window) { response in

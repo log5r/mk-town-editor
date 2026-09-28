@@ -29,10 +29,10 @@ enum WorkspaceSearchScope: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .all: "すべて"
-        case .headings: "見出し"
-        case .body: "本文・リスト・引用・表"
-        case .code: "コードブロック"
+        case .all: String(localized: "すべて")
+        case .headings: String(localized: "見出し")
+        case .body: String(localized: "本文・リスト・引用・表")
+        case .code: String(localized: "コードブロック")
         }
     }
 

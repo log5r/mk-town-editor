@@ -9,6 +9,7 @@ struct ImageEditorSheet: View {
     private enum Source: String, CaseIterable {
         case url = "URL"
         case file = "ファイル"
+        var title: String { self == .url ? "URL" : String(localized: "ファイル") }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -41,7 +42,7 @@ struct ImageEditorSheet: View {
                 .font(.headline)
             Picker("画像の取得元", selection: $source) {
                 ForEach(Source.allCases, id: \.self) { value in
-                    Text(value.rawValue).tag(value)
+                    Text(value.title).tag(value)
                 }
             }
             .pickerStyle(.segmented)

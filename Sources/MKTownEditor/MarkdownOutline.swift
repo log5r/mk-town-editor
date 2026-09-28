@@ -13,7 +13,7 @@ enum MarkdownOutline {
             guard case let .heading(level) = block.kind else { return nil }
             let title = block.content.trimmingCharacters(in: .whitespacesAndNewlines)
             return MarkdownOutlineEntry(id: block.id, level: level,
-                                        title: title.isEmpty ? "無題の見出し" : title,
+                                        title: title.isEmpty ? String(localized: "無題の見出し") : title,
                                         sourceRange: block.sourceRange)
         }
     }
@@ -132,6 +132,14 @@ enum MarkdownContentKind: String, CaseIterable {
     case task = "タスク"
     case link = "リンク"
     case image = "画像"
+
+    var title: String {
+        switch self {
+        case .task: String(localized: "タスク")
+        case .link: String(localized: "リンク")
+        case .image: String(localized: "画像")
+        }
+    }
 }
 
 struct MarkdownContentItem: Identifiable, Equatable {
@@ -157,7 +165,7 @@ enum MarkdownContentInspector {
         var items = analysis.blocks.compactMap { block -> MarkdownContentItem? in
             guard let task = block.task else { return nil }
             return MarkdownContentItem(kind: .task,
-                label: (task.isChecked ? "完了: " : "未完了: ") + task.content,
+                label: (task.isChecked ? String(localized: "完了: ") : String(localized: "未完了: ")) + task.content,
                 destination: nil, sourceRange: block.sourceRange)
         }
         let inline = MarkdownLinkSyntax.inlineLinks(in: text).filter {
