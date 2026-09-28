@@ -47,4 +47,27 @@ final class MarkdownLinkDiagnosticsTests: XCTestCase {
         XCTAssertEqual(links.map(\.destination), ["image.png", "folder/a(1).md"])
         XCTAssertEqual(links.map(\.isImage), [true, false])
     }
+
+    func testLintFindsHeadingJumpMissingLinkAndMixedListMarkers() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = "# Main\n### Deep\n- one\n* two\n[bad](missing.md)\n```\n* code\n```"
+        let diagnostics = MarkdownLint.inspect(source, analysis: MarkdownAnalysis(source),
+            context: DocumentContext(fileURL: root.appendingPathComponent("source.md")))
+        XCTAssertEqual(diagnostics.map(\.rule), [.headingHierarchy, .listMarker, .missingLink])
+        let text = source as NSString
+        XCTAssertEqual(text.substring(with: diagnostics[0].sourceRange), "### Deep\n")
+        XCTAssertEqual(text.substring(with: diagnostics[1].sourceRange), "* two\n")
+    }
+
+    func testLintDisabledRulesSuppressOnlyTheirDiagnostics() throws {
+        let source = "## First\n- one\n+ two"
+        let context = DocumentContext(fileURL: nil)
+        let all = MarkdownLint.inspect(source, analysis: MarkdownAnalysis(source), context: context)
+        XCTAssertEqual(all.map(\.rule), [.headingHierarchy, .listMarker])
+        let filtered = MarkdownLint.inspect(source, analysis: MarkdownAnalysis(source),
+            context: context, disabled: [.headingHierarchy])
+        XCTAssertEqual(filtered.map(\.rule), [.listMarker])
+    }
 }

@@ -120,6 +120,16 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.readingEstimate, estimate)
     }
 
+    func testDisabledLintRulesPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        settings.disabledLintRules = [.headingHierarchy, .listMarker]
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.disabledLintRules,
+                       [.headingHierarchy, .listMarker])
+    }
+
     func testWritingGoalAndSessionBaselinePersistAndFollowRename() {
         let defaults = isolatedDefaults()
         let oldURL = URL(fileURLWithPath: "/tmp/work/draft.md")

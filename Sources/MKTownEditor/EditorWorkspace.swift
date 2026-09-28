@@ -30,6 +30,9 @@ struct EditorWorkspace: View {
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
+    @State private var showingMarkdownLint = false
+    @State private var isCheckingMarkdownLint = false
+    @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
     @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
@@ -196,6 +199,13 @@ struct EditorWorkspace: View {
                 }
                 .help("ローカルリンクの参照先を確認")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Markdown診断", systemImage: "checkmark.seal") {
+                    showingMarkdownLint = true
+                    checkMarkdownLint()
+                }
+                .help("見出し・リンク・リスト表記を診断")
+            }
 
             ToolbarItem(placement: .principal) {
                 Picker("表示", selection: mode) {
@@ -353,6 +363,24 @@ struct EditorWorkspace: View {
                 if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
                 navigate(to: diagnostic.sourceRange.location)
             }
+        }
+        .sheet(isPresented: $showingMarkdownLint) {
+            MarkdownLintSheet(diagnostics: markdownLintDiagnostics,
+                              isChecking: isCheckingMarkdownLint,
+                              source: document.text,
+                              disabledRules: settingsStore.app.disabledLintRules ?? [],
+                              onToggleRule: { rule, isEnabled in
+                                  var settings = settingsStore.app
+                                  var disabled = settings.disabledLintRules ?? []
+                                  if isEnabled { disabled.remove(rule) } else { disabled.insert(rule) }
+                                  settings.disabledLintRules = disabled
+                                  settingsStore.setAppSettings(settings)
+                                  checkMarkdownLint()
+                              }, onSelect: { diagnostic in
+                                  showingMarkdownLint = false
+                                  if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                                  navigate(to: diagnostic.sourceRange.location)
+                              })
         }
     }
 
@@ -535,6 +563,7 @@ struct EditorWorkspace: View {
             navigationHistory.moveDocument(from: oldURL, to: newURL)
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
+            if showingMarkdownLint { checkMarkdownLint() }
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
                 settingsStore.moveDocumentState(from: oldURL, to: newURL)
@@ -556,6 +585,7 @@ struct EditorWorkspace: View {
             previewSearchRange = nil
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
+            if showingMarkdownLint { checkMarkdownLint() }
         }
         .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
@@ -928,6 +958,25 @@ struct EditorWorkspace: View {
             guard document.text == source else { return }
             linkDiagnostics = diagnostics
             isCheckingLinks = false
+        }
+    }
+
+    private func checkMarkdownLint() {
+        let source = document.text
+        let cachedAnalysis = analysisStore.snapshot?.source == source
+            ? analysisStore.snapshot?.analysis : nil
+        let context = documentContext
+        let disabled = settingsStore.app.disabledLintRules ?? []
+        isCheckingMarkdownLint = true
+        Task {
+            let diagnostics = await Task.detached(priority: .userInitiated) {
+                MarkdownLint.inspect(source, analysis: cachedAnalysis ?? MarkdownAnalysis(source),
+                                     context: context, disabled: disabled)
+            }.value
+            guard document.text == source,
+                  (settingsStore.app.disabledLintRules ?? []) == disabled else { return }
+            markdownLintDiagnostics = diagnostics
+            isCheckingMarkdownLint = false
         }
     }
 
@@ -1458,6 +1507,58 @@ private struct LinkDiagnosticsSheet: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(diagnostic.title).fontWeight(.medium)
+                            Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(minWidth: 560, minHeight: 350)
+        .padding(20)
+    }
+}
+
+private struct MarkdownLintSheet: View {
+    let diagnostics: [MarkdownLintDiagnostic]
+    let isChecking: Bool
+    let source: String
+    let disabledRules: Set<MarkdownLintRule>
+    let onToggleRule: (MarkdownLintRule, Bool) -> Void
+    let onSelect: (MarkdownLintDiagnostic) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Markdown診断").font(.headline)
+                Spacer()
+                Button("閉じる") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            HStack {
+                ForEach(MarkdownLintRule.allCases, id: \.self) { rule in
+                    Toggle(rule.title, isOn: Binding(
+                        get: { !disabledRules.contains(rule) },
+                        set: { onToggleRule(rule, $0) }
+                    ))
+                }
+            }
+            if isChecking {
+                ProgressView("Markdownを確認中")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if diagnostics.isEmpty {
+                ContentUnavailableView("有効な規則で問題は見つかりません", systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let lines = MarkdownLineIndex(source)
+                List(diagnostics) { diagnostic in
+                    Button { onSelect(diagnostic) } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(diagnostic.rule.title).fontWeight(.medium)
                             Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

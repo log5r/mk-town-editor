@@ -121,3 +121,74 @@ enum MarkdownLinkDiagnostics {
         return (location - cursor - 1) % 2 == 1
     }
 }
+
+enum MarkdownLintRule: String, Codable, CaseIterable, Sendable {
+    case headingHierarchy
+    case missingLink
+    case listMarker
+
+    var title: String {
+        switch self {
+        case .headingHierarchy: "見出し階層"
+        case .missingLink: "リンク先"
+        case .listMarker: "箇条書き記号"
+        }
+    }
+}
+
+struct MarkdownLintDiagnostic: Identifiable, Equatable, Sendable {
+    let rule: MarkdownLintRule
+    let sourceRange: NSRange
+    let detail: String
+
+    var id: String { "\(rule.rawValue):\(sourceRange.location):\(detail)" }
+}
+
+enum MarkdownLint {
+    private static let markerPattern = try! NSRegularExpression(pattern: #"^[ \t]*([-+*])[ \t]+"#)
+
+    static func inspect(_ source: String, analysis: MarkdownAnalysis,
+                        context: DocumentContext,
+                        disabled: Set<MarkdownLintRule> = []) -> [MarkdownLintDiagnostic] {
+        var result: [MarkdownLintDiagnostic] = []
+        if !disabled.contains(.headingHierarchy) {
+            var previousLevel = 0
+            for block in analysis.blocks.sorted(by: { $0.sourceRange.location < $1.sourceRange.location }) {
+                guard case let .heading(level) = block.kind else { continue }
+                if level > previousLevel + 1 {
+                    result.append(MarkdownLintDiagnostic(rule: .headingHierarchy,
+                        sourceRange: block.sourceRange,
+                        detail: previousLevel == 0
+                            ? "最初の見出しはレベル1を推奨します"
+                            : "見出しレベルが\(previousLevel)から\(level)へ飛んでいます"))
+                }
+                previousLevel = level
+            }
+        }
+        if !disabled.contains(.missingLink) {
+            result += MarkdownLinkDiagnostics.inspect(source, analysis: analysis, context: context)
+                .map { MarkdownLintDiagnostic(rule: .missingLink,
+                    sourceRange: $0.sourceRange, detail: "\($0.title): \($0.detail)") }
+        }
+        if !disabled.contains(.listMarker) {
+            let text = source as NSString
+            var firstMarker: String?
+            for block in analysis.blocks.sorted(by: { $0.sourceRange.location < $1.sourceRange.location })
+                where block.kind == .unorderedList {
+                let line = text.substring(with: block.sourceRange)
+                    .components(separatedBy: .newlines).first ?? ""
+                let range = NSRange(location: 0, length: (line as NSString).length)
+                guard let match = markerPattern.firstMatch(in: line, range: range) else { continue }
+                let marker = (line as NSString).substring(with: match.range(at: 1))
+                if let firstMarker, firstMarker != marker {
+                    result.append(MarkdownLintDiagnostic(rule: .listMarker,
+                        sourceRange: block.sourceRange,
+                        detail: "箇条書き記号を「\(firstMarker)」に揃えてください"))
+                } else if firstMarker == nil {
+                    firstMarker = marker
+                }
+            }
+        }
+        return result.sorted { $0.sourceRange.location < $1.sourceRange.location }
+    }
+}
