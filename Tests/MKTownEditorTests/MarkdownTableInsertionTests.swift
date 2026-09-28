@@ -36,6 +36,33 @@ final class MarkdownTableInsertionTests: XCTestCase {
 }
 
 final class MarkdownTableEditingTests: XCTestCase {
+    func testTableFormattingAlignsJapaneseCellsAndIsIdempotent() throws {
+        let source = "before\n\n| A | B |\n| :---: | ---: |\n| 日本 | 1 |\n| x | 22 |\n\nafter"
+        let selection = NSRange(location: (source as NSString).range(of: "日本").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .formatTable))
+        let result = edit.applying(to: source)
+        XCTAssertTrue(result.contains("| :---: | ---: |"))
+        XCTAssertTrue(result.contains("| 日本  |    1 |"))
+        XCTAssertTrue(result.hasPrefix("before\n\n"))
+        XCTAssertTrue(result.hasSuffix("\n\nafter"))
+        let again = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: edit.selection,
+                                                             operation: .formatTable))
+        XCTAssertEqual(again.applying(to: result), result)
+    }
+
+    func testTableFormattingTreatsEscapedCodePipeAsCellContent() throws {
+        let source = "| A | B | C |\r\n| --- | --- | --- |\r\n| `a\\|b` | q |  |\r\n| `a|b` | q |\r\n"
+        let selection = NSRange(location: (source as NSString).range(of: "q").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .formatTable))
+        let result = edit.applying(to: source)
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first?.table)
+        XCTAssertEqual(table.rows[0], ["`a\\|b`", "q", ""])
+        XCTAssertEqual(table.rows[1], ["`a", "b`", "q"])
+        XCTAssertTrue(result.contains("\r\n"))
+    }
+
     func testTabMovesThroughSourceCellsAndBackwards() throws {
         let source = "| 名前 | 値 |\n| --- | --- |\n| あ | 1 |\n"
         let name = (source as NSString).range(of: "名前")

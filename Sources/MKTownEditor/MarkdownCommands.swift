@@ -165,6 +165,9 @@ struct MarkdownCommands: Commands {
                     Text("右揃え").tag(MarkdownTable.Alignment.trailing as MarkdownTable.Alignment?)
                 }
                 .disabled(editorModel?.selectedTableAlignment == nil)
+                Divider()
+                Button("表を整形") { editorModel?.editTable(.formatTable) }
+                    .disabled(editorModel?.canEditTable(.formatTable) != true)
             }
             Menu("見出しレベル") {
                 commandButton(.heading(level: 0))
