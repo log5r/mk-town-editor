@@ -28,6 +28,7 @@ struct MarkdownCommands: Commands {
             Divider()
             commandButton(.link)
             commandButton(.image)
+            commandButton(.table)
             Menu("見出しレベル") {
                 commandButton(.heading(level: 0))
                 Divider()

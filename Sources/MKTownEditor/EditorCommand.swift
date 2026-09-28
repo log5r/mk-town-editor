@@ -17,10 +17,11 @@ enum EditorCommand: Hashable {
     case codeBlock(language: MarkdownCodeLanguage?)
     case horizontalRule
     case image
+    case table
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .image, .quote, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .image, .table, .quote, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -40,6 +41,7 @@ enum EditorCommand: Hashable {
         case let .codeBlock(language): language.map { "\($0.title) コードブロック" } ?? "言語なし"
         case .horizontalRule: "区切り線"
         case .image: "画像…"
+        case .table: "表…"
         case .find: "検索…"
         }
     }
@@ -62,6 +64,7 @@ enum EditorCommand: Hashable {
         case .codeBlock: "chevron.left.forwardslash.chevron.right"
         case .horizontalRule: "minus"
         case .image: "photo"
+        case .table: "tablecells"
         case .find: "magnifyingglass"
         }
     }
@@ -83,6 +86,7 @@ enum EditorCommand: Hashable {
         case let .codeBlock(language): language == nil ? ("`", [.command, .option]) : nil
         case .horizontalRule: nil
         case .image: nil
+        case .table: nil
         case .find: ("f", .command)
         }
     }
@@ -123,6 +127,7 @@ enum EditorCommand: Hashable {
         case let .codeBlock(language): model.apply(.codeBlock(language: language))
         case .horizontalRule: model.apply(.horizontalRule)
         case .image: model.presentImageEditor()
+        case .table: model.presentTableEditor()
         case .find: model.showFindBar()
         }
     }
