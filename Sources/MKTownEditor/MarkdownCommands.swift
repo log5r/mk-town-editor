@@ -145,6 +145,8 @@ struct MarkdownCommands: Commands {
             commandButton(.link)
             commandButton(.image)
             commandButton(.table)
+            Button("TSV・CSVから表へ変換…") { editorModel?.convertClipboardTable() }
+                .disabled(editorModel?.canExecuteCommand != true)
             Menu("表を編集") {
                 Button("下に行を追加") { editorModel?.editTable(.insertRow) }
                     .disabled(editorModel?.canEditTable(.insertRow) != true)

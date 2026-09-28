@@ -3,6 +3,47 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownTableInsertionTests: XCTestCase {
+    func testCSVConversionHandlesQuotesNewlinesAndMarkdownCharacters() throws {
+        let csv = "Name,Note\r\n\"A, B\",\"line 1\r\nline 2\"\r\n\"pipe|slash\\\",\"say \"\"hi\"\"\"\r\n"
+        let conversion = try XCTUnwrap(MarkdownTableInsertion.conversion(in: "", selection: NSRange(location: 0, length: 0),
+                                                                          delimitedText: csv))
+        let result = conversion.edit.applying(to: "")
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first?.table)
+        XCTAssertTrue(conversion.hasMultilineCells)
+        XCTAssertEqual(table.header, ["Name", "Note"])
+        XCTAssertEqual(table.rows[0], ["A, B", "line 1<br>line 2"])
+        XCTAssertEqual(table.rows[1], ["pipe\\|slash\\\\", "say \"hi\""])
+    }
+
+    func testTSVConversionPadsRowsAndSeparatesSurroundingText() throws {
+        let source = "before\r\nafter"
+        let conversion = try XCTUnwrap(MarkdownTableInsertion.conversion(in: source,
+            selection: NSRange(location: 8, length: 0), delimitedText: "A\tB\tC\nx\ty"))
+        let result = conversion.edit.applying(to: source)
+        XCTAssertFalse(conversion.hasMultilineCells)
+        XCTAssertEqual(MarkdownAnalysis(result).blocks.first(where: { $0.kind == .table })?.table?.rows,
+                       [["x", "y", ""]])
+        XCTAssertTrue(result.contains("\r\n\r\n| A | B | C |\r\n"))
+    }
+
+    func testDelimitedConversionRejectsBrokenQuotesAndSingleValue() {
+        let selection = NSRange(location: 0, length: 0)
+        XCTAssertNil(MarkdownTableInsertion.conversion(in: "", selection: selection,
+                                                        delimitedText: "a,\"unfinished"))
+        XCTAssertNil(MarkdownTableInsertion.conversion(in: "", selection: selection,
+                                                        delimitedText: "a,\"b\"unexpected"))
+        XCTAssertNil(MarkdownTableInsertion.conversion(in: "", selection: selection,
+                                                        delimitedText: "only one value"))
+    }
+
+    func testCSVWithQuotedTabStillUsesCommaDelimiter() throws {
+        let csv = "A,B\n\"contains\ttab\",literal"
+        let conversion = try XCTUnwrap(MarkdownTableInsertion.conversion(in: "",
+            selection: NSRange(location: 0, length: 0), delimitedText: csv))
+        XCTAssertEqual(MarkdownAnalysis(conversion.edit.applying(to: "")).rootBlocks.first?.table?.rows,
+                       [["contains\ttab", "literal"]])
+    }
+
     func testGeneratedTableParsesWithRequestedShapeAndSelectsFirstHeader() {
         let draft = MarkdownTableInsertion.draft(in: "", selection: NSRange(location: 0, length: 0))
         let edit = try! XCTUnwrap(MarkdownTableInsertion.edit(in: "", draft: draft, rows: 3, columns: 2))
@@ -191,6 +232,25 @@ final class MarkdownTableEditingTests: XCTestCase {
 
 @MainActor
 final class MarkdownTableInsertionEditorTests: XCTestCase {
+    func testClipboardConversionIsUndoable() {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = ""
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
+        pasteboard.clearContents()
+        pasteboard.setString("A,B\nx,y", forType: .string)
+        let model = MarkdownEditorModel()
+        model.tablePasteboard = pasteboard
+        model.connect(view)
+        model.convertClipboardTable()
+        XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows, [["x", "y"]])
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "")
+    }
+
     func testTabUsesCellNavigationAndAddsUndoableRow() {
         let source = "| A | B |\n| --- | --- |\n| x | y |"
         let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
