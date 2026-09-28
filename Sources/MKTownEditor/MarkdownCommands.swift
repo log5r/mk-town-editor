@@ -340,6 +340,7 @@ struct MarkdownCommands: Commands {
             commandButton(.inlineCode)
             Divider()
             commandButton(.link)
+            commandButton(.footnote)
             commandButton(.image)
             commandButton(.table)
             Button("TSV・CSVから表へ変換…") { editorModel?.convertClipboardTable() }

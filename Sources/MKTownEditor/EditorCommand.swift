@@ -6,6 +6,7 @@ enum EditorCommand: Hashable {
     case strikethrough
     case inlineCode
     case link
+    case footnote
     case heading(level: Int)
     case quote
     case unorderedList
@@ -21,7 +22,7 @@ enum EditorCommand: Hashable {
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .image, .table, .quote, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .footnote, .image, .table, .quote, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -30,6 +31,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: "取り消し線"
         case .inlineCode: "インラインコード"
         case .link: "リンク"
+        case .footnote: "脚注を挿入"
         case let .heading(level): level == 0 ? "本文" : "見出し \(level)"
         case .quote: "引用"
         case .unorderedList: "箇条書き"
@@ -53,6 +55,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: "strikethrough"
         case .inlineCode: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
+        case .footnote: "text.badge.plus"
         case .heading: "number"
         case .quote: "text.quote"
         case .unorderedList: "list.bullet"
@@ -76,6 +79,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: ("x", [.command, .shift])
         case .inlineCode: ("`", .command)
         case .link: ("k", .command)
+        case .footnote: nil
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
         case .quote: (">", [.command, .shift])
         case .unorderedList: ("8", [.command, .shift])
@@ -116,6 +120,7 @@ enum EditorCommand: Hashable {
         case .strikethrough: model.apply(.strikethrough)
         case .inlineCode: model.apply(.inlineCode)
         case .link: model.presentLinkEditor()
+        case .footnote: model.insertFootnote()
         case let .heading(level): model.apply(.heading(level: level))
         case .quote: model.apply(.quote)
         case .unorderedList: model.apply(.unorderedList)

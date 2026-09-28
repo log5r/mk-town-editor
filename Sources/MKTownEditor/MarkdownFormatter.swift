@@ -641,3 +641,35 @@ enum MarkdownAutoFormat {
         return text.length
     }
 }
+
+enum MarkdownFootnoteInsertion {
+    private static let identifierPattern = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+
+    static func plan(in text: String, selection: NSRange) -> MarkdownEdit? {
+        let source = text as NSString
+        guard selection.location >= 0, selection.location <= source.length,
+              selection.length >= 0,
+              selection.length <= source.length - selection.location else { return nil }
+        let full = NSRange(location: 0, length: source.length)
+        let used = Set(identifierPattern.matches(in: text, range: full).map {
+            source.substring(with: $0.range(at: 1)).lowercased()
+        })
+        var number = 1
+        while used.contains("fn\(number)") { number += 1 }
+        let id = "fn\(number)"
+        let reference = "[^\(id)]"
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        let insertion = NSMaxRange(selection)
+        let suffix = source.substring(from: insertion)
+        let bodyAfterReference = source.substring(to: insertion) + reference + suffix
+        let separator: String
+        if bodyAfterReference.hasSuffix(newline + newline) { separator = "" }
+        else if bodyAfterReference.hasSuffix(newline) { separator = newline }
+        else { separator = newline + newline }
+        let definition = "[^\(id)]: "
+        let replacement = reference + suffix + separator + definition
+        return MarkdownEdit(range: NSRange(location: insertion, length: source.length - insertion),
+            replacement: replacement,
+            selection: NSRange(location: insertion + (replacement as NSString).length, length: 0))
+    }
+}

@@ -65,6 +65,24 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "hello")
     }
 
+    func testFootnoteInsertionMovesCaretToDefinitionAndUndoesTogether() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "Text"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 4, length: 0))
+
+        XCTAssertTrue(model.insertFootnote())
+        XCTAssertEqual(view.string, "Text[^fn1]\n\n[^fn1]: ")
+        XCTAssertEqual(view.selectedRange().location, (view.string as NSString).length)
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "Text")
+    }
+
     func testToggleRemovesFormattingAndUndoRestoresMarkersAndSelection() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.allowsUndo = true

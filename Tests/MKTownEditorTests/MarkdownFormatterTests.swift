@@ -480,4 +480,18 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertNil(MarkdownAutoFormat.plan(source,
             selection: NSRange(location: NSNotFound, length: 1)))
     }
+
+    func testFootnoteInsertionUsesUniqueIDAndPreservesCRLF() throws {
+        let source = "Text[^fn1] and [^FN2].\r\n"
+        let selection = (source as NSString).range(of: "Text")
+        let edit = try XCTUnwrap(MarkdownFootnoteInsertion.plan(in: source, selection: selection))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "Text[^fn3][^fn1] and [^FN2].\r\n\r\n[^fn3]: ")
+        XCTAssertEqual(edit.selection.location, (updated as NSString).length)
+        XCTAssertNil(MarkdownFootnoteInsertion.plan(in: source,
+            selection: NSRange(location: NSNotFound, length: 1)))
+        let empty = try XCTUnwrap(MarkdownFootnoteInsertion.plan(in: "",
+            selection: NSRange(location: 0, length: 0)))
+        XCTAssertEqual(empty.applying(to: ""), "[^fn1]\n\n[^fn1]: ")
+    }
 }
