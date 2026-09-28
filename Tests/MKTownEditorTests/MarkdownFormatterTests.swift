@@ -325,4 +325,46 @@ final class MarkdownFormatterTests: XCTestCase {
             XCTAssertEqual(edit.selection, NSRange(location: location + 6, length: 0))
         }
     }
+
+    func testToggleTaskAtCaretChangesOnlyCurrentItem() {
+        let source = "- [ ] first\n- [x] second"
+        let edit = MarkdownFormatter.toggleTasks(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "first").location, length: 0))
+        XCTAssertEqual(edit?.applying(to: source), "- [x] first\n- [x] second")
+    }
+
+    func testToggleSelectedTasksUsesOneStateForAllItems() {
+        let mixed = "- [ ] first\n- [x] second\n- plain"
+        let selected = NSRange(location: 0, length: (mixed as NSString).length)
+        let checked = MarkdownFormatter.toggleTasks(in: mixed, selection: selected)
+        XCTAssertEqual(checked?.applying(to: mixed), "- [x] first\n- [x] second\n- plain")
+
+        let allChecked = "- [x] first\n1. [X] second"
+        let unchecked = MarkdownFormatter.toggleTasks(in: allChecked,
+            selection: NSRange(location: 0, length: (allChecked as NSString).length))
+        XCTAssertEqual(unchecked?.applying(to: allChecked), "- [ ] first\n1. [ ] second")
+
+        let twoUnchecked = "- [ ] first\n- [ ] second"
+        let firstLine = MarkdownFormatter.toggleTasks(in: twoUnchecked,
+            selection: NSRange(location: 0, length: ("- [ ] first\n" as NSString).length))
+        XCTAssertEqual(firstLine?.applying(to: twoUnchecked), "- [x] first\n- [ ] second")
+    }
+
+    func testToggleTaskSupportsNestedQuoteAndSkipsCodeAndPlainText() {
+        let source = "> - [ ] quoted\n\n```\n- [ ] literal\n```\n\n- plain"
+        let quoted = MarkdownFormatter.toggleTasks(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "quoted").location, length: 0))
+        XCTAssertEqual(quoted?.applying(to: source),
+                       "> - [x] quoted\n\n```\n- [ ] literal\n```\n\n- plain")
+        XCTAssertNil(MarkdownFormatter.toggleTasks(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "literal").location, length: 0)))
+        XCTAssertNil(MarkdownFormatter.toggleTasks(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "plain").location, length: 0)))
+
+        let previewLocation = try! XCTUnwrap(MarkdownAnalysis(source).blocks.first(where: { $0.task != nil }))
+            .sourceRange.location
+        XCTAssertEqual(MarkdownFormatter.toggleTasks(in: source,
+            selection: NSRange(location: previewLocation, length: 0))?.applying(to: source),
+            "> - [x] quoted\n\n```\n- [ ] literal\n```\n\n- plain")
+    }
 }

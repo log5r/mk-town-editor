@@ -12,8 +12,9 @@ enum MarkdownRenderer {
         return renderSequence(analysis.rootBlocks, in: analysis)
     }
 
-    static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> NSAttributedString {
-        render(block, references: analysis.references)
+    static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                           showTaskPrefix: Bool = true) -> NSAttributedString {
+        render(block, references: analysis.references, showTaskPrefix: showTaskPrefix)
     }
 
     static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis) -> NSAttributedString {
@@ -67,7 +68,7 @@ enum MarkdownRenderer {
     }
 
     private static func render(
-        _ block: MarkdownBlock, references: [String: MarkdownReference]
+        _ block: MarkdownBlock, references: [String: MarkdownReference], showTaskPrefix: Bool = true
     ) -> NSAttributedString {
         switch block.kind {
         case .blank:
@@ -98,17 +99,22 @@ enum MarkdownRenderer {
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
                                  baseFont: .systemFont(ofSize: 15), references: references)
-            let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
-            content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            if showTaskPrefix || task == nil {
+                let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
+                content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            }
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case let .orderedList(number):
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content),
                                  baseFont: .systemFont(ofSize: 15), references: references)
-            let prefix = task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
-                ?? "\(number).  "
-            content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            let prefix = showTaskPrefix
+                ? task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
+                    ?? "\(number).  "
+                : "\(number).  "
+            content.insert(NSAttributedString(string: prefix,
+                attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:

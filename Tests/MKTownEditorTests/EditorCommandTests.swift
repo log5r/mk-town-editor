@@ -97,4 +97,16 @@ final class EditorCommandTests: XCTestCase {
         EditorCommand.unorderedList.perform(on: model)
         XCTAssertEqual(view.string, "- one\n- two")
     }
+
+    func testTaskCompletionCommandChangesCaretLine() {
+        let view = NSTextView()
+        view.string = "- [ ] first\n- [ ] second"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 7, length: 0))
+
+        EditorCommand.toggleTaskCompletion.perform(on: model)
+
+        XCTAssertEqual(view.string, "- [x] first\n- [ ] second")
+    }
 }

@@ -69,6 +69,36 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "**word**")
     }
 
+    func testTaskCompletionCommandIsUndoable() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "- [ ] first\n- [x] second"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+
+        model.toggleTaskCompletion()
+        XCTAssertEqual(view.string, "- [x] first\n- [x] second")
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "- [ ] first\n- [x] second")
+    }
+
+    func testPreviewTaskActionPreservesSourceSelectionAndFocus() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "- [ ] first\n- [ ] second"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 22, length: 0))
+
+        model.toggleTask(at: 0)
+
+        XCTAssertEqual(view.string, "- [x] first\n- [ ] second")
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 22, length: 0))
+    }
+
     func testDisconnectAndReconnectRestoreSelectionWithoutKeepingOldView() {
         let oldView = NSTextView()
         oldView.string = "前🙂後"

@@ -71,6 +71,9 @@ struct MarkdownEdit: Equatable {
 
 enum MarkdownFormatter {
     private static let headingExpression = try! NSRegularExpression(pattern: #"^( {0,3})(#{1,6})(?:[ \t]+|$)"#)
+    private static let taskLineExpression = try! NSRegularExpression(
+        pattern: #"^(?:[ \t]*>[ \t]*)*[ \t]*(?:[-+*]|[0-9]{1,9}[.)])[ \t]+\[([ xX])\](?:[ \t]|$)"#
+    )
 
     static func apply(
         _ style: MarkdownFormattingStyle,
@@ -101,6 +104,35 @@ enum MarkdownFormatter {
         case .taskList:
             return convertList(text, selection: safeSelection, target: .task)
         }
+    }
+
+    static func toggleTasks(in text: String, selection: NSRange) -> MarkdownEdit? {
+        let source = text as NSString
+        let safeSelection = clamped(selection, in: text)
+        let selectedLines = source.lineRange(for: safeSelection)
+        let analysis = MarkdownAnalysis(text)
+        var states: [(location: Int, checked: Bool)] = []
+        var seenLines = Set<Int>()
+        for block in analysis.blocks where block.task != nil {
+            let lineRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
+            guard NSIntersectionRange(lineRange, selectedLines).length > 0,
+                  seenLines.insert(lineRange.location).inserted else { continue }
+            let line = source.substring(with: lineRange)
+            guard let match = taskLineExpression.firstMatch(in: line,
+                range: NSRange(location: 0, length: (line as NSString).length)) else { continue }
+            let stateRange = match.range(at: 1)
+            let state = (line as NSString).substring(with: stateRange)
+            states.append((lineRange.location + stateRange.location, state == "x" || state == "X"))
+        }
+        guard !states.isEmpty else { return nil }
+        let newState = states.allSatisfy(\.checked) ? " " : "x"
+        let replacement = NSMutableString(string: source.substring(with: selectedLines))
+        for state in states.sorted(by: { $0.location > $1.location }) {
+            replacement.replaceCharacters(in: NSRange(location: state.location - selectedLines.location, length: 1),
+                                          with: newState)
+        }
+        return MarkdownEdit(range: selectedLines, replacement: replacement as String,
+                            selection: safeSelection)
     }
 
     private static func wrap(
