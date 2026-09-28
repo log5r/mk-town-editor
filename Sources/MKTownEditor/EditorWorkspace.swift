@@ -50,6 +50,7 @@ struct EditorWorkspace: View {
     @State private var sidebarTab: SidebarTab = .outline
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
+    @State private var showingWorkspaceSearch = false
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -156,6 +157,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
         .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
         .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
+        .focusedSceneValue(\.searchWorkspaceAction) { showingWorkspaceSearch = true }
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,
@@ -212,6 +214,9 @@ struct EditorWorkspace: View {
                     catch { workspaceOpenError = error.localizedDescription }
                 }
             }
+        }
+        .sheet(isPresented: $showingWorkspaceSearch) {
+            WorkspaceSearchSheet { result in openWorkspaceSearchResult(result) }
         }
         .sheet(item: $fileAction) { action in
             if let root = workspaceStore.rootURL {
@@ -388,6 +393,7 @@ struct EditorWorkspace: View {
             }
             analysisStore.update(source: document.text)
             receivePendingDocumentLink()
+            receivePendingSearchPosition()
             workspaceStore.refresh()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -440,6 +446,9 @@ struct EditorWorkspace: View {
         }
         .onChange(of: documentLinkNavigation.pending) { _, _ in
             receivePendingDocumentLink()
+        }
+        .onChange(of: documentLinkNavigation.pendingPosition) { _, _ in
+            receivePendingSearchPosition()
         }
         .onDisappear {
             analysisStore.cancel()
@@ -759,6 +768,29 @@ struct EditorWorkspace: View {
         guard let fileURL, analysisStore.snapshot?.source == document.text,
               let fragment = documentLinkNavigation.take(for: fileURL) else { return }
         navigateToHeading(fragment)
+    }
+
+    private func openWorkspaceSearchResult(_ result: WorkspaceSearchResult) {
+        if result.url.resolvingSymlinksInPath().standardizedFileURL ==
+            fileURL?.resolvingSymlinksInPath().standardizedFileURL {
+            mode.wrappedValue = .editor
+            editorModel.selectAndReveal(result.sourceRange)
+            return
+        }
+        documentLinkNavigation.requestPosition(in: result.url, range: result.sourceRange)
+        Task {
+            do { try await openDocument(at: result.url) }
+            catch {
+                documentLinkNavigation.cancelPosition(for: result.url)
+                workspaceOpenError = error.localizedDescription
+            }
+        }
+    }
+
+    private func receivePendingSearchPosition() {
+        guard let fileURL, let range = documentLinkNavigation.takePosition(for: fileURL) else { return }
+        mode.wrappedValue = .editor
+        editorModel.selectAndReveal(range)
     }
 
     private func checkLinks() {

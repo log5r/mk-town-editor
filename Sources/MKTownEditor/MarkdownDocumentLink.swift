@@ -22,7 +22,33 @@ final class DocumentLinkNavigation: ObservableObject {
         let fragment: String
     }
 
+    struct PendingPosition: Equatable {
+        let fileURL: URL
+        let range: NSRange
+    }
+
     @Published private(set) var pending: Pending?
+    @Published private(set) var pendingPosition: PendingPosition?
+
+    func requestPosition(in fileURL: URL, range: NSRange) {
+        pendingPosition = PendingPosition(fileURL: fileURL.resolvingSymlinksInPath().standardizedFileURL,
+                                          range: range)
+    }
+
+    func takePosition(for fileURL: URL) -> NSRange? {
+        guard pendingPosition?.fileURL == fileURL.resolvingSymlinksInPath().standardizedFileURL else {
+            return nil
+        }
+        let range = pendingPosition?.range
+        pendingPosition = nil
+        return range
+    }
+
+    func cancelPosition(for fileURL: URL) {
+        if pendingPosition?.fileURL == fileURL.resolvingSymlinksInPath().standardizedFileURL {
+            pendingPosition = nil
+        }
+    }
 
     func request(_ link: MarkdownDocumentLink) {
         guard let fragment = link.fragment else { return }

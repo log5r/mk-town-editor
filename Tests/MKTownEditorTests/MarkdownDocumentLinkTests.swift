@@ -3,6 +3,18 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownDocumentLinkTests: XCTestCase {
+    @MainActor
+    func testSearchPositionIsDeliveredOnlyToMatchingDocument() {
+        let navigation = DocumentLinkNavigation()
+        let target = URL(fileURLWithPath: "/tmp/result.md")
+        let other = URL(fileURLWithPath: "/tmp/other.md")
+        let range = NSRange(location: 12, length: 4)
+        navigation.requestPosition(in: target, range: range)
+        XCTAssertNil(navigation.takePosition(for: other))
+        XCTAssertEqual(navigation.takePosition(for: target.resolvingSymlinksInPath()), range)
+        XCTAssertNil(navigation.takePosition(for: target))
+    }
+
     func testRelativeMarkdownLinkResolvesAgainstCurrentDocument() {
         let context = DocumentContext(fileURL: URL(fileURLWithPath: "/tmp/book/chapters/current.md"))
         let link = MarkdownDocumentLink(url: URL(string: "../intro/first%20draft.md#%E6%A6%82%E8%A6%81")!,
