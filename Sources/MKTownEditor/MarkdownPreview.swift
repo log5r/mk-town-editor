@@ -16,6 +16,7 @@ struct MarkdownPreview: View {
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
+    var onRevealSource: ((NSRange) -> Void)?
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -23,7 +24,8 @@ struct MarkdownPreview: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
-            if PreviewAccessibility.requiresStructuredView(analysis.blocks) || onVisibleBlockChange != nil {
+            if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
+                onVisibleBlockChange != nil || onRevealSource != nil {
                 let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
@@ -52,6 +54,14 @@ struct MarkdownPreview: View {
                                     Color.clear.preference(key: PreviewBlockOriginsKey.self,
                                         value: [block.id: geometry.frame(in: .named("markdownPreview")).minY])
                                 })
+                                .contextMenu {
+                                    Button("原文へ移動", systemImage: "text.cursor") {
+                                        onRevealSource?(block.sourceRange)
+                                    }
+                                }
+                                .accessibilityAction(named: "原文へ移動") {
+                                    onRevealSource?(block.sourceRange)
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)

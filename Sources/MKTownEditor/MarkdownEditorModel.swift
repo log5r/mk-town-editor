@@ -80,6 +80,23 @@ final class MarkdownEditorModel: ObservableObject {
         selectedRange = range
     }
 
+    func selectAndReveal(_ sourceRange: NSRange) {
+        let location = max(0, sourceRange.location)
+        guard let textView else {
+            selectedRange = NSRange(location: location, length: max(0, sourceRange.length))
+            pendingNavigationLocation = location
+            return
+        }
+        let length = (textView.string as NSString).length
+        let safeLocation = min(location, length)
+        let range = NSRange(location: safeLocation,
+                            length: min(max(0, sourceRange.length), length - safeLocation))
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+        textView.window?.makeFirstResponder(textView)
+        selectedRange = range
+    }
+
     func scrollToTop(sourceLocation: Int) {
         guard let textView, let scrollView = textView.enclosingScrollView,
               let layoutManager = textView.layoutManager,
