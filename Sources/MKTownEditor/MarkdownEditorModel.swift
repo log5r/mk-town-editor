@@ -86,6 +86,17 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    @discardableResult
+    func changeIndentation(_ direction: MarkdownIndentation.Direction) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownIndentation.edit(in: textView.string,
+                                                  selection: textView.selectedRange(),
+                                                  direction: direction) else { return false }
+        perform(edit, in: textView, storage: storage, focusEditor: true)
+        return true
+    }
+
     func toggleTask(at sourceLocation: Int) {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),

@@ -11,6 +11,8 @@ enum EditorCommand: Hashable {
     case unorderedList
     case orderedList
     case taskList
+    case indentList
+    case outdentList
     case toggleTaskCompletion
     case codeBlock(language: MarkdownCodeLanguage?)
     case horizontalRule
@@ -18,7 +20,7 @@ enum EditorCommand: Hashable {
     case find
 
     static let toolbar: [Self] = [.bold, .italic, .link]
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .image, .quote, .unorderedList, .orderedList, .taskList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .link, .image, .quote, .unorderedList, .orderedList, .taskList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -32,6 +34,8 @@ enum EditorCommand: Hashable {
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
+        case .indentList: "インデントを増やす"
+        case .outdentList: "インデントを減らす"
         case .toggleTaskCompletion: "タスクの完了を切り替え"
         case let .codeBlock(language): language.map { "\($0.title) コードブロック" } ?? "言語なし"
         case .horizontalRule: "区切り線"
@@ -52,6 +56,8 @@ enum EditorCommand: Hashable {
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
+        case .indentList: "increase.indent"
+        case .outdentList: "decrease.indent"
         case .toggleTaskCompletion: "checkmark.square"
         case .codeBlock: "chevron.left.forwardslash.chevron.right"
         case .horizontalRule: "minus"
@@ -72,6 +78,7 @@ enum EditorCommand: Hashable {
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
+        case .indentList, .outdentList: nil
         case .toggleTaskCompletion: ("t", [.command, .option])
         case let .codeBlock(language): language == nil ? ("`", [.command, .option]) : nil
         case .horizontalRule: nil
@@ -82,7 +89,18 @@ enum EditorCommand: Hashable {
 
     @MainActor
     func canExecute(in model: MarkdownEditorModel?) -> Bool {
-        model?.canExecuteCommand ?? false
+        guard model?.canExecuteCommand == true else { return false }
+        switch self {
+        case .indentList:
+            guard let view = model?.textView else { return false }
+            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
+                                            direction: .indent) != nil
+        case .outdentList:
+            guard let view = model?.textView else { return false }
+            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
+                                            direction: .outdent) != nil
+        default: return true
+        }
     }
 
     @MainActor
@@ -99,6 +117,8 @@ enum EditorCommand: Hashable {
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)
+        case .indentList: model.changeIndentation(.indent)
+        case .outdentList: model.changeIndentation(.outdent)
         case .toggleTaskCompletion: model.toggleTaskCompletion()
         case let .codeBlock(language): model.apply(.codeBlock(language: language))
         case .horizontalRule: model.apply(.horizontalRule)

@@ -152,6 +152,16 @@ final class EditorTextView: NSTextView {
         super.insertNewline(sender)
     }
 
+    override func insertTab(_ sender: Any?) {
+        if commandModel?.changeIndentation(.indent) == true { return }
+        super.insertTab(sender)
+    }
+
+    override func insertBacktab(_ sender: Any?) {
+        if commandModel?.changeIndentation(.outdent) == true { return }
+        super.insertBacktab(sender)
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         makeMarkdownMenu(baseMenu: super.menu(for: event))
     }

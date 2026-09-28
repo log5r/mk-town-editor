@@ -39,6 +39,8 @@ struct MarkdownCommands: Commands {
             commandButton(.unorderedList)
             commandButton(.orderedList)
             commandButton(.taskList)
+            commandButton(.indentList)
+            commandButton(.outdentList)
             commandButton(.toggleTaskCompletion)
             Menu("コードブロック") {
                 commandButton(.codeBlock(language: nil))
