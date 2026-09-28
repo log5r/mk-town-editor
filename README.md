@@ -1,0 +1,32 @@
+# MKTownEditor
+
+MKTownEditor は、macOS の標準コンポーネントで構成した書類ベースの Markdown エディタです。CodiMD の編集・プレビュー体験を参考にしながら、ローカルファイルを扱うネイティブアプリとして設計しています。
+
+## 主な機能
+
+- `.md` / プレーンテキストファイルの読み込みと `.md` への保存
+- 編集、左右分割、プレビューの3つの表示モード
+- 入力と同時に更新されるネイティブ Markdown プレビュー
+- 太字、斜体、リンク、コード、見出し、引用、箇条書きの書式コマンド
+- macOS 標準の検索バー、Undo / Redo、スペルチェック
+- 行数、単語数、文字数の表示
+- VoiceOver 向けのラベルとシステム標準の外観・文字色
+
+## 動作環境
+
+- macOS 14 以降
+- Xcode 16 以降（Swift 6）
+
+## 実行
+
+Xcode で `MKTownEditor.xcodeproj` を開き、`MKTownEditor` スキームを実行します。コマンドラインからは次の方法でも起動できます。
+
+```sh
+swift run MKTownEditor
+```
+
+## テスト
+
+```sh
+swift test
+```

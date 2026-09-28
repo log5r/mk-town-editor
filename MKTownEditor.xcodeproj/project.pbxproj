@@ -1,0 +1,194 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000001 /* DocumentStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* DocumentStatistics.swift */; };
+		A10000000000000000000002 /* EditorMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* EditorMode.swift */; };
+		A10000000000000000000003 /* EditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* EditorWorkspace.swift */; };
+		A10000000000000000000004 /* MKTownEditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* MKTownEditorApp.swift */; };
+		A10000000000000000000005 /* MarkdownCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MarkdownCommands.swift */; };
+		A10000000000000000000006 /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* MarkdownDocument.swift */; };
+		A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* MarkdownEditorModel.swift */; };
+		A10000000000000000000008 /* MarkdownFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* MarkdownFormatter.swift */; };
+		A10000000000000000000009 /* MarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MarkdownPreview.swift */; };
+		A1000000000000000000000A /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* MarkdownRenderer.swift */; };
+		A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* MarkdownTextEditor.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000000000000000000001 /* DocumentStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStatistics.swift; sourceTree = "<group>"; };
+		A20000000000000000000002 /* EditorMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorMode.swift; sourceTree = "<group>"; };
+		A20000000000000000000003 /* EditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorWorkspace.swift; sourceTree = "<group>"; };
+		A20000000000000000000004 /* MKTownEditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MKTownEditorApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000005 /* MarkdownCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCommands.swift; sourceTree = "<group>"; };
+		A20000000000000000000006 /* MarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocument.swift; sourceTree = "<group>"; };
+		A20000000000000000000007 /* MarkdownEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEditorModel.swift; sourceTree = "<group>"; };
+		A20000000000000000000008 /* MarkdownFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFormatter.swift; sourceTree = "<group>"; };
+		A20000000000000000000009 /* MarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreview.swift; sourceTree = "<group>"; };
+		A2000000000000000000000A /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
+		A2000000000000000000000B /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
+		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A40000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A40000000000000000000002 /* MKTownEditor */,
+				A40000000000000000000003 /* Support */,
+				A40000000000000000000004 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A40000000000000000000002 /* MKTownEditor */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000001 /* DocumentStatistics.swift */,
+				A20000000000000000000002 /* EditorMode.swift */,
+				A20000000000000000000003 /* EditorWorkspace.swift */,
+				A20000000000000000000004 /* MKTownEditorApp.swift */,
+				A20000000000000000000005 /* MarkdownCommands.swift */,
+				A20000000000000000000006 /* MarkdownDocument.swift */,
+				A20000000000000000000007 /* MarkdownEditorModel.swift */,
+				A20000000000000000000008 /* MarkdownFormatter.swift */,
+				A20000000000000000000009 /* MarkdownPreview.swift */,
+				A2000000000000000000000A /* MarkdownRenderer.swift */,
+				A2000000000000000000000B /* MarkdownTextEditor.swift */,
+			);
+			path = Sources/MKTownEditor;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000003 /* Support */ = {
+			isa = PBXGroup;
+			children = (A2000000000000000000000C /* Info.plist */,);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000004 /* Products */ = {
+			isa = PBXGroup;
+			children = (A2000000000000000000000D /* MKTownEditor.app */,);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000000000000000000001 /* MKTownEditor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A90000000000000000000002 /* Build configuration list for PBXNativeTarget "MKTownEditor" */;
+			buildPhases = (
+				A70000000000000000000001 /* Sources */,
+				A30000000000000000000001 /* Frameworks */,
+				A60000000000000000000001 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = MKTownEditor;
+			productName = MKTownEditor;
+			productReference = A2000000000000000000000D /* MKTownEditor.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A80000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = { A50000000000000000000001 = { CreatedOnToolsVersion = 27.0; }; };
+			};
+			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = A40000000000000000000001;
+			productRefGroup = A40000000000000000000004 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A50000000000000000000001 /* MKTownEditor */,);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A70000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000001 /* DocumentStatistics.swift in Sources */,
+				A10000000000000000000002 /* EditorMode.swift in Sources */,
+				A10000000000000000000003 /* EditorWorkspace.swift in Sources */,
+				A10000000000000000000004 /* MKTownEditorApp.swift in Sources */,
+				A10000000000000000000005 /* MarkdownCommands.swift in Sources */,
+				A10000000000000000000006 /* MarkdownDocument.swift in Sources */,
+				A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */,
+				A10000000000000000000008 /* MarkdownFormatter.swift in Sources */,
+				A10000000000000000000009 /* MarkdownPreview.swift in Sources */,
+				A1000000000000000000000A /* MarkdownRenderer.swift in Sources */,
+				A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B10000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0; }; name = Debug; };
+		B10000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; }; name = Release; };
+		B10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Support/Info.plist;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		B10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_LANGUAGE = en;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Support/Info.plist;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A80000000000000000000001 /* Project object */;
+}

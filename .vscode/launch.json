@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MKTownEditor}",
+            "name": "Debug MKTownEditor",
+            "target": "MKTownEditor",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug MKTownEditor"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:MKTownEditor}",
+            "name": "Release MKTownEditor",
+            "target": "MKTownEditor",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release MKTownEditor"
+        }
+    ]
+}
