@@ -12,6 +12,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
+    var onVisibleSourceChange: ((Int) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -77,6 +78,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.registerForDraggedTypes([.fileURL])
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
+        context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.isRestoringSession = false
@@ -108,6 +110,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.onImagePaste = onImagePaste
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
+        context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         if context.coordinator.appliedLayoutOptions != layoutOptions {
             layoutOptions.apply(to: textView, in: scrollView)
             context.coordinator.appliedLayoutOptions = layoutOptions
@@ -145,6 +148,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         var appliedLayoutOptions: EditorLayoutOptions?
         var sharedSnapshot: DocumentSnapshot?
         var usesSharedAnalysis = false
+        var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
         private var highlightedWithSharedAnalysis: Bool?
@@ -191,6 +195,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
             lineNumberRuler?.needsDisplay = true
             guard let scrollView, !isRestoringSession else { return }
             model.scrollDidChange(scrollView.contentView.bounds.origin)
+            if let editor = textView as? EditorTextView,
+               let location = editor.firstVisibleSourceLocation(in: scrollView) {
+                onVisibleSourceChange?(location)
+            }
         }
     }
 }
@@ -220,6 +228,15 @@ final class EditorTextView: NSTextView {
     private var selectionBeforeImageDrag: NSRange?
     private var imageDropLocation: Int? {
         didSet { needsDisplay = true }
+    }
+
+    func firstVisibleSourceLocation(in scrollView: NSScrollView) -> Int? {
+        guard let layoutManager, let textContainer else { return nil }
+        let visible = convert(scrollView.contentView.bounds, from: scrollView.contentView)
+        let point = NSPoint(x: 0, y: max(0, visible.minY - textContainerOrigin.y))
+        return min((string as NSString).length,
+                   layoutManager.characterIndex(for: point, in: textContainer,
+                                                fractionOfDistanceBetweenInsertionPoints: nil))
     }
 
     override func becomeFirstResponder() -> Bool {

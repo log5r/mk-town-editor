@@ -80,6 +80,22 @@ final class MarkdownEditorModel: ObservableObject {
         selectedRange = range
     }
 
+    func scrollToTop(sourceLocation: Int) {
+        guard let textView, let scrollView = textView.enclosingScrollView,
+              let layoutManager = textView.layoutManager,
+              textView.textContainer != nil,
+              layoutManager.numberOfGlyphs > 0 else { return }
+        let length = (textView.string as NSString).length
+        let location = min(max(sourceLocation, 0), max(length - 1, 0))
+        let glyph = min(layoutManager.glyphIndexForCharacter(at: location),
+                        layoutManager.numberOfGlyphs - 1)
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let clipView = scrollView.contentView
+        let y = max(0, line.minY + textView.textContainerOrigin.y)
+        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: y))
+        scrollView.reflectScrolledClipView(clipView)
+    }
+
     var canExecuteCommand: Bool {
         hasActiveEditor && textView?.isEditable == true && textView?.hasMarkedText() == false
     }
