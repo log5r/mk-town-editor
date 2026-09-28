@@ -190,6 +190,7 @@ struct AppEditorSettings: Codable, Equatable {
     var previewBodyWidth: Int?
     var showsInvisibleCharacters: Bool?
     var showsIndentGuides: Bool?
+    var shortcutOverrides: [String: ShortcutChord]?
 }
 
 enum EditorZoomSurface: CaseIterable {
@@ -277,6 +278,32 @@ final class EditorSettingsStore: ObservableObject {
     }
 
     var app: AppEditorSettings { values.app }
+
+    func shortcut(for command: EditorCommand) -> ShortcutChord? {
+        EditorShortcutRegistry.shortcut(for: command,
+                                        overrides: values.app.shortcutOverrides ?? [:])
+    }
+
+    func setShortcut(_ chord: ShortcutChord, for command: EditorCommand) throws {
+        var normalized = chord
+        normalized.key = chord.key.lowercased()
+        try EditorShortcutRegistry.validate(normalized, for: command,
+            overrides: values.app.shortcutOverrides ?? [:])
+        values.app.shortcutOverrides = values.app.shortcutOverrides ?? [:]
+        values.app.shortcutOverrides?[command.toolbarIdentifier] = normalized
+        save()
+    }
+
+    func resetShortcut(for command: EditorCommand) throws {
+        var remaining = values.app.shortcutOverrides ?? [:]
+        remaining[command.toolbarIdentifier] = nil
+        if let defaultShortcut = EditorShortcutRegistry.shortcut(for: command, overrides: [:]) {
+            try EditorShortcutRegistry.validate(defaultShortcut, for: command,
+                                                overrides: remaining)
+        }
+        values.app.shortcutOverrides = remaining
+        save()
+    }
 
     func setAppSettings(_ settings: AppEditorSettings) {
         values.app = settings

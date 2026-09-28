@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EditorPreferencesView: View {
     @ObservedObject var settingsStore: EditorSettingsStore
+    @State private var showingShortcuts = false
 
     var body: some View {
         Form {
@@ -69,6 +70,9 @@ struct EditorPreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("キーボード") {
+                Button("ショートカット一覧と設定…") { showingShortcuts = true }
+            }
             Section("スニペット") {
                 ForEach(settingsStore.app.snippets ?? []) { snippet in
                     VStack(alignment: .leading) {
@@ -94,6 +98,9 @@ struct EditorPreferencesView: View {
         }
         .formStyle(.grouped)
         .frame(width: 430)
+        .sheet(isPresented: $showingShortcuts) {
+            EditorShortcutPreferencesView(settingsStore: settingsStore)
+        }
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppEditorSettings, Value>) -> Binding<Value> {
@@ -248,11 +255,13 @@ struct SnippetPickerView: View {
 
 struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
 
     private var matches: [EditorCommand] {
-        EditorCommand.paletteMatches(query, in: model)
+        EditorCommand.paletteMatches(query, in: model,
+            shortcutLabel: { settingsStore.shortcut(for: $0)?.label })
     }
 
     var body: some View {
@@ -265,7 +274,7 @@ struct CommandPaletteView: View {
                     HStack {
                         Label(command.title, systemImage: command.symbolName)
                         Spacer()
-                        if let shortcut = command.shortcutLabel {
+                        if let shortcut = settingsStore.shortcut(for: command)?.label {
                             Text(shortcut).font(.caption).foregroundStyle(.secondary)
                         }
                     }
