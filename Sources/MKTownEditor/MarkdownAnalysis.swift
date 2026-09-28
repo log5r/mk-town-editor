@@ -58,17 +58,67 @@ struct MarkdownAnalysis {
     private static let listPattern = try! NSRegularExpression(pattern: #"^([ \t]*)([-+*]|[0-9]{1,9}[.)])[ \t]+(.*)$"#)
 
     private static func parse(_ markdown: String) -> [MarkdownBlock] {
-        let lines = sourceLines(markdown)
+        var nextID = 0
+        return parseLines(sourceLines(markdown), parentID: nil, nextID: &nextID)
+    }
+
+    private static func parseLines(
+        _ lines: [SourceLine],
+        parentID: Int?,
+        nextID: inout Int
+    ) -> [MarkdownBlock] {
         var result: [MarkdownBlock] = []
         var listAncestors: [(indent: Int, id: Int, depth: Int)] = []
-        var quoteAncestors: [Int] = []
         var index = 0
 
         while index < lines.count {
             let line = lines[index]
             let trimmed = line.text.trimmingCharacters(in: .whitespaces)
 
+            if parseQuote(line.text) != nil {
+                let quoteID = nextID
+                nextID += 1
+                let firstLine = line
+                var quoteLines: [SourceLine] = []
+                var allowsLazyContinuation = false
+                var activeFence: Fence?
+                while index < lines.count {
+                    let current = lines[index]
+                    if parseQuote(current.text) != nil {
+                        let inner = removeFirstQuoteMarker(current.text)
+                        quoteLines.append(SourceLine(text: inner, range: current.range))
+                        if let fence = activeFence {
+                            if isClosingFence(inner, for: fence) { activeFence = nil }
+                            allowsLazyContinuation = false
+                        } else if let fence = openingFence(inner.trimmingCharacters(in: .whitespaces)) {
+                            activeFence = fence
+                            allowsLazyContinuation = false
+                        } else {
+                            allowsLazyContinuation = isParagraphContinuation(inner)
+                        }
+                    } else if allowsLazyContinuation && isParagraphContinuation(current.text) {
+                        quoteLines.append(current)
+                    } else {
+                        break
+                    }
+                    index += 1
+                }
+                let lastRange = quoteLines[quoteLines.count - 1].range
+                result.append(MarkdownBlock(
+                    id: quoteID, parentID: parentID, kind: .quote,
+                    content: quoteLines.map(\.text).joined(separator: "\n"),
+                    sourceRange: NSRange(location: firstLine.range.location,
+                                         length: NSMaxRange(lastRange) - firstLine.range.location),
+                    codeLanguage: nil, lineBreaks: [], sourceIndent: nil, nestingDepth: 0
+                ))
+                result.append(contentsOf: parseLines(quoteLines, parentID: quoteID, nextID: &nextID))
+                listAncestors.removeAll()
+                continue
+            }
+
             if let fence = openingFence(trimmed) {
+                let id = nextID
+                nextID += 1
                 index += 1
                 var codeLines: [String] = []
                 while index < lines.count && !isClosingFence(lines[index].text, for: fence) {
@@ -78,18 +128,18 @@ struct MarkdownAnalysis {
                 if index < lines.count { index += 1 }
                 let end = lines[index - 1].range
                 result.append(MarkdownBlock(
-                    id: result.count, parentID: nil, kind: .codeBlock,
+                    id: id, parentID: parentID, kind: .codeBlock,
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
                     codeLanguage: fence.language, lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 listAncestors.removeAll()
-                quoteAncestors.removeAll()
                 continue
             }
 
-            let id = result.count
-            var parentID: Int?
+            let id = nextID
+            nextID += 1
+            var blockParentID = parentID
             var kind: MarkdownBlock.Kind
             var content = line.text
             var sourceRange = line.range
@@ -103,17 +153,9 @@ struct MarkdownAnalysis {
                 content = ""
                 if let parent = listAncestors.last, index + 1 < lines.count,
                    indentationWidth(lines[index + 1].text) > parent.indent {
-                    parentID = parent.id
+                    blockParentID = parent.id
                     nestingDepth = parent.depth + 1
                 }
-            } else if let quote = parseQuote(trimmed) {
-                kind = .quote
-                content = quote.content
-                parentID = quote.depth > 1 && quoteAncestors.count >= quote.depth - 1
-                    ? quoteAncestors[quote.depth - 2] : nil
-                quoteAncestors = Array(quoteAncestors.prefix(quote.depth - 1))
-                quoteAncestors.append(id)
-                listAncestors.removeAll()
             } else if let heading = parseHeading(trimmed) {
                 kind = .heading(level: heading.level)
                 content = heading.content
@@ -137,23 +179,23 @@ struct MarkdownAnalysis {
                 while let last = listAncestors.last, last.indent >= list.indent {
                     listAncestors.removeLast()
                 }
-                parentID = listAncestors.last?.id
+                blockParentID = listAncestors.last?.id ?? parentID
                 nestingDepth = listAncestors.count
                 sourceIndent = list.sourceIndent
                 listAncestors.append((list.indent, id, nestingDepth))
-                quoteAncestors.removeAll()
             } else {
                 kind = .paragraph
                 if let parent = listAncestors.last, indentationWidth(line.text) > parent.indent {
-                    parentID = parent.id
+                    blockParentID = parent.id
                     nestingDepth = parent.depth + 1
                 }
-                var parts = [parentID == nil ? line.text : withoutLeadingIndent(line.text)]
+                let isListContinuation = blockParentID != parentID
+                var parts = [isListContinuation ? withoutLeadingIndent(line.text) : line.text]
                 var next = index + 1
                 while next < lines.count && isParagraphContinuation(lines[next].text) &&
-                    (parentID == nil || indentationWidth(lines[next].text) > listAncestors.last!.indent) {
+                    (!isListContinuation || indentationWidth(lines[next].text) > listAncestors.last!.indent) {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
-                    parts.append(parentID == nil ? lines[next].text :
+                    parts.append(!isListContinuation ? lines[next].text :
                         withoutLeadingIndent(lines[next].text))
                     next += 1
                 }
@@ -163,10 +205,9 @@ struct MarkdownAnalysis {
                 advance = next - index
             }
 
-            if !isList(kind) && parentID == nil { listAncestors.removeAll() }
-            if kind != .quote { quoteAncestors.removeAll() }
+            if !isList(kind) && blockParentID == parentID { listAncestors.removeAll() }
             result.append(MarkdownBlock(
-                id: id, parentID: parentID, kind: kind, content: content,
+                id: id, parentID: blockParentID, kind: kind, content: content,
                 sourceRange: sourceRange, codeLanguage: nil, lineBreaks: lineBreaks,
                 sourceIndent: sourceIndent, nestingDepth: nestingDepth
             ))
@@ -222,7 +263,7 @@ struct MarkdownAnalysis {
 
     private static func isParagraphContinuation(_ line: String) -> Bool {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
-        return !trimmed.isEmpty && openingFence(trimmed) == nil && parseQuote(trimmed) == nil &&
+        return !trimmed.isEmpty && openingFence(trimmed) == nil && parseQuote(line) == nil &&
             parseHeading(trimmed) == nil && !["---", "***", "___"].contains(trimmed) &&
             parseList(line) == nil
     }
@@ -236,13 +277,27 @@ struct MarkdownAnalysis {
 
     private static func parseQuote(_ line: String) -> (depth: Int, content: String)? {
         var remainder = line[...]
+        var indentation = 0
+        while remainder.first == " " && indentation < 4 {
+            remainder = remainder.dropFirst()
+            indentation += 1
+        }
+        guard indentation <= 3 else { return nil }
         var depth = 0
         while remainder.first == ">" {
             depth += 1
             remainder = remainder.dropFirst()
-            if remainder.first == " " { remainder = remainder.dropFirst() }
+            if remainder.first == " " || remainder.first == "\t" { remainder = remainder.dropFirst() }
         }
         return depth > 0 ? (depth, String(remainder)) : nil
+    }
+
+    private static func removeFirstQuoteMarker(_ line: String) -> String {
+        var remainder = line[...]
+        while remainder.first == " " { remainder = remainder.dropFirst() }
+        remainder = remainder.dropFirst()
+        if remainder.first == " " || remainder.first == "\t" { remainder = remainder.dropFirst() }
+        return String(remainder)
     }
 
     private static func parseList(_ line: String) -> (kind: MarkdownBlock.Kind, content: String, indent: Int, sourceIndent: String)? {

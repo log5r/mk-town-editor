@@ -4,7 +4,7 @@ import XCTest
 
 final class MarkdownRendererTests: XCTestCase {
     func testParserRecognizesCommonBlockTypes() {
-        let blocks = MarkdownAnalysis("# Title\n> Quote\n- Item\n2. Second\n---").blocks
+        let blocks = MarkdownAnalysis("# Title\n> Quote\n- Item\n2. Second\n---").rootBlocks
 
         XCTAssertEqual(blocks.map(\.kind), [
             .heading(level: 1),
@@ -62,5 +62,19 @@ final class MarkdownRendererTests: XCTestCase {
         let rendered = MarkdownRenderer.render("- parent\n  continued\n  - child")
 
         XCTAssertEqual(rendered.string, "•  parent continued\n•  child")
+    }
+
+    @MainActor
+    func testQuoteRendersMultipleParagraphsListsCodeAndNestedQuote() {
+        let markdown = "> first\n> second\n>\n> - item\n>   - child\n>\n> ```swift\n> let x = 1\n> ```\n>> nested"
+
+        XCTAssertEqual(MarkdownRenderer.render(markdown).string,
+                       "│  first second\n│  \n│  •  item\n│  •  child\n│  \n│  let x = 1\n│  │  nested")
+    }
+
+    @MainActor
+    func testQuoteLazyContinuationAndOutsideParagraph() {
+        XCTAssertEqual(MarkdownRenderer.render("> first\nsecond\n>\noutside").string,
+                       "│  first second\n│  \noutside")
     }
 }
