@@ -76,6 +76,16 @@ final class MarkdownEditorModel: ObservableObject {
         perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
+    /// Returns true when Return belongs to a Markdown line, even if AppKit rejects the edit.
+    func continueListOrQuote() -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownLineContinuation.edit(in: textView.string,
+                                                       selection: textView.selectedRange()) else { return false }
+        perform(edit, in: textView, storage: storage, focusEditor: true)
+        return true
+    }
+
     func toggleTask(at sourceLocation: Int) {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),

@@ -73,3 +73,5 @@ GFMの`[ ]`・`[x]`・`[X]`はリスト項目の最初の段落の先頭だけ�
 編集画面のMarkdown構文色分けは`NSTextStorage`を書き換えず、`NSLayoutManager`の一時的な文字色属性を使う。ブロックの見出し・コード・区切り線・表は`MarkdownAnalysis`の原文範囲から求め、引用・リスト・タスクの記号とインラインコード・リンク・強調記号をUTF-16範囲で補う。コードブロックとコードスパン内の他の構文は装飾しない。入力と外部更新の後に再適用し、IME未確定文字列がある間は更新しない。表示のみの処理なのでUndo履歴と原文は変えない。大きい文書向けの差分解析・再描画はB07で検討する。
 
 行番号は`NSScrollView`の縦`NSRulerView`に表示し、本文の保存内容には含めない。`NSLayoutManager`の行フラグメントから画面上の位置を得て、各フラグメントの先頭が原文の論理行頭である場合だけ番号を描く。これにより折り返し行で番号が重複しない。空文書と末尾改行後の空行も1行として表示し、CRLFを1つの行区切りとして数える。入力・外部更新・スクロールでガターを再描画し、桁数に応じて幅を変える。TextKitの行フラグメント列挙と`NSRulerView`の描画・幅変更はAppleの[NSLayoutManager](https://developer.apple.com/documentation/appkit/nslayoutmanager/enumeratelinefragments(forGlyphRange:using:))と[NSRulerView](https://developer.apple.com/documentation/appkit/nsrulerview)を使用する。
+
+Returnキーでのリスト・引用継続は`NSTextView.insertNewline`から編集モデルへ渡し、通常の範囲編集とUndo経路を使う。箇条書きは同じ記号、番号付きリストは番号を1増やして区切り記号を保持し、タスクは未完了`[ ]`で継続する。引用は元の階層を引き継ぐ。空のリスト項目ではリスト記号を外し、引用内なら引用階層を残す。空の引用行では最も内側の引用記号を1つ外す。コードブロック内、選択範囲あり、IME未確定中は補助せず標準の入力処理に委ねる。編集が拒否された場合も別の改行を挿入しない。原文の改行形式はCRLF・CR・LFを維持する。
