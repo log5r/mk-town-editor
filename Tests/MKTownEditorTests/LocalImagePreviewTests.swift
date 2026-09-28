@@ -26,6 +26,10 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(attachment.image?.accessibilityDescription, "説明")
         XCTAssertEqual(rendered.attribute(.alternateDescription, at: location,
                                           effectiveRange: nil) as? String, "説明")
+        let inspectionLink = try XCTUnwrap(rendered.attribute(.link, at: location,
+            effectiveRange: nil) as? URL)
+        XCTAssertEqual(MarkdownImageInspectionLink.destination(inspectionLink),
+            assets.appendingPathComponent("図 one.png"))
     }
 
     func testReferenceImagesAlsoLoadAndMissingResourcesShowAlt() throws {
@@ -55,11 +59,24 @@ final class LocalImagePreviewTests: XCTestCase {
         store.setEnabled(true)
         await store.load(url)
         XCTAssertNotNil(store.image(for: url))
+        XCTAssertNotNil(store.fullImage(for: url))
         let revision = store.revision
         await store.load(url)
         XCTAssertEqual(store.revision, revision)
         store.setEnabled(false)
         XCTAssertNil(store.image(for: url))
+        XCTAssertNil(store.fullImage(for: url))
+    }
+
+    func testImageInspectionLinkRejectsUnsupportedSchemes() {
+        let remote = URL(string: "https://example.com/a%20b.png")!
+        XCTAssertEqual(MarkdownImageInspectionLink.destination(
+            MarkdownImageInspectionLink.make(remote)!), remote)
+        XCTAssertNil(MarkdownImageInspectionLink.destination(
+            URL(string: "mktown-image:/inspect?url=javascript%3Aalert%281%29")!))
+        XCTAssertNil(MarkdownImageInspectionLink.make(URL(string: "javascript:alert(1)")!))
+        XCTAssertNil(MarkdownImageInspectionLink.destination(
+            URL(string: "mktown-image:/other?url=https%3A%2F%2Fexample.com%2Fa.png")!))
     }
 
     func testRemoteImageStoreReportsDecodeFailureAndSkipsUnsupportedScheme() async {

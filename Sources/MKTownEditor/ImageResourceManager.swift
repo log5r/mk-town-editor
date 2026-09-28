@@ -9,6 +9,7 @@ final class RemoteImageStore: ObservableObject {
     static let shared = RemoteImageStore()
     @Published private(set) var revision = 0
     private let images = NSCache<NSURL, NSImage>()
+    private let fullImageData = NSCache<NSURL, NSData>()
     private var failed = Set<URL>()
     private var inFlight = Set<URL>()
     private(set) var isEnabled = false
@@ -26,6 +27,7 @@ final class RemoteImageStore: ObservableObject {
     }) {
         self.fetch = fetch
         images.totalCostLimit = 40_000_000
+        fullImageData.totalCostLimit = 40_000_000
     }
 
     func setEnabled(_ enabled: Bool) {
@@ -33,6 +35,7 @@ final class RemoteImageStore: ObservableObject {
         isEnabled = enabled
         if !enabled {
             images.removeAllObjects()
+            fullImageData.removeAllObjects()
             failed.removeAll()
         }
         revision += 1
@@ -41,6 +44,11 @@ final class RemoteImageStore: ObservableObject {
     func image(for url: URL) -> NSImage? {
         guard isEnabled else { return nil }
         return images.object(forKey: url as NSURL)
+    }
+
+    func fullImage(for url: URL) -> NSImage? {
+        guard isEnabled, let data = fullImageData.object(forKey: url as NSURL) else { return nil }
+        return NSImage(data: data as Data)
     }
 
     func hasFailed(_ url: URL) -> Bool { isEnabled && failed.contains(url) }
@@ -86,12 +94,35 @@ final class RemoteImageStore: ObservableObject {
                              height: CGFloat(thumbnail.height) * scale))
             images.setObject(image, forKey: url as NSURL,
                 cost: thumbnail.width * thumbnail.height * 4)
+            fullImageData.setObject(data as NSData, forKey: url as NSURL, cost: data.count)
             revision += 1
         } catch {
             guard isEnabled, !Task.isCancelled else { return }
             failed.insert(url)
             revision += 1
         }
+    }
+}
+
+enum MarkdownImageInspectionLink {
+    static func make(_ destination: URL) -> URL? {
+        guard destination.isFileURL ||
+                ["http", "https"].contains(destination.scheme?.lowercased() ?? "") else { return nil }
+        var components = URLComponents()
+        components.scheme = "mktown-image"
+        components.path = "/inspect"
+        components.queryItems = [URLQueryItem(name: "url", value: destination.absoluteString)]
+        return components.url
+    }
+
+    static func destination(_ link: URL) -> URL? {
+        guard link.scheme == "mktown-image", link.path == "/inspect",
+              let value = URLComponents(url: link, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "url" })?.value,
+              let destination = URL(string: value),
+              destination.isFileURL || ["http", "https"].contains(destination.scheme?.lowercased() ?? "")
+        else { return nil }
+        return destination
     }
 }
 
