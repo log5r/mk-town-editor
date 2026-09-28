@@ -8,6 +8,7 @@ struct PreviewNavigationTarget: Equatable {
 
 struct MarkdownPreview: View {
     @StateObject private var renderCache = PreviewRenderCache()
+    @ObservedObject private var remoteImages = RemoteImageStore.shared
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
@@ -21,8 +22,17 @@ struct MarkdownPreview: View {
     var onRevealSource: ((NSRange) -> Void)?
     var showsFrontMatter = false
     var zoom: Double = 1
+    var loadsRemoteImages = false
+
+    private var remoteImageTaskID: Int {
+        var hasher = Hasher()
+        hasher.combine(markdown)
+        hasher.combine(loadsRemoteImages)
+        return hasher.finalize()
+    }
 
     var body: some View {
+        Group {
         if usesSharedAnalysis && snapshot == nil {
             ProgressView("プレビューを準備中")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,14 +169,27 @@ struct MarkdownPreview: View {
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
-                                    onOpenDocument: onOpenDocument, zoom: zoom)
+                                    onOpenDocument: onOpenDocument, zoom: zoom,
+                                    remoteRevision: remoteImages.revision)
+            }
+        }
+        }
+        .task(id: remoteImageTaskID) {
+            remoteImages.setEnabled(loadsRemoteImages)
+            guard loadsRemoteImages else { return }
+            let urls = RemoteImageStore.referencedURLs(in: markdown)
+            await withTaskGroup(of: Void.self) { group in
+                for url in urls {
+                    group.addTask { await remoteImages.load(url) }
+                }
             }
         }
     }
 
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let rendered = renderCache.render(block, in: analysis, context: documentContext, zoom: zoom)
+        let rendered = renderCache.render(block, in: analysis, context: documentContext,
+            zoom: zoom, remoteRevision: remoteImages.revision)
         if case let .heading(level) = block.kind {
             Text(AttributedString(rendered))
                 .textSelection(.enabled)
@@ -193,7 +216,8 @@ struct MarkdownPreview: View {
             .disabled(onToggleTask == nil)
 
             Text(AttributedString(renderCache.render(block, in: analysis, context: documentContext,
-                                                    zoom: zoom, showsTaskPrefix: false)))
+                                                    zoom: zoom, showsTaskPrefix: false,
+                                                    remoteRevision: remoteImages.revision)))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -226,7 +250,8 @@ struct MarkdownPreview: View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
                 Text(AttributedString(renderCache.renderCell(cells[column], in: analysis,
-                    context: documentContext, zoom: zoom)))
+                    context: documentContext, zoom: zoom,
+                    remoteRevision: remoteImages.revision)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -285,6 +310,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let onOpenHeading: ((String) -> Void)?
     let onOpenDocument: ((URL) -> Void)?
     let zoom: Double
+    let remoteRevision: Int
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -332,6 +358,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         var renderedSource: String?
         var renderedContext: DocumentContext?
         var renderedZoom: Double?
+        var renderedRemoteRevision: Int?
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             let url = link as? URL ?? (link as? String).flatMap(URL.init(string:))
@@ -352,12 +379,14 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     private func update(_ textView: NSTextView, coordinator: Coordinator) {
         guard coordinator.renderedSource != markdown ||
                 coordinator.renderedContext != documentContext ||
-                coordinator.renderedZoom != zoom else { return }
+                coordinator.renderedZoom != zoom ||
+                coordinator.renderedRemoteRevision != remoteRevision else { return }
         let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
             ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom
+        coordinator.renderedRemoteRevision = remoteRevision
     }
 }

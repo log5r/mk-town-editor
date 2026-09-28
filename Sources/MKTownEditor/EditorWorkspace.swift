@@ -645,7 +645,8 @@ struct EditorWorkspace: View {
                             onOpenDocument: openLinkedDocument,
                             onRevealSource: revealSource,
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                            zoom: settingsStore.zoom(for: .preview))
+                            zoom: settingsStore.zoom(for: .preview),
+                            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
         }
     }
 
@@ -691,7 +692,8 @@ struct EditorWorkspace: View {
                                 onVisibleBlockChange: synchronizeEditor(to:),
                                 onRevealSource: revealSource,
                                 showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                                zoom: settingsStore.zoom(for: .preview))
+                                zoom: settingsStore.zoom(for: .preview),
+                                loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
                     .frame(maxWidth: .infinity)
             }
         }

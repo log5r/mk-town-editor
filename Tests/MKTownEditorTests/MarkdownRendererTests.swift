@@ -271,8 +271,8 @@ final class MarkdownRendererTests: XCTestCase {
         let rendered = MarkdownRenderer.render(markdown)
         let text = rendered.string as NSString
 
-        XCTAssertEqual(rendered.string, "Full key KEY 画像: photo\n")
-        for label in ["Full", "key", "KEY", "画像: photo"] {
+        XCTAssertEqual(rendered.string, "Full key KEY 外部画像の読込オフ: photo\n")
+        for label in ["Full", "key", "KEY", "外部画像の読込オフ: photo"] {
             let range = text.range(of: label)
             XCTAssertNotEqual(range.location, NSNotFound)
             if range.location != NSNotFound {

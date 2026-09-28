@@ -43,7 +43,44 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(missing.string, "画像: missing")
         XCTAssertNotNil(missing.attribute(.link, at: 0, effectiveRange: nil))
         XCTAssertEqual(MarkdownRenderer.render("![remote](https://example.com/a.png)").string,
-                       "画像: remote")
+                       "外部画像の読込オフ: remote")
+    }
+
+    func testRemoteImageStoreRequiresOptInCachesAndClearsOnDisable() async {
+        let imageData = png
+        let store = RemoteImageStore(fetch: { _ in imageData })
+        let url = URL(string: "https://example.com/figure.png")!
+        await store.load(url)
+        XCTAssertNil(store.image(for: url))
+        store.setEnabled(true)
+        await store.load(url)
+        XCTAssertNotNil(store.image(for: url))
+        let revision = store.revision
+        await store.load(url)
+        XCTAssertEqual(store.revision, revision)
+        store.setEnabled(false)
+        XCTAssertNil(store.image(for: url))
+    }
+
+    func testRemoteImageStoreReportsDecodeFailureAndSkipsUnsupportedScheme() async {
+        let store = RemoteImageStore(fetch: { _ in Data("invalid".utf8) })
+        store.setEnabled(true)
+        let url = URL(string: "https://example.com/broken.png")!
+        await store.load(url)
+        XCTAssertTrue(store.hasFailed(url))
+        let revision = store.revision
+        await store.load(url)
+        XCTAssertEqual(store.revision, revision)
+        await store.load(URL(fileURLWithPath: "/tmp/image.png"))
+        XCTAssertEqual(store.revision, revision)
+    }
+
+    func testRemoteImageReferencesExcludeCodeAndIncludeReferenceStyle() {
+        let markdown = "![shown][pic]\n\n[pic]: https://example.com/a.png\n\n" +
+            "`![inline](https://example.com/no.png)`\n\n```md\n" +
+            "![code](https://example.com/code.png)\n```"
+        XCTAssertEqual(RemoteImageStore.referencedURLs(in: markdown),
+            [URL(string: "https://example.com/a.png")!])
     }
 
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {

@@ -255,8 +255,27 @@ enum MarkdownRenderer {
                 value.addAttribute(.alternateDescription, value: alt,
                                    range: NSRange(location: 0, length: value.length))
                 replacement = value
+            } else if ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                      let image = RemoteImageStore.shared.image(for: url) {
+                let attachment = MarkdownImageAttachment()
+                let accessibleImage = (image.copy() as? NSImage) ?? image
+                accessibleImage.accessibilityDescription = alt
+                attachment.image = accessibleImage
+                attachment.bounds = NSRect(origin: .zero, size: image.size)
+                let value = NSMutableAttributedString(attachment: attachment)
+                value.addAttribute(.alternateDescription, value: alt,
+                                   range: NSRange(location: 0, length: value.length))
+                replacement = value
             } else {
-                let value = NSMutableAttributedString(string: "画像: \(alt)",
+                let status: String
+                if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                    status = RemoteImageStore.shared.isEnabled
+                        ? (RemoteImageStore.shared.hasFailed(url) ? "画像を読み込めません" : "画像を読み込み中")
+                        : "外部画像の読込オフ"
+                } else {
+                    status = "画像"
+                }
+                let value = NSMutableAttributedString(string: "\(status): \(alt)",
                                                       attributes: baseAttributes(font: baseFont, color: color,
                                                                                  paragraphSpacing: paragraphSpacing))
                 value.addAttribute(.link, value: url, range: NSRange(location: 0, length: value.length))

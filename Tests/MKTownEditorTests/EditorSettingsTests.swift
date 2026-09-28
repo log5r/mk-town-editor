@@ -13,6 +13,16 @@ final class EditorSettingsTests: XCTestCase {
         let reloaded = EditorSettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.app.snippets, settings.snippets)
     }
+
+    func testRemoteImagePreferenceDefaultsOffAndPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.loadsRemoteImages)
+        var settings = store.app
+        settings.loadsRemoteImages = true
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.loadsRemoteImages, true)
+    }
     func testDefaultsAndDocumentFolderAppPrecedence() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)

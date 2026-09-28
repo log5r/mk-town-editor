@@ -143,6 +143,7 @@ struct AppEditorSettings: Codable, Equatable {
     var proofing: EditorProofingSettings?
     var showsFrontMatterInPreview: Bool?
     var snippets: [EditorSnippet]?
+    var loadsRemoteImages: Bool?
 }
 
 enum EditorZoomSurface: CaseIterable {
