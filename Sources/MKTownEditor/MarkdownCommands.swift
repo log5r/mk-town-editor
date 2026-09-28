@@ -126,6 +126,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.copyRichAction) private var copyRichAction
     @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
     @ObservedObject var settingsStore: EditorSettingsStore
+    @ObservedObject var workspaceStore: WorkspaceStore
 
     var body: some Commands {
         CommandGroup(replacing: .printItem) {
@@ -154,6 +155,12 @@ struct MarkdownCommands: Commands {
             Button("見出しへ移動…") { goToHeadingAction?() }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(goToHeadingAction == nil)
+        }
+        CommandMenu("ワークスペース") {
+            Button("フォルダを開く…") { workspaceStore.chooseFolder() }
+                .keyboardShortcut("o", modifiers: [.command, .option])
+            Button("ファイル一覧を更新") { workspaceStore.refresh(force: true) }
+                .disabled(workspaceStore.rootURL == nil)
         }
         CommandMenu("表示倍率") {
             Text("編集: \(Int((settingsStore.zoom(for: .editor) * 100).rounded()))%")
