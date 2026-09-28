@@ -13,6 +13,10 @@ enum EditorCommand: Hashable {
     case removeFormatting
     case tableOfContents
     case renumberList
+    case duplicateLines
+    case moveLinesUp
+    case moveLinesDown
+    case deleteLines
     case unorderedList
     case orderedList
     case taskList
@@ -42,6 +46,10 @@ enum EditorCommand: Hashable {
         case .removeFormatting: "書式を除去"
         case .tableOfContents: "目次を生成・更新"
         case .renumberList: "番号付きリストを再採番"
+        case .duplicateLines: "行を複製"
+        case .moveLinesUp: "行を上へ移動"
+        case .moveLinesDown: "行を下へ移動"
+        case .deleteLines: "行を削除"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -70,6 +78,10 @@ enum EditorCommand: Hashable {
         case .removeFormatting: "textformat"
         case .tableOfContents: "list.bullet.indent"
         case .renumberList: "list.number"
+        case .duplicateLines: "plus.square.on.square"
+        case .moveLinesUp: "arrow.up"
+        case .moveLinesDown: "arrow.down"
+        case .deleteLines: "trash"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -98,6 +110,7 @@ enum EditorCommand: Hashable {
         case .removeFormatting: nil
         case .tableOfContents: nil
         case .renumberList: nil
+        case .duplicateLines, .moveLinesUp, .moveLinesDown, .deleteLines: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -143,6 +156,10 @@ enum EditorCommand: Hashable {
         case .removeFormatting: model.apply(.removeFormatting)
         case .tableOfContents: model.apply(.tableOfContents)
         case .renumberList: model.apply(.renumberList)
+        case .duplicateLines: model.apply(.duplicateLines)
+        case .moveLinesUp: model.apply(.moveLinesUp)
+        case .moveLinesDown: model.apply(.moveLinesDown)
+        case .deleteLines: model.apply(.deleteLines)
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)
