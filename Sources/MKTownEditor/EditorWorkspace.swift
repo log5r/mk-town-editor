@@ -494,6 +494,11 @@ struct EditorWorkspace: View {
                 editorModel.commitTable(rows: rows, columns: columns)
             }
         }
+        .sheet(isPresented: $editorModel.showingSnippetPicker) {
+            SnippetPickerView(snippets: editorModel.snippets) { snippet in
+                editorModel.insertSnippet(snippet)
+            }
+        }
         .alert(pasteNeedsSave ? "先に書類を保存" : "画像を挿入できません", isPresented: Binding(
             get: { imageDropError != nil || pasteNeedsSave },
             set: { if !$0 { imageDropError = nil; pasteNeedsSave = false } }
@@ -1209,6 +1214,7 @@ struct EditorWorkspace: View {
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
                            tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
                            proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
+                           snippets: settingsStore.app.snippets ?? [],
                            isEditable: !workspaceStore.isDocumentLocked(fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage,
                            onVisibleSourceChange: synchronizePreview(to:))

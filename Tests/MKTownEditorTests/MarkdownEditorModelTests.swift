@@ -83,6 +83,49 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.selectedRange().location, hidden)
     }
 
+    func testSnippetReplacesTriggerAndTabsThroughEditedPlaceholders() {
+        let snippet = EditorSnippet(trigger: "sig", template: "${2:名前}、${1:🙂}より$0")
+        let plan = try! XCTUnwrap(MarkdownSnippetPlan.make(snippet, in: "sig",
+            selection: NSRange(location: 3, length: 0)))
+        let expanded = plan.edit.applying(to: "sig")
+        XCTAssertEqual(expanded, "名前、🙂より")
+        XCTAssertEqual((expanded as NSString).substring(with: plan.edit.selection), "🙂")
+        XCTAssertEqual(plan.placeholders.map { (expanded as NSString).substring(with: $0) },
+            ["🙂", "名前"])
+        let embedded = try! XCTUnwrap(MarkdownSnippetPlan.make(snippet, in: "prefixsig",
+            selection: NSRange(location: 9, length: 0)))
+        XCTAssertEqual(embedded.edit.range, NSRange(location: 9, length: 0))
+
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "sig"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        XCTAssertTrue(model.insertSnippet(snippet))
+        let chosen = view.selectedRange()
+        view.textStorage?.replaceCharacters(in: chosen, with: "山田太郎")
+        view.setSelectedRange(NSRange(location: chosen.location + 4, length: 0))
+        view.insertTab(nil)
+        XCTAssertEqual((view.string as NSString).substring(with: view.selectedRange()), "名前")
+        view.insertTab(nil)
+        XCTAssertEqual(view.selectedRange(), NSRange(location: (view.string as NSString).length, length: 0))
+        XCTAssertEqual(view.string, "名前、山田太郎より")
+    }
+
+    func testTabExpandsConfiguredSnippetTrigger() {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "sig"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.snippets = [EditorSnippet(trigger: "sig", template: "${1:名前}$0")]
+        view.commandModel = model
+        view.setSelectedRange(NSRange(location: 3, length: 0))
+        view.insertTab(nil)
+        XCTAssertEqual(view.string, "名前")
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 0, length: 2))
+    }
+
     func testRestoredSelectionIsClampedToCurrentDocument() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.string = "short"

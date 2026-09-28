@@ -54,6 +54,12 @@ struct EditorProofingSettings: Codable, Equatable {
     var correctsSpelling = true
 }
 
+struct EditorSnippet: Codable, Equatable, Identifiable {
+    var id = UUID()
+    var trigger: String
+    var template: String
+}
+
 struct EditorTextStyle: Equatable {
     var fontChoice: EditorFontChoice = .monospacedSystem
     var fontSize: Double = 13
@@ -136,6 +142,7 @@ struct AppEditorSettings: Codable, Equatable {
     var disabledLintRules: Set<MarkdownLintRule>?
     var proofing: EditorProofingSettings?
     var showsFrontMatterInPreview: Bool?
+    var snippets: [EditorSnippet]?
 }
 
 enum EditorZoomSurface: CaseIterable {
