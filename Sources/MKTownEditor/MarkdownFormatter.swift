@@ -56,6 +56,7 @@ enum MarkdownFormattingStyle {
     case quote
     case unorderedList
     case orderedList
+    case taskList
 }
 
 struct MarkdownEdit: Equatable {
@@ -94,9 +95,11 @@ enum MarkdownFormatter {
         case .quote:
             return prefixLines(text, selection: safeSelection, prefix: "> ")
         case .unorderedList:
-            return prefixLines(text, selection: safeSelection, prefix: "- ")
+            return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
-            return orderedList(text, selection: safeSelection)
+            return convertList(text, selection: safeSelection, target: .ordered)
+        case .taskList:
+            return convertList(text, selection: safeSelection, target: .task)
         }
     }
 
@@ -277,15 +280,42 @@ enum MarkdownFormatter {
     private static let listMarkerExpression = try! NSRegularExpression(
         pattern: #"^([ \t]*)(?:[-+*][ \t]+|([0-9]{1,9})[.)][ \t]+)(.*)$"#
     )
+    private static let taskMarkerExpression = try! NSRegularExpression(
+        pattern: #"^\[([ xX])\](?:[ \t]+(.*))?$"#
+    )
 
-    private static func orderedList(_ text: String, selection: NSRange) -> MarkdownEdit {
+    private enum ListTarget: Equatable {
+        case unordered
+        case ordered
+        case task
+
+        var marker: String {
+            switch self {
+            case .unordered: "- "
+            case .ordered: "1. "
+            case .task: "- [ ] "
+            }
+        }
+    }
+
+    private struct EditableListLine {
+        let indent: String
+        let content: String
+        let ending: String
+        let start: Int?
+        let taskState: String?
+        let hadMarker: Bool
+    }
+
+    private static func convertList(_ text: String, selection: NSRange, target: ListTarget) -> MarkdownEdit {
         let source = text as NSString
         let lineRange = source.lineRange(for: selection)
         if lineRange.length == 0 {
-            return MarkdownEdit(range: lineRange, replacement: "1. ",
-                                selection: NSRange(location: lineRange.location + 3, length: 0))
+            return MarkdownEdit(range: lineRange, replacement: target.marker,
+                                selection: NSRange(location: lineRange.location +
+                                                   (target.marker as NSString).length, length: 0))
         }
-        var lines: [(indent: String, content: String, ending: String, start: Int?)] = []
+        var lines: [EditableListLine] = []
         var cursor = lineRange.location
         repeat {
             var lineStart = 0
@@ -299,28 +329,55 @@ enum MarkdownFormatter {
                                                            range: NSRange(location: 0, length: (raw as NSString).length)) {
                 let nsRaw = raw as NSString
                 let numberRange = match.range(at: 2)
-                lines.append((nsRaw.substring(with: match.range(at: 1)),
-                              nsRaw.substring(with: match.range(at: 3)), ending,
-                              numberRange.location == NSNotFound ? nil : Int(nsRaw.substring(with: numberRange))))
+                let markedContent = nsRaw.substring(with: match.range(at: 3))
+                let taskMatch = taskMarkerExpression.firstMatch(in: markedContent,
+                    range: NSRange(location: 0, length: (markedContent as NSString).length))
+                let taskState = taskMatch.map { (markedContent as NSString).substring(with: $0.range(at: 1)) }
+                let content: String
+                if let taskMatch {
+                    let taskContentRange = taskMatch.range(at: 2)
+                    content = taskContentRange.location == NSNotFound ? ""
+                        : (markedContent as NSString).substring(with: taskContentRange)
+                } else {
+                    content = markedContent
+                }
+                lines.append(EditableListLine(indent: nsRaw.substring(with: match.range(at: 1)),
+                                              content: content, ending: ending,
+                                              start: numberRange.location == NSNotFound ? nil : Int(nsRaw.substring(with: numberRange)),
+                                              taskState: taskState, hadMarker: true))
             } else {
                 let indent = String(raw.prefix(while: { $0 == " " || $0 == "\t" }))
-                lines.append((indent, String(raw.dropFirst(indent.count)), ending, nil))
+                lines.append(EditableListLine(indent: indent, content: String(raw.dropFirst(indent.count)),
+                                              ending: ending, start: nil, taskState: nil, hadMarker: false))
             }
             cursor = lineEnd
         } while cursor < NSMaxRange(lineRange)
 
-        if selection.length == 0, lines.count == 1, lines[0].content.isEmpty {
-            let replacement = lines[0].indent + "1. " + lines[0].ending
+        if selection.length == 0, lines.count == 1, lines[0].content.isEmpty, !lines[0].hadMarker {
+            let replacement = lines[0].indent + target.marker + lines[0].ending
             return MarkdownEdit(range: lineRange, replacement: replacement,
                                 selection: NSRange(location: lineRange.location +
-                                                   (lines[0].indent as NSString).length + 3, length: 0))
+                                                   (lines[0].indent as NSString).length +
+                                                   (target.marker as NSString).length, length: 0))
         }
 
-        var number = lines.first(where: { !$0.content.isEmpty })?.start ?? 1
+        var number = lines.first(where: { $0.hadMarker || !$0.content.isEmpty })?.start ?? 1
         let replacement = lines.map { line in
-            guard !line.content.isEmpty else { return line.indent + line.ending }
-            defer { number += 1 }
-            return line.indent + "\(number). " + line.content + line.ending
+            guard line.hadMarker || !line.content.isEmpty else { return line.indent + line.ending }
+            let marker: String
+            switch target {
+            case .unordered:
+                marker = "- "
+            case .ordered:
+                marker = "\(number). "
+                number += 1
+            case .task:
+                marker = "- [\(line.taskState ?? " ")] "
+            }
+            let content = target == .ordered
+                ? line.taskState.map { "[\($0)] " + line.content } ?? line.content
+                : line.content
+            return line.indent + marker + content + line.ending
         }.joined()
         let newSelection = NSRange(location: lineRange.location, length: (replacement as NSString).length)
         return MarkdownEdit(range: lineRange, replacement: replacement, selection: newSelection)

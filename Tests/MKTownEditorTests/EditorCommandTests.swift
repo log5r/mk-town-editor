@@ -82,4 +82,19 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(view.string, "1. one\n2. two")
         XCTAssertEqual(EditorCommand.orderedList.title, "番号付きリスト")
     }
+
+    func testTaskAndBulletCommandsConvertSelectedLines() {
+        let view = NSTextView()
+        view.string = "- one\n- two"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+
+        EditorCommand.taskList.perform(on: model)
+        XCTAssertEqual(view.string, "- [ ] one\n- [ ] two")
+
+        view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
+        EditorCommand.unorderedList.perform(on: model)
+        XCTAssertEqual(view.string, "- one\n- two")
+    }
 }
