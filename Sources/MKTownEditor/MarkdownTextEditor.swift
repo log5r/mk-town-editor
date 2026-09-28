@@ -13,6 +13,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var tableAddsRowOnTab = true
     var proofing = EditorProofingSettings()
     var snippets: [EditorSnippet] = []
+    var whitespaceOptions = EditorWhitespaceOptions()
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -41,6 +42,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         textStyle.apply(to: textView)
+        textView.whitespaceOptions = whitespaceOptions
+        textView.whitespaceTabWidth = textStyle.tabWidth
+        textView.refreshInvisibles()
         context.coordinator.appliedTextStyle = textStyle
         textView.textColor = .textColor
         textView.backgroundColor = .textBackgroundColor
@@ -82,6 +86,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        if textView.whitespaceOptions != whitespaceOptions ||
+           textView.whitespaceTabWidth != textStyle.tabWidth {
+            textView.whitespaceOptions = whitespaceOptions
+            textView.whitespaceTabWidth = textStyle.tabWidth
+            textView.refreshInvisibles()
+        }
         textView.registerForDraggedTypes([.fileURL])
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
@@ -146,6 +156,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         let selection = textView.selectedRange()
         textView.clearFolds()
         textView.string = text
+        textView.refreshInvisibles()
         context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
@@ -183,6 +194,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView else { return }
             (textView as? EditorTextView)?.clearFolds()
             text = textView.string
+            (textView as? EditorTextView)?.refreshInvisibles()
             applyProofing()
             refreshSyntax()
             if let scrollView, let options = appliedLayoutOptions {
@@ -300,6 +312,15 @@ final class EditorTextView: NSTextView {
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var imagePasteboard: NSPasteboard = .general
+    var whitespaceOptions = EditorWhitespaceOptions()
+    var whitespaceTabWidth = 4
+    private var invisiblePlan: InvisibleCharacterPlan?
+
+    func refreshInvisibles() {
+        invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
+            ? InvisibleCharacterPlan(source: string, tabWidth: max(1, whitespaceTabWidth)) : nil
+        needsDisplay = true
+    }
     private(set) var foldedPlans: [MarkdownFoldPlan] = []
     var foldedHeaderLocations: Set<Int> { Set(foldedPlans.map(\.headerLocation)) }
     private var selectionBeforeImageDrag: NSRange?
@@ -449,11 +470,73 @@ final class EditorTextView: NSTextView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        drawInvisibles(in: dirtyRect)
         guard let imageDropLocation,
               let indicator = imageDropIndicatorRect(at: imageDropLocation),
               indicator.intersects(dirtyRect) else { return }
         NSColor.controlAccentColor.setFill()
         indicator.fill()
+    }
+
+    private func drawInvisibles(in dirtyRect: NSRect) {
+        guard !hasMarkedText(), let invisiblePlan, let layoutManager, let textContainer else { return }
+        let containerRect = dirtyRect.offsetBy(dx: -textContainerOrigin.x, dy: -textContainerOrigin.y)
+        let glyphRange = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
+        let visible = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let start = visible.location
+        let end = NSMaxRange(visible)
+        func firstVisible<Item>(_ items: [Item], location: (Item) -> Int) -> Int {
+            var low = 0
+            var high = items.count
+            while low < high {
+                let middle = (low + high) / 2
+                if location(items[middle]) < start { low = middle + 1 }
+                else { high = middle }
+            }
+            return low
+        }
+        func glyph(_ location: Int) -> (NSRange, NSRect)? {
+            let range = layoutManager.glyphRange(forCharacterRange: NSRange(location: location, length: 1),
+                                                 actualCharacterRange: nil)
+            guard range.length > 0 else { return nil }
+            let rect = layoutManager.boundingRect(forGlyphRange: range, in: textContainer)
+            return (range, rect.offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y))
+        }
+        if whitespaceOptions.showsIndentGuides {
+            let first = firstVisible(invisiblePlan.guides, location: { $0 })
+            for location in invisiblePlan.guides[first...].prefix(while: { $0 < end }) {
+                guard let (range, rect) = glyph(location) else { continue }
+                let line = layoutManager.lineFragmentRect(forGlyphAt: range.location,
+                                                          effectiveRange: nil)
+                let path = NSBezierPath()
+                let x = rect.maxX - 1
+                path.move(to: NSPoint(x: x, y: line.minY + textContainerOrigin.y))
+                path.line(to: NSPoint(x: x, y: line.maxY + textContainerOrigin.y))
+                path.lineWidth = 1
+                NSColor.tertiaryLabelColor.withAlphaComponent(0.35).setStroke()
+                path.stroke()
+            }
+        }
+        if whitespaceOptions.showsCharacters {
+            let font = NSFont.systemFont(ofSize: 9)
+            let first = firstVisible(invisiblePlan.marks, location: { $0.location })
+            for mark in invisiblePlan.marks[first...].prefix(while: { $0.location < end }) {
+                guard let (_, rect) = glyph(mark.location) else { continue }
+                let symbol: String
+                let color: NSColor
+                switch mark.kind {
+                case .space: symbol = "·"; color = .tertiaryLabelColor
+                case .trailingSpace: symbol = "·"; color = .systemOrange
+                case .tab: symbol = "→"; color = .tertiaryLabelColor
+                case .newline: symbol = "¶"; color = .tertiaryLabelColor
+                }
+                let attributes: [NSAttributedString.Key: Any] = [.font: font,
+                    .foregroundColor: color.withAlphaComponent(0.75)]
+                let size = (symbol as NSString).size(withAttributes: attributes)
+                let x = mark.kind == .newline ? rect.maxX : rect.midX - size.width / 2
+                (symbol as NSString).draw(at: NSPoint(x: x, y: rect.minY), withAttributes: attributes)
+            }
+        }
     }
 
     func imageDropIndicatorRect(at location: Int) -> NSRect? {

@@ -187,6 +187,8 @@ struct AppEditorSettings: Codable, Equatable {
     var markdownDialect: MarkdownDialect?
     var previewTheme: PreviewTheme?
     var previewBodyWidth: Int?
+    var showsInvisibleCharacters: Bool?
+    var showsIndentGuides: Bool?
 }
 
 enum EditorZoomSurface: CaseIterable {

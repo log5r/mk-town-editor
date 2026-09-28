@@ -23,6 +23,8 @@ struct EditorPreferencesView: View {
                 Text("上下の余白: \(Int(settingsStore.app.verticalMargin ?? 18)) pt")
             }
             Toggle("行を折り返す", isOn: binding(\.wrapsLines))
+            Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
+            Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
             Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
                 Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
             }

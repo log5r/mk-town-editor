@@ -80,6 +80,7 @@
 		A1000000000000000000005C /* RichTextMarkdownImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005C /* RichTextMarkdownImporter.swift */; };
 		A1000000000000000000005D /* PortablePackageExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005D /* PortablePackageExporter.swift */; };
 		A1000000000000000000005E /* WorkspaceBatchExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005E /* WorkspaceBatchExporter.swift */; };
+		A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005F /* EditorInvisibleCharacters.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -159,6 +160,7 @@
 		A2000000000000000000005C /* RichTextMarkdownImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RichTextMarkdownImporter.swift; sourceTree = "<group>"; };
 		A2000000000000000000005D /* PortablePackageExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortablePackageExporter.swift; sourceTree = "<group>"; };
 		A2000000000000000000005E /* WorkspaceBatchExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBatchExporter.swift; sourceTree = "<group>"; };
+		A2000000000000000000005F /* EditorInvisibleCharacters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorInvisibleCharacters.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -252,6 +254,7 @@
 				A2000000000000000000005C /* RichTextMarkdownImporter.swift */,
 				A2000000000000000000005D /* PortablePackageExporter.swift */,
 				A2000000000000000000005E /* WorkspaceBatchExporter.swift */,
+				A2000000000000000000005F /* EditorInvisibleCharacters.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -393,6 +396,7 @@
 				A1000000000000000000005C /* RichTextMarkdownImporter.swift in Sources */,
 				A1000000000000000000005D /* PortablePackageExporter.swift in Sources */,
 				A1000000000000000000005E /* WorkspaceBatchExporter.swift in Sources */,
+				A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -76,6 +76,17 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(restored.app.previewTheme, .paper)
         XCTAssertEqual(restored.app.previewBodyWidth, 720)
     }
+    func testInvisibleDisplayPreferencesPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        settings.showsInvisibleCharacters = true
+        settings.showsIndentGuides = true
+        store.setAppSettings(settings)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.app.showsInvisibleCharacters, true)
+        XCTAssertEqual(restored.app.showsIndentGuides, true)
+    }
     func testDefaultsAndDocumentFolderAppPrecedence() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
