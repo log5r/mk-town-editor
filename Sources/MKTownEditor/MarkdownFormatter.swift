@@ -1,5 +1,51 @@
 import Foundation
 
+enum MarkdownInlineSyntax {
+    static func codeSpanRanges(in text: String) -> [NSRange] {
+        let source = text as NSString
+        var ranges: [NSRange] = []
+        var cursor = 0
+        while cursor < source.length {
+            guard source.character(at: cursor) == 96 else {
+                cursor += 1
+                continue
+            }
+            var backslashes = 0
+            var before = cursor - 1
+            while before >= 0 && source.character(at: before) == 92 {
+                backslashes += 1
+                before -= 1
+            }
+            if backslashes % 2 == 1 {
+                cursor += 1
+                continue
+            }
+            let opening = cursor
+            while cursor < source.length && source.character(at: cursor) == 96 { cursor += 1 }
+            let length = cursor - opening
+            var search = cursor
+            var closing: Int?
+            while search < source.length {
+                guard source.character(at: search) == 96 else {
+                    search += 1
+                    continue
+                }
+                let runStart = search
+                while search < source.length && source.character(at: search) == 96 { search += 1 }
+                if search - runStart == length {
+                    closing = search
+                    break
+                }
+            }
+            if let closing {
+                ranges.append(NSRange(location: opening, length: closing - opening))
+                cursor = closing
+            }
+        }
+        return ranges
+    }
+}
+
 enum MarkdownFormattingStyle {
     case bold
     case italic
@@ -56,16 +102,144 @@ enum MarkdownFormatter {
         placeholder: String
     ) -> MarkdownEdit {
         let nsText = text as NSString
-        let selected = nsText.substring(with: selection)
+        let markerLength = (prefix as NSString).length
+        let markers: [String]
+        switch prefix {
+        case "**": markers = ["**", "__"]
+        case "_": markers = ["_", "*"]
+        default: markers = [prefix]
+        }
+        let spans = formattingSpans(in: text, markers: markers)
+        if let enclosing = spans.filter({
+            if selection.length == 0 {
+                return selection.location >= $0.innerRange.location &&
+                    selection.location <= NSMaxRange($0.innerRange)
+            }
+            return selection.location >= $0.innerRange.location &&
+                NSMaxRange(selection) <= NSMaxRange($0.innerRange)
+        }).min(by: { $0.range.length < $1.range.length }) {
+            let inner = nsText.substring(with: enclosing.innerRange)
+            let start = min(max(selection.location, enclosing.innerRange.location),
+                            NSMaxRange(enclosing.innerRange))
+            let end = min(max(NSMaxRange(selection), enclosing.innerRange.location),
+                          NSMaxRange(enclosing.innerRange))
+            return MarkdownEdit(
+                range: enclosing.range,
+                replacement: inner,
+                selection: NSRange(location: enclosing.range.location + start - enclosing.innerRange.location,
+                                   length: end - start)
+            )
+        }
+
+        var editRange = selection
+        if selection.length > 0 {
+            for span in spans where NSIntersectionRange(span.range, editRange).length > 0 {
+                editRange = NSUnionRange(editRange, span.range)
+            }
+        }
+        let selected = nsText.substring(with: editRange)
+        let contained = spans.filter {
+            $0.range.location >= editRange.location && NSMaxRange($0.range) <= NSMaxRange(editRange)
+        }
+        if !contained.isEmpty {
+            let unwrapped = NSMutableString(string: selected)
+            let markerRanges = contained.flatMap { span in
+                [NSRange(location: span.range.location - editRange.location, length: span.markerLength),
+                 NSRange(location: NSMaxRange(span.innerRange) - editRange.location,
+                         length: span.markerLength)]
+            }.sorted { $0.location > $1.location }
+            for range in markerRanges {
+                unwrapped.replaceCharacters(in: range, with: "")
+            }
+            let content = unwrapped as String
+            let uncovered = NSMutableString(string: selected)
+            let outerSpans = contained.filter { span in
+                !contained.contains { other in
+                    other.range.location <= span.range.location &&
+                        NSMaxRange(other.range) >= NSMaxRange(span.range) &&
+                        !NSEqualRanges(other.range, span.range)
+                }
+            }
+            for span in outerSpans.reversed() {
+                uncovered.replaceCharacters(in: NSRange(location: span.range.location - editRange.location,
+                                                       length: span.range.length), with: "")
+            }
+            let shouldRemove = (uncovered as String)
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let replacement = shouldRemove ? content : prefix + content + suffix
+            return MarkdownEdit(
+                range: editRange,
+                replacement: replacement,
+                selection: NSRange(location: editRange.location + (shouldRemove ? 0 : markerLength),
+                                   length: (content as NSString).length)
+            )
+        }
         let content = selected.isEmpty ? placeholder : selected
         let replacement = prefix + content + suffix
-        let prefixLength = (prefix as NSString).length
         let contentLength = (content as NSString).length
         return MarkdownEdit(
-            range: selection,
+            range: editRange,
             replacement: replacement,
-            selection: NSRange(location: selection.location + prefixLength, length: contentLength)
+            selection: NSRange(location: editRange.location + markerLength, length: contentLength)
         )
+    }
+
+    private struct FormattingSpan {
+        let range: NSRange
+        let innerRange: NSRange
+        let markerLength: Int
+    }
+
+    private static func formattingSpans(in text: String, markers: [String]) -> [FormattingSpan] {
+        let source = text as NSString
+        let codeSpans = MarkdownInlineSyntax.codeSpanRanges(in: text)
+        if markers == ["`"] {
+            return codeSpans.map { range in
+                let markerLength = (0..<range.length)
+                    .prefix(while: { source.character(at: range.location + $0) == 96 }).count
+                return FormattingSpan(
+                    range: range,
+                    innerRange: NSRange(location: range.location + markerLength,
+                                        length: range.length - markerLength * 2),
+                    markerLength: markerLength
+                )
+            }
+        }
+        var spans: [FormattingSpan] = []
+        for marker in markers {
+            let escaped = NSRegularExpression.escapedPattern(for: marker)
+            let boundary = marker.count == 1 ? "(?<!\(escaped))" : ""
+            let after = marker.count == 1 ? "(?!\(escaped))" : ""
+            let pattern = try! NSRegularExpression(
+                pattern: boundary + escaped + after + #"([\s\S]+?)"# + boundary + escaped + after
+            )
+            spans += pattern.matches(in: text, range: NSRange(location: 0, length: source.length)).compactMap { match in
+                let inner = match.range(at: 1)
+                let endMarker = NSMaxRange(inner)
+                guard !isEscaped(in: source, at: match.range.location),
+                      !isEscaped(in: source, at: endMarker),
+                      !codeSpans.contains(where: { code in
+                          NSIntersectionRange(code, NSRange(location: match.range.location,
+                                                            length: (marker as NSString).length)).length > 0 ||
+                              NSIntersectionRange(code, NSRange(location: endMarker,
+                                                                length: (marker as NSString).length)).length > 0
+                      })
+                else { return nil }
+                return FormattingSpan(range: match.range, innerRange: inner,
+                                      markerLength: (marker as NSString).length)
+            }
+        }
+        return spans.sorted { $0.range.location < $1.range.location }
+    }
+
+    private static func isEscaped(in source: NSString, at location: Int) -> Bool {
+        var backslashes = 0
+        var cursor = location - 1
+        while cursor >= 0 && source.character(at: cursor) == 92 {
+            backslashes += 1
+            cursor -= 1
+        }
+        return backslashes % 2 == 1
     }
 
     private static func link(_ text: String, selection: NSRange) -> MarkdownEdit {

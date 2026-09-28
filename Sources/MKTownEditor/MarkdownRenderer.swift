@@ -189,7 +189,7 @@ enum MarkdownRenderer {
         guard !references.isEmpty else { return markdown }
         let source = markdown as NSString
         let result = NSMutableString(string: markdown)
-        let codeSpans = codeSpanRanges(in: source)
+        let codeSpans = MarkdownInlineSyntax.codeSpanRanges(in: markdown)
         let matches = referencePattern.matches(in: markdown,
             range: NSRange(location: 0, length: source.length))
         for match in matches.reversed() {
@@ -211,49 +211,6 @@ enum MarkdownRenderer {
                                      with: "[\(title)](<\(reference.destination)>)")
         }
         return result as String
-    }
-
-    private static func codeSpanRanges(in source: NSString) -> [NSRange] {
-        var ranges: [NSRange] = []
-        var cursor = 0
-        while cursor < source.length {
-            guard source.character(at: cursor) == 96 else {
-                cursor += 1
-                continue
-            }
-            var backslashes = 0
-            var before = cursor - 1
-            while before >= 0 && source.character(at: before) == 92 {
-                backslashes += 1
-                before -= 1
-            }
-            if backslashes % 2 == 1 {
-                cursor += 1
-                continue
-            }
-            let opening = cursor
-            while cursor < source.length && source.character(at: cursor) == 96 { cursor += 1 }
-            let length = cursor - opening
-            var search = cursor
-            var closing: Int?
-            while search < source.length {
-                guard source.character(at: search) == 96 else {
-                    search += 1
-                    continue
-                }
-                let runStart = search
-                while search < source.length && source.character(at: search) == 96 { search += 1 }
-                if search - runStart == length {
-                    closing = search
-                    break
-                }
-            }
-            if let closing {
-                ranges.append(NSRange(location: opening, length: closing - opening))
-                cursor = closing
-            }
-        }
-        return ranges
     }
 
     private static func baseAttributes(
