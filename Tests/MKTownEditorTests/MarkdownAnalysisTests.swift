@@ -235,4 +235,52 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(blocks[2].content, "===")
         XCTAssertEqual(blocks[5].content, "")
     }
+
+    func testGFMTableParsesAlignmentRowsAndOriginalRanges() {
+        let source = "| Name | Score | Note |\r\n| :--- | ---: | :---: |\r\n| 🙂 | 42 | ok |\r\n| short |\r\n\r\nafter"
+        let analysis = MarkdownAnalysis(source)
+        let tableBlock = analysis.rootBlocks[0]
+        let table = try! XCTUnwrap(tableBlock.table)
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.table, .blank, .paragraph])
+        XCTAssertEqual(table.header, ["Name", "Score", "Note"])
+        XCTAssertEqual(table.alignments, [.leading, .trailing, .center])
+        XCTAssertEqual(table.rows, [["🙂", "42", "ok"], ["short", "", ""]])
+        XCTAssertEqual((source as NSString).substring(with: tableBlock.sourceRange),
+                       "| Name | Score | Note |\r\n| :--- | ---: | :---: |\r\n| 🙂 | 42 | ok |\r\n| short |\r\n")
+        XCTAssertEqual((source as NSString).substring(with: table.rowRanges[0]), "| 🙂 | 42 | ok |\r\n")
+        XCTAssertTrue(analysis.positionMap.positions(for: tableBlock.sourceRange) != nil)
+    }
+
+    func testGFMTableSplitsOnlyUnescapedPipesIncludingInsideCodeSpans() {
+        let source = "left|right\n---|---\n\\| escaped | `a\\|b`\n\\\\| separator | value\n`a|b` | tail"
+        let table = try! XCTUnwrap(MarkdownAnalysis(source).rootBlocks[0].table)
+
+        XCTAssertEqual(table.rows[0], ["\\| escaped", "`a\\|b`"])
+        XCTAssertEqual(table.rows[1], ["\\\\", "separator"])
+        XCTAssertEqual(table.rows[2], ["`a", "b`"])
+    }
+
+    func testGFMTableRequiresMatchingHeaderAndDelimiterColumns() {
+        let mismatched = MarkdownAnalysis("a|b\n---|---|---")
+        let setext = MarkdownAnalysis("title\n---")
+        let invalidDelimiter = MarkdownAnalysis("a|b\n::---|---")
+        let heading = MarkdownAnalysis("# a|b\n---|---")
+
+        XCTAssertFalse(mismatched.blocks.contains(where: { $0.kind == .table }))
+        XCTAssertFalse(setext.blocks.contains(where: { $0.kind == .table }))
+        XCTAssertFalse(invalidDelimiter.blocks.contains(where: { $0.kind == .table }))
+        XCTAssertFalse(heading.blocks.contains(where: { $0.kind == .table }))
+    }
+
+    func testGFMTableInsideQuoteAndListPreservesContainerRelationships() {
+        let quote = MarkdownAnalysis("> a|b\n> -|-\n> 1|2")
+        let list = MarkdownAnalysis("- parent\n  | a | b |\n  | - | - |\n  | 1 | 2 |\n- next")
+
+        XCTAssertEqual(quote.children(of: quote.rootBlocks[0]).map(\.kind), [.table])
+        XCTAssertEqual(quote.children(of: quote.rootBlocks[0])[0].table?.rows, [["1", "2"]])
+        XCTAssertEqual(list.rootBlocks.map(\.kind), [.unorderedList, .unorderedList])
+        XCTAssertEqual(list.children(of: list.rootBlocks[0]).map(\.kind), [.table])
+        XCTAssertEqual(list.children(of: list.rootBlocks[0])[0].table?.rows, [["1", "2"]])
+    }
 }

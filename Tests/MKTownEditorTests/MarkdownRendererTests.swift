@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
@@ -97,5 +98,32 @@ final class MarkdownRendererTests: XCTestCase {
 
         XCTAssertEqual(rendered.string, "first second\ntitle")
         XCTAssertNotNil(rendered.attribute(.font, at: 0, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testTableFallbackRendersCellsWithoutDelimiterSyntax() {
+        XCTAssertEqual(MarkdownRenderer.render("a|b\n---|---\n1|2").string, "a\tb\n1\t2")
+    }
+
+    @MainActor
+    func testTablePreviewHasNestedHorizontalScrollArea() {
+        func scrollViews(in view: NSView) -> [NSScrollView] {
+            let current = (view as? NSScrollView).map { [$0] } ?? []
+            return current + view.subviews.flatMap(scrollViews(in:))
+        }
+        for markdown in [
+            "a|b|c\n-|-|-\n1|2|3",
+            "> a|b|c\n> -|-|-\n> 1|2|3",
+            "- item\n  a|b|c\n  -|-|-\n  1|2|3"
+        ] {
+            let preview = MarkdownPreview(markdown: markdown, documentContext: DocumentContext(fileURL: nil))
+            let host = NSHostingView(rootView: preview)
+            host.frame = NSRect(x: 0, y: 0, width: 280, height: 240)
+            host.layoutSubtreeIfNeeded()
+
+            let areas = scrollViews(in: host)
+            XCTAssertGreaterThanOrEqual(areas.count, 2)
+            XCTAssertTrue(areas.contains(where: \.hasHorizontalScroller))
+        }
     }
 }
