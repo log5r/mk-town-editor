@@ -4,6 +4,47 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownRendererTests: XCTestCase {
+    @MainActor
+    func testBareAutolinksExcludePunctuationAndCodeInPreviewAndHTML() {
+        let markdown = "Visit www.commonmark.org/help. See https://example.com/a(b)). Mail a+tag@bar.example. `https://code.example`"
+        let rendered = MarkdownRenderer.render(markdown)
+        let text = rendered.string as NSString
+        func link(_ token: String) -> URL? {
+            let range = text.range(of: token)
+            return rendered.attribute(.link, at: range.location, effectiveRange: nil) as? URL
+        }
+        XCTAssertEqual(link("www.commonmark.org/help"), URL(string: "http://www.commonmark.org/help"))
+        XCTAssertEqual(link("https://example.com/a(b)"), URL(string: "https://example.com/a(b)"))
+        XCTAssertEqual(link("a+tag@bar.example"), URL(string: "mailto:a+tag@bar.example"))
+        XCTAssertNil(link("https://code.example"))
+        let html = MarkdownHTMLExporter.render(markdown)
+        XCTAssertTrue(html.contains("href=\"http://www.commonmark.org/help\""))
+        XCTAssertTrue(html.contains("href=\"mailto:a+tag@bar.example\""))
+        XCTAssertFalse(html.contains("href=\"https://code.example\""))
+    }
+
+    @MainActor
+    func testBareURLRequiresGFMDelimiter() {
+        let rendered = MarkdownRenderer.render("prefixhttps://example.com and https://valid.example")
+        let text = rendered.string as NSString
+        XCTAssertNil(rendered.attribute(.link, at: text.range(of: "prefixhttps").location,
+            effectiveRange: nil))
+        XCTAssertEqual(rendered.attribute(.link, at: text.range(of: "https://valid.example").location,
+            effectiveRange: nil) as? URL, URL(string: "https://valid.example"))
+    }
+
+    @MainActor
+    func testExplicitMailtoAndInvalidDomainAreNotMislinked() {
+        let rendered = MarkdownRenderer.render("mailto:a.b-c_d@mail.example and www.invalid_foo.bar and www.good.example")
+        let text = rendered.string as NSString
+        XCTAssertEqual(rendered.attribute(.link, at: text.range(of: "mailto:a.b-c_d@mail.example").location,
+            effectiveRange: nil) as? URL, URL(string: "mailto:a.b-c_d@mail.example"))
+        XCTAssertNil(rendered.attribute(.link, at: text.range(of: "www.invalid_foo.bar").location,
+            effectiveRange: nil))
+        XCTAssertNotNil(rendered.attribute(.link, at: text.range(of: "www.good.example").location,
+            effectiveRange: nil))
+    }
+
     func testParserRecognizesCommonBlockTypes() {
         let blocks = MarkdownAnalysis("# Title\n> Quote\n- Item\n2. Second\n---").rootBlocks
 
