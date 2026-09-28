@@ -56,6 +56,10 @@ private struct CopyRichActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ExportPlainTextActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -102,6 +106,10 @@ extension FocusedValues {
         get { self[CopyRichActionKey.self] }
         set { self[CopyRichActionKey.self] = newValue }
     }
+    var exportPlainTextAction: (() -> Void)? {
+        get { self[ExportPlainTextActionKey.self] }
+        set { self[ExportPlainTextActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -116,6 +124,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.pageSetupAction) private var pageSetupAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @FocusedValue(\.copyRichAction) private var copyRichAction
+    @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -174,6 +183,8 @@ struct MarkdownCommands: Commands {
                 .disabled(exportHTMLAction == nil)
             Button("PDF…") { exportPDFAction?() }
                 .disabled(exportPDFAction == nil)
+            Button("テキスト…") { exportPlainTextAction?() }
+                .disabled(exportPlainTextAction == nil)
         }
         CommandGroup(after: .textEditing) {
             Divider()
