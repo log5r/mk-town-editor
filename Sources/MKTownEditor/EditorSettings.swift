@@ -32,17 +32,59 @@ struct EditorTextStyle: Equatable {
     var lineSpacing: Double = 3
     var horizontalMargin: Double = 18
     var verticalMargin: Double = 18
+    var tabWidth: Int = 4
 
     @MainActor
     func apply(to textView: NSTextView) {
-        textView.font = fontChoice.font(size: CGFloat(fontSize))
+        let font = fontChoice.font(size: CGFloat(fontSize))
+        textView.font = font
         textView.textContainerInset = NSSize(width: horizontalMargin, height: verticalMargin)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = CGFloat(lineSpacing)
+        paragraph.tabStops = []
+        paragraph.defaultTabInterval = (" " as NSString).size(withAttributes: [.font: font]).width * CGFloat(tabWidth)
         textView.defaultParagraphStyle = paragraph
         var typing = textView.typingAttributes
         typing[.paragraphStyle] = paragraph
         textView.typingAttributes = typing
+    }
+}
+
+struct EditorLayoutOptions: Equatable {
+    var wrapsLines = true
+    var listIndentWidth = 2
+    var codeIndentWidth = 4
+
+    @MainActor
+    func apply(to textView: NSTextView, in scrollView: NSScrollView) {
+        scrollView.hasHorizontalScroller = !wrapsLines
+        textView.isHorizontallyResizable = !wrapsLines
+        textView.autoresizingMask = wrapsLines ? [.width] : []
+        textView.textContainer?.widthTracksTextView = wrapsLines
+        textView.textContainer?.containerSize = NSSize(
+            width: wrapsLines ? 0 : CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        synchronizeWidth(of: textView, in: scrollView)
+    }
+
+    @MainActor
+    func synchronizeWidth(of textView: NSTextView, in scrollView: NSScrollView) {
+        let viewportWidth = scrollView.contentSize.width
+        let requiredWidth: CGFloat
+        if wrapsLines {
+            requiredWidth = viewportWidth
+        } else if let layoutManager = textView.layoutManager,
+                  let container = textView.textContainer {
+            layoutManager.ensureLayout(for: container)
+            requiredWidth = max(viewportWidth, ceil(layoutManager.usedRect(for: container).maxX
+                                                    + textView.textContainerInset.width * 2))
+        } else {
+            requiredWidth = viewportWidth
+        }
+        if abs(textView.frame.width - requiredWidth) > 0.5 {
+            textView.frame.size.width = requiredWidth
+        }
     }
 }
 
@@ -55,6 +97,9 @@ struct AppEditorSettings: Codable, Equatable {
     var fontChoice: EditorFontChoice?
     var horizontalMargin: Double?
     var verticalMargin: Double?
+    var tabWidth: Int?
+    var listIndentWidth: Int?
+    var codeIndentWidth: Int?
 }
 
 struct FolderEditorSettings: Codable, Equatable {
@@ -127,7 +172,16 @@ final class EditorSettingsStore: ObservableObject {
             fontSize: min(32, max(10, fontSize(for: documentURL))),
             lineSpacing: min(12, max(0, values.app.lineSpacing)),
             horizontalMargin: min(48, max(8, values.app.horizontalMargin ?? 18)),
-            verticalMargin: min(48, max(8, values.app.verticalMargin ?? 18))
+            verticalMargin: min(48, max(8, values.app.verticalMargin ?? 18)),
+            tabWidth: min(8, max(2, values.app.tabWidth ?? 4))
+        )
+    }
+
+    func layoutOptions() -> EditorLayoutOptions {
+        EditorLayoutOptions(
+            wrapsLines: values.app.wrapsLines,
+            listIndentWidth: min(8, max(2, values.app.listIndentWidth ?? 2)),
+            codeIndentWidth: min(8, max(2, values.app.codeIndentWidth ?? 4))
         )
     }
 

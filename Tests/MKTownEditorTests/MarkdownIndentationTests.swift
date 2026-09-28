@@ -54,6 +54,18 @@ final class MarkdownIndentationTests: XCTestCase {
                                              direction: .indent))
     }
 
+    func testConfiguredListAndCodeIndentWidths() {
+        let list = "- first\n- second"
+        let item = MarkdownIndentation.edit(in: list, selection: NSRange(location: 10, length: 0),
+                                            direction: .indent, listIndentWidth: 4, codeIndentWidth: 8)
+        XCTAssertEqual(item?.applying(to: list), "- first\n    - second")
+
+        let code = "```\ncode\n```"
+        let edit = MarkdownIndentation.edit(in: code, selection: NSRange(location: 4, length: 0),
+                                            direction: .indent, listIndentWidth: 4, codeIndentWidth: 8)
+        XCTAssertEqual(edit?.applying(to: code), "```\n        code\n```")
+    }
+
     private func tryEdit(_ text: String, _ selection: NSRange,
                          _ direction: MarkdownIndentation.Direction,
                          file: StaticString = #filePath, line: UInt = #line) -> MarkdownEdit {

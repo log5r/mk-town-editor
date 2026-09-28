@@ -11,6 +11,8 @@ final class MarkdownEditorModel: ObservableObject {
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
+    var listIndentWidth = 2
+    var codeIndentWidth = 4
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
@@ -93,7 +95,9 @@ final class MarkdownEditorModel: ObservableObject {
               textView.isEditable, !textView.hasMarkedText(),
               let edit = MarkdownIndentation.edit(in: textView.string,
                                                   selection: textView.selectedRange(),
-                                                  direction: direction) else { return false }
+                                                  direction: direction,
+                                                  listIndentWidth: listIndentWidth,
+                                                  codeIndentWidth: codeIndentWidth) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
     }

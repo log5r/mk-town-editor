@@ -6,6 +6,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     @Binding var text: String
     let model: MarkdownEditorModel
     var textStyle: EditorTextStyle = EditorTextStyle()
+    var layoutOptions: EditorLayoutOptions = EditorLayoutOptions()
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -17,7 +18,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = EditorScrollView()
         scrollView.hasVerticalScroller = true
-        scrollView.hasHorizontalScroller = false
+        scrollView.hasHorizontalScroller = !layoutOptions.wrapsLines
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         scrollView.drawsBackground = true
@@ -41,12 +42,16 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.isAutomaticSpellingCorrectionEnabled = true
         textView.isContinuousSpellCheckingEnabled = true
         textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
-
         scrollView.documentView = textView
+        layoutOptions.apply(to: textView, in: scrollView)
+        scrollView.onLayout = { [weak textView, weak scrollView, weak coordinator = context.coordinator] in
+            guard let textView, let scrollView, let coordinator,
+                  let options = coordinator.appliedLayoutOptions else { return }
+            options.synchronizeWidth(of: textView, in: scrollView)
+        }
+        context.coordinator.appliedLayoutOptions = layoutOptions
+        model.listIndentWidth = layoutOptions.listIndentWidth
+        model.codeIndentWidth = layoutOptions.codeIndentWidth
         let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
         scrollView.verticalRulerView = lineNumberRuler
         scrollView.hasVerticalRuler = true
@@ -69,6 +74,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.onImagePaste = onImagePaste
         textView.registerForDraggedTypes([.fileURL])
         MarkdownSyntaxHighlighter.apply(to: textView)
+        layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.isRestoringSession = false
         textView.onFocused = { [weak textView, weak model] in
             guard let textView, let model else { return }
@@ -96,15 +102,24 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        if context.coordinator.appliedLayoutOptions != layoutOptions {
+            layoutOptions.apply(to: textView, in: scrollView)
+            context.coordinator.appliedLayoutOptions = layoutOptions
+            context.coordinator.lineNumberRuler?.refresh()
+        }
+        context.coordinator.model.listIndentWidth = layoutOptions.listIndentWidth
+        context.coordinator.model.codeIndentWidth = layoutOptions.codeIndentWidth
         if context.coordinator.appliedTextStyle != textStyle {
             textStyle.apply(to: textView)
             context.coordinator.appliedTextStyle = textStyle
             context.coordinator.lineNumberRuler?.refresh()
         }
+        layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         guard textView.string != text else { return }
         let selection = textView.selectedRange()
         textView.string = text
         MarkdownSyntaxHighlighter.apply(to: textView)
+        layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.lineNumberRuler?.refresh()
         let length = (text as NSString).length
         let location = min(selection.location, length)
@@ -118,6 +133,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         weak var scrollView: NSScrollView?
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var appliedTextStyle: EditorTextStyle?
+        var appliedLayoutOptions: EditorLayoutOptions?
         var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
@@ -129,6 +145,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView else { return }
             text = textView.string
             MarkdownSyntaxHighlighter.apply(to: textView)
+            if let scrollView, let options = appliedLayoutOptions {
+                options.synchronizeWidth(of: textView, in: scrollView)
+            }
             lineNumberRuler?.refresh()
         }
 
@@ -147,6 +166,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
 private final class EditorScrollView: NSScrollView {
     var onWindowAttached: (() -> Void)?
+    var onLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        onLayout?()
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
