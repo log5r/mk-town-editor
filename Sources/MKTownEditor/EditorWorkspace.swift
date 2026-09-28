@@ -61,6 +61,7 @@ struct EditorWorkspace: View {
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
+    @State private var showingSnapshotHistory = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
     @State private var previewSearchCaseSensitive = false
@@ -208,6 +209,13 @@ struct EditorWorkspace: View {
                 .help("ローカルリンクの参照先を確認")
             }
             ToolbarItem(placement: .primaryAction) {
+                Button("明示スナップショット", systemImage: "clock.arrow.circlepath") {
+                    showingSnapshotHistory = true
+                }
+                .disabled(fileURL == nil)
+                .help("名前を付けた本文履歴を保存・比較・復元")
+            }
+            ToolbarItem(placement: .primaryAction) {
                 Menu("文章ツール", systemImage: "text.badge.checkmark") {
                     Button("Markdown診断") {
                         showingMarkdownLint = true
@@ -352,6 +360,23 @@ struct EditorWorkspace: View {
                         do { try await openDocument(at: url) }
                         catch { workspaceOpenError = error.localizedDescription }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showingSnapshotHistory) {
+            if let fileURL {
+                WorkspaceSnapshotHistorySheet(documentURL: fileURL,
+                    currentText: $document.text) { restored, expected in
+                    guard document.text == expected else { return false }
+                    if editorModel.hasActiveEditor {
+                        let range = NSRange(location: 0, length: (expected as NSString).length)
+                        let edit = MarkdownEdit(range: range, replacement: restored,
+                            selection: NSRange(location: 0, length: 0))
+                        return editorModel.applyRegexEdit(edit, expectedSource: expected)
+                    }
+                    previewTaskUndoTarget.replaceText(restored, in: $document.text,
+                        undoManager: undoManager, actionName: "スナップショットを復元")
+                    return true
                 }
             }
         }

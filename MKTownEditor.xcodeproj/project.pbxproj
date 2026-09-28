@@ -75,6 +75,7 @@
 		A10000000000000000000057 /* PreviewSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000057 /* PreviewSearchSheet.swift */; };
 		A10000000000000000000058 /* WorkspaceAttachmentAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */; };
 		A10000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */; };
+		A1000000000000000000005A /* WorkspaceSnapshotHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005A /* WorkspaceSnapshotHistory.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -149,6 +150,7 @@
 		A20000000000000000000057 /* PreviewSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewSearchSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentAudit.swift; sourceTree = "<group>"; };
 		A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAttachmentAuditSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000005A /* WorkspaceSnapshotHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSnapshotHistory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -237,6 +239,7 @@
 				A20000000000000000000057 /* PreviewSearchSheet.swift */,
 				A20000000000000000000058 /* WorkspaceAttachmentAudit.swift */,
 				A20000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift */,
+				A2000000000000000000005A /* WorkspaceSnapshotHistory.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -373,6 +376,7 @@
 				A10000000000000000000057 /* PreviewSearchSheet.swift in Sources */,
 				A10000000000000000000058 /* WorkspaceAttachmentAudit.swift in Sources */,
 				A10000000000000000000059 /* WorkspaceAttachmentAuditSheet.swift in Sources */,
+				A1000000000000000000005A /* WorkspaceSnapshotHistory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
