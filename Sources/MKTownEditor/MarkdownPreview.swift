@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MarkdownPreview: NSViewRepresentable {
     let markdown: String
+    let documentContext: DocumentContext
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()

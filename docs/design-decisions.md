@@ -27,3 +27,5 @@ CodiMD の特徴のうち、Markdown ソースとレンダリング結果を同�
 編集セッションの選択範囲・スクロール位置・フォーカス復帰の意図は、書類画面ごとの `MarkdownEditorModel` が保持する。表示切替で `NSTextView` が破棄される際は参照を解除し、新しいビューの接続時に状態を復元する。外部更新などで本文が短くなった場合は選択範囲を本文内へ収める。フォーカスはビューがウインドウへ接続された後に復元する。
 
 見出しレベルはメニューからH1〜H6と本文を選べる。既存のATX見出し記号と末尾の閉じ記号を取り除いて対象行だけを書き換える。本文行を本文に変換するなど、変更内容が同じ場合は編集通知やUndo項目を作らない。
+
+`DocumentGroup` の構成から渡される `fileURL` を書類画面の `DocumentContext` に反映する。未保存書類では相対リソースを解決せず、保存・移動・別名保存でURLが更新されるたびに基準ディレクトリも変わる。書類本文の読み書きは引き続き `FileDocument` に任せ、URLから本文を再読込しない。参照: [Apple DocumentGroup](https://developer.apple.com/documentation/SwiftUI/DocumentGroup)。

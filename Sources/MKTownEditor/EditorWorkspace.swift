@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
+    let fileURL: URL?
     @StateObject private var editorModel = MarkdownEditorModel()
     @SceneStorage("editorMode") private var storedMode = EditorMode.split.rawValue
 
@@ -14,6 +15,10 @@ struct EditorWorkspace: View {
 
     private var statistics: DocumentStatistics {
         DocumentStatistics(text: document.text)
+    }
+
+    private var documentContext: DocumentContext {
+        DocumentContext(fileURL: fileURL)
     }
 
     var body: some View {
@@ -55,11 +60,11 @@ struct EditorWorkspace: View {
             HSplitView {
                 sourceEditor
                     .frame(minWidth: 280)
-                MarkdownPreview(markdown: document.text)
+                MarkdownPreview(markdown: document.text, documentContext: documentContext)
                     .frame(minWidth: 280)
             }
         case .preview:
-            MarkdownPreview(markdown: document.text)
+            MarkdownPreview(markdown: document.text, documentContext: documentContext)
         }
     }
 
