@@ -79,6 +79,25 @@ final class LocalImagePreviewTests: XCTestCase {
             URL(string: "mktown-image:/other?url=https%3A%2F%2Fexample.com%2Fa.png")!))
     }
 
+    func testLocalAttachmentLinkOpensQuickLookOnlyForExistingNonDocumentFile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let pdf = root.appendingPathComponent("仕様 one.pdf")
+        let markdown = root.appendingPathComponent("other.md")
+        try Data("pdf".utf8).write(to: pdf)
+        try Data("text".utf8).write(to: markdown)
+        let context = DocumentContext(fileURL: root.appendingPathComponent("note.md"))
+        XCTAssertEqual(MarkdownAttachmentInspectionLink.localFile(
+            URL(string: "%E4%BB%95%E6%A7%98%20one.pdf")!, context: context), pdf)
+        XCTAssertNil(MarkdownAttachmentInspectionLink.localFile(
+            URL(string: "other.md")!, context: context))
+        XCTAssertNil(MarkdownAttachmentInspectionLink.localFile(
+            URL(string: "missing.pdf")!, context: context))
+        XCTAssertNil(MarkdownAttachmentInspectionLink.localFile(
+            URL(string: "https://example.com/file.pdf")!, context: context))
+    }
+
     func testRemoteImageStoreReportsDecodeFailureAndSkipsUnsupportedScheme() async {
         let store = RemoteImageStore(fetch: { _ in Data("invalid".utf8) })
         store.setEnabled(true)
