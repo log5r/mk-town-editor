@@ -53,6 +53,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         )
         context.coordinator.isRestoringSession = true
         model.connect(textView, scrollView: scrollView)
+        textView.commandModel = model
         context.coordinator.isRestoringSession = false
         textView.onFocused = { [weak textView, weak model] in
             guard let textView, let model else { return }
@@ -124,12 +125,46 @@ private final class EditorScrollView: NSScrollView {
     }
 }
 
-private final class EditorTextView: NSTextView {
+final class EditorTextView: NSTextView {
     var onFocused: (() -> Void)?
+    weak var commandModel: MarkdownEditorModel?
 
     override func becomeFirstResponder() -> Bool {
         let didBecome = super.becomeFirstResponder()
         if didBecome { onFocused?() }
         return didBecome
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        makeMarkdownMenu(baseMenu: super.menu(for: event))
+    }
+
+    func makeMarkdownMenu(baseMenu: NSMenu?) -> NSMenu {
+        let menu = (baseMenu?.copy() as? NSMenu) ?? NSMenu()
+        if !menu.items.isEmpty { menu.addItem(.separator()) }
+        for command in EditorCommand.context {
+            add(command, to: menu)
+        }
+        let headingItem = NSMenuItem(title: "見出しレベル", action: nil, keyEquivalent: "")
+        let headingMenu = NSMenu(title: "見出しレベル")
+        for level in 0...6 {
+            add(.heading(level: level), to: headingMenu)
+        }
+        headingItem.submenu = headingMenu
+        menu.addItem(headingItem)
+        return menu
+    }
+
+    private func add(_ command: EditorCommand, to menu: NSMenu) {
+        let item = NSMenuItem(title: command.title, action: #selector(performMarkdownCommand(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = command
+        item.isEnabled = command.canExecute(in: commandModel)
+        menu.addItem(item)
+    }
+
+    @objc private func performMarkdownCommand(_ item: NSMenuItem) {
+        guard let command = item.representedObject as? EditorCommand else { return }
+        command.perform(on: commandModel)
     }
 }

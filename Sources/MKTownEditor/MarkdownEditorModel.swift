@@ -4,12 +4,14 @@ import Combine
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
+    @Published private(set) var hasActiveEditor = false
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        hasActiveEditor = true
         let length = (textView.string as NSString).length
         let location = min(selectedRange.location, length)
         textView.setSelectedRange(NSRange(
@@ -27,6 +29,7 @@ final class MarkdownEditorModel: ObservableObject {
             shouldRestoreFocus = window.firstResponder === textView
         }
         self.textView = nil
+        hasActiveEditor = false
     }
 
     func scrollDidChange(_ origin: NSPoint) {
@@ -50,6 +53,10 @@ final class MarkdownEditorModel: ObservableObject {
 
     func selectionDidChange(_ range: NSRange) {
         selectedRange = range
+    }
+
+    var canExecuteCommand: Bool {
+        hasActiveEditor && textView?.isEditable == true && textView?.hasMarkedText() == false
     }
 
     func apply(_ style: MarkdownFormattingStyle) {

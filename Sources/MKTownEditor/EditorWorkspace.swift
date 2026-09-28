@@ -38,9 +38,9 @@ struct EditorWorkspace: View {
         .frame(minWidth: 720, minHeight: 480)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                formatButton("太字", symbol: "bold", style: .bold)
-                formatButton("斜体", symbol: "italic", style: .italic)
-                formatButton("リンク", symbol: "link", style: .link)
+                ForEach(EditorCommand.toolbar, id: \.self) { command in
+                    formatButton(command)
+                }
             }
 
             ToolbarItem(placement: .principal) {
@@ -119,17 +119,13 @@ struct EditorWorkspace: View {
         .accessibilityLabel("文書統計。\(statistics.lines) 行、\(statistics.words) 語、\(statistics.characters) 文字")
     }
 
-    private func formatButton(
-        _ label: String,
-        symbol: String,
-        style: MarkdownFormattingStyle
-    ) -> some View {
+    private func formatButton(_ command: EditorCommand) -> some View {
         Button {
-            editorModel.apply(style)
+            command.perform(on: editorModel)
         } label: {
-            Label(label, systemImage: symbol)
+            Label(command.title, systemImage: command.symbolName)
         }
-        .help(label)
-        .disabled(mode.wrappedValue == .preview)
+        .help(command.title)
+        .disabled(!command.canExecute(in: editorModel))
     }
 }

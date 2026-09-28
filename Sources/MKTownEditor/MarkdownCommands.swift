@@ -17,36 +17,30 @@ struct MarkdownCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .textEditing) {
             Divider()
-            Button("検索…") {
-                editorModel?.showFindBar()
-            }
-            .keyboardShortcut("f", modifiers: .command)
-            .disabled(editorModel == nil)
+            commandButton(.find)
         }
 
         CommandMenu("Markdown") {
-            Button("太字") { editorModel?.apply(.bold) }
-                .keyboardShortcut("b", modifiers: .command)
-            Button("斜体") { editorModel?.apply(.italic) }
-                .keyboardShortcut("i", modifiers: .command)
-            Button("インラインコード") { editorModel?.apply(.inlineCode) }
-                .keyboardShortcut("`", modifiers: .command)
+            commandButton(.bold)
+            commandButton(.italic)
+            commandButton(.inlineCode)
             Divider()
-            Button("リンク") { editorModel?.apply(.link) }
-                .keyboardShortcut("k", modifiers: .command)
+            commandButton(.link)
             Menu("見出しレベル") {
-                Button("本文") { editorModel?.apply(.heading(level: 0)) }
-                    .keyboardShortcut("0", modifiers: [.command, .option])
+                commandButton(.heading(level: 0))
                 Divider()
                 ForEach(1...6, id: \.self) { level in
-                    Button("見出し \(level)") { editorModel?.apply(.heading(level: level)) }
-                        .keyboardShortcut(KeyEquivalent(Character(String(level))), modifiers: [.command, .option])
+                    commandButton(.heading(level: level))
                 }
             }
-            Button("引用") { editorModel?.apply(.quote) }
-                .keyboardShortcut(">", modifiers: [.command, .shift])
-            Button("箇条書き") { editorModel?.apply(.unorderedList) }
-                .keyboardShortcut("8", modifiers: [.command, .shift])
+            commandButton(.quote)
+            commandButton(.unorderedList)
         }
+    }
+
+    private func commandButton(_ command: EditorCommand) -> some View {
+        Button(command.title) { command.perform(on: editorModel) }
+            .keyboardShortcut(command.shortcut.key, modifiers: command.shortcut.modifiers)
+            .disabled(!command.canExecute(in: editorModel))
     }
 }
