@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import ImageIO
 import UniformTypeIdentifiers
@@ -41,6 +42,24 @@ struct ImageResourceManager {
 
     init(fileManager: FileManager = .default) {
         self.fileManager = fileManager
+    }
+
+    func previewImage(at fileURL: URL, alt: String) -> NSImage? {
+        guard fileURL.isFileURL,
+              let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil),
+              CGImageSourceGetType(source) != nil,
+              CGImageSourceGetCount(source) > 0,
+              let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 960
+              ] as CFDictionary) else { return nil }
+        let scale = min(1, 480 / CGFloat(thumbnail.width), 320 / CGFloat(thumbnail.height))
+        let image = NSImage(cgImage: thumbnail,
+                            size: NSSize(width: CGFloat(thumbnail.width) * scale,
+                                         height: CGFloat(thumbnail.height) * scale))
+        image.accessibilityDescription = alt
+        return image
     }
 
     func importImage(at fileURL: URL, for context: DocumentContext) throws -> ImportedImage {
