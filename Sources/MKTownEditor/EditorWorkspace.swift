@@ -821,7 +821,9 @@ struct EditorWorkspace: View {
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
             zoom: settingsStore.zoom(for: .preview),
-            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
+            theme: settingsStore.app.previewTheme ?? .system,
+            bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         return VStack(spacing: 0) {
             PreviewUpdateControls(updates: previewUpdates, source: document.text,
                                   preferredSnapshot: analysisStore.snapshot,

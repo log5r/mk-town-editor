@@ -19,4 +19,20 @@ final class PreviewTypographyTests: XCTestCase {
         XCTAssertEqual(scaled.attribute(.link, at: link.location, effectiveRange: nil) as? URL,
                        URL(string: "https://example.com"))
     }
+
+    func testPaperPaletteKeepsTextReadableAndChangesHeadingAndCode() throws {
+        let theme = PreviewTheme.paper
+        let background = try XCTUnwrap(theme.background)
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(try XCTUnwrap(theme.bodyColor), background), 7)
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(try XCTUnwrap(theme.headingColor), background), 7)
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(try XCTUnwrap(theme.codeColor), background), 7)
+        let source = NSAttributedString(string: "Heading")
+        let themed = PreviewTypography.themed(source, kind: .heading(level: 1), theme: theme)
+        XCTAssertEqual(themed.string, source.string)
+        XCTAssertEqual(themed.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+                       theme.headingColor)
+        let code = PreviewTypography.themed(source, kind: .codeBlock, theme: theme)
+        XCTAssertNotNil(code.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+        XCTAssertTrue(PreviewTypography.themed(source, kind: nil, theme: .system) === source)
+    }
 }

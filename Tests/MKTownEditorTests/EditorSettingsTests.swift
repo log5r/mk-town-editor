@@ -64,6 +64,18 @@ final class EditorSettingsTests: XCTestCase {
         store.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.loadsRemoteImages, true)
     }
+    func testPreviewThemeAndWidthPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.previewTheme)
+        var settings = store.app
+        settings.previewTheme = .paper
+        settings.previewBodyWidth = 720
+        store.setAppSettings(settings)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.app.previewTheme, .paper)
+        XCTAssertEqual(restored.app.previewBodyWidth, 720)
+    }
     func testDefaultsAndDocumentFolderAppPrecedence() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
