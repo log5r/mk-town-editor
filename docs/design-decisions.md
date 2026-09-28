@@ -14,7 +14,9 @@ CodiMD の特徴のうち、Markdown ソースとレンダリング結果を同�
 
 ## Markdown 処理
 
-プレビューは Markdown をブロック単位に分類し、Foundation の `AttributedString` Markdown パーサーでインライン要素を処理して `NSAttributedString` に変換する。見出し、引用、リスト、コードブロックには AppKit の標準フォント、色、段落スタイルを付ける。Web コンテンツや独自 HTML を埋め込まないため、表示がシステムの文字設定とアクセシビリティに自然に追従する。
+プレビューは文書全体の `MarkdownAnalysis` からブロックを取得し、Foundation の `AttributedString` Markdown パーサーでインライン要素を処理して `NSAttributedString` に変換する。各ブロックは原文のUTF-16範囲、親ブロック、コード言語を保持する。見出し、引用、リスト、コードブロックには AppKit の標準フォント、色、段落スタイルを付ける。Web コンテンツや独自 HTML を埋め込まないため、表示がシステムの文字設定とアクセシビリティに自然に追従する。
+
+現在の `MarkdownAnalysis` は既存表示の構文を対象とする位置付き基盤であり、CommonMarkやGFMの完全な解析器ではない。複数行段落、複数段落のリスト、参照リンク、表などの解釈は個別の構文項目で追加する。表示は当面ソース順にブロックを描画し、親子関係に応じたインデントや装飾もそれぞれの項目で追加する。
 
 書式入力は純粋関数 `MarkdownFormatter` として分離し、UTF-16 ベースの `NSRange` を扱う。これにより `NSTextView` の選択範囲と日本語入力を安全に接続し、UI を起動せず単体テストできる。
 
