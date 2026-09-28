@@ -332,7 +332,7 @@ struct ImageResourceManager {
 
 enum ImageInsertionService {
     @MainActor
-    static func insert(alt: String, input: ImageInput, title: String,
+    static func insert(alt: String, input: ImageInput, title: String, width: Int? = nil,
                        context: DocumentContext, model: MarkdownEditorModel,
                        currentContext: () -> DocumentContext) async throws {
         let imported: ImportedImage?
@@ -349,7 +349,8 @@ enum ImageInsertionService {
             destination = result.relativePath
         }
         guard !Task.isCancelled, currentContext() == context,
-              model.commitImage(alt: alt, destination: destination, title: title) else {
+              model.commitImage(alt: alt, destination: destination, title: title,
+                                width: width) else {
             if let imported { ImageResourceManager().rollback(imported) }
             throw ImageInsertionError.documentChanged
         }

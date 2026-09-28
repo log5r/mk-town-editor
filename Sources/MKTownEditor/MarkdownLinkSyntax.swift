@@ -66,15 +66,18 @@ enum MarkdownLinkSyntax {
     }
 
     static func imageEdit(in text: String, draft: MarkdownImageDraft,
-                          alt: String, destination: String, title: String) -> MarkdownEdit? {
+                          alt: String, destination: String, title: String,
+                          width: Int? = nil) -> MarkdownEdit? {
         let source = text as NSString
         guard text == draft.originalDocumentText,
               draft.range.location <= source.length,
               NSMaxRange(draft.range) <= source.length,
               source.substring(with: draft.range) == draft.originalText,
               !alt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        let image = makeImage(alt: alt, destination: destination, title: title)
+              !destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              width.map({ (1...9999).contains($0) }) ?? true else { return nil }
+        let image = makeImage(alt: alt, destination: destination, title: title) +
+            (width.map { "{width=\($0)}" } ?? "")
         return MarkdownEdit(range: draft.range, replacement: image,
                             selection: NSRange(location: draft.range.location + (image as NSString).length, length: 0))
     }
