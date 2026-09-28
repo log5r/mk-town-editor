@@ -10,6 +10,8 @@ struct RegexSearchSheet: View {
     @State private var pattern = ""
     @State private var replacement = ""
     @State private var caseSensitive = false
+    @State private var limitsToSelection = false
+    @State private var scope: RegexSelectionScope?
     @State private var matches: [NSRange] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
@@ -18,11 +20,22 @@ struct RegexSearchSheet: View {
         let source: String
         let pattern: String
         let caseSensitive: Bool
+        let scope: NSRange?
     }
 
     private struct SearchResult: Sendable {
         let matches: [NSRange]
         let message: String?
+    }
+
+    init(source: String, selectedRange: NSRange, initialScope: NSRange,
+         onSelect: @escaping (NSRange) -> Void,
+         onReplace: @escaping (MarkdownEdit, String) -> Bool) {
+        self.source = source
+        self.selectedRange = selectedRange
+        self.onSelect = onSelect
+        self.onReplace = onReplace
+        _scope = State(initialValue: RegexSelectionScope(initialScope))
     }
 
     var body: some View {
@@ -33,9 +46,11 @@ struct RegexSearchSheet: View {
                 TextField("検索パターン", text: $pattern)
                 TextField("置換文字列（$1 などで参照）", text: $replacement)
                 Toggle("大文字小文字を区別", isOn: $caseSensitive)
+                Toggle("選択範囲内", isOn: $limitsToSelection)
+                    .disabled(scope == nil)
             }
             .formStyle(.grouped)
-            .frame(height: 160)
+            .frame(height: 195)
 
             if let errorMessage {
                 Text(errorMessage)
@@ -75,7 +90,8 @@ struct RegexSearchSheet: View {
         }
         .frame(width: 620, height: 460)
         .padding(20)
-        .task(id: Query(source: source, pattern: pattern, caseSensitive: caseSensitive)) {
+        .task(id: Query(source: source, pattern: pattern, caseSensitive: caseSensitive,
+                        scope: activeScope)) {
             guard !pattern.isEmpty else {
                 matches = []
                 errorMessage = nil
@@ -84,11 +100,13 @@ struct RegexSearchSheet: View {
             }
             isSearching = true
             matches = []
-            let query = Query(source: source, pattern: pattern, caseSensitive: caseSensitive)
+            let query = Query(source: source, pattern: pattern, caseSensitive: caseSensitive,
+                              scope: activeScope)
             let result = await Task.detached(priority: .userInitiated) {
                 do {
                     return SearchResult(matches: try RegexSearch.matches(in: query.source,
-                        pattern: query.pattern, caseSensitive: query.caseSensitive), message: nil)
+                        pattern: query.pattern, caseSensitive: query.caseSensitive,
+                        scope: query.scope), message: nil)
                 } catch {
                     return SearchResult(matches: [], message: error.localizedDescription)
                 }
@@ -104,6 +122,10 @@ struct RegexSearchSheet: View {
         RegexSearch.nextMatch(in: matches, after: selectedRange)
     }
 
+    private var activeScope: NSRange? {
+        limitsToSelection ? scope?.range : nil
+    }
+
     private var replacementTarget: NSRange? {
         RegexSearch.replacementTarget(in: matches, selection: selectedRange)
     }
@@ -117,9 +139,17 @@ struct RegexSearchSheet: View {
     private func replace(only match: NSRange?) {
         do {
             guard let edit = try RegexSearch.replacementEdit(in: source, pattern: pattern,
-                template: replacement, caseSensitive: caseSensitive, onlyMatch: match) else { return }
+                template: replacement, caseSensitive: caseSensitive,
+                scope: activeScope, onlyMatch: match) else { return }
             if !onReplace(edit, source) {
                 errorMessage = "置換できません。本文と編集状態を確認してください。"
+            } else if var currentScope = scope {
+                if currentScope.apply(edit) {
+                    scope = currentScope
+                } else {
+                    scope = nil
+                    limitsToSelection = false
+                }
             }
         } catch {
             errorMessage = error.localizedDescription

@@ -4,12 +4,14 @@ enum RegexSearchError: Error, Equatable, LocalizedError, Sendable {
     case emptyPattern
     case invalidPattern(String)
     case invalidCapture(Int)
+    case invalidScope
 
     var errorDescription: String? {
         switch self {
         case .emptyPattern: "検索パターンを入力してください。"
         case let .invalidPattern(message): "正規表現が無効です: \(message)"
         case let .invalidCapture(number): "置換文字列の参照 $\(number) が存在しません。"
+        case .invalidScope: "選択範囲が現在の本文と一致しません。"
         }
     }
 }
@@ -28,7 +30,7 @@ enum RegexSearch {
     static func matches(in source: String, pattern: String,
                         caseSensitive: Bool = false, scope: NSRange? = nil) throws -> [NSRange] {
         let regex = try compile(pattern, caseSensitive: caseSensitive)
-        let range = validScope(scope, in: source)
+        let range = try validScope(scope, in: source)
         return regex.matches(in: source, range: range).map(\.range)
     }
 
@@ -37,7 +39,7 @@ enum RegexSearch {
                                 onlyMatch: NSRange? = nil) throws -> MarkdownEdit? {
         let regex = try compile(pattern, caseSensitive: caseSensitive)
         let sourceText = source as NSString
-        let found = regex.matches(in: source, range: validScope(scope, in: source))
+        let found = regex.matches(in: source, range: try validScope(scope, in: source))
         let chosen = onlyMatch.map { range in found.filter { $0.range == range } } ?? found
         guard let first = chosen.first, let last = chosen.last else { return nil }
         let editRange = NSRange(location: first.range.location,
@@ -68,11 +70,14 @@ enum RegexSearch {
         }
     }
 
-    private static func validScope(_ scope: NSRange?, in source: String) -> NSRange {
+    private static func validScope(_ scope: NSRange?, in source: String) throws -> NSRange {
         let length = (source as NSString).length
-        guard let scope, scope.location >= 0, scope.location <= length,
-              scope.length >= 0, scope.length <= length - scope.location else {
+        guard let scope else {
             return NSRange(location: 0, length: length)
+        }
+        guard scope.location >= 0, scope.location <= length,
+              scope.length >= 0, scope.length <= length - scope.location else {
+            throw RegexSearchError.invalidScope
         }
         return scope
     }
@@ -107,5 +112,31 @@ enum RegexSearch {
             cursor += 1
         }
         return result
+    }
+}
+
+struct RegexSelectionScope: Equatable {
+    private(set) var range: NSRange
+
+    init?(_ range: NSRange) {
+        guard range.location >= 0, range.length > 0 else { return nil }
+        self.range = range
+    }
+
+    mutating func apply(_ edit: MarkdownEdit) -> Bool {
+        guard edit.range.location >= 0, edit.range.length >= 0,
+              edit.range.location <= Int.max - edit.range.length else { return false }
+        let delta = (edit.replacement as NSString).length - edit.range.length
+        if edit.range.location >= range.location,
+           NSMaxRange(edit.range) <= NSMaxRange(range) {
+            range.length += delta
+            return range.length >= 0
+        }
+        if NSMaxRange(edit.range) <= range.location {
+            range.location += delta
+            return range.location >= 0
+        }
+        if edit.range.location >= NSMaxRange(range) { return true }
+        return false
     }
 }

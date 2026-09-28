@@ -127,6 +127,9 @@ struct MarkdownCommands: Commands {
             Button("すべて置換") { editorModel?.replaceAllMatches() }
                 .keyboardShortcut("r", modifiers: [.command, .option, .shift])
                 .disabled(editorModel?.canExecuteCommand != true)
+            Button("選択範囲をすべて置換") { editorModel?.replaceAllInSelection() }
+                .disabled(editorModel?.canExecuteCommand != true ||
+                          editorModel?.selectedRange.length == 0)
             Divider()
             Button("正規表現検索・置換…") { regexSearchAction?() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
