@@ -17,6 +17,18 @@ final class EditorSettingsTests: XCTestCase {
             minimum: 280), 196)
     }
 
+    func testFocusModeRestoresPreviousSidebarVisibilityAcrossRepeatedToggles() {
+        var state = FocusModeState()
+        XCTAssertEqual(state.toggle(sidebarVisibility: .all), .detailOnly)
+        XCTAssertTrue(state.isActive)
+        XCTAssertEqual(state.savedSidebarVisibility, .all)
+        XCTAssertEqual(state.toggle(sidebarVisibility: .detailOnly), .all)
+        XCTAssertFalse(state.isActive)
+        XCTAssertEqual(state.toggle(sidebarVisibility: .detailOnly), .detailOnly)
+        XCTAssertEqual(state.toggle(sidebarVisibility: .detailOnly), .detailOnly)
+        XCTAssertFalse(state.isActive)
+    }
+
     func testBookmarksPersistAndFollowDocumentRename() {
         let defaults = isolatedDefaults()
         let original = URL(fileURLWithPath: "/tmp/work/old.md")
