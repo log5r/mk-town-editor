@@ -11,6 +11,7 @@ enum EditorCommand: Hashable {
     case quote
     case plainBlock
     case removeFormatting
+    case tableOfContents
     case unorderedList
     case orderedList
     case taskList
@@ -38,6 +39,7 @@ enum EditorCommand: Hashable {
         case .quote: "引用"
         case .plainBlock: "本文に戻す"
         case .removeFormatting: "書式を除去"
+        case .tableOfContents: "目次を生成・更新"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -64,6 +66,7 @@ enum EditorCommand: Hashable {
         case .quote: "text.quote"
         case .plainBlock: "text.alignleft"
         case .removeFormatting: "textformat"
+        case .tableOfContents: "list.bullet.indent"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -90,6 +93,7 @@ enum EditorCommand: Hashable {
         case .quote: (">", [.command, .shift])
         case .plainBlock: nil
         case .removeFormatting: nil
+        case .tableOfContents: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -133,6 +137,7 @@ enum EditorCommand: Hashable {
         case .quote: model.apply(.quote)
         case .plainBlock: model.apply(.plainBlock)
         case .removeFormatting: model.apply(.removeFormatting)
+        case .tableOfContents: model.apply(.tableOfContents)
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)

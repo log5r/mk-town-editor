@@ -136,6 +136,36 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.applying(to: source), "前\n```md\n**literal**\n```\n後")
     }
 
+    func testTableOfContentsUsesHeadingLevelsAndDuplicateAnchors() {
+        let source = "# Guide\n## Steps\n## Steps"
+        let edit = MarkdownFormatter.apply(.tableOfContents, to: source,
+            selection: NSRange(location: 0, length: 0))
+        XCTAssertEqual(edit.applying(to: source),
+            "- [Guide](#guide)\n  - [Steps](#steps)\n  - [Steps](#steps-1)\n\n" + source)
+        XCTAssertEqual((edit.applying(to: source) as NSString).substring(with: edit.selection),
+            "- [Guide](#guide)\n  - [Steps](#steps)\n  - [Steps](#steps-1)")
+    }
+
+    func testTableOfContentsReplacesOnlySelectedExistingList() {
+        let source = "# One\n\n- [old](#old)\n\n## Two"
+        let selection = (source as NSString).range(of: "- [old](#old)")
+        let edit = MarkdownFormatter.apply(.tableOfContents, to: source, selection: selection)
+        XCTAssertEqual(edit.range, selection)
+        XCTAssertEqual(edit.applying(to: source),
+            "# One\n\n- [One](#one)\n  - [Two](#two)\n\n## Two")
+    }
+
+    func testTableOfContentsPreservesCRLFAndLeavesDocumentWithoutHeadingsUntouched() {
+        let source = "# 日本語\r\n## 子"
+        let edit = MarkdownFormatter.apply(.tableOfContents, to: source,
+            selection: NSRange(location: (source as NSString).length, length: 0))
+        XCTAssertEqual(edit.applying(to: source),
+            source + "\r\n\r\n- [日本語](#日本語)\r\n  - [子](#子)")
+        let plain = MarkdownFormatter.apply(.tableOfContents, to: "本文",
+            selection: NSRange(location: 1, length: 0))
+        XCTAssertEqual(plain.applying(to: "本文"), "本文")
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
