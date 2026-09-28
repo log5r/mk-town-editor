@@ -23,7 +23,7 @@ final class ImageResourceManagerTests: XCTestCase {
             MarkdownLinkSyntax.escapeDestination(imported.relativePath)), image)
     }
 
-    func testOutsideImageCopiesIntoAssetsWithCollisionFreeNameAndRollback() throws {
+    func testOutsideImageReusesIdenticalAssetAndNumbersDifferentContent() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         let documents = root.appendingPathComponent("documents")
@@ -35,13 +35,37 @@ final class ImageResourceManagerTests: XCTestCase {
 
         let first = try manager.importImage(at: image, for: context)
         let second = try manager.importImage(at: image, for: context)
+        let anotherFolder = root.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: anotherFolder, withIntermediateDirectories: true)
+        let differentImage = anotherFolder.appendingPathComponent("photo.png")
+        try (png + Data([1])).write(to: differentImage)
+        let third = try manager.importImage(at: differentImage, for: context)
 
         XCTAssertEqual(first.relativePath, "assets/photo.png")
-        XCTAssertEqual(second.relativePath, "assets/photo-2.png")
-        XCTAssertEqual(try Data(contentsOf: first.createdFileURL!), png)
+        XCTAssertEqual(second.relativePath, "assets/photo.png")
+        XCTAssertNil(second.createdFileURL)
         manager.rollback(second)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: second.createdFileURL!.path))
+        XCTAssertEqual(third.relativePath, "assets/photo-2.png")
+        XCTAssertEqual(try Data(contentsOf: first.createdFileURL!), png)
+        manager.rollback(third)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: third.createdFileURL!.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: first.createdFileURL!.path))
+    }
+
+    func testFailedCopyRemovesStagingFile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let manager = ImageResourceManager(fileManager: FailingImageCopyManager())
+
+        XCTAssertThrowsError(try manager.importImage(at: image,
+            for: DocumentContext(fileURL: documents.appendingPathComponent("README.md"))))
+        let contents = try FileManager.default.contentsOfDirectory(
+            atPath: documents.appendingPathComponent("assets").path)
+        XCTAssertTrue(contents.isEmpty)
     }
 
     func testUnsavedDocumentAndInvalidImageAreRejected() throws {
@@ -96,6 +120,13 @@ final class ImageResourceManagerTests: XCTestCase {
         XCTAssertNil(imported.createdFileURL)
         XCTAssertEqual(context.resolveLocalResource(imported.relativePath), image)
         XCTAssertFalse(FileManager.default.fileExists(atPath: documents.appendingPathComponent("assets").path))
+    }
+}
+
+private final class FailingImageCopyManager: FileManager {
+    override func copyItem(at srcURL: URL, to dstURL: URL) throws {
+        try Data("partial".utf8).write(to: dstURL)
+        throw CocoaError(.fileWriteOutOfSpace)
     }
 }
 
