@@ -1536,6 +1536,9 @@ struct EditorWorkspace: View {
                            tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
                            proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
                            snippets: settingsStore.app.snippets ?? [],
+                           whitespaceOptions: EditorWhitespaceOptions(
+                               showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
+                               showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
                            isEditable: !workspaceStore.isDocumentLocked(fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage,
                            onVisibleSourceChange: synchronizePreview(to:))
