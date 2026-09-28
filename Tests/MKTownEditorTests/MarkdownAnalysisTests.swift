@@ -26,6 +26,9 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(analysis.children(of: analysis.blocks[0]).map(\.id), [1, 2])
         XCTAssertEqual(analysis.children(of: analysis.blocks[4]).map(\.id), [5])
         XCTAssertEqual(analysis.blocks[1].kind, .orderedList(number: 1))
+        XCTAssertEqual(analysis.blocks[1].sourceIndent, "  ")
+        XCTAssertEqual(analysis.blocks[1].nestingDepth, 1)
+        XCTAssertEqual(analysis.blocks[3].nestingDepth, 0)
     }
 
     func testLongerClosingFenceAndUnclosedFenceKeepSourceRange() {
@@ -52,5 +55,28 @@ final class MarkdownAnalysisTests: XCTestCase {
         let analysis = MarkdownAnalysis("escaped\\\\\nnext")
 
         XCTAssertEqual(analysis.blocks[0].lineBreaks, [.soft])
+    }
+
+    func testListItemCanContainMultipleParagraphsAndMixedNestedMarkers() {
+        let source = "- parent\n\n  second paragraph\n  continues  \n  here\n  1. ordered child\n  - bullet child\n- next"
+        let analysis = MarkdownAnalysis(source)
+        let parent = analysis.blocks[0]
+
+        XCTAssertEqual(analysis.children(of: parent).map(\.kind), [
+            .blank, .paragraph, .orderedList(number: 1), .unorderedList
+        ])
+        XCTAssertEqual(analysis.blocks[2].content, "second paragraph\ncontinues  \nhere")
+        XCTAssertEqual(analysis.blocks[2].lineBreaks, [.soft, .hard])
+        XCTAssertEqual(analysis.blocks.last?.parentID, nil)
+    }
+
+    func testImmediateContinuationStaysInFirstListParagraph() {
+        let source = "- parent\n  continued\n  - child"
+        let analysis = MarkdownAnalysis(source)
+
+        XCTAssertEqual(analysis.blocks.count, 2)
+        XCTAssertEqual(analysis.blocks[0].content, "parent\ncontinued")
+        XCTAssertEqual(analysis.blocks[0].lineBreaks, [.soft])
+        XCTAssertEqual(analysis.blocks[1].parentID, analysis.blocks[0].id)
     }
 }

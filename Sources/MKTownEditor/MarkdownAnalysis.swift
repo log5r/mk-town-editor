@@ -24,6 +24,8 @@ struct MarkdownBlock: Equatable {
     let sourceRange: NSRange
     let codeLanguage: String?
     let lineBreaks: [MarkdownLineBreak]
+    let sourceIndent: String?
+    let nestingDepth: Int
 }
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
@@ -53,12 +55,12 @@ struct MarkdownAnalysis {
         let language: String?
     }
 
-    private static let listPattern = try! NSRegularExpression(pattern: #"^( *)([-+*]|[0-9]{1,9}[.)])[ \t]+(.*)$"#)
+    private static let listPattern = try! NSRegularExpression(pattern: #"^([ \t]*)([-+*]|[0-9]{1,9}[.)])[ \t]+(.*)$"#)
 
     private static func parse(_ markdown: String) -> [MarkdownBlock] {
         let lines = sourceLines(markdown)
         var result: [MarkdownBlock] = []
-        var listAncestors: [(indent: Int, id: Int)] = []
+        var listAncestors: [(indent: Int, id: Int, depth: Int)] = []
         var quoteAncestors: [Int] = []
         var index = 0
 
@@ -79,7 +81,7 @@ struct MarkdownAnalysis {
                     id: result.count, parentID: nil, kind: .codeBlock,
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
-                    codeLanguage: fence.language, lineBreaks: []
+                    codeLanguage: fence.language, lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 listAncestors.removeAll()
                 quoteAncestors.removeAll()
@@ -93,10 +95,17 @@ struct MarkdownAnalysis {
             var sourceRange = line.range
             var lineBreaks: [MarkdownLineBreak] = []
             var advance = 1
+            var sourceIndent: String?
+            var nestingDepth = 0
 
             if trimmed.isEmpty {
                 kind = .blank
                 content = ""
+                if let parent = listAncestors.last, index + 1 < lines.count,
+                   indentationWidth(lines[index + 1].text) > parent.indent {
+                    parentID = parent.id
+                    nestingDepth = parent.depth + 1
+                }
             } else if let quote = parseQuote(trimmed) {
                 kind = .quote
                 content = quote.content
@@ -113,20 +122,39 @@ struct MarkdownAnalysis {
                 content = ""
             } else if let list = parseList(line.text) {
                 kind = list.kind
-                content = list.content
+                var parts = [list.content]
+                var next = index + 1
+                while next < lines.count && isParagraphContinuation(lines[next].text) &&
+                    indentationWidth(lines[next].text) > list.indent {
+                    lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
+                    parts.append(withoutLeadingIndent(lines[next].text))
+                    next += 1
+                }
+                content = parts.joined(separator: "\n")
+                sourceRange = NSRange(location: line.range.location,
+                                      length: NSMaxRange(lines[next - 1].range) - line.range.location)
+                advance = next - index
                 while let last = listAncestors.last, last.indent >= list.indent {
                     listAncestors.removeLast()
                 }
                 parentID = listAncestors.last?.id
-                listAncestors.append((list.indent, id))
+                nestingDepth = listAncestors.count
+                sourceIndent = list.sourceIndent
+                listAncestors.append((list.indent, id, nestingDepth))
                 quoteAncestors.removeAll()
             } else {
                 kind = .paragraph
-                var parts = [line.text]
+                if let parent = listAncestors.last, indentationWidth(line.text) > parent.indent {
+                    parentID = parent.id
+                    nestingDepth = parent.depth + 1
+                }
+                var parts = [parentID == nil ? line.text : withoutLeadingIndent(line.text)]
                 var next = index + 1
-                while next < lines.count && isParagraphContinuation(lines[next].text) {
+                while next < lines.count && isParagraphContinuation(lines[next].text) &&
+                    (parentID == nil || indentationWidth(lines[next].text) > listAncestors.last!.indent) {
                     lineBreaks.append(lineBreak(after: parts[parts.count - 1]))
-                    parts.append(lines[next].text)
+                    parts.append(parentID == nil ? lines[next].text :
+                        withoutLeadingIndent(lines[next].text))
                     next += 1
                 }
                 content = parts.joined(separator: "\n")
@@ -135,11 +163,12 @@ struct MarkdownAnalysis {
                 advance = next - index
             }
 
-            if !isList(kind) { listAncestors.removeAll() }
+            if !isList(kind) && parentID == nil { listAncestors.removeAll() }
             if kind != .quote { quoteAncestors.removeAll() }
             result.append(MarkdownBlock(
                 id: id, parentID: parentID, kind: kind, content: content,
-                sourceRange: sourceRange, codeLanguage: nil, lineBreaks: lineBreaks
+                sourceRange: sourceRange, codeLanguage: nil, lineBreaks: lineBreaks,
+                sourceIndent: sourceIndent, nestingDepth: nestingDepth
             ))
             index += advance
         }
@@ -216,18 +245,31 @@ struct MarkdownAnalysis {
         return depth > 0 ? (depth, String(remainder)) : nil
     }
 
-    private static func parseList(_ line: String) -> (kind: MarkdownBlock.Kind, content: String, indent: Int)? {
+    private static func parseList(_ line: String) -> (kind: MarkdownBlock.Kind, content: String, indent: Int, sourceIndent: String)? {
         let source = line as NSString
         guard let match = listPattern.firstMatch(in: line, range: NSRange(location: 0, length: source.length)) else {
             return nil
         }
-        let indent = source.substring(with: match.range(at: 1)).count
+        let sourceIndent = source.substring(with: match.range(at: 1))
+        let indent = indentationWidth(sourceIndent)
         let marker = source.substring(with: match.range(at: 2))
         let content = source.substring(with: match.range(at: 3))
         if let number = Int(marker.dropLast()) {
-            return (.orderedList(number: number), content, indent)
+            return (.orderedList(number: number), content, indent, sourceIndent)
         }
-        return (.unorderedList, content, indent)
+        return (.unorderedList, content, indent, sourceIndent)
+    }
+
+    private static func indentationWidth(_ line: String) -> Int {
+        var width = 0
+        for character in line.prefix(while: { $0 == " " || $0 == "\t" }) {
+            width += character == "\t" ? 4 - width % 4 : 1
+        }
+        return width
+    }
+
+    private static func withoutLeadingIndent(_ line: String) -> String {
+        String(line.drop(while: { $0 == " " || $0 == "\t" }))
     }
 
     private static func isList(_ kind: MarkdownBlock.Kind) -> Bool {
