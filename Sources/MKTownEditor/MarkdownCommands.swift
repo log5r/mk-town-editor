@@ -56,6 +56,10 @@ private struct ExportPortablePackageActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ExportWorkspaceBatchActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 private struct PageSetupActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -154,6 +158,10 @@ extension FocusedValues {
         get { self[ExportPortablePackageActionKey.self] }
         set { self[ExportPortablePackageActionKey.self] = newValue }
     }
+    var exportWorkspaceBatchAction: (() -> Void)? {
+        get { self[ExportWorkspaceBatchActionKey.self] }
+        set { self[ExportWorkspaceBatchActionKey.self] = newValue }
+    }
     var pageSetupAction: (() -> Void)? {
         get { self[PageSetupActionKey.self] }
         set { self[PageSetupActionKey.self] = newValue }
@@ -208,6 +216,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportExternalAction) private var exportExternalAction
     @FocusedValue(\.importRichTextAction) private var importRichTextAction
     @FocusedValue(\.exportPortablePackageAction) private var exportPortablePackageAction
+    @FocusedValue(\.exportWorkspaceBatchAction) private var exportWorkspaceBatchAction
     @FocusedValue(\.pageSetupAction) private var pageSetupAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @FocusedValue(\.copyRichAction) private var copyRichAction
@@ -330,6 +339,8 @@ struct MarkdownCommands: Commands {
                 .disabled(exportExternalAction == nil)
             Button("添付を含むパッケージ…") { exportPortablePackageAction?() }
                 .disabled(exportPortablePackageAction == nil)
+            Button("複数文書を一括書き出し…") { exportWorkspaceBatchAction?() }
+                .disabled(exportWorkspaceBatchAction == nil)
             Button("テキスト…") { exportPlainTextAction?() }
                 .disabled(exportPlainTextAction == nil)
         }
