@@ -145,6 +145,17 @@ struct MarkdownCommands: Commands {
             commandButton(.link)
             commandButton(.image)
             commandButton(.table)
+            Menu("表を編集") {
+                Button("下に行を追加") { editorModel?.editTable(.insertRow) }
+                    .disabled(editorModel?.canEditTable(.insertRow) != true)
+                Button("行を削除") { editorModel?.editTable(.deleteRow) }
+                    .disabled(editorModel?.canEditTable(.deleteRow) != true)
+                Divider()
+                Button("右に列を追加") { editorModel?.editTable(.insertColumn) }
+                    .disabled(editorModel?.canEditTable(.insertColumn) != true)
+                Button("列を削除") { editorModel?.editTable(.deleteColumn) }
+                    .disabled(editorModel?.canEditTable(.deleteColumn) != true)
+            }
             Menu("見出しレベル") {
                 commandButton(.heading(level: 0))
                 Divider()

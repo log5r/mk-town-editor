@@ -230,6 +230,23 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    func canEditTable(_ operation: MarkdownTableOperation) -> Bool {
+        guard canExecuteCommand, let textView else { return false }
+        return MarkdownTableEditing.edit(in: textView.string,
+                                         selection: textView.selectedRange(),
+                                         operation: operation) != nil
+    }
+
+    @discardableResult
+    func editTable(_ operation: MarkdownTableOperation) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownTableEditing.edit(in: textView.string,
+                                                    selection: textView.selectedRange(),
+                                                    operation: operation) else { return false }
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func commitImage(alt: String, destination: String, title: String) -> Bool {
         guard let draft = imageDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),

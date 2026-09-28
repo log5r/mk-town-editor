@@ -35,6 +35,80 @@ final class MarkdownTableInsertionTests: XCTestCase {
     }
 }
 
+final class MarkdownTableEditingTests: XCTestCase {
+    func testAddingAndDeletingRowsPreservesColumnCountAndCRLF() throws {
+        let source = "| 名前 | 値 |\r\n| --- | --- |\r\n| あ | 1 |\r\n"
+        let selection = NSRange(location: (source as NSString).range(of: "あ").location, length: 0)
+        let added = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                             operation: .insertRow))
+        let result = added.applying(to: source)
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first?.table)
+        XCTAssertEqual(table.rows.count, 2)
+        XCTAssertEqual(table.rows.map(\.count), [2, 2])
+        XCTAssertTrue(result.contains("| あ | 1 |\r\n|   |   |\r\n"))
+        let removed = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: added.selection,
+                                                               operation: .deleteRow))
+        XCTAssertEqual(removed.applying(to: result), source)
+    }
+
+    func testColumnsPreserveEscapedPipesAndDelimiterShape() throws {
+        let source = "| A | B |\n| --- | :---: |\n| a\\|b | `c\\|d` |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "B").location, length: 0)
+        let inserted = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                                operation: .insertColumn))
+        let result = inserted.applying(to: source)
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first?.table)
+        XCTAssertEqual(table.header.count, 3)
+        XCTAssertEqual(table.rows[0], ["a\\|b", "`c\\|d`", ""])
+        XCTAssertEqual(table.alignments, [.leading, .center, .leading])
+        let deleted = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: inserted.selection,
+                                                               operation: .deleteColumn))
+        XCTAssertEqual(deleted.applying(to: result), source)
+    }
+
+    func testStructuralEditRequiresTableAndKeepsOneColumn() throws {
+        XCTAssertNil(MarkdownTableEditing.edit(in: "ordinary text", selection: NSRange(location: 0, length: 0),
+                                               operation: .insertRow))
+        let source = "| A |\n| --- |\n| x |"
+        let header = NSRange(location: 2, length: 0)
+        XCTAssertNil(MarkdownTableEditing.edit(in: source, selection: header, operation: .deleteRow))
+        XCTAssertNil(MarkdownTableEditing.edit(in: source, selection: header, operation: .deleteColumn))
+        let added = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: header,
+                                                             operation: .insertRow))
+        XCTAssertEqual(MarkdownAnalysis(added.applying(to: source)).rootBlocks.first?.table?.rows.count, 2)
+    }
+
+    func testQuotedTableKeepsQuotePrefixWhenAddingRow() throws {
+        let source = "> | A | B |\n> | --- | --- |\n> | x | y |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "x").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .insertRow))
+        let result = edit.applying(to: source)
+        XCTAssertTrue(result.contains("> | x | y |\n> |   |   |\n"))
+        XCTAssertEqual(MarkdownAnalysis(result).blocks.first(where: { $0.kind == .table })?.table?.rows.count, 2)
+    }
+
+    func testColumnsHandleRowsWithoutOuterPipesAndTrailingSpaces() throws {
+        let source = "A | B  \n--- | ---  \nx | y  \n"
+        let selection = NSRange(location: (source as NSString).range(of: "y").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .insertColumn))
+        let table = try XCTUnwrap(MarkdownAnalysis(edit.applying(to: source)).rootBlocks.first?.table)
+        XCTAssertEqual(table.header.count, 3)
+        XCTAssertEqual(table.rows, [["x", "y", ""]])
+    }
+
+    func testAddingColumnPadsShortRowsAndKeepsEmptyCells() throws {
+        let source = "| A | B | C |\n| --- | --- | --- |\n| x || z |\n| only |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "only").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .insertColumn))
+        let table = try XCTUnwrap(MarkdownAnalysis(edit.applying(to: source)).rootBlocks.first?.table)
+        XCTAssertEqual(table.header.count, 4)
+        XCTAssertEqual(table.rows, [["x", "", "", "z"], ["only", "", "", ""]])
+    }
+}
+
 @MainActor
 final class MarkdownTableInsertionEditorTests: XCTestCase {
     func testCommandOpensSheetDraftAndCommitIsUndoable() {
@@ -54,5 +128,22 @@ final class MarkdownTableInsertionEditorTests: XCTestCase {
         XCTAssertEqual((view.string as NSString).substring(with: view.selectedRange()), "列1")
         view.undoManager?.undo()
         XCTAssertEqual(view.string, "")
+    }
+
+    func testTableRowEditIsUndoable() {
+        let source = "| A |\n| --- |\n| x |\n"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: (source as NSString).range(of: "x").location, length: 0))
+        XCTAssertTrue(model.editTable(.insertRow))
+        XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows.count, 2)
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
     }
 }
