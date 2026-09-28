@@ -17,6 +17,7 @@ struct EditorWorkspace: View {
     @State private var navigationSequence = 0
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
+    @State private var navigationHistory = NavigationHistory()
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -80,6 +81,11 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.markdownEditorModel, editorModel)
         .focusedSceneValue(\.goToLineAction) { showingGoToLine = true }
         .focusedSceneValue(\.goToHeadingAction) { showingGoToHeading = true }
+        .focusedSceneValue(\.navigationHistoryActions, NavigationHistoryActions(
+            canGoBack: navigationHistory.canGoBack,
+            canGoForward: navigationHistory.canGoForward,
+            goBack: { goBack() }, goForward: { goForward() }
+        ))
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
@@ -135,6 +141,7 @@ struct EditorWorkspace: View {
             legacyMode = nil
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            navigationHistory.moveDocument(from: oldURL, to: newURL)
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
                 settingsStore.moveDocumentState(from: oldURL, to: newURL)
@@ -222,15 +229,63 @@ struct EditorWorkspace: View {
 
     private func navigate(to entry: MarkdownOutlineEntry) {
         guard analysisStore.snapshot?.source == document.text else { return }
-        editorModel.navigate(to: entry.sourceRange.location)
-        navigationSequence += 1
-        previewNavigationTarget = PreviewNavigationTarget(blockID: entry.id, sequence: navigationSequence)
+        navigate(to: entry.sourceRange.location, previewBlockID: entry.id)
     }
 
     private func goToLine(_ requestedLine: Int) {
         let destination = MarkdownLineIndex(document.text).destination(for: requestedLine)
         if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+        navigate(to: destination.utf16Location)
+    }
+
+    private var currentNavigationPoint: NavigationPoint {
+        NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
+    }
+
+    private func navigate(to location: Int, previewBlockID: Int? = nil) {
+        let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
+        navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        editorModel.navigate(to: location)
+        if let previewBlockID {
+            navigationSequence += 1
+            previewNavigationTarget = PreviewNavigationTarget(blockID: previewBlockID,
+                                                              sequence: navigationSequence)
+        } else {
+            scrollPreview(to: location)
+        }
+    }
+
+    private func goBack() {
+        guard let destination = navigationHistory.goBack(from: currentNavigationPoint),
+              destination.documentURL == fileURL else { return }
+        revealEditorForUnstructuredPreview()
         editorModel.navigate(to: destination.utf16Location)
+        scrollPreview(to: destination.utf16Location)
+    }
+
+    private func goForward() {
+        guard let destination = navigationHistory.goForward(from: currentNavigationPoint),
+              destination.documentURL == fileURL else { return }
+        revealEditorForUnstructuredPreview()
+        editorModel.navigate(to: destination.utf16Location)
+        scrollPreview(to: destination.utf16Location)
+    }
+
+    private func scrollPreview(to sourceLocation: Int) {
+        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return }
+        let visible = snapshot.analysis.blocks.filter { $0.kind != .quote }
+        guard let block = visible.last(where: { $0.sourceRange.location <= sourceLocation }) ?? visible.first else {
+            return
+        }
+        navigationSequence += 1
+        previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+    }
+
+    private func revealEditorForUnstructuredPreview() {
+        guard mode.wrappedValue == .preview,
+              let snapshot = analysisStore.snapshot,
+              !PreviewAccessibility.requiresStructuredView(snapshot.analysis.blocks) else { return }
+        mode.wrappedValue = .editor
     }
 
     private var sourceEditor: some View {
