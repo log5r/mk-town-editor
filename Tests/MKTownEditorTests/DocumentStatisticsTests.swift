@@ -42,4 +42,16 @@ final class DocumentStatisticsTests: XCTestCase {
             at: source.range(of: "beta").location, in: analysis, documentLength: source.length))
         XCTAssertEqual(source.substring(with: nested), "## Inner\nbeta\n")
     }
+
+    func testJapaneseTokenizationDiffersFromWhitespaceCounting() {
+        let text = "今日は晴れです。 明日も晴れ。"
+        XCTAssertEqual(WordCountMode.whitespace.count(in: text), 2)
+        XCTAssertGreaterThan(WordCountMode.japanese.count(in: text), 2)
+        XCTAssertEqual(WordCountMode.japanese.count(in: "  \n。!?"), 0)
+    }
+
+    func testEnglishTokenizationOmitsPunctuation() {
+        XCTAssertEqual(WordCountMode.english.count(in: "Hello, world!"), 2)
+        XCTAssertEqual(WordCountMode.english.count(in: ""), 0)
+    }
 }

@@ -94,6 +94,19 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).imageImportMode(for: nil), .relativeReference)
     }
 
+    func testWordCountModePersistsAndOldAppSettingsDecode() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.wordCountMode)
+        var settings = store.app
+        settings.wordCountMode = .japanese
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.wordCountMode, .japanese)
+        let old = try JSONDecoder().decode(AppEditorSettings.self,
+            from: Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8))
+        XCTAssertNil(old.wordCountMode)
+    }
+
     func testOldAppSettingsDecodeWithoutImageImportMode() throws {
         let data = Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8)
         let decoded = try JSONDecoder().decode(AppEditorSettings.self, from: data)

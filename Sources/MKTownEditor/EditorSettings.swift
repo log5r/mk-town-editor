@@ -103,6 +103,7 @@ struct AppEditorSettings: Codable, Equatable {
     var tableAddsRowOnTab: Bool?
     var editorZoom: Double?
     var previewZoom: Double?
+    var wordCountMode: WordCountMode?
 }
 
 enum EditorZoomSurface: CaseIterable {
