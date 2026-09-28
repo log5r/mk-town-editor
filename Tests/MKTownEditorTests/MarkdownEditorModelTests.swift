@@ -51,6 +51,24 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "hello")
     }
 
+    func testToggleRemovesFormattingAndUndoRestoresMarkersAndSelection() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "**word**"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 2, length: 4))
+
+        model.apply(.bold)
+        XCTAssertEqual(view.string, "word")
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 0, length: 4))
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "**word**")
+    }
+
     func testDisconnectAndReconnectRestoreSelectionWithoutKeepingOldView() {
         let oldView = NSTextView()
         oldView.string = "前🙂後"

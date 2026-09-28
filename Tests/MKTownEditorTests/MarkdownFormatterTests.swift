@@ -97,4 +97,111 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.applying(to: ""), "### ")
         XCTAssertEqual(edit.selection, NSRange(location: 4, length: 0))
     }
+
+    func testBoldToggleRemovesSurroundingMarkersForInnerAndWholeSelection() {
+        let source = "前**強調🙂**後"
+        for range in [(source as NSString).range(of: "強調🙂"),
+                      (source as NSString).range(of: "**強調🙂**")] {
+            let edit = MarkdownFormatter.apply(.bold, to: source, selection: range)
+            let updated = edit.applying(to: source)
+
+            XCTAssertEqual(updated, "前強調🙂後")
+            XCTAssertEqual((updated as NSString).substring(with: edit.selection), "強調🙂")
+        }
+    }
+
+    func testEmptySelectionInsideFormattedTextRemovesFormattingAndKeepsCaret() {
+        let source = "**hello**"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: NSRange(location: 4, length: 0))
+
+        XCTAssertEqual(edit.applying(to: source), "hello")
+        XCTAssertEqual(edit.selection, NSRange(location: 2, length: 0))
+    }
+
+    func testMixedSelectionBecomesUniformlyFormatted() {
+        let source = "**one** and two"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+
+        XCTAssertEqual(edit.applying(to: source), "**one and two**")
+        XCTAssertEqual(edit.selection, NSRange(location: 2, length: 11))
+    }
+
+    func testFullyFormattedMixedSpansAreUnwrappedTogether() {
+        let source = "**one** **two**"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+
+        XCTAssertEqual(edit.applying(to: source), "one two")
+    }
+
+    func testItalicAndCodeToggleLeaveOtherFormattingInPlace() {
+        let italic = MarkdownFormatter.apply(.italic, to: "_word_",
+                                              selection: NSRange(location: 1, length: 4))
+        let code = MarkdownFormatter.apply(.inlineCode, to: "**`word`**",
+                                            selection: NSRange(location: 3, length: 4))
+
+        XCTAssertEqual(italic.applying(to: "_word_"), "word")
+        XCTAssertEqual(code.applying(to: "**`word`**"), "**word**")
+    }
+
+    func testEscapedMarkersAreNotRemoved() {
+        let source = "\\**literal**"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: (source as NSString).range(of: "literal"))
+
+        XCTAssertEqual(edit.applying(to: source), "\\****literal****")
+    }
+
+    func testLiteralBoldMarkersInsideCodeAreNotToggledAway() {
+        let source = "`**literal**`"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: (source as NSString).range(of: "literal"))
+
+        XCTAssertEqual(edit.applying(to: source), "`****literal****`")
+    }
+
+    func testCaretImmediatelyOutsideFormattingDoesNotRemoveIt() {
+        let source = "**word**"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: NSRange(location: 0, length: 0))
+
+        XCTAssertEqual(edit.applying(to: source), "**太字****word**")
+    }
+
+    func testAlternativeMarkersAndLongCodeDelimiterCanBeToggled() {
+        for (style, source, word) in [
+            (MarkdownFormattingStyle.bold, "__strong__", "strong"),
+            (.italic, "*emphasis*", "emphasis"),
+            (.inlineCode, "``a`b``", "a`b")
+        ] {
+            let edit = MarkdownFormatter.apply(style, to: source,
+                                               selection: (source as NSString).range(of: word))
+            XCTAssertEqual(edit.applying(to: source), word)
+        }
+    }
+
+    func testToggleHandlesNestedAlternativeMarkersAndCodeChild() {
+        let nested = "**outer __inner__**"
+        let whole = MarkdownFormatter.apply(.bold, to: nested,
+                                            selection: NSRange(location: 0, length: (nested as NSString).length))
+        XCTAssertEqual(whole.applying(to: nested), "outer inner")
+
+        let inner = MarkdownFormatter.apply(.bold, to: nested,
+                                            selection: (nested as NSString).range(of: "inner"))
+        XCTAssertEqual(inner.applying(to: nested), "**outer inner**")
+
+        let withCode = "**one `two` three**"
+        let codeChild = MarkdownFormatter.apply(.bold, to: withCode,
+                                                selection: (withCode as NSString).range(of: "one `two` three"))
+        XCTAssertEqual(codeChild.applying(to: withCode), "one `two` three")
+    }
+
+    func testPartialSelectionExpandsAcrossExistingFormatting() {
+        let source = "**one** and two"
+        let edit = MarkdownFormatter.apply(.bold, to: source,
+                                           selection: (source as NSString).range(of: "one** and"))
+        XCTAssertEqual(edit.applying(to: source), "**one and** two")
+    }
 }
