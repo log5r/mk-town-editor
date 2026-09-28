@@ -17,4 +17,10 @@ enum MarkdownOutline {
                                         sourceRange: block.sourceRange)
         }
     }
+
+    static func currentSection(at sourceLocation: Int,
+                               in entries: [MarkdownOutlineEntry]) -> MarkdownOutlineEntry? {
+        guard sourceLocation >= 0 else { return nil }
+        return entries.last { $0.sourceRange.location <= sourceLocation }
+    }
 }
