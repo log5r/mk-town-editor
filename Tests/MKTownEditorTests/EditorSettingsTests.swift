@@ -49,6 +49,27 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(store.mode(for: URL(fileURLWithPath: "/tmp/work/other.md")), .split)
     }
 
+    func testImageImportModeUsesFolderThenAppAndPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        let document = URL(fileURLWithPath: "/tmp/work/chapter/README.md")
+        XCTAssertEqual(store.imageImportMode(for: document), .managedCopy)
+
+        store.setImageImportMode(.relativeReference)
+        XCTAssertEqual(store.imageImportMode(for: document), .relativeReference)
+        store.setFolderSettings(FolderEditorSettings(defaultMode: nil, fontSize: nil,
+                                                      imageImportMode: .managedCopy),
+                                for: URL(fileURLWithPath: "/tmp/work"))
+        XCTAssertEqual(store.imageImportMode(for: document), .managedCopy)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).imageImportMode(for: nil), .relativeReference)
+    }
+
+    func testOldAppSettingsDecodeWithoutImageImportMode() throws {
+        let data = Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8)
+        let decoded = try JSONDecoder().decode(AppEditorSettings.self, from: data)
+        XCTAssertNil(decoded.imageImportMode)
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "MKTownEditorTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

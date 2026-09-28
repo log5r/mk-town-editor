@@ -10,7 +10,7 @@ struct MKTownEditorApp: App {
                 .environmentObject(settingsStore)
         }
         .commands {
-            MarkdownCommands()
+            MarkdownCommands(settingsStore: settingsStore)
         }
     }
 }

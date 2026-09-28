@@ -6,11 +6,13 @@ struct AppEditorSettings: Codable, Equatable {
     var fontSize: Double = 13
     var lineSpacing: Double = 3
     var wrapsLines = true
+    var imageImportMode: ImageImportMode?
 }
 
 struct FolderEditorSettings: Codable, Equatable {
     var defaultMode: EditorMode?
     var fontSize: Double?
+    var imageImportMode: ImageImportMode?
 }
 
 struct DocumentDisplayState: Codable, Equatable {
@@ -63,6 +65,17 @@ final class EditorSettingsStore: ObservableObject {
     func fontSize(for documentURL: URL?) -> Double {
         guard let documentURL else { return values.app.fontSize }
         return nearestFolderValue(for: documentURL, \.fontSize) ?? values.app.fontSize
+    }
+
+    func imageImportMode(for documentURL: URL?) -> ImageImportMode {
+        guard let documentURL else { return values.app.imageImportMode ?? .managedCopy }
+        return nearestFolderValue(for: documentURL, \.imageImportMode)
+            ?? values.app.imageImportMode ?? .managedCopy
+    }
+
+    func setImageImportMode(_ mode: ImageImportMode) {
+        values.app.imageImportMode = mode
+        save()
     }
 
     func setMode(_ mode: EditorMode, for documentURL: URL) {

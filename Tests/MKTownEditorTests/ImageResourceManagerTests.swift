@@ -79,6 +79,24 @@ final class ImageResourceManagerTests: XCTestCase {
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: outside.appendingPathComponent("photo.png").path))
     }
+
+    func testRelativeReferenceModeKeepsExternalFileWithoutCopy() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let context = DocumentContext(fileURL: documents.appendingPathComponent("README.md"))
+
+        let imported = try ImageResourceManager().importImage(at: image, for: context,
+                                                              mode: .relativeReference)
+
+        XCTAssertEqual(imported.relativePath, "../photo.png")
+        XCTAssertNil(imported.createdFileURL)
+        XCTAssertEqual(context.resolveLocalResource(imported.relativePath), image)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: documents.appendingPathComponent("assets").path))
+    }
 }
 
 @MainActor
@@ -136,6 +154,60 @@ final class ImageInsertionServiceTests: XCTestCase {
             XCTAssertTrue(error is ImageInsertionError)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: documents.appendingPathComponent("assets/photo-2.png").path))
+        XCTAssertEqual(view.string, "changed")
+    }
+
+    func testDroppedImageUsesCapturedUTF16PositionAndUndo() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let context = DocumentContext(fileURL: documents.appendingPathComponent("README.md"))
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "😀abc"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let draft = try XCTUnwrap(model.imageDropDraft(at: 2))
+
+        try await ImageInsertionService.insertDrop(fileURL: image, draft: draft,
+                                                   mode: .managedCopy, context: context,
+                                                   model: model, currentContext: { context })
+
+        XCTAssertEqual(view.string, "😀![photo](assets/photo.png)abc")
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "😀abc")
+    }
+
+    func testStaleDropRollsBackCopiedFile() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let documents = root.appendingPathComponent("documents")
+        try FileManager.default.createDirectory(at: documents, withIntermediateDirectories: true)
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let context = DocumentContext(fileURL: documents.appendingPathComponent("README.md"))
+        let view = NSTextView()
+        view.string = "original"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let draft = try XCTUnwrap(model.imageDropDraft(at: 0))
+        view.string = "changed"
+
+        do {
+            try await ImageInsertionService.insertDrop(fileURL: image, draft: draft,
+                                                       mode: .managedCopy, context: context,
+                                                       model: model, currentContext: { context })
+            XCTFail("A stale drop must be rejected")
+        } catch {
+            XCTAssertTrue(error is ImageInsertionError)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: documents.appendingPathComponent("assets/photo.png").path))
         XCTAssertEqual(view.string, "changed")
     }
 }

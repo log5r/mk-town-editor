@@ -163,6 +163,24 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    func imageDropDraft(at sourceLocation: Int) -> MarkdownImageDraft? {
+        guard canExecuteCommand, let textView,
+              sourceLocation >= 0,
+              sourceLocation <= (textView.string as NSString).length else { return nil }
+        return MarkdownLinkSyntax.imageDraft(in: textView.string,
+                                             selection: NSRange(location: sourceLocation, length: 0))
+    }
+
+    func commitDroppedImage(_ draft: MarkdownImageDraft, alt: String, destination: String) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownLinkSyntax.imageEdit(in: textView.string, draft: draft,
+                                                      alt: alt, destination: destination, title: "") else {
+            return false
+        }
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     @discardableResult
     private func perform(_ edit: MarkdownEdit, in textView: NSTextView,
                          storage: NSTextStorage, focusEditor: Bool) -> Bool {
