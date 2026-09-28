@@ -17,6 +17,8 @@ struct MarkdownDocumentLink: Equatable {
 
 @MainActor
 final class DocumentLinkNavigation: ObservableObject {
+    static let shared = DocumentLinkNavigation()
+
     struct Pending: Equatable {
         let fileURL: URL
         let fragment: String
@@ -29,6 +31,20 @@ final class DocumentLinkNavigation: ObservableObject {
 
     @Published private(set) var pending: Pending?
     @Published private(set) var pendingPosition: PendingPosition?
+    @Published private(set) var pendingLines: [URL: Int] = [:]
+
+    func requestLine(in fileURL: URL, line: Int) {
+        guard line > 0 else { return }
+        pendingLines[fileURL.resolvingSymlinksInPath().standardizedFileURL] = line
+    }
+
+    func takeLine(for fileURL: URL) -> Int? {
+        pendingLines.removeValue(forKey: fileURL.resolvingSymlinksInPath().standardizedFileURL)
+    }
+
+    func cancelLine(for fileURL: URL) {
+        pendingLines.removeValue(forKey: fileURL.resolvingSymlinksInPath().standardizedFileURL)
+    }
 
     func requestPosition(in fileURL: URL, range: NSRange) {
         pendingPosition = PendingPosition(fileURL: fileURL.resolvingSymlinksInPath().standardizedFileURL,

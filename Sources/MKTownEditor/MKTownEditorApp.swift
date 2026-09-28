@@ -2,8 +2,9 @@ import SwiftUI
 
 @main
 struct MKTownEditorApp: App {
+    @NSApplicationDelegateAdaptor(ExternalDocumentOpenAppDelegate.self) private var appDelegate
     @StateObject private var settingsStore = EditorSettingsStore()
-    @StateObject private var documentLinkNavigation = DocumentLinkNavigation()
+    @StateObject private var documentLinkNavigation = DocumentLinkNavigation.shared
     @StateObject private var workspaceStore = WorkspaceStore()
 
     var body: some Scene {

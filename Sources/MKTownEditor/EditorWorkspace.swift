@@ -690,6 +690,7 @@ struct EditorWorkspace: View {
                 unsavedMode = legacyMode.flatMap(EditorMode.init(rawValue:)) ?? settingsStore.app.defaultMode
             }
             legacyMode = nil
+            receivePendingExternalLine()
         }
         .onDisappear {
             savePosition(for: fileURL)
@@ -738,6 +739,7 @@ struct EditorWorkspace: View {
                 break
             }
             restorePosition(for: newURL)
+            receivePendingExternalLine()
         }
         .onChange(of: document.text) { _, newText in
             previewUpdates.sourceChanged()
@@ -765,6 +767,9 @@ struct EditorWorkspace: View {
         }
         .onChange(of: documentLinkNavigation.pendingPosition) { _, _ in
             receivePendingSearchPosition()
+        }
+        .onChange(of: documentLinkNavigation.pendingLines) { _, _ in
+            receivePendingExternalLine()
         }
         .onDisappear {
             analysisStore.cancel()
@@ -1314,6 +1319,13 @@ struct EditorWorkspace: View {
         guard let fileURL, let range = documentLinkNavigation.takePosition(for: fileURL) else { return }
         mode.wrappedValue = .editor
         editorModel.selectAndReveal(range)
+    }
+
+    private func receivePendingExternalLine() {
+        guard let fileURL, let line = documentLinkNavigation.takeLine(for: fileURL) else { return }
+        mode.wrappedValue = .editor
+        let location = MarkdownLineIndex(document.text).destination(for: line).utf16Location
+        navigate(to: location)
     }
 
     private func checkLinks() {
