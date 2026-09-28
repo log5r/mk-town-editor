@@ -72,6 +72,21 @@ final class WorkspaceStore: ObservableObject {
     private var generation = 0
     private var isRefreshing = false
     private var lastRefresh = Date.distantPast
+    private var openDocuments: [URL: Int] = [:]
+
+    var openDocumentURLs: [URL] { Array(openDocuments.keys) }
+
+    func registerOpenDocument(_ url: URL) {
+        let url = url.resolvingSymlinksInPath().standardizedFileURL
+        openDocuments[url, default: 0] += 1
+    }
+
+    func unregisterOpenDocument(_ url: URL) {
+        let url = url.resolvingSymlinksInPath().standardizedFileURL
+        guard let count = openDocuments[url] else { return }
+        if count <= 1 { openDocuments.removeValue(forKey: url) }
+        else { openDocuments[url] = count - 1 }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

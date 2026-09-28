@@ -23,6 +23,7 @@ struct MarkdownImageDraft: Identifiable {
 
 struct MarkdownInlineLink: Equatable {
     let range: NSRange
+    let destinationRange: NSRange
     let destination: String
     let isImage: Bool
 }
@@ -43,6 +44,7 @@ enum MarkdownLinkSyntax {
             let range = isImage
                 ? NSRange(location: cursor - 1, length: parsed.range.length + 1) : parsed.range
             result.append(MarkdownInlineLink(range: range,
+                                             destinationRange: parsed.destinationRange,
                                              destination: unescape(parsed.destination),
                                              isImage: isImage))
             cursor = NSMaxRange(parsed.range)
@@ -206,6 +208,7 @@ enum MarkdownLinkSyntax {
     private struct ParsedLink {
         let range: NSRange
         let labelRange: NSRange
+        let destinationRange: NSRange
         let destination: String
         let title: String
     }
@@ -227,6 +230,7 @@ enum MarkdownLinkSyntax {
         cursor += 1
         skipSpaces(source, cursor: &cursor)
         let destination: String
+        let destinationRange: NSRange
         if cursor < source.length && source.character(at: cursor) == 60 {
             cursor += 1
             let start = cursor
@@ -235,7 +239,8 @@ enum MarkdownLinkSyntax {
                 cursor += 1
             }
             guard cursor < source.length else { return nil }
-            destination = source.substring(with: NSRange(location: start, length: cursor - start))
+            destinationRange = NSRange(location: start, length: cursor - start)
+            destination = source.substring(with: destinationRange)
             cursor += 1
         } else {
             let start = cursor
@@ -251,7 +256,8 @@ enum MarkdownLinkSyntax {
                 if character == 32 || character == 9 || character == 10 || character == 13 { break }
                 cursor += 1
             }
-            destination = source.substring(with: NSRange(location: start, length: cursor - start))
+            destinationRange = NSRange(location: start, length: cursor - start)
+            destination = source.substring(with: destinationRange)
         }
         let beforeSpaces = cursor
         skipSpaces(source, cursor: &cursor)
@@ -273,7 +279,8 @@ enum MarkdownLinkSyntax {
         }
         guard cursor < source.length && source.character(at: cursor) == 41 else { return nil }
         return ParsedLink(range: NSRange(location: opening, length: cursor - opening + 1),
-                          labelRange: labelRange, destination: destination, title: title)
+                          labelRange: labelRange, destinationRange: destinationRange,
+                          destination: destination, title: title)
     }
 
     private static func skipSpaces(_ source: NSString, cursor: inout Int) {

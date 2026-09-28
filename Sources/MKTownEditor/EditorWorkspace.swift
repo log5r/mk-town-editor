@@ -48,6 +48,8 @@ struct EditorWorkspace: View {
     @State private var sidebarTab: SidebarTab = .outline
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
+    @State private var fileAction: WorkspaceFileAction?
+    @State private var workspaceViewActive = false
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
@@ -195,6 +197,14 @@ struct EditorWorkspace: View {
                 }
             }
         }
+        .sheet(item: $fileAction) { action in
+            if let root = workspaceStore.rootURL {
+                WorkspaceFileOperationSheet(action: action, rootURL: root,
+                                            currentDocumentURL: fileURL) {
+                    workspaceStore.refresh(force: true)
+                }
+            }
+        }
         .sheet(isPresented: $showingGoToHeading) {
             GoToHeadingSheet(entries: analysisStore.snapshot?.source == document.text ? outlineEntries : []) {
                 navigate(to: $0)
@@ -339,6 +349,10 @@ struct EditorWorkspace: View {
     var body: some View {
         alertView
         .onAppear {
+            if !workspaceViewActive {
+                workspaceViewActive = true
+                if let fileURL { workspaceStore.registerOpenDocument(fileURL) }
+            }
             analysisStore.update(source: document.text)
             receivePendingDocumentLink()
             workspaceStore.refresh()
@@ -349,10 +363,20 @@ struct EditorWorkspace: View {
             }
             legacyMode = nil
         }
+        .onDisappear {
+            if workspaceViewActive {
+                if let fileURL { workspaceStore.unregisterOpenDocument(fileURL) }
+                workspaceViewActive = false
+            }
+        }
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             workspaceStore.refresh()
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            if workspaceViewActive {
+                if let oldURL { workspaceStore.unregisterOpenDocument(oldURL) }
+                if let newURL { workspaceStore.registerOpenDocument(newURL) }
+            }
             navigationHistory.moveDocument(from: oldURL, to: newURL)
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
@@ -457,6 +481,15 @@ struct EditorWorkspace: View {
                 .labelStyle(.iconOnly)
                 .disabled(workspaceStore.rootURL == nil)
                 .help("ファイル名で書類を探す")
+                if let root = workspaceStore.rootURL {
+                    Menu {
+                        Button("新規Markdown書類…") { fileAction = .createDocument(root) }
+                        Button("新規フォルダ…") { fileAction = .createFolder(root) }
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .help("ワークスペースに作成")
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -464,6 +497,7 @@ struct EditorWorkspace: View {
                 OutlineGroup(workspaceStore.nodes, children: \.children) { node in
                     if node.isDirectory {
                         Label(node.name, systemImage: "folder")
+                            .contextMenu { fileContextActions(for: node) }
                     } else {
                         Button {
                             Task {
@@ -478,6 +512,7 @@ struct EditorWorkspace: View {
                             Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { fileContextActions(for: node) }
                     }
                 }
             }
@@ -496,6 +531,18 @@ struct EditorWorkspace: View {
                     .allowsHitTesting(false)
             }
         }
+    }
+
+    @ViewBuilder
+    private func fileContextActions(for node: WorkspaceNode) -> some View {
+        if node.isDirectory {
+            Button("新規Markdown書類…") { fileAction = .createDocument(node.url) }
+            Button("新規フォルダ…") { fileAction = .createFolder(node.url) }
+            Divider()
+        }
+        Button("名前を変更…") { fileAction = .rename(node.url) }
+        Button("移動…") { fileAction = .move(node.url) }
+        Button("ゴミ箱へ移動…", role: .destructive) { fileAction = .trash(node.url) }
     }
 
     private var outlineSidebar: some View {

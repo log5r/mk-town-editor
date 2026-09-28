@@ -1,0 +1,149 @@
+import Foundation
+import XCTest
+@testable import MKTownEditor
+
+final class WorkspaceFileOperationsTests: XCTestCase {
+    func testMovePlanRebasesIncomingAndOutgoingLinks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("drafts")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let source = folder.appendingPathComponent("source.md")
+        let destination = root.appendingPathComponent("renamed.md")
+        let referring = root.appendingPathComponent("index.md")
+        try "# Title\n\n[other](../other.md)\n\n`[code](../other.md)`".write(
+            to: source, atomically: true, encoding: .utf8)
+        try "[open](drafts/source.md#title)\n\n![alt](drafts/source.md \"caption\")\n\n[id]: drafts/source.md".write(
+            to: referring, atomically: true, encoding: .utf8)
+        try "other".write(to: root.appendingPathComponent("other.md"),
+                          atomically: true, encoding: .utf8)
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                         root: root)
+        XCTAssertEqual(plan.changedLinks, 4)
+        let previews = plan.changes.flatMap(\.linkChanges)
+        XCTAssertTrue(previews.contains { $0.before == "drafts/source.md#title" &&
+            $0.after == "renamed.md#title" })
+        try plan.apply()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path))
+        let moved = try String(contentsOf: destination, encoding: .utf8)
+        XCTAssertTrue(moved.contains("[other](other.md)"))
+        XCTAssertTrue(moved.contains("`[code](../other.md)`"))
+        let updated = try String(contentsOf: referring, encoding: .utf8)
+        XCTAssertTrue(updated.contains("[open](renamed.md#title)"))
+        XCTAssertTrue(updated.contains("![alt](renamed.md \"caption\")"))
+        XCTAssertTrue(updated.contains("[id]: renamed.md"))
+    }
+
+    func testPlanStopsWhenDocumentChangesBeforeApply() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("before.md")
+        let destination = root.appendingPathComponent("after.md")
+        let ref = root.appendingPathComponent("ref.md")
+        try "old".write(to: source, atomically: true, encoding: .utf8)
+        try "[link](before.md)".write(to: ref, atomically: true, encoding: .utf8)
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                         root: root)
+        try "new text".write(to: ref, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try plan.apply())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testPlanStopsWhenPreviouslyUnrelatedDocumentAddsLink() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("before.md")
+        let destination = root.appendingPathComponent("after.md")
+        let another = root.appendingPathComponent("another.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try "unrelated".write(to: another, atomically: true, encoding: .utf8)
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                         root: root)
+        try "[new](before.md)".write(to: another, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try plan.apply())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    func testCreateRejectsCollisionsAndUnsafeNames() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let folder = try WorkspaceFileOperations.create(name: "drafts", in: root, root: root,
+                                                         folder: true)
+        let file = try WorkspaceFileOperations.create(name: "first.md", in: folder, root: root,
+                                                       folder: false)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path))
+        let implicitExtension = try WorkspaceFileOperations.create(name: "second", in: folder,
+                                                                    root: root, folder: false)
+        XCTAssertEqual(implicitExtension.pathExtension, "md")
+        XCTAssertThrowsError(try WorkspaceFileOperations.create(name: "first.md", in: folder,
+                                                                  root: root, folder: false))
+        XCTAssertThrowsError(try WorkspaceFileOperations.create(name: "../bad.md", in: folder,
+                                                                  root: root, folder: false))
+    }
+
+    func testTrashMovesFileOutOfWorkspace() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = try WorkspaceFileOperations.create(name: "discard.md", in: root, root: root,
+                                                       folder: false)
+        let trashed = try WorkspaceFileOperations.moveToTrash(file, root: root)
+        defer { if let trashed { try? FileManager.default.removeItem(at: trashed) } }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertNotNil(trashed)
+    }
+
+    func testMovingFolderUpdatesIncomingLinksAndKeepsInternalRelativeLinks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("folder")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try "![img](image.png)".write(to: folder.appendingPathComponent("a.md"),
+                                      atomically: true, encoding: .utf8)
+        try Data([0]).write(to: folder.appendingPathComponent("image.png"))
+        let index = root.appendingPathComponent("index.md")
+        try "[read](folder/a.md) ![img](folder/image.png)".write(
+            to: index, atomically: true, encoding: .utf8)
+        let destination = root.appendingPathComponent("renamed")
+        let plan = try WorkspaceFileOperations.planMove(source: folder, destination: destination,
+                                                         root: root)
+        XCTAssertEqual(plan.changedLinks, 2)
+        try plan.apply()
+        XCTAssertEqual(try String(contentsOf: destination.appendingPathComponent("a.md"),
+                                  encoding: .utf8), "![img](image.png)")
+        XCTAssertEqual(try String(contentsOf: index, encoding: .utf8),
+                       "[read](renamed/a.md) ![img](renamed/image.png)")
+    }
+
+    func testPlanStopsWhenNewDocumentAppearsBeforeApply() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = try WorkspaceFileOperations.create(name: "old.md", in: root, root: root,
+                                                         folder: false)
+        let plan = try WorkspaceFileOperations.planMove(source: source,
+            destination: root.appendingPathComponent("new.md"), root: root)
+        try "[link](old.md)".write(to: root.appendingPathComponent("late.md"),
+                                    atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try plan.apply())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+    }
+
+    func testMoveEscapesReservedCharactersInLinkPath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("before#1.md")
+        let destination = root.appendingPathComponent("after#2.md")
+        try "text".write(to: source, atomically: true, encoding: .utf8)
+        let ref = root.appendingPathComponent("ref.md")
+        try "[read](before%231.md)".write(to: ref, atomically: true, encoding: .utf8)
+        try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                              root: root).apply()
+        XCTAssertEqual(try String(contentsOf: ref, encoding: .utf8), "[read](after%232.md)")
+    }
+}
