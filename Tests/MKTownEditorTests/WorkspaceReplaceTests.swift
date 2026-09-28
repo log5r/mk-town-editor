@@ -64,4 +64,18 @@ final class WorkspaceReplaceTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: a, encoding: .utf8), "foo a")
         XCTAssertEqual(try String(contentsOf: b, encoding: .utf8), "foo b")
     }
+
+    func testStructuralScopeLimitsReplacementToCodeBlocks() throws {
+        let root = try workspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("scope.md")
+        try "# token\n\ntext token\n\n```\ntoken\n```".write(
+            to: file, atomically: true, encoding: .utf8)
+        let plan = try WorkspaceReplace.plan(root: root,
+            options: WorkspaceSearchOptions(query: "token", scope: .code), replacement: "changed")
+        XCTAssertEqual(plan.matchCount, 1)
+        try plan.apply(selectedURLs: [file], openDocuments: [])
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8),
+                       "# token\n\ntext token\n\n```\nchanged\n```")
+    }
 }

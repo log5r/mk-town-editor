@@ -8,6 +8,7 @@ struct WorkspaceReplaceSheet: View {
     @State private var replacement = ""
     @State private var include = "*.md, *.markdown, *.txt"
     @State private var exclude = ""
+    @State private var scope: WorkspaceSearchScope = .all
     @State private var plan: WorkspaceReplacePlan?
     @State private var selectedURLs: Set<URL> = []
     @State private var errorMessage: String?
@@ -39,6 +40,11 @@ struct WorkspaceReplaceSheet: View {
                 TextField("除外: archive/*", text: $exclude)
             }
             .textFieldStyle(.roundedBorder)
+            Picker("構造", selection: $scope) {
+                ForEach(WorkspaceSearchScope.allCases) { value in
+                    Text(value.title).tag(value)
+                }
+            }
             Text("対象・除外はカンマ区切りのパスパターンです。開いている書類は置換できません。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -94,6 +100,7 @@ struct WorkspaceReplaceSheet: View {
         .onChange(of: replacement) { _, _ in invalidatePlan() }
         .onChange(of: include) { _, _ in invalidatePlan() }
         .onChange(of: exclude) { _, _ in invalidatePlan() }
+        .onChange(of: scope) { _, _ in invalidatePlan() }
         .onDisappear { planTask?.cancel() }
     }
 
@@ -106,7 +113,7 @@ struct WorkspaceReplaceSheet: View {
         errorMessage = nil
         let options = WorkspaceSearchOptions(query: query,
             includePatterns: patterns(in: include).isEmpty ? ["*"] : patterns(in: include),
-            excludePatterns: patterns(in: exclude))
+            excludePatterns: patterns(in: exclude), scope: scope)
         let replacement = replacement
         let worker = Task.detached(priority: .userInitiated) {
             try WorkspaceReplace.plan(root: root, options: options, replacement: replacement)
