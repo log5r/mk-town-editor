@@ -5,7 +5,7 @@ struct WorkspaceViewSettings: Codable, Equatable {
         case name
         case modified
 
-        var title: String { self == .name ? "名前順" : "更新日時順" }
+        var title: String { self == .name ? String(localized: "名前順") : String(localized: "更新日時順") }
     }
 
     enum FileFilter: String, Codable, CaseIterable {
@@ -15,9 +15,9 @@ struct WorkspaceViewSettings: Codable, Equatable {
 
         var title: String {
             switch self {
-            case .all: "すべて"
-            case .documents: "書類"
-            case .attachments: "添付"
+            case .all: String(localized: "すべて")
+            case .documents: String(localized: "書類")
+            case .attachments: String(localized: "添付")
             }
         }
     }

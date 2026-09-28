@@ -8,17 +8,17 @@ enum WordCountMode: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .whitespace: "空白区切り"
-        case .japanese: "日本語の単語分割"
-        case .english: "英語の単語分割"
+        case .whitespace: String(localized: "空白区切り")
+        case .japanese: String(localized: "日本語の単語分割")
+        case .english: String(localized: "英語の単語分割")
         }
     }
 
     var explanation: String {
         switch self {
-        case .whitespace: "空白・改行で分けたまとまりを数えます。"
-        case .japanese: "日本語として単語に分け、句読点や空白を除いて数えます。"
-        case .english: "英語として単語に分け、句読点や空白を除いて数えます。"
+        case .whitespace: String(localized: "空白・改行で分けたまとまりを数えます。")
+        case .japanese: String(localized: "日本語として単語に分け、句読点や空白を除いて数えます。")
+        case .english: String(localized: "英語として単語に分け、句読点や空白を除いて数えます。")
         }
     }
 
@@ -43,8 +43,8 @@ enum ReadingLanguage: String, Codable, CaseIterable, Sendable {
     case japanese
     case english
 
-    var title: String { self == .japanese ? "日本語" : "英語" }
-    var unit: String { self == .japanese ? "文字/分" : "語/分" }
+    var title: String { self == .japanese ? String(localized: "日本語") : String(localized: "英語") }
+    var unit: String { self == .japanese ? String(localized: "文字/分") : String(localized: "語/分") }
 }
 
 struct ReadingEstimateSettings: Codable, Equatable, Sendable {

@@ -86,6 +86,15 @@ struct EditorWorkspace: View {
         case inspector = "インスペクタ"
         case bookmarks = "ブックマーク"
         case files = "ファイル"
+
+        var title: String {
+            switch self {
+            case .outline: String(localized: "アウトライン")
+            case .inspector: String(localized: "インスペクタ")
+            case .bookmarks: String(localized: "ブックマーク")
+            case .files: String(localized: "ファイル")
+            }
+        }
     }
 
     private struct EncodingImport: Identifiable {
@@ -264,7 +273,7 @@ struct EditorWorkspace: View {
                 Menu("分割配置", systemImage: "rectangle.split.2x1") {
                     Picker("方向", selection: $splitOrientation) {
                         ForEach(EditorSplitOrientation.allCases, id: \.self) { orientation in
-                            Text(orientation.rawValue).tag(orientation)
+                            Text(orientation.title).tag(orientation)
                         }
                     }
                     Toggle("プレビューを先に表示", isOn: $previewFirst)
@@ -368,7 +377,7 @@ struct EditorWorkspace: View {
                     return editorModel.applyRegexEdit(edit, expectedSource: expected)
                 }
                 previewTaskUndoTarget.replaceText(imported, in: $document.text,
-                    undoManager: undoManager, actionName: "HTML・RTFを取り込む")
+                    undoManager: undoManager, actionName: String(localized: "HTML・RTFを取り込む"))
                 return true
             }
         }
@@ -427,7 +436,7 @@ struct EditorWorkspace: View {
                         return editorModel.applyRegexEdit(edit, expectedSource: expected)
                     }
                     previewTaskUndoTarget.replaceText(restored, in: $document.text,
-                        undoManager: undoManager, actionName: "スナップショットを復元")
+                        undoManager: undoManager, actionName: String(localized: "スナップショットを復元"))
                     return true
                 }
             }
@@ -511,7 +520,7 @@ struct EditorWorkspace: View {
                     return editorModel.applyRegexEdit(plan.edit, expectedSource: plan.source)
                 }
                 previewTaskUndoTarget.replaceText(plan.edit.applying(to: plan.source),
-                    in: $document.text, undoManager: undoManager, actionName: "Markdownを自動整形")
+                    in: $document.text, undoManager: undoManager, actionName: String(localized: "Markdownを自動整形"))
                 return true
             }
         }
@@ -640,7 +649,7 @@ struct EditorWorkspace: View {
             }
         } message: {
             Text(pasteNeedsSave
-                 ? "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。"
+                 ? String(localized: "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。")
                  : imageDropError ?? "")
         }
         .alert("文字コードの取り込みに失敗", isPresented: Binding(
@@ -932,7 +941,7 @@ struct EditorWorkspace: View {
         VStack(spacing: 0) {
             Picker("サイドバー", selection: $sidebarTab) {
                 ForEach(SidebarTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(tab.title).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -956,7 +965,7 @@ struct EditorWorkspace: View {
         return List {
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
                 let matching = items.filter { $0.kind == kind }
-                Section("\(kind.rawValue)（\(matching.count)）") {
+                Section("\(kind.title)（\(matching.count)）") {
                     ForEach(matching) { item in
                         Button { navigate(to: item.sourceRange.location) } label: {
                             VStack(alignment: .leading, spacing: 3) {
@@ -968,7 +977,7 @@ struct EditorWorkspace: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("\(kind.rawValue)、\(item.label)")
+                        .accessibilityLabel("\(kind.title)、\(item.label)")
                     }
                 }
             }
@@ -1130,7 +1139,7 @@ struct EditorWorkspace: View {
                                     do { try await openDocument(at: node.url) }
                                     catch { workspaceOpenError = error.localizedDescription }
                                 } else if !NSWorkspace.shared.open(node.url) {
-                                    workspaceOpenError = "添付ファイルを開けませんでした。"
+                                    workspaceOpenError = String(localized: "添付ファイルを開けませんでした。")
                                 }
                             }
                         } label: {
@@ -1419,7 +1428,7 @@ struct EditorWorkspace: View {
         do {
             let info = printInfo.copy() as! NSPrintInfo
             try printSettings.apply(to: info)
-            let title = fileURL?.deletingPathExtension().lastPathComponent ?? "無題"
+            let title = fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
             let view = try MarkdownPDFExporter.printableView(document.text, documentURL: fileURL,
                                                              printInfo: info, title: title,
                                                              header: printSettings.header,
@@ -1675,16 +1684,16 @@ struct EditorWorkspace: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Divider()
-                        statisticsRow("全文", value: statistics)
+                        statisticsRow(String(localized: "全文"), value: statistics)
                         if let selectionStatistics {
-                            statisticsRow("選択範囲", value: selectionStatistics)
+                            statisticsRow(String(localized: "選択範囲"), value: selectionStatistics)
                         } else {
                             Text("選択範囲なし")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         if let sectionStatistics {
-                            statisticsRow("セクション: \(sectionStatistics.title)",
+                            statisticsRow(String(localized: "セクション: \(sectionStatistics.title)"),
                                           value: sectionStatistics.value)
                         }
                         Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
@@ -1709,11 +1718,11 @@ struct EditorWorkspace: View {
     }
 
     private var statusAccessibilityLabel: String {
-        var value = "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字"
+        var value = String(localized: "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字")
         if let selectionStatistics {
-            value += "、選択範囲 \(selectionStatistics.characters) 文字"
+            value += String(localized: "、選択範囲 \(selectionStatistics.characters) 文字")
         } else if let sectionStatistics {
-            value += "、セクション \(sectionStatistics.value.characters) 文字"
+            value += String(localized: "、セクション \(sectionStatistics.value.characters) 文字")
         }
         return value
     }
@@ -1730,7 +1739,7 @@ struct EditorWorkspace: View {
         guard let minutes = readingEstimate.estimatedMinutes(for: document.text, spoken: spoken) else {
             return "—"
         }
-        return "約\(minutes) 分"
+        return String(localized: "約\(minutes) 分")
     }
 
     private var writingProgressView: some View {
@@ -2015,7 +2024,7 @@ private struct MarkdownAutoFormatSheet: View {
 @MainActor
 final class PreviewTaskUndoTarget {
     func replaceText(_ newText: String, in text: Binding<String>, undoManager: UndoManager?,
-                     actionName: String = "タスクの完了切替") {
+                     actionName: String = String(localized: "タスクの完了切替")) {
         let previous = text.wrappedValue
         guard previous != newText else { return }
         text.wrappedValue = newText
@@ -2037,7 +2046,10 @@ private struct LinkEditorSheet: View {
     let onSaveReference: (String, String) -> Bool
     let onAttach: @MainActor (String, URL, ImageImportMode) async throws -> Void
     @Environment(\.dismiss) private var dismiss
-    private enum LinkForm: String, CaseIterable { case inline = "URL", reference = "参照ID" }
+    private enum LinkForm: String, CaseIterable {
+        case inline = "URL", reference = "参照ID"
+        var title: String { self == .inline ? "URL" : String(localized: "参照ID") }
+    }
     @State private var form: LinkForm = .inline
     @State private var label: String
     @State private var destination: String
@@ -2075,7 +2087,7 @@ private struct LinkEditorSheet: View {
             if !referenceIDs.isEmpty {
                 Picker("リンク形式", selection: $form) {
                     ForEach(LinkForm.allCases, id: \.self) { value in
-                        Text(value.rawValue).tag(value)
+                        Text(value.title).tag(value)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -2190,7 +2202,7 @@ private struct LinkEditorSheet: View {
             switch outcome {
             case let .success(urls):
                 attachmentURL = urls.first
-                if label == "リンク", let file = urls.first {
+                if label == String(localized: "リンク"), let file = urls.first {
                     label = file.deletingPathExtension().lastPathComponent
                 }
             case let .failure(error): attachmentError = error.localizedDescription

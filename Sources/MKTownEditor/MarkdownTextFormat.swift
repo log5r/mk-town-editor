@@ -12,7 +12,7 @@ struct MarkdownTextFormat: Equatable {
             switch self {
             case .lf: "LF (Unix)"
             case .crlf: "CRLF (Windows)"
-            case .cr: "CR (旧Mac)"
+            case .cr: String(localized: "CR (旧Mac)")
             }
         }
 

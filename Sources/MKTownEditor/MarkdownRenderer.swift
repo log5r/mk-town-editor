@@ -18,7 +18,7 @@ enum MarkdownRenderer {
         let output = NSMutableAttributedString(attributedString:
             renderSequence(analysis.rootBlocks, in: analysis, context: documentContext))
         if !analysis.footnotes.entries.isEmpty {
-            output.append(NSAttributedString(string: "\n\n脚注\n"))
+            output.append(NSAttributedString(string: "\n\n" + String(localized: "脚注") + "\n"))
             for note in analysis.footnotes.entries {
                 let prefix = NSMutableAttributedString(string: "\(note.number). ")
                 prefix.append(inline(note.content, baseFont: .systemFont(ofSize: 13),
@@ -147,7 +147,7 @@ enum MarkdownRenderer {
                                  baseFont: .systemFont(ofSize: 15), references: references,
                                  footnotes: footnotes, context: context)
             if showTaskPrefix || task == nil {
-                let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
+                let prefix = task.map { $0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ") } ?? "•  "
                 content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             }
             applyListIndent(to: content, depth: block.nestingDepth)
@@ -158,7 +158,7 @@ enum MarkdownRenderer {
                                  baseFont: .systemFont(ofSize: 15), references: references,
                                  footnotes: footnotes, context: context)
             let prefix = showTaskPrefix
-                ? task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
+                ? task.map { "\(number).  " + ($0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ")) }
                     ?? "\(number).  "
                 : "\(number).  "
             content.insert(NSAttributedString(string: prefix,
@@ -288,10 +288,10 @@ enum MarkdownRenderer {
                 let status: String
                 if ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
                     status = RemoteImageStore.shared.isEnabled
-                        ? (RemoteImageStore.shared.hasFailed(url) ? "画像を読み込めません" : "画像を読み込み中")
-                        : "外部画像の読込オフ"
+                        ? (RemoteImageStore.shared.hasFailed(url) ? String(localized: "画像を読み込めません") : String(localized: "画像を読み込み中"))
+                        : String(localized: "外部画像の読込オフ")
                 } else {
-                    status = "画像"
+                    status = String(localized: "画像")
                 }
                 let value = NSMutableAttributedString(string: "\(status): \(alt)",
                                                       attributes: baseAttributes(font: baseFont, color: color,

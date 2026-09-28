@@ -48,10 +48,10 @@ enum ShortcutError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .invalidKey: "キーは印字可能な1文字を指定してください。"
-        case .modifierRequired: "CommandまたはControlを含めてください。"
-        case .reserved: "macOSまたはアプリの標準操作に使われています。"
-        case let .duplicate(title): "「\(title)」と重複しています。"
+        case .invalidKey: String(localized: "キーは印字可能な1文字を指定してください。")
+        case .modifierRequired: String(localized: "CommandまたはControlを含めてください。")
+        case .reserved: String(localized: "macOSまたはアプリの標準操作に使われています。")
+        case let .duplicate(title): String(localized: "「\(title)」と重複しています。")
         }
     }
 }

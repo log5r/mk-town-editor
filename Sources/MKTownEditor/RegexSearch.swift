@@ -8,10 +8,10 @@ enum RegexSearchError: Error, Equatable, LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .emptyPattern: "検索パターンを入力してください。"
-        case let .invalidPattern(message): "正規表現が無効です: \(message)"
-        case let .invalidCapture(number): "置換文字列の参照 $\(number) が存在しません。"
-        case .invalidScope: "選択範囲が現在の本文と一致しません。"
+        case .emptyPattern: String(localized: "検索パターンを入力してください。")
+        case let .invalidPattern(message): String(localized: "正規表現が無効です: \(message)")
+        case let .invalidCapture(number): String(localized: "置換文字列の参照 $\(number) が存在しません。")
+        case .invalidScope: String(localized: "選択範囲が現在の本文と一致しません。")
         }
     }
 }

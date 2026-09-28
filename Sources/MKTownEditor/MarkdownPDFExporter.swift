@@ -8,9 +8,9 @@ enum MarkdownPDFExportError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .printingFailed: "PDFの作成に失敗しました。"
-        case .emptyOutput: "作成したPDFを読み取れません。"
-        case .invalidMargins: "余白が用紙サイズに対して大きすぎます。"
+        case .printingFailed: String(localized: "PDFの作成に失敗しました。")
+        case .emptyOutput: String(localized: "作成したPDFを読み取れません。")
+        case .invalidMargins: String(localized: "余白が用紙サイズに対して大きすぎます。")
         }
     }
 }

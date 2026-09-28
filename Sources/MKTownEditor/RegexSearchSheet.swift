@@ -131,7 +131,7 @@ struct RegexSearchSheet: View {
     }
 
     private func matchText(_ range: NSRange) -> String {
-        guard range.length > 0 else { return "空位置" }
+        guard range.length > 0 else { return String(localized: "空位置") }
         return (source as NSString).substring(with: range)
             .replacingOccurrences(of: "\n", with: "↵")
     }
@@ -142,7 +142,7 @@ struct RegexSearchSheet: View {
                 template: replacement, caseSensitive: caseSensitive,
                 scope: activeScope, onlyMatch: match) else { return }
             if !onReplace(edit, source) {
-                errorMessage = "置換できません。本文と編集状態を確認してください。"
+                errorMessage = String(localized: "置換できません。本文と編集状態を確認してください。")
             } else if var currentScope = scope {
                 if currentScope.apply(edit) {
                     scope = currentScope

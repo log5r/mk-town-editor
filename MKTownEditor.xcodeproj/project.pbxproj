@@ -82,6 +82,7 @@
 		A1000000000000000000005E /* WorkspaceBatchExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005E /* WorkspaceBatchExporter.swift */; };
 		A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005F /* EditorInvisibleCharacters.swift */; };
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
+		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -163,6 +164,7 @@
 		A2000000000000000000005E /* WorkspaceBatchExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBatchExporter.swift; sourceTree = "<group>"; };
 		A2000000000000000000005F /* EditorInvisibleCharacters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorInvisibleCharacters.swift; sourceTree = "<group>"; };
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
+		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -258,6 +260,7 @@
 				A2000000000000000000005E /* WorkspaceBatchExporter.swift */,
 				A2000000000000000000005F /* EditorInvisibleCharacters.swift */,
 				A20000000000000000000060 /* EditorShortcuts.swift */,
+				A20000000000000000000061 /* Localizable.xcstrings */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -305,9 +308,9 @@
 			};
 			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */;
 			compatibilityVersion = "Xcode 16.0";
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
-			knownRegions = (en, Base);
+			knownRegions = (ja, en, Base);
 			mainGroup = A40000000000000000000001;
 			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -317,7 +320,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000061 /* Localizable.xcstrings in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */

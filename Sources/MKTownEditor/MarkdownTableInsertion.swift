@@ -165,14 +165,17 @@ enum MarkdownTableInsertion {
         let after = source.substring(from: NSMaxRange(draft.range))
         let leading = spacing(before: before, newline: newline)
         let trailing = spacing(after: after, newline: newline)
-        let header = "| " + (1...columns).map { "列\($0)" }.joined(separator: " | ") + " |"
+        let firstHeader = String(localized: "列1")
+        let header = "| " + ([firstHeader] + (2..<(columns + 1)).map {
+            String(localized: "列\($0)")
+        }).joined(separator: " | ") + " |"
         let delimiter = "| " + Array(repeating: "---", count: columns).joined(separator: " | ") + " |"
         let row = "| " + Array(repeating: " ", count: columns).joined(separator: " | ") + " |"
         let table = ([header, delimiter] + Array(repeating: row, count: rows)).joined(separator: newline)
         let replacement = leading + table + trailing
         return MarkdownEdit(range: draft.range, replacement: replacement,
                             selection: NSRange(location: draft.range.location + (leading as NSString).length + 2,
-                                               length: ("列1" as NSString).length))
+                                               length: (firstHeader as NSString).length))
     }
 
     private static func spacing(before text: String, newline: String) -> String {

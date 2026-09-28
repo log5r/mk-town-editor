@@ -13,11 +13,11 @@ struct MarkdownLinkDiagnostic: Equatable, Identifiable, Sendable {
 
     var title: String {
         switch kind {
-        case .missingFile: "ファイルが見つかりません"
-        case .missingImage: "画像が見つかりません"
-        case .missingHeading: "見出しが見つかりません"
-        case .missingReference: "参照定義が見つかりません"
-        case .unreadableTarget: "リンク先を読み取れません"
+        case .missingFile: String(localized: "ファイルが見つかりません")
+        case .missingImage: String(localized: "画像が見つかりません")
+        case .missingHeading: String(localized: "見出しが見つかりません")
+        case .missingReference: String(localized: "参照定義が見つかりません")
+        case .unreadableTarget: String(localized: "リンク先を読み取れません")
         }
     }
 }
@@ -129,9 +129,9 @@ enum MarkdownLintRule: String, Codable, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .headingHierarchy: "見出し階層"
-        case .missingLink: "リンク先"
-        case .listMarker: "箇条書き記号"
+        case .headingHierarchy: String(localized: "見出し階層")
+        case .missingLink: String(localized: "リンク先")
+        case .listMarker: String(localized: "箇条書き記号")
         }
     }
 }
@@ -159,8 +159,8 @@ enum MarkdownLint {
                     result.append(MarkdownLintDiagnostic(rule: .headingHierarchy,
                         sourceRange: block.sourceRange,
                         detail: previousLevel == 0
-                            ? "最初の見出しはレベル1を推奨します"
-                            : "見出しレベルが\(previousLevel)から\(level)へ飛んでいます"))
+                            ? String(localized: "最初の見出しはレベル1を推奨します")
+                            : String(localized: "見出しレベルが\(previousLevel)から\(level)へ飛んでいます")))
                 }
                 previousLevel = level
             }
@@ -183,7 +183,7 @@ enum MarkdownLint {
                 if let firstMarker, firstMarker != marker {
                     result.append(MarkdownLintDiagnostic(rule: .listMarker,
                         sourceRange: block.sourceRange,
-                        detail: "箇条書き記号を「\(firstMarker)」に揃えてください"))
+                        detail: String(localized: "箇条書き記号を「\(firstMarker)」に揃えてください")))
                 } else if firstMarker == nil {
                     firstMarker = marker
                 }

@@ -31,9 +31,9 @@ enum RichTextImportError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedFormat: "HTMLまたはRTFファイルを選んでください。"
-        case .invalidDocument: "ファイルを読み取れませんでした。"
-        case .documentTooLarge: "取り込めるファイルは10MBまでです。"
+        case .unsupportedFormat: String(localized: "HTMLまたはRTFファイルを選んでください。")
+        case .invalidDocument: String(localized: "ファイルを読み取れませんでした。")
+        case .documentTooLarge: String(localized: "取り込めるファイルは10MBまでです。")
         }
     }
 }
@@ -49,14 +49,14 @@ enum RichTextMarkdownImporter {
             let sanitized = sanitizeHTML(html)
             content = Data(sanitized.html.utf8)
             if sanitized.images > 0 {
-                warnings.append("画像\(sanitized.images)件は本文へコピーせず、位置をプレースホルダーで示します。")
+                warnings.append(String(localized: "画像\(sanitized.images)件は本文へコピーせず、位置をプレースホルダーで示します。"))
             }
             if html.range(of: "<table", options: .caseInsensitive) != nil {
-                warnings.append("表のセル構造は保持されず、本文テキストに変換されます。")
+                warnings.append(String(localized: "表のセル構造は保持されず、本文テキストに変換されます。"))
             }
             if html.range(of: "<style", options: .caseInsensitive) != nil ||
                 html.range(of: "<link", options: .caseInsensitive) != nil {
-                warnings.append("CSSによる配色・余白などは取り込みません。")
+                warnings.append(String(localized: "CSSによる配色・余白などは取り込みません。"))
             }
         }
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
@@ -79,13 +79,13 @@ enum RichTextMarkdownImporter {
                URL(string: value)?.scheme == nil { hasRelativeLink = true }
         }
         if hasAttachment && format == .rtf {
-            warnings.append("RTF内の添付画像は本文へコピーせず、位置をプレースホルダーで示します。")
+            warnings.append(String(localized: "RTF内の添付画像は本文へコピーせず、位置をプレースホルダーで示します。"))
         }
         if hasDecoration {
-            warnings.append("下線・打ち消し線・背景色など一部の装飾は失われます。")
+            warnings.append(String(localized: "下線・打ち消し線・背景色など一部の装飾は失われます。"))
         }
         if hasRelativeLink {
-            warnings.append("相対リンクは移動先の基準が異なるため、リンク先を付けずに文字だけ取り込みます。")
+            warnings.append(String(localized: "相対リンクは移動先の基準が異なるため、リンク先を付けずに文字だけ取り込みます。"))
         }
         let markdown = markdown(from: attributed)
         guard !markdown.isEmpty else { throw RichTextImportError.invalidDocument }
@@ -284,7 +284,7 @@ struct RichTextImportSheet: View {
                 Button("現在の書類へ適用") {
                     guard let result else { return }
                     if onApply(result.markdown, currentText) { dismiss() }
-                    else { errorMessage = "本文が変更されたか編集中のため、適用できませんでした。" }
+                    else { errorMessage = String(localized: "本文が変更されたか編集中のため、適用できませんでした。") }
                 }
                 .keyboardShortcut(.defaultAction)
                 .disabled(result == nil || isWorking)

@@ -15,16 +15,16 @@ enum WorkspaceFileOperationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .outsideWorkspace: "ワークスペースの外には移動できません。"
-        case .destinationExists: "同じ名前のファイルまたはフォルダが既にあります。"
-        case .sourceMissing: "元のファイルまたはフォルダが見つかりません。"
-        case let .unreadableDocument(url): "リンクを確認するための書類を読めません: \(url.lastPathComponent)"
-        case let .documentChanged(url): "確認後に書類が変更されました: \(url.lastPathComponent)"
-        case .rollbackFailed: "変更の復元に失敗しました。ファイルを確認してください。"
-        case .indexTruncated: "ファイル一覧が上限を超えたため、リンク更新を安全に確認できません。"
-        case .invalidName: "ファイル名またはフォルダ名を確認してください。"
-        case .workspaceChanged: "確認後にワークスペース内の書類が増減しました。もう一度確認してください。"
-        case let .openDocumentChanged(url): "確認後に開いている書類が変更されました: \(url.lastPathComponent)"
+        case .outsideWorkspace: String(localized: "ワークスペースの外には移動できません。")
+        case .destinationExists: String(localized: "同じ名前のファイルまたはフォルダが既にあります。")
+        case .sourceMissing: String(localized: "元のファイルまたはフォルダが見つかりません。")
+        case let .unreadableDocument(url): String(localized: "リンクを確認するための書類を読めません: \(url.lastPathComponent)")
+        case let .documentChanged(url): String(localized: "確認後に書類が変更されました: \(url.lastPathComponent)")
+        case .rollbackFailed: String(localized: "変更の復元に失敗しました。ファイルを確認してください。")
+        case .indexTruncated: String(localized: "ファイル一覧が上限を超えたため、リンク更新を安全に確認できません。")
+        case .invalidName: String(localized: "ファイル名またはフォルダ名を確認してください。")
+        case .workspaceChanged: String(localized: "確認後にワークスペース内の書類が増減しました。もう一度確認してください。")
+        case let .openDocumentChanged(url): String(localized: "確認後に開いている書類が変更されました: \(url.lastPathComponent)")
         }
     }
 }

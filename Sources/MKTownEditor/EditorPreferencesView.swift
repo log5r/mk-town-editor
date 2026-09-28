@@ -169,11 +169,11 @@ struct FolderEditorSettingsView: View {
             Text(folderURL.path).font(.caption).textSelection(.enabled)
             Text("フォルダの設定はアプリ設定より優先されます。未指定の項目は親フォルダ、次にアプリ設定を使います。")
                 .font(.caption).foregroundStyle(.secondary)
-            widthRow("タブ幅", keyPath: \.tabWidth,
+            widthRow(String(localized: "タブ幅"), keyPath: \.tabWidth,
                      inherited: settingsStore.textStyle(for: folderURL.appendingPathComponent("sample.md")).tabWidth)
-            widthRow("リストの字下げ", keyPath: \.listIndentWidth,
+            widthRow(String(localized: "リストの字下げ"), keyPath: \.listIndentWidth,
                      inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).listIndentWidth)
-            widthRow("コードの字下げ", keyPath: \.codeIndentWidth,
+            widthRow(String(localized: "コードの字下げ"), keyPath: \.codeIndentWidth,
                      inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).codeIndentWidth)
             Picker("添付ファイルの保存先", selection: optionalBinding(\.attachmentDirectory)) {
                 Text("継承").tag(nil as AttachmentDirectory?)

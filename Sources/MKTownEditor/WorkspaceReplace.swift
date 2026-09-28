@@ -10,11 +10,11 @@ enum WorkspaceReplaceError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noMatches: "置換対象がありません。"
-        case .tooManyMatches: "一致が10,000件を超えました。対象パターンを絞ってください。"
-        case let .documentChanged(url): "確認後に書類が変更されました: \(url.lastPathComponent)"
-        case let .documentOpen(url): "書類が開いています。保存して閉じてから置換してください: \(url.lastPathComponent)"
-        case .rollbackFailed: "変更の復元に失敗しました。対象ファイルを確認してください。"
+        case .noMatches: String(localized: "置換対象がありません。")
+        case .tooManyMatches: String(localized: "一致が10,000件を超えました。対象パターンを絞ってください。")
+        case let .documentChanged(url): String(localized: "確認後に書類が変更されました: \(url.lastPathComponent)")
+        case let .documentOpen(url): String(localized: "書類が開いています。保存して閉じてから置換してください: \(url.lastPathComponent)")
+        case .rollbackFailed: String(localized: "変更の復元に失敗しました。対象ファイルを確認してください。")
         }
     }
 }

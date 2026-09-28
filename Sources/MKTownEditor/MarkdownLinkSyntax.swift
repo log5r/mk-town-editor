@@ -93,7 +93,7 @@ enum MarkdownLinkSyntax {
         let selected = source.substring(with: safeSelection)
         return MarkdownLinkDraft(range: safeSelection, originalDocumentText: text, originalText: selected,
                                  originalLabel: nil, rawLabel: nil, isExisting: false,
-                                 label: selected.isEmpty ? "リンク" : selected,
+                                 label: selected.isEmpty ? String(localized: "リンク") : selected,
                                  destination: "", title: "")
     }
 

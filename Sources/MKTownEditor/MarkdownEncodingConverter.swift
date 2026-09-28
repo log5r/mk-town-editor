@@ -39,8 +39,8 @@ enum MarkdownEncodingError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .cannotDecode: "この文字コードでは内容を損失なく読み込めません。"
-        case .cannotEncode: "選んだ文字コードでは表せない文字があります。別の文字コードを選んでください。"
+        case .cannotDecode: String(localized: "この文字コードでは内容を損失なく読み込めません。")
+        case .cannotEncode: String(localized: "選んだ文字コードでは表せない文字があります。別の文字コードを選んでください。")
         }
     }
 }

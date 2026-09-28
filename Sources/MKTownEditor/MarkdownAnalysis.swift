@@ -14,11 +14,11 @@ enum MarkdownCalloutKind: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .note: "メモ"
-        case .tip: "ヒント"
-        case .important: "重要"
-        case .warning: "警告"
-        case .caution: "注意"
+        case .note: String(localized: "メモ")
+        case .tip: String(localized: "ヒント")
+        case .important: String(localized: "重要")
+        case .warning: String(localized: "警告")
+        case .caution: String(localized: "注意")
         }
     }
 

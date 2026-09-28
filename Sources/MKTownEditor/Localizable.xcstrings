@@ -1,0 +1,6448 @@
+{
+  "sourceLanguage": "ja",
+  "strings": {
+    " ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " "
+          }
+        }
+      }
+    },
+    "      + %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "      + %@"
+          }
+        }
+      }
+    },
+    "・中止しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· Cancelled"
+          }
+        }
+      }
+    },
+    "、セクション %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", section %lld characters"
+          }
+        }
+      }
+    },
+    "、選択範囲 %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", selection %lld characters"
+          }
+        }
+      }
+    },
+    ".%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ".%@"
+          }
+        }
+      }
+    },
+    "（なし）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(None)"
+          }
+        }
+      }
+    },
+    "「%@」と重複しています。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conflicts with “%@”."
+          }
+        }
+      }
+    },
+    "# タイトル\n\n## 概要\n\n## 本文\n\n## まとめ\n": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "# Title\n\n## Overview\n\n## Body\n\n## Conclusion\n"
+          }
+        }
+      }
+    },
+    "# 会議メモ\n\n## 日時・参加者\n\n## 議題\n\n## 決定事項\n\n## 次のアクション\n": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "# Meeting Notes\n\n## Date and Attendees\n\n## Agenda\n\n## Decisions\n\n## Next Actions\n"
+          }
+        }
+      }
+    },
+    "# 無題\n\nMarkdown で書き始めましょう。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "# Untitled\n\nStart writing in Markdown."
+          }
+        }
+      }
+    },
+    "#%@ に対応する見出しがありません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No heading matches #%@."
+          }
+        }
+      }
+    },
+    "%@ コードブロック": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Code Block"
+          }
+        }
+      }
+    },
+    "%@ のテンプレート": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@'s template"
+          }
+        }
+      }
+    },
+    "%@ の完了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete %@"
+          }
+        }
+      }
+    },
+    "%@ 列、%lld 行目、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ column, row %lld, %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@ 列、%2$lld 行目、%3$@"
+          }
+        }
+      }
+    },
+    "%@、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@、%2$@"
+          }
+        }
+      }
+    },
+    "%@: %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld characters"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@: %2$lld 文字"
+          }
+        }
+      }
+    },
+    "%@: %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld items"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@: %2$lld件"
+          }
+        }
+      }
+    },
+    "%@: %lld件 / 書類: %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@: %2$lld items / Documents: %3$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@: %2$lld件 / 書類: %3$lld件"
+          }
+        }
+      }
+    },
+    "%@:%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@:%2$lld"
+          }
+        }
+      }
+    },
+    "%@。%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@. %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@。%2$@"
+          }
+        }
+      }
+    },
+    "%@。内訳を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: Show details"
+          }
+        }
+      }
+    },
+    "%@（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$lld)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@（%2$lld）"
+          }
+        }
+      }
+    },
+    "%@（%lld箇所）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ (%2$lld matches)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@（%2$lld箇所）"
+          }
+        }
+      }
+    },
+    "%@を書き出す…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export %@…"
+          }
+        }
+      }
+    },
+    "%lld / %lld 件を確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checked %1$lld / %2$lld items"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld / %2$lld 件を確認"
+          }
+        }
+      }
+    },
+    "%lld / %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld / %2$lld characters"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld / %2$lld 文字"
+          }
+        }
+      }
+    },
+    "%lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld characters"
+          }
+        }
+      }
+    },
+    "%lld 行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld lines"
+          }
+        }
+      }
+    },
+    "%lld 行: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line %1$lld: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld 行: %2$@"
+          }
+        }
+      }
+    },
+    "%lld 行を変更します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld lines will change."
+          }
+        }
+      }
+    },
+    "%lld 語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld words"
+          }
+        }
+      }
+    },
+    "%lld 語。%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld words. %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lld 語。%2$@"
+          }
+        }
+      }
+    },
+    "%lld.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld."
+          }
+        }
+      }
+    },
+    "%lldファイル / %lld箇所。変更するファイルを選んでください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld files / %2$lld matches. Select the files to change."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$lldファイル / %2$lld箇所。変更するファイルを選んでください。"
+          }
+        }
+      }
+    },
+    "%lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld items"
+          }
+        }
+      }
+    },
+    "⇧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⇧"
+          }
+        }
+      }
+    },
+    "+ %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+ %@"
+          }
+        }
+      }
+    },
+    "− %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "− %@"
+          }
+        }
+      }
+    },
+    "⌃": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌃"
+          }
+        }
+      }
+    },
+    "⌘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘"
+          }
+        }
+      }
+    },
+    "⌥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌥"
+          }
+        }
+      }
+    },
+    "☐ 未完了  ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☐ Incomplete  "
+          }
+        }
+      }
+    },
+    "☑ 完了  ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "☑ Complete  "
+          }
+        }
+      }
+    },
+    "${1:文字}、${2:文字}をTabで順に選択し、$0を最後のカーソル位置にします。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Tab to move between ${1:text} and ${2:text}, then move the cursor to $0."
+          }
+        }
+      }
+    },
+    "1〜%lld 行。範囲外の番号は最も近い行へ移動します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lines 1–%lld. Out-of-range numbers move to the nearest line."
+          }
+        }
+      }
+    },
+    "1件置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace one"
+          }
+        }
+      }
+    },
+    "assets にコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy to assets"
+          }
+        }
+      }
+    },
+    "CommandまたはControlを含めてください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include Command or Control."
+          }
+        }
+      }
+    },
+    "CR (旧Mac)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CR (Classic Mac)"
+          }
+        }
+      }
+    },
+    "CSSによる配色・余白などは取り込みません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSS colors, spacing, and other styles are not imported."
+          }
+        }
+      }
+    },
+    "DOCX・ODT・EPUB には任意導入の Pandoc を使います。画像は書類のフォルダから解決します。Pandocの構文解釈により、独自の画像幅指定などは変わる場合があります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOCX, ODT, and EPUB use an optional Pandoc installation. Images are resolved from the document folder. Pandoc may interpret extensions such as custom image widths differently."
+          }
+        }
+      }
+    },
+    "DOCX・ODT・EPUB…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DOCX, ODT, EPUB…"
+          }
+        }
+      }
+    },
+    "Finderで表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Finder"
+          }
+        }
+      }
+    },
+    "HTML・RTFからMarkdownへ…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import HTML or RTF as Markdown…"
+          }
+        }
+      }
+    },
+    "HTML・RTFからMarkdownへ取り込む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import HTML or RTF as Markdown"
+          }
+        }
+      }
+    },
+    "HTML・RTFとしてコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy as HTML and RTF"
+          }
+        }
+      }
+    },
+    "HTML・RTFを取り込む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import HTML or RTF"
+          }
+        }
+      }
+    },
+    "HTML…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTML…"
+          }
+        }
+      }
+    },
+    "HTMLまたはRTFファイルを選んでください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an HTML or RTF file."
+          }
+        }
+      }
+    },
+    "HTMLを書き出せません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not export HTML"
+          }
+        }
+      }
+    },
+    "macOSの「バージョンを戻す」とは別に、名前を付けた時点を保存します。復元は現在の書類に対する編集としてUndoできます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These named snapshots are separate from macOS Versions. Restoring one edits the current document and can be undone."
+          }
+        }
+      }
+    },
+    "macOSまたはアプリの標準操作に使われています。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reserved for a standard macOS or app action."
+          }
+        }
+      }
+    },
+    "Markdown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown"
+          }
+        }
+      }
+    },
+    "Markdownの自動整形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-format Markdown"
+          }
+        }
+      }
+    },
+    "Markdownを確認中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking Markdown"
+          }
+        }
+      }
+    },
+    "Markdownを自動整形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto Format Markdown"
+          }
+        }
+      }
+    },
+    "Markdown原文を対象にした推定値です。実際の所要時間は読み方で変わります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These estimates use the Markdown source. Actual reading times vary."
+          }
+        }
+      }
+    },
+    "Markdown書類と添付を一覧できます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse Markdown documents and attachments"
+          }
+        }
+      }
+    },
+    "Markdown書類を作成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Markdown Document"
+          }
+        }
+      }
+    },
+    "Markdown構文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown syntax"
+          }
+        }
+      }
+    },
+    "Markdown表ではセル内改行を直接表せないため、<br>に置き換えます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown tables cannot represent line breaks inside cells, so they will be replaced with <br>."
+          }
+        }
+      }
+    },
+    "Markdown診断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown diagnostics"
+          }
+        }
+      }
+    },
+    "Markdown診断と自動整形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown diagnostics and auto-format"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Pandoc の実行ファイル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pandoc executable"
+          }
+        }
+      }
+    },
+    "Pandocが見つかりません。公式サイトから任意で導入し、実行ファイルを指定してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pandoc was not found. You can install it from the official site and select its executable."
+          }
+        }
+      }
+    },
+    "Pandocが見つかりません。公式サイトから任意で導入できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pandoc was not found. You can install it from the official site."
+          }
+        }
+      }
+    },
+    "PDF…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PDF…"
+          }
+        }
+      }
+    },
+    "PDFの作成に失敗しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create the PDF."
+          }
+        }
+      }
+    },
+    "PDFを書き出せません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not export PDF"
+          }
+        }
+      }
+    },
+    "RTF内の添付画像は本文へコピーせず、位置をプレースホルダーで示します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attached images in the RTF are shown as placeholders instead of being copied into the document."
+          }
+        }
+      }
+    },
+    "Tabで一覧へ移動し、矢印キーで選んでから移動できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press Tab to move to the list, then use the arrow keys to choose a destination."
+          }
+        }
+      }
+    },
+    "TSV・CSVから表へ変換…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert TSV or CSV to a table…"
+          }
+        }
+      }
+    },
+    "TSV・CSVを表に変換できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Convert TSV or CSV to a Table"
+          }
+        }
+      }
+    },
+    "URL": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "URL"
+          }
+        }
+      }
+    },
+    "UTF-8 BOM": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UTF-8 BOM"
+          }
+        }
+      }
+    },
+    "UTF-8で保存した書類は、このアプリでそのまま編集できます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documents saved as UTF-8 can be edited directly in this app."
+          }
+        }
+      }
+    },
+    "ZIPで保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as ZIP"
+          }
+        }
+      }
+    },
+    "ZIPの作成に失敗しました: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not create ZIP: %@"
+          }
+        }
+      }
+    },
+    "アウトライン": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outline"
+          }
+        }
+      }
+    },
+    "インスペクタ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspector"
+          }
+        }
+      }
+    },
+    "インデントガイドを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show indent guides"
+          }
+        }
+      }
+    },
+    "インデントを増やす": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Increase Indent"
+          }
+        }
+      }
+    },
+    "インデントを減らす": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrease Indent"
+          }
+        }
+      }
+    },
+    "インラインコード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inline Code"
+          }
+        }
+      }
+    },
+    "キー（1文字）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key (one character)"
+          }
+        }
+      }
+    },
+    "キーは印字可能な1文字を指定してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose one printable character for the key."
+          }
+        }
+      }
+    },
+    "キーボード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard"
+          }
+        }
+      }
+    },
+    "キャンセル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "クリップボードへ書き込めませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not write to the clipboard."
+          }
+        }
+      }
+    },
+    "コード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code"
+          }
+        }
+      }
+    },
+    "コードとURLでは自動訂正を一時停止します。ユーザー辞書にはmacOSの標準機能を使います。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autocorrection pauses in code and URLs. The user dictionary is managed by macOS."
+          }
+        }
+      }
+    },
+    "コードの字下げ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code Indent"
+          }
+        }
+      }
+    },
+    "コードの字下げ: %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code indent: %lld characters"
+          }
+        }
+      }
+    },
+    "コードブロック": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code block"
+          }
+        }
+      }
+    },
+    "コードをコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy code"
+          }
+        }
+      }
+    },
+    "このウインドウの増減: %@%lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change in this window: %1$@%2$lld characters"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "このウインドウの増減: %1$@%2$lld 文字"
+          }
+        }
+      }
+    },
+    "このフォルダの字下げ・添付先・Markdown構文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indentation, attachments, and Markdown syntax for this folder"
+          }
+        }
+      }
+    },
+    "この変更を復元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this change"
+          }
+        }
+      }
+    },
+    "この文字コードでは内容を損失なく読み込めません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The content cannot be decoded without loss using this encoding."
+          }
+        }
+      }
+    },
+    "この文字コードでは損失なく読めません。別の候補を選んでください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This encoding cannot read the file without loss. Choose another option."
+          }
+        }
+      }
+    },
+    "この書類のフォルダ内": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In this document's folder"
+          }
+        }
+      }
+    },
+    "コマンドパレット…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command Palette…"
+          }
+        }
+      }
+    },
+    "コマンドを検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search commands"
+          }
+        }
+      }
+    },
+    "コマンドを選び、キーと修飾キーを設定します。重複する操作やmacOSの予約操作は保存できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a command and set its key and modifiers. Duplicate and macOS reserved shortcuts cannot be saved."
+          }
+        }
+      }
+    },
+    "コマンド名またはショートカット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Command name or shortcut"
+          }
+        }
+      }
+    },
+    "ゴミ箱へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash"
+          }
+        }
+      }
+    },
+    "ゴミ箱へ移動…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to Trash…"
+          }
+        }
+      }
+    },
+    "コメントにする／解除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment or Uncomment"
+          }
+        }
+      }
+    },
+    "サイドバー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sidebar"
+          }
+        }
+      }
+    },
+    "サイドバーを表示または隠す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show or hide the sidebar"
+          }
+        }
+      }
+    },
+    "システム": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        }
+      }
+    },
+    "システム等幅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System Monospaced"
+          }
+        }
+      }
+    },
+    "ショートカット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcuts"
+          }
+        }
+      }
+    },
+    "ショートカット一覧と設定…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut list and settings…"
+          }
+        }
+      }
+    },
+    "スクリーンショット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot"
+          }
+        }
+      }
+    },
+    "スナップショットを復元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Snapshot"
+          }
+        }
+      }
+    },
+    "スナップショット名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot name"
+          }
+        }
+      }
+    },
+    "スニペット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snippets"
+          }
+        }
+      }
+    },
+    "スニペットを挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert snippet"
+          }
+        }
+      }
+    },
+    "スニペットを挿入…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert Snippet…"
+          }
+        }
+      }
+    },
+    "スニペットを追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add snippet"
+          }
+        }
+      }
+    },
+    "すべて": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        }
+      }
+    },
+    "すべての拡張子": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All extensions"
+          }
+        }
+      }
+    },
+    "すべて展開": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand All"
+          }
+        }
+      }
+    },
+    "すべて置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace all"
+          }
+        }
+      }
+    },
+    "スペルチェック": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spell checking"
+          }
+        }
+      }
+    },
+    "スペルチェックの言語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spell-check language"
+          }
+        }
+      }
+    },
+    "セクション: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section: %@"
+          }
+        }
+      }
+    },
+    "セクションを上へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move section up"
+          }
+        }
+      }
+    },
+    "セクションを下へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move section down"
+          }
+        }
+      }
+    },
+    "セッションの増減: %@%lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session change: %1$@%2$lld characters"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "セッションの増減: %1$@%2$lld 文字"
+          }
+        }
+      }
+    },
+    "セッションをここから開始": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start a session here"
+          }
+        }
+      }
+    },
+    "セル内改行を変換します": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert Line Breaks in Cells"
+          }
+        }
+      }
+    },
+    "タイトル（任意）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title (optional)"
+          }
+        }
+      }
+    },
+    "タスク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tasks"
+          }
+        }
+      }
+    },
+    "タスクの完了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task Completion"
+          }
+        }
+      }
+    },
+    "タスクの完了を切り替え": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Task Completion"
+          }
+        }
+      }
+    },
+    "タスクの完了切替": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle Task Completion"
+          }
+        }
+      }
+    },
+    "タスクリスト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Task List"
+          }
+        }
+      }
+    },
+    "タブ幅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab Width"
+          }
+        }
+      }
+    },
+    "タブ幅: %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab width: %lld characters"
+          }
+        }
+      }
+    },
+    "データ行数: %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data rows: %lld"
+          }
+        }
+      }
+    },
+    "テキスト…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text…"
+          }
+        }
+      }
+    },
+    "テキストを書き出せません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not export text"
+          }
+        }
+      }
+    },
+    "テキスト書き出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text export"
+          }
+        }
+      }
+    },
+    "テンプレート": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Template"
+          }
+        }
+      }
+    },
+    "はじめに": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Getting Started"
+          }
+        }
+      }
+    },
+    "パッケージ名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Package name"
+          }
+        }
+      }
+    },
+    "パッケージ名にはフォルダ名に使える文字を指定してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a valid folder name for the package."
+          }
+        }
+      }
+    },
+    "ヒント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tip"
+          }
+        }
+      }
+    },
+    "ピン留め": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin"
+          }
+        }
+      }
+    },
+    "ピン留めを外す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unpin"
+          }
+        }
+      }
+    },
+    "ファイル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files"
+          }
+        }
+      }
+    },
+    "ファイルが見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File Not Found"
+          }
+        }
+      }
+    },
+    "ファイルへの相対リンクを補完するには、先に書類を保存してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document before completing relative file links."
+          }
+        }
+      }
+    },
+    "ファイルをゴミ箱へ移動します。このファイルを指すリンクは更新されません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move this file to Trash. Links to it will not be updated."
+          }
+        }
+      }
+    },
+    "ファイルを添付": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attach file"
+          }
+        }
+      }
+    },
+    "ファイルを移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move File"
+          }
+        }
+      }
+    },
+    "ファイルを読み取れませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the file."
+          }
+        }
+      }
+    },
+    "ファイルを選択…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose file…"
+          }
+        }
+      }
+    },
+    "ファイルを開けません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the file"
+          }
+        }
+      }
+    },
+    "ファイル一覧が上限を超えたため、リンク更新を安全に確認できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file list exceeded its limit, so link updates cannot be checked safely."
+          }
+        }
+      }
+    },
+    "ファイル一覧を更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh file list"
+          }
+        }
+      }
+    },
+    "ファイル名で書類を探す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find a document by name"
+          }
+        }
+      }
+    },
+    "ファイル名で開く…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open by filename…"
+          }
+        }
+      }
+    },
+    "ファイル名またはパス": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filename or path"
+          }
+        }
+      }
+    },
+    "ファイル名またはフォルダ名を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the file or folder name."
+          }
+        }
+      }
+    },
+    "ファイル画像を挿入するには、先に文書を保存してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document before inserting an image file."
+          }
+        }
+      }
+    },
+    "フェンスを除いたコード本文をコピー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the code without its fence"
+          }
+        }
+      }
+    },
+    "フォルダの編集設定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder editing settings"
+          }
+        }
+      }
+    },
+    "フォルダの設定はアプリ設定より優先されます。未指定の項目は親フォルダ、次にアプリ設定を使います。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder settings take precedence over app settings. Unspecified values come from the nearest parent folder, then the app."
+          }
+        }
+      }
+    },
+    "フォルダを作成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create Folder"
+          }
+        }
+      }
+    },
+    "フォルダを記憶できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not remember the folder"
+          }
+        }
+      }
+    },
+    "フォルダを開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open folder"
+          }
+        }
+      }
+    },
+    "フォルダを開く…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open folder…"
+          }
+        }
+      }
+    },
+    "フォルダ全体を検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the folder"
+          }
+        }
+      }
+    },
+    "フォルダ全体を検索…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search the folder…"
+          }
+        }
+      }
+    },
+    "フォント": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font"
+          }
+        }
+      }
+    },
+    "ブックマーク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks"
+          }
+        }
+      }
+    },
+    "ブックマークがありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No bookmarks"
+          }
+        }
+      }
+    },
+    "ブックマークを削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete bookmark"
+          }
+        }
+      }
+    },
+    "フッターにページ番号を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show page numbers in the footer"
+          }
+        }
+      }
+    },
+    "プリセット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preset"
+          }
+        }
+      }
+    },
+    "プリセットを保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save preset"
+          }
+        }
+      }
+    },
+    "プリセット名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preset name"
+          }
+        }
+      }
+    },
+    "プレーンテキスト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plain Text"
+          }
+        }
+      }
+    },
+    "プレビュー": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview"
+          }
+        }
+      }
+    },
+    "プレビュー — %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview — %@"
+          }
+        }
+      }
+    },
+    "プレビュー: %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview: %lld%%"
+          }
+        }
+      }
+    },
+    "プレビューにフロントマターを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show front matter in preview"
+          }
+        }
+      }
+    },
+    "プレビューを先に表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show preview first"
+          }
+        }
+      }
+    },
+    "プレビューを別ウインドウで開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open preview in another window"
+          }
+        }
+      }
+    },
+    "プレビューを拡大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom in preview"
+          }
+        }
+      }
+    },
+    "プレビューを標準サイズに戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset preview zoom"
+          }
+        }
+      }
+    },
+    "プレビューを準備中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preparing preview"
+          }
+        }
+      }
+    },
+    "プレビューを縮小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom out preview"
+          }
+        }
+      }
+    },
+    "プレビュー内を検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search in preview"
+          }
+        }
+      }
+    },
+    "フロントマター": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Front matter"
+          }
+        }
+      }
+    },
+    "ページ設定…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page Setup…"
+          }
+        }
+      }
+    },
+    "ヘッダーとフッター": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header and footer"
+          }
+        }
+      }
+    },
+    "ヘッダーに書類名を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show document name in header"
+          }
+        }
+      }
+    },
+    "メモ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note"
+          }
+        }
+      }
+    },
+    "もう一度プレビューを開いてください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the preview again."
+          }
+        }
+      }
+    },
+    "リストの字下げ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List Indent"
+          }
+        }
+      }
+    },
+    "リストの字下げ: %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List indent: %lld characters"
+          }
+        }
+      }
+    },
+    "リモート画像を読み込む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load remote images"
+          }
+        }
+      }
+    },
+    "リンク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link"
+          }
+        }
+      }
+    },
+    "リンクの問題は見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No link problems found"
+          }
+        }
+      }
+    },
+    "リンクを保存できません。本文と編集状態を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the link. Check the document and editing state."
+          }
+        }
+      }
+    },
+    "リンクを挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert link"
+          }
+        }
+      }
+    },
+    "リンクを確認するための書類を読めません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read a document needed to check links: %@"
+          }
+        }
+      }
+    },
+    "リンクを確認中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking links"
+          }
+        }
+      }
+    },
+    "リンクを編集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit link"
+          }
+        }
+      }
+    },
+    "リンク先": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link Destination"
+          }
+        }
+      }
+    },
+    "リンク先のURLを残す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include link destinations"
+          }
+        }
+      }
+    },
+    "リンク先を読み取れません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot Read Link Destination"
+          }
+        }
+      }
+    },
+    "リンク先を開けません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the link destination"
+          }
+        }
+      }
+    },
+    "リンク先候補、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link suggestion: %@"
+          }
+        }
+      }
+    },
+    "リンク形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link format"
+          }
+        }
+      }
+    },
+    "リンク診断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link diagnostics"
+          }
+        }
+      }
+    },
+    "ローカルリンクの参照先を確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check local link destinations"
+          }
+        }
+      }
+    },
+    "ワークスペース": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Workspace"
+          }
+        }
+      }
+    },
+    "ワークスペースに作成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create in workspace"
+          }
+        }
+      }
+    },
+    "ワークスペースのフォルダを選ぶ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose workspace folder"
+          }
+        }
+      }
+    },
+    "ワークスペースの外には移動できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot move outside the workspace."
+          }
+        }
+      }
+    },
+    "ワークスペース内のMarkdown書類を調べます。未使用は整理候補で、ファイルは削除しません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan Markdown documents in the workspace. Unused attachments are suggestions for cleanup; no files will be deleted."
+          }
+        }
+      }
+    },
+    "ワークスペース内の移動先": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination in workspace"
+          }
+        }
+      }
+    },
+    "一致: %lld 件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matches: %lld"
+          }
+        }
+      }
+    },
+    "一致が10,000件を超えました。対象パターンを絞ってください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More than 10,000 matches were found. Narrow the pattern."
+          }
+        }
+      }
+    },
+    "一致する書類がありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching documents"
+          }
+        }
+      }
+    },
+    "上": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top"
+          }
+        }
+      }
+    },
+    "上下": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top and Bottom"
+          }
+        }
+      }
+    },
+    "上下の余白: %lld pt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical margin: %lld pt"
+          }
+        }
+      }
+    },
+    "下": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom"
+          }
+        }
+      }
+    },
+    "下に行を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert row below"
+          }
+        }
+      }
+    },
+    "下線・打ち消し線・背景色など一部の装飾は失われます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some styling, including underlines, strikethrough, and background colors, will be lost."
+          }
+        }
+      }
+    },
+    "並び順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort order"
+          }
+        }
+      }
+    },
+    "並び順とフィルター": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort and filter"
+          }
+        }
+      }
+    },
+    "中央揃え": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Center"
+          }
+        }
+      }
+    },
+    "中止": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        }
+      }
+    },
+    "代替テキスト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternative text"
+          }
+        }
+      }
+    },
+    "会議メモ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meeting Notes"
+          }
+        }
+      }
+    },
+    "余白（pt）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Margins (pt)"
+          }
+        }
+      }
+    },
+    "余白が用紙サイズに対して大きすぎます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Margins are too large for the page size."
+          }
+        }
+      }
+    },
+    "余白を小さくしてください。本文領域には縦横100pt以上が必要です。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use smaller margins. The content area needs at least 100 pt in each direction."
+          }
+        }
+      }
+    },
+    "作成したPDFを読み取れません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the created PDF."
+          }
+        }
+      }
+    },
+    "保存…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save…"
+          }
+        }
+      }
+    },
+    "保存しました: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved: %@"
+          }
+        }
+      }
+    },
+    "保存先": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination"
+          }
+        }
+      }
+    },
+    "保存先: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination: %@"
+          }
+        }
+      }
+    },
+    "保存先フォルダを使用できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot use the destination folder."
+          }
+        }
+      }
+    },
+    "保存先を選ぶ…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose destination…"
+          }
+        }
+      }
+    },
+    "保存形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save format"
+          }
+        }
+      }
+    },
+    "保存時: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved at: %@"
+          }
+        }
+      }
+    },
+    "元のファイルまたはフォルダが見つかりません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source file or folder was not found."
+          }
+        }
+      }
+    },
+    "元ファイルを参照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference Original File"
+          }
+        }
+      }
+    },
+    "先に書類を保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document first"
+          }
+        }
+      }
+    },
+    "先頭1,000文字を表示しています。内容を確認してから保存してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing the first 1,000 characters. Review the content before saving."
+          }
+        }
+      }
+    },
+    "入力構文: %@。画像幅など一部の拡張は変換先で再現できない場合があります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input syntax: %@. Some extensions, including image widths, may not survive conversion."
+          }
+        }
+      }
+    },
+    "全文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full Document"
+          }
+        }
+      }
+    },
+    "最初の見出しはレベル1を推奨します": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The first heading should be level 1."
+          }
+        }
+      }
+    },
+    "出力の最大幅（px、任意）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum output width (px, optional)"
+          }
+        }
+      }
+    },
+    "出力の最大高さ（px、任意）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum output height (px, optional)"
+          }
+        }
+      }
+    },
+    "出力形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Output format"
+          }
+        }
+      }
+    },
+    "分割": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split"
+          }
+        }
+      }
+    },
+    "分割配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split layout"
+          }
+        }
+      }
+    },
+    "列%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Column %lld"
+          }
+        }
+      }
+    },
+    "列1": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Column 1"
+          }
+        }
+      }
+    },
+    "列を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete column"
+          }
+        }
+      }
+    },
+    "列数: %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Columns: %lld"
+          }
+        }
+      }
+    },
+    "列見出し %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Column heading %@"
+          }
+        }
+      }
+    },
+    "削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete"
+          }
+        }
+      }
+    },
+    "前へ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous"
+          }
+        }
+      }
+    },
+    "前を検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find previous"
+          }
+        }
+      }
+    },
+    "区切り文字、引用符、行の内容を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the separators, quotation marks, and row contents."
+          }
+        }
+      }
+    },
+    "区切り線": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal Rule"
+          }
+        }
+      }
+    },
+    "印刷…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print…"
+          }
+        }
+      }
+    },
+    "印刷できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not print"
+          }
+        }
+      }
+    },
+    "原寸": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actual size"
+          }
+        }
+      }
+    },
+    "原文へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal in source"
+          }
+        }
+      }
+    },
+    "参照ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference ID"
+          }
+        }
+      }
+    },
+    "参照されている添付（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenced attachments (%lld)"
+          }
+        }
+      }
+    },
+    "参照ファイルが見つかりません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenced file was not found: %@"
+          }
+        }
+      }
+    },
+    "参照ファイルの合計が500MBを超えています。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenced files exceed 500 MB in total."
+          }
+        }
+      }
+    },
+    "参照元:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenced by:"
+          }
+        }
+      }
+    },
+    "参照定義が見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference Definition Not Found"
+          }
+        }
+      }
+    },
+    "参照形式／インライン形式を変換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert Reference and Inline Link"
+          }
+        }
+      }
+    },
+    "取り消し線": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strikethrough"
+          }
+        }
+      }
+    },
+    "取り込み": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import"
+          }
+        }
+      }
+    },
+    "取り込めるファイルは10MBまでです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files up to 10 MB can be imported."
+          }
+        }
+      }
+    },
+    "右": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right"
+          }
+        }
+      }
+    },
+    "右に列を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert column to the right"
+          }
+        }
+      }
+    },
+    "右揃え": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Align right"
+          }
+        }
+      }
+    },
+    "同じ名前のファイルまたはフォルダが既にあります。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A file or folder with the same name already exists."
+          }
+        }
+      }
+    },
+    "同じ名前の出力が既にあります。別の名前を指定してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An output with the same name already exists. Choose another name."
+          }
+        }
+      }
+    },
+    "同名の出力が既にあります。上書きせずにスキップしました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An output with the same name already exists. It was skipped without overwriting."
+          }
+        }
+      }
+    },
+    "名前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        }
+      }
+    },
+    "名前を付けた本文履歴を保存・比較・復元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save, compare, and restore named document snapshots"
+          }
+        }
+      }
+    },
+    "名前を変更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename"
+          }
+        }
+      }
+    },
+    "名前を変更…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rename…"
+          }
+        }
+      }
+    },
+    "名前順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        }
+      }
+    },
+    "執筆目標とセッション": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing goal and session"
+          }
+        }
+      }
+    },
+    "基本（表・脚注・フロントマターなし）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basic (no tables, footnotes, or front matter)"
+          }
+        }
+      }
+    },
+    "変換して保存…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert and save…"
+          }
+        }
+      }
+    },
+    "変換に失敗しました: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversion failed: %@"
+          }
+        }
+      }
+    },
+    "変換を中止しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversion cancelled."
+          }
+        }
+      }
+    },
+    "変換中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Converting"
+          }
+        }
+      }
+    },
+    "変換器が空のファイルを返しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The converter returned an empty file."
+          }
+        }
+      }
+    },
+    "変換後のMarkdown（%lld文字）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Converted Markdown (%lld characters)"
+          }
+        }
+      }
+    },
+    "変更の復元に失敗しました。ファイルを確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not restore changes. Check the files."
+          }
+        }
+      }
+    },
+    "変更の復元に失敗しました。対象ファイルを確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not restore changes. Check the affected files."
+          }
+        }
+      }
+    },
+    "変更を確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review changes"
+          }
+        }
+      }
+    },
+    "変更箇所はありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No changes"
+          }
+        }
+      }
+    },
+    "外部変換器で書き出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export with external converter"
+          }
+        }
+      }
+    },
+    "外部画像の読込オフ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External Image Loading Off"
+          }
+        }
+      }
+    },
+    "外部画像はパッケージに含められません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External images cannot be included in the package: %@"
+          }
+        }
+      }
+    },
+    "大文字と小文字を区別": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match case"
+          }
+        }
+      }
+    },
+    "大文字小文字を区別": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match case"
+          }
+        }
+      }
+    },
+    "太字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bold"
+          }
+        }
+      }
+    },
+    "完了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completed"
+          }
+        }
+      }
+    },
+    "完了: ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete: "
+          }
+        }
+      }
+    },
+    "完了にする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark completed"
+          }
+        }
+      }
+    },
+    "対象": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Target"
+          }
+        }
+      }
+    },
+    "対象・除外はカンマ区切りのパスパターンです。開いている書類は置換できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include and exclude patterns are comma-separated paths. Open documents cannot be replaced."
+          }
+        }
+      }
+    },
+    "対象・除外はカンマ区切りのファイルパスパターンです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include and exclude patterns are comma-separated file path patterns."
+          }
+        }
+      }
+    },
+    "対象: *.md, docs/*": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include: *.md, docs/*"
+          }
+        }
+      }
+    },
+    "対象の書類が開いています。保存して閉じてから操作してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The target document is open. Save and close it before continuing."
+          }
+        }
+      }
+    },
+    "対象フォルダ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source Folder"
+          }
+        }
+      }
+    },
+    "対象フォルダを読み取れません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read the selected folder."
+          }
+        }
+      }
+    },
+    "対象フォルダ内の Markdown・テキスト書類を、フォルダ構成を保って書き出します。同名の出力は上書きしません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Markdown and text documents in the selected folder while keeping its folder structure. Existing outputs will not be overwritten."
+          }
+        }
+      }
+    },
+    "対象書類が10,000件を超えています。範囲を狭めてください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More than 10,000 documents were selected. Narrow the scope."
+          }
+        }
+      }
+    },
+    "履歴を選択": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a snapshot"
+          }
+        }
+      }
+    },
+    "左": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left"
+          }
+        }
+      }
+    },
+    "左右": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Side by Side"
+          }
+        }
+      }
+    },
+    "左右の余白: %lld pt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal margin: %lld pt"
+          }
+        }
+      }
+    },
+    "左揃え": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Align left"
+          }
+        }
+      }
+    },
+    "差分はありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No differences"
+          }
+        }
+      }
+    },
+    "差分を比較中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comparing differences"
+          }
+        }
+      }
+    },
+    "差分を確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review differences"
+          }
+        }
+      }
+    },
+    "差分を確認中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reviewing differences…"
+          }
+        }
+      }
+    },
+    "引用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quote"
+          }
+        }
+      }
+    },
+    "形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format"
+          }
+        }
+      }
+    },
+    "戻る": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "手動更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh manually"
+          }
+        }
+      }
+    },
+    "拡張（表・脚注・フロントマター）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extended (tables, footnotes, and front matter)"
+          }
+        }
+      }
+    },
+    "持ち出し用パッケージ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Portable package"
+          }
+        }
+      }
+    },
+    "指定したPandocを実行できません。ファイルと実行権限を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot run the selected Pandoc executable. Check the file and execute permission."
+          }
+        }
+      }
+    },
+    "指定した実行ファイルが見つからないか、実行権限がありません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected executable is missing or cannot be run."
+          }
+        }
+      }
+    },
+    "指定行へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to line"
+          }
+        }
+      }
+    },
+    "指定行へ移動…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to line…"
+          }
+        }
+      }
+    },
+    "挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert"
+          }
+        }
+      }
+    },
+    "改行形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line endings"
+          }
+        }
+      }
+    },
+    "整形を適用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply formatting"
+          }
+        }
+      }
+    },
+    "文字/分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "characters/min"
+          }
+        }
+      }
+    },
+    "文字コード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text encoding"
+          }
+        }
+      }
+    },
+    "文字コードの取り込みに失敗": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not import text encoding"
+          }
+        }
+      }
+    },
+    "文字コードを指定して取り込む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import with selected encoding"
+          }
+        }
+      }
+    },
+    "文字コードを指定して取り込む…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import with selected encoding…"
+          }
+        }
+      }
+    },
+    "文字サイズ: %lld pt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font size: %lld pt"
+          }
+        }
+      }
+    },
+    "文字サイズ（px）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font size (px)"
+          }
+        }
+      }
+    },
+    "文字数の内訳": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Character count details"
+          }
+        }
+      }
+    },
+    "文字数の内訳を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show character count details"
+          }
+        }
+      }
+    },
+    "文字数目標": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Character goal"
+          }
+        }
+      }
+    },
+    "文書全体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entire document"
+          }
+        }
+      }
+    },
+    "文書統計。%lld 行、%@で%lld 語、全文 %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document statistics: %lld lines, %@ word count, %lld words, %lld characters in the full document"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "文書統計。%1$lld 行、%2$@で%3$lld 語、全文 %4$lld 文字"
+          }
+        }
+      }
+    },
+    "文章ツール": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing tools"
+          }
+        }
+      }
+    },
+    "斜体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Italic"
+          }
+        }
+      }
+    },
+    "新規Markdown書類…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Markdown document…"
+          }
+        }
+      }
+    },
+    "新規フォルダ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Folder"
+          }
+        }
+      }
+    },
+    "新規フォルダ…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New folder…"
+          }
+        }
+      }
+    },
+    "新規書類.md": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New Document.md"
+          }
+        }
+      }
+    },
+    "方向": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direction"
+          }
+        }
+      }
+    },
+    "既定に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore default"
+          }
+        }
+      }
+    },
+    "日本語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese"
+          }
+        }
+      }
+    },
+    "日本語として単語に分け、句読点や空白を除いて数えます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count words using Japanese segmentation, excluding punctuation and whitespace."
+          }
+        }
+      }
+    },
+    "日本語の単語分割": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Japanese Word Segmentation"
+          }
+        }
+      }
+    },
+    "明朝体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serif"
+          }
+        }
+      }
+    },
+    "明示スナップショット": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Named snapshot"
+          }
+        }
+      }
+    },
+    "時間の推定言語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated time language"
+          }
+        }
+      }
+    },
+    "更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh"
+          }
+        }
+      }
+    },
+    "更新日時順": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date Modified"
+          }
+        }
+      }
+    },
+    "書き出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        }
+      }
+    },
+    "書き出し…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export…"
+          }
+        }
+      }
+    },
+    "書き出しを中止しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export cancelled."
+          }
+        }
+      }
+    },
+    "書き出し中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting"
+          }
+        }
+      }
+    },
+    "書き出し先が変換中に変更されました。もう一度保存先を選んでください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The destination changed during conversion. Choose a destination again."
+          }
+        }
+      }
+    },
+    "書き出し設定を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the export settings."
+          }
+        }
+      }
+    },
+    "書き出す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        }
+      }
+    },
+    "書式を除去": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Formatting"
+          }
+        }
+      }
+    },
+    "書式付きコピーに失敗しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not copy formatted text"
+          }
+        }
+      }
+    },
+    "書類": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documents"
+          }
+        }
+      }
+    },
+    "書類が開いています。保存して閉じてから置換してください: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A document is open. Save and close it before replacing: %@"
+          }
+        }
+      }
+    },
+    "書類と参照ファイルを1つのフォルダまたはZIPにまとめます。欠落ファイルがあれば出力を中止します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Package the document and referenced files in a folder or ZIP. Export stops if a file is missing."
+          }
+        }
+      }
+    },
+    "有効な規則で問題は見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No problems found under the enabled rules"
+          }
+        }
+      }
+    },
+    "未使用の候補（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unused candidates (%lld)"
+          }
+        }
+      }
+    },
+    "未完了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete"
+          }
+        }
+      }
+    },
+    "未完了: ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete: "
+          }
+        }
+      }
+    },
+    "未完了にする": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark incomplete"
+          }
+        }
+      }
+    },
+    "本文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Body"
+          }
+        }
+      }
+    },
+    "本文・リスト・引用・表": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Body, Lists, Quotes, and Tables"
+          }
+        }
+      }
+    },
+    "本文が変更されたか編集中のため、復元できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The document changed or is being edited, so it could not be restored."
+          }
+        }
+      }
+    },
+    "本文が変更されたか編集中のため、整形を適用できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The document changed or is being edited, so formatting could not be applied."
+          }
+        }
+      }
+    },
+    "本文が変更されたか編集中のため、適用できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The document changed or is being edited, so the import could not be applied."
+          }
+        }
+      }
+    },
+    "本文が変更されたため画像を挿入できません。もう一度挿入してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The document changed. Try inserting the image again."
+          }
+        }
+      }
+    },
+    "本文に戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert to Body"
+          }
+        }
+      }
+    },
+    "本文に戻る": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to text"
+          }
+        }
+      }
+    },
+    "本文の最大幅: %lld pt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum body width: %lld pt"
+          }
+        }
+      }
+    },
+    "本文全体を復元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore entire document"
+          }
+        }
+      }
+    },
+    "本文幅（px）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Body width (px)"
+          }
+        }
+      }
+    },
+    "本文形式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document format"
+          }
+        }
+      }
+    },
+    "校正": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proofing"
+          }
+        }
+      }
+    },
+    "検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search"
+          }
+        }
+      }
+    },
+    "検索…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search…"
+          }
+        }
+      }
+    },
+    "検索パターン": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search pattern"
+          }
+        }
+      }
+    },
+    "検索パターンを入力してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a search pattern."
+          }
+        }
+      }
+    },
+    "検索中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching"
+          }
+        }
+      }
+    },
+    "検索中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching…"
+          }
+        }
+      }
+    },
+    "検索語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search term"
+          }
+        }
+      }
+    },
+    "検索語（改行も指定できます）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search term (can include line breaks)"
+          }
+        }
+      }
+    },
+    "構造": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Structure"
+          }
+        }
+      }
+    },
+    "欠落している添付（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing attachments (%lld)"
+          }
+        }
+      }
+    },
+    "次へ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next"
+          }
+        }
+      }
+    },
+    "次を検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find next"
+          }
+        }
+      }
+    },
+    "正規表現が無効です: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid regular expression: %@"
+          }
+        }
+      }
+    },
+    "正規表現で検索・置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find and replace with regular expressions"
+          }
+        }
+      }
+    },
+    "正規表現検索・置換…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regex find and replace…"
+          }
+        }
+      }
+    },
+    "注意": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caution"
+          }
+        }
+      }
+    },
+    "派生画像を作成する": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a derived image"
+          }
+        }
+      }
+    },
+    "添付": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachments"
+          }
+        }
+      }
+    },
+    "添付ファイルの保存先": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment folder"
+          }
+        }
+      }
+    },
+    "添付ファイルの確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment audit"
+          }
+        }
+      }
+    },
+    "添付ファイルを確認…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check attachments…"
+          }
+        }
+      }
+    },
+    "添付ファイルを確認中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking attachments…"
+          }
+        }
+      }
+    },
+    "添付ファイルを開けませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open the attachment."
+          }
+        }
+      }
+    },
+    "添付を含むパッケージ…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Package with attachments…"
+          }
+        }
+      }
+    },
+    "添付方法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment method"
+          }
+        }
+      }
+    },
+    "無題": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled"
+          }
+        }
+      }
+    },
+    "無題の見出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Untitled Heading"
+          }
+        }
+      }
+    },
+    "現在: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current: %@"
+          }
+        }
+      }
+    },
+    "現在の %lld 行付近": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Near line %lld"
+          }
+        }
+      }
+    },
+    "現在のカーソル位置をブックマーク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmark cursor position"
+          }
+        }
+      }
+    },
+    "現在の文書に適用: 保存先 %@、構文 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applied to this document: Folder %1$@, syntax %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "現在の文書に適用: 保存先 %1$@、構文 %2$@"
+          }
+        }
+      }
+    },
+    "現在の書類のプレビューを別ウインドウで表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show this document's preview in another window"
+          }
+        }
+      }
+    },
+    "現在の書類へ適用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply to current document"
+          }
+        }
+      }
+    },
+    "現在の本文を保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save current text"
+          }
+        }
+      }
+    },
+    "現在位置を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add current position"
+          }
+        }
+      }
+    },
+    "画像": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image"
+          }
+        }
+      }
+    },
+    "画像…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image…"
+          }
+        }
+      }
+    },
+    "画像%lld件は本文へコピーせず、位置をプレースホルダーで示します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld images are shown as placeholders instead of being copied into the document."
+          }
+        }
+      }
+    },
+    "画像が見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Not Found"
+          }
+        }
+      }
+    },
+    "画像だけの段落では代替テキストをキャプションにも使用します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The alternative text also serves as the caption when an image occupies its own paragraph."
+          }
+        }
+      }
+    },
+    "画像ドロップ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image drop"
+          }
+        }
+      }
+    },
+    "画像の URL": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image URL"
+          }
+        }
+      }
+    },
+    "画像の保存名を決められません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not choose a name for the image."
+          }
+        }
+      }
+    },
+    "画像の取得元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image source"
+          }
+        }
+      }
+    },
+    "画像の相対パスを解決するため、先に書類を保存してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document first to resolve relative image paths."
+          }
+        }
+      }
+    },
+    "画像の説明を残す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include image descriptions"
+          }
+        }
+      }
+    },
+    "画像を挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert image"
+          }
+        }
+      }
+    },
+    "画像を挿入できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not insert image"
+          }
+        }
+      }
+    },
+    "画像を表示できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not display image"
+          }
+        }
+      }
+    },
+    "画像を読み込み中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading Image"
+          }
+        }
+      }
+    },
+    "画像を読み込めません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Load Image"
+          }
+        }
+      }
+    },
+    "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document before pasting an image, then try again."
+          }
+        }
+      }
+    },
+    "画像保存先の assets フォルダを確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the assets folder used for saving images."
+          }
+        }
+      }
+    },
+    "画質": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image quality"
+          }
+        }
+      }
+    },
+    "画質 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quality %lld%%"
+          }
+        }
+      }
+    },
+    "番号付きリスト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numbered List"
+          }
+        }
+      }
+    },
+    "番号付きリストを再採番": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renumber Numbered List"
+          }
+        }
+      }
+    },
+    "目標まで %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld characters to goal"
+          }
+        }
+      }
+    },
+    "目標を保存するには書類を保存してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the document before saving a goal."
+          }
+        }
+      }
+    },
+    "目標を達成しました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Goal reached"
+          }
+        }
+      }
+    },
+    "目次を付ける": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include table of contents"
+          }
+        }
+      }
+    },
+    "目次を生成・更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate or Update Table of Contents"
+          }
+        }
+      }
+    },
+    "相対リンクは移動先の基準が異なるため、リンク先を付けずに文字だけ取り込みます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relative links are imported as text because their destination base may differ."
+          }
+        }
+      }
+    },
+    "短縮語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trigger"
+          }
+        }
+      }
+    },
+    "確認できませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not complete the check"
+          }
+        }
+      }
+    },
+    "確認後にワークスペース内の書類が増減しました。もう一度確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The documents in the workspace changed after review. Review them again."
+          }
+        }
+      }
+    },
+    "確認後に書類が変更されました: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document changed after review: %@"
+          }
+        }
+      }
+    },
+    "確認後に開いている書類が変更されました: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open document changed after review: %@"
+          }
+        }
+      }
+    },
+    "移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move"
+          }
+        }
+      }
+    },
+    "移動…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move…"
+          }
+        }
+      }
+    },
+    "移動先の行番号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination line number"
+          }
+        }
+      }
+    },
+    "空の書類": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blank Document"
+          }
+        }
+      }
+    },
+    "空位置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty Position"
+          }
+        }
+      }
+    },
+    "空白・タブ・改行を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show spaces, tabs, and line breaks"
+          }
+        }
+      }
+    },
+    "空白・改行で分けたまとまりを数えます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count groups of text separated by whitespace or newlines."
+          }
+        }
+      }
+    },
+    "空白区切り": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whitespace Separated"
+          }
+        }
+      }
+    },
+    "空白込み %lld 文字 / 空白除外 %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld characters with spaces / %2$lld without spaces"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "空白込み %1$lld 文字 / 空白除外 %2$lld 文字"
+          }
+        }
+      }
+    },
+    "空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The first count includes spaces and line breaks. The second excludes them."
+          }
+        }
+      }
+    },
+    "等幅": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monospaced"
+          }
+        }
+      }
+    },
+    "節 %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section: %lld characters"
+          }
+        }
+      }
+    },
+    "箇条書き": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bulleted List"
+          }
+        }
+      }
+    },
+    "箇条書き記号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "List Marker"
+          }
+        }
+      }
+    },
+    "箇条書き記号と見出しの空白を揃え、不要な行末空白を除きます。コード、明示改行、フロントマターは保持します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normalize bullet markers and heading spacing, and remove unnecessary trailing spaces. Code, hard breaks, and front matter remain unchanged."
+          }
+        }
+      }
+    },
+    "箇条書き記号を「%@」に揃えてください": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use “%@” consistently for list markers."
+          }
+        }
+      }
+    },
+    "約%lld 分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About %lld minutes"
+          }
+        }
+      }
+    },
+    "紙色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paper"
+          }
+        }
+      }
+    },
+    "終了コード %d": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exit code %d"
+          }
+        }
+      }
+    },
+    "継承": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inherit"
+          }
+        }
+      }
+    },
+    "続ける…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue…"
+          }
+        }
+      }
+    },
+    "編集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit"
+          }
+        }
+      }
+    },
+    "編集 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor %lld%%"
+          }
+        }
+      }
+    },
+    "編集: %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor: %lld%%"
+          }
+        }
+      }
+    },
+    "編集とプレビューの分割位置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor and preview divider"
+          }
+        }
+      }
+    },
+    "編集を拡大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom in editor"
+          }
+        }
+      }
+    },
+    "編集を標準サイズに戻す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset editor zoom"
+          }
+        }
+      }
+    },
+    "編集を縮小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom out editor"
+          }
+        }
+      }
+    },
+    "置換…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace…"
+          }
+        }
+      }
+    },
+    "置換できません。本文と編集状態を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not replace. Check the document and editing state."
+          }
+        }
+      }
+    },
+    "置換中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replacing…"
+          }
+        }
+      }
+    },
+    "置換対象がありません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matches to replace."
+          }
+        }
+      }
+    },
+    "置換後": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After replacement"
+          }
+        }
+      }
+    },
+    "置換文字列（$1 などで参照）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replacement text (use $1 for a capture)"
+          }
+        }
+      }
+    },
+    "置換文字列の参照 $%lld が存在しません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture group $%lld does not exist in the replacement."
+          }
+        }
+      }
+    },
+    "脚注": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Footnotes"
+          }
+        }
+      }
+    },
+    "脚注を挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert Footnote"
+          }
+        }
+      }
+    },
+    "脚注を残す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include footnotes"
+          }
+        }
+      }
+    },
+    "自動判定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        }
+      }
+    },
+    "自動整形…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-format…"
+          }
+        }
+      }
+    },
+    "自動更新・世代 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic updates · revision %lld"
+          }
+        }
+      }
+    },
+    "自動更新を停止": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause automatic updates"
+          }
+        }
+      }
+    },
+    "自動更新を再開": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resume automatic updates"
+          }
+        }
+      }
+    },
+    "自動訂正": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autocorrection"
+          }
+        }
+      }
+    },
+    "英語": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English"
+          }
+        }
+      }
+    },
+    "英語として単語に分け、句読点や空白を除いて数えます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count words using English segmentation, excluding punctuation and whitespace."
+          }
+        }
+      }
+    },
+    "英語の単語分割": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "English Word Segmentation"
+          }
+        }
+      }
+    },
+    "行 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line %lld"
+          }
+        }
+      }
+    },
+    "行%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line %lld"
+          }
+        }
+      }
+    },
+    "行%lld  − %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line %1$lld  − %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "行%1$lld  − %2$@"
+          }
+        }
+      }
+    },
+    "行を上へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Lines Up"
+          }
+        }
+      }
+    },
+    "行を下へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Lines Down"
+          }
+        }
+      }
+    },
+    "行を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete row"
+          }
+        }
+      }
+    },
+    "行を折り返す": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wrap lines"
+          }
+        }
+      }
+    },
+    "行を複製": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate Lines"
+          }
+        }
+      }
+    },
+    "行番号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line numbers"
+          }
+        }
+      }
+    },
+    "行間: %lld pt": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line spacing: %lld pt"
+          }
+        }
+      }
+    },
+    "表、%lld 列、%lld 行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table, %1$lld columns, %2$lld rows"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "表、%1$lld 列、%2$lld 行"
+          }
+        }
+      }
+    },
+    "表…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table…"
+          }
+        }
+      }
+    },
+    "表のセル構造は保持されず、本文テキストに変換されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table cell structure is not preserved; cells are converted to body text."
+          }
+        }
+      }
+    },
+    "表の最後でTabを押したら行を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add a row when Tab is pressed in the last table cell"
+          }
+        }
+      }
+    },
+    "表を挿入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert table"
+          }
+        }
+      }
+    },
+    "表を挿入できません。本文と編集状態を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not insert table. Check the document and editing state."
+          }
+        }
+      }
+    },
+    "表を整形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format table"
+          }
+        }
+      }
+    },
+    "表を編集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit table"
+          }
+        }
+      }
+    },
+    "表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        }
+      }
+    },
+    "表示は先頭30,000文字までです。適用時は全文を取り込みます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The preview shows the first 30,000 characters. Applying the import uses the entire document."
+          }
+        }
+      }
+    },
+    "表示世代 %lld / 原文世代 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview revision %1$lld / source revision %2$lld"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "表示世代 %1$lld / 原文世代 %2$lld"
+          }
+        }
+      }
+    },
+    "表示倍率": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom"
+          }
+        }
+      }
+    },
+    "表示名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display name"
+          }
+        }
+      }
+    },
+    "表示幅（px、任意）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display width (px, optional)"
+          }
+        }
+      }
+    },
+    "表紙を付ける": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include cover page"
+          }
+        }
+      }
+    },
+    "複数ウインドウの書類内容が一致しません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open windows have different contents for this document: %@"
+          }
+        }
+      }
+    },
+    "複数ファイルの一括置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace across files"
+          }
+        }
+      }
+    },
+    "複数ファイルを置換…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace in multiple files…"
+          }
+        }
+      }
+    },
+    "複数文書を一括書き出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch export documents"
+          }
+        }
+      }
+    },
+    "複数文書を一括書き出し…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Batch export documents…"
+          }
+        }
+      }
+    },
+    "見出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Headings"
+          }
+        }
+      }
+    },
+    "見出し %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading %lld"
+          }
+        }
+      }
+    },
+    "見出し・コードを折りたたむ／展開": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fold or Expand Heading and Code"
+          }
+        }
+      }
+    },
+    "見出しがありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No headings"
+          }
+        }
+      }
+    },
+    "見出しが見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading not found"
+          }
+        }
+      }
+    },
+    "見出しと子見出しを昇格": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Promote heading and subheadings"
+          }
+        }
+      }
+    },
+    "見出しと子見出しを降格": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Demote heading and subheadings"
+          }
+        }
+      }
+    },
+    "見出しへ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to heading"
+          }
+        }
+      }
+    },
+    "見出しへ移動…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to heading…"
+          }
+        }
+      }
+    },
+    "見出しレベル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading level"
+          }
+        }
+      }
+    },
+    "見出しレベル %lld、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading level %1$lld, %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "見出しレベル %1$lld、%2$@"
+          }
+        }
+      }
+    },
+    "見出しレベルが%lldから%lldへ飛んでいます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading level jumps from %lld to %lld."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "見出しレベルが%1$lldから%2$lldへ飛んでいます"
+          }
+        }
+      }
+    },
+    "見出し候補、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading suggestion: %@"
+          }
+        }
+      }
+    },
+    "見出し名で検索": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search headings"
+          }
+        }
+      }
+    },
+    "見出し階層": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heading Hierarchy"
+          }
+        }
+      }
+    },
+    "解除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        }
+      }
+    },
+    "言語なし": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Language"
+          }
+        }
+      }
+    },
+    "記事": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Article"
+          }
+        }
+      }
+    },
+    "設定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        }
+      }
+    },
+    "設定を保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save settings"
+          }
+        }
+      }
+    },
+    "語/分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "words/min"
+          }
+        }
+      }
+    },
+    "語数の数え方": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Word count method"
+          }
+        }
+      }
+    },
+    "読み込み": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "読み込み中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading"
+          }
+        }
+      }
+    },
+    "読む速度: %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading speed: %1$lld %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "読む速度: %1$lld %2$@"
+          }
+        }
+      }
+    },
+    "読了の目安: %@ / 音読の目安: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated reading time: %1$@ / aloud: %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "読了の目安: %1$@ / 音読の目安: %2$@"
+          }
+        }
+      }
+    },
+    "警告": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        }
+      }
+    },
+    "進む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward"
+          }
+        }
+      }
+    },
+    "適用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        }
+      }
+    },
+    "選ぶ…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose…"
+          }
+        }
+      }
+    },
+    "選んだ文字コードでは表せない文字があります。別の文字コードを選んでください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some characters cannot be represented in the chosen encoding. Choose another encoding."
+          }
+        }
+      }
+    },
+    "選択 %lld 文字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selection: %lld characters"
+          }
+        }
+      }
+    },
+    "選択…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select…"
+          }
+        }
+      }
+    },
+    "選択したファイルは対応する画像ではありません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file is not a supported image."
+          }
+        }
+      }
+    },
+    "選択したファイルを添付できません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file cannot be attached."
+          }
+        }
+      }
+    },
+    "選択したファイルを置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace selected files"
+          }
+        }
+      }
+    },
+    "選択してください": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select an item"
+          }
+        }
+      }
+    },
+    "選択列の配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected column alignment"
+          }
+        }
+      }
+    },
+    "選択範囲": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selection"
+          }
+        }
+      }
+    },
+    "選択範囲が現在の本文と一致しません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selection does not match the current document."
+          }
+        }
+      }
+    },
+    "選択範囲なし": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No selection"
+          }
+        }
+      }
+    },
+    "選択範囲の行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected lines"
+          }
+        }
+      }
+    },
+    "選択範囲をすべて置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace all in selection"
+          }
+        }
+      }
+    },
+    "選択範囲を拡大": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand Selection"
+          }
+        }
+      }
+    },
+    "選択範囲を縮小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shrink Selection"
+          }
+        }
+      }
+    },
+    "選択範囲内": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Within selection"
+          }
+        }
+      }
+    },
+    "配色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color theme"
+          }
+        }
+      }
+    },
+    "重要": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Important"
+          }
+        }
+      }
+    },
+    "閉じる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close"
+          }
+        }
+      }
+    },
+    "開いている参照元書類の未保存内容も、リンク更新と一緒に保存されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsaved changes in open source documents will be saved along with the link updates."
+          }
+        }
+      }
+    },
+    "開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "除外: archive/*": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude: archive/*"
+          }
+        }
+      }
+    },
+    "集中モード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Focus Mode"
+          }
+        }
+      }
+    },
+    "集中モードを終了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exit Focus Mode"
+          }
+        }
+      }
+    },
+    "集中モードを開始": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter Focus Mode"
+          }
+        }
+      }
+    },
+    "音読速度: %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speaking speed: %1$lld %2$@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "音読速度: %1$lld %2$@"
+          }
+        }
+      }
+    },
+    "項目がありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No items"
+          }
+        }
+      }
+    },
+    "項目が多いため一部のみ表示しています": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing only some items because the list is large"
+          }
+        }
+      }
+    },
+    "項目を解析中…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzing items…"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

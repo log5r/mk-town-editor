@@ -13,7 +13,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "MKTownEditor",
-            path: "Sources/MKTownEditor"
+            path: "Sources/MKTownEditor",
+            resources: [.process("Localizable.xcstrings")]
         ),
         .testTarget(
             name: "MKTownEditorTests",

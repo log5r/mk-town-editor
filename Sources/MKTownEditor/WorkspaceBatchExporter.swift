@@ -11,7 +11,7 @@ enum BatchExportFormat: String, CaseIterable, Identifiable, Sendable {
         case .markdown: "Markdown"
         case .html: "HTML"
         case .pdf: "PDF"
-        case .plainText: "プレーンテキスト"
+        case .plainText: String(localized: "プレーンテキスト")
         }
     }
     var fileExtension: String {
@@ -50,10 +50,10 @@ enum BatchExportError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidSource: "対象フォルダを読み取れません。"
-        case .invalidDestination: "保存先フォルダを使用できません。"
-        case .tooManyFiles: "対象書類が10,000件を超えています。範囲を狭めてください。"
-        case .destinationExists: "同名の出力が既にあります。上書きせずにスキップしました。"
+        case .invalidSource: String(localized: "対象フォルダを読み取れません。")
+        case .invalidDestination: String(localized: "保存先フォルダを使用できません。")
+        case .tooManyFiles: String(localized: "対象書類が10,000件を超えています。範囲を狭めてください。")
+        case .destinationExists: String(localized: "同名の出力が既にあります。上書きせずにスキップしました。")
         }
     }
 }
@@ -167,8 +167,8 @@ struct WorkspaceBatchExportSheet: View {
             Text("複数文書を一括書き出し").font(.headline)
             Text("対象フォルダ内の Markdown・テキスト書類を、フォルダ構成を保って書き出します。同名の出力は上書きしません。")
                 .font(.caption).foregroundStyle(.secondary)
-            folderRow("対象フォルダ", url: source) { chooseFolder(sourceFolder: true) }
-            folderRow("保存先", url: destination) { chooseFolder(sourceFolder: false) }
+            folderRow(String(localized: "対象フォルダ"), url: source) { chooseFolder(sourceFolder: true) }
+            folderRow(String(localized: "保存先"), url: destination) { chooseFolder(sourceFolder: false) }
             Picker("形式", selection: $format) {
                 ForEach(BatchExportFormat.allCases) { value in Text(value.title).tag(value) }
             }
@@ -176,7 +176,7 @@ struct WorkspaceBatchExportSheet: View {
             if running || result != nil { Text("\(completed) / \(total) 件を確認") }
             if let result {
                 Text("成功 \(result.exported)件・失敗 \(result.failures.count)件" +
-                     (result.cancelled ? "・中止しました" : ""))
+                     (result.cancelled ? String(localized: "・中止しました") : ""))
                 if !result.failures.isEmpty {
                     List(result.failures) { failure in
                         VStack(alignment: .leading) {
@@ -243,7 +243,7 @@ struct WorkspaceBatchExportSheet: View {
                     dialect: { settingsStore.markdownDialect(for: $0) },
                     progress: { done, _ in completed = done })
             } catch is CancellationError {
-                errorMessage = "書き出しを中止しました。"
+                errorMessage = String(localized: "書き出しを中止しました。")
             } catch {
                 errorMessage = error.localizedDescription
             }
