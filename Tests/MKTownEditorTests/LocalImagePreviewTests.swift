@@ -68,6 +68,22 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertNil(store.fullImage(for: url))
     }
 
+    func testDetachedPreviewWindowFollowsDocumentURLAndClosesWithOwner() throws {
+        let suite = "mktown-detached-preview-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let manager = DetachedPreviewWindowManager()
+        let settings = EditorSettingsStore(defaults: defaults)
+        manager.show(document: .constant(MarkdownDocument(text: "# Preview")),
+            documentURL: nil, settingsStore: settings)
+        XCTAssertTrue(manager.isOpen)
+        let saved = URL(fileURLWithPath: "/tmp/preview.md")
+        manager.updateDocumentURL(saved)
+        XCTAssertEqual(manager.documentURL, saved)
+        manager.close()
+        XCTAssertFalse(manager.isOpen)
+    }
+
     func testImageInspectionLinkRejectsUnsupportedSchemes() {
         let remote = URL(string: "https://example.com/a%20b.png")!
         XCTAssertEqual(MarkdownImageInspectionLink.destination(

@@ -13,6 +13,7 @@ struct EditorWorkspace: View {
     @StateObject private var editorModel = MarkdownEditorModel()
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
+    @StateObject private var detachedPreview = DetachedPreviewWindowManager()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
     @State private var imageDropError: String?
@@ -238,6 +239,13 @@ struct EditorWorkspace: View {
                     Toggle("プレビューを先に表示", isOn: $previewFirst)
                 }
                 .disabled(mode.wrappedValue != .split)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
+                    detachedPreview.show(document: $document, documentURL: fileURL,
+                                         settingsStore: settingsStore)
+                }
+                .help("現在の書類のプレビューを別ウインドウで表示")
             }
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
@@ -592,6 +600,7 @@ struct EditorWorkspace: View {
         }
         .onDisappear {
             savePosition(for: fileURL)
+            detachedPreview.close()
             if workspaceViewActive {
                 if let fileURL {
                     workspaceStore.unregisterOpenDocument(fileURL)
@@ -605,6 +614,7 @@ struct EditorWorkspace: View {
             savePosition(for: fileURL)
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            detachedPreview.updateDocumentURL(newURL)
             savePosition(for: oldURL)
             if workspaceViewActive {
                 if let oldURL {
