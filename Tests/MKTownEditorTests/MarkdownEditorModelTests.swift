@@ -4,6 +4,47 @@ import XCTest
 
 @MainActor
 final class MarkdownEditorModelTests: XCTestCase {
+    func testSelectionExpandsThroughLinkParagraphAndSectionThenShrinks() {
+        let source = "# Guide\n\nSee [site](https://example.com).\n\n# Next"
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = source
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let caret = (source as NSString).range(of: "site").location + 1
+        view.setSelectedRange(NSRange(location: caret, length: 0))
+
+        model.expandSelection()
+        XCTAssertEqual((source as NSString).substring(with: view.selectedRange()),
+            "[site](https://example.com)")
+        model.expandSelection()
+        XCTAssertTrue((source as NSString).substring(with: view.selectedRange()).hasPrefix("See "))
+        model.expandSelection()
+        XCTAssertTrue((source as NSString).substring(with: view.selectedRange()).hasPrefix("# Guide"))
+        model.shrinkSelection()
+        XCTAssertTrue((source as NSString).substring(with: view.selectedRange()).hasPrefix("See "))
+        model.shrinkSelection()
+        XCTAssertEqual((source as NSString).substring(with: view.selectedRange()),
+            "[site](https://example.com)")
+        model.shrinkSelection()
+        XCTAssertEqual(view.selectedRange(), NSRange(location: caret, length: 0))
+    }
+
+    func testSelectionExpansionIncludesNestedListItemButNotNextSibling() {
+        let source = "- 親\n  - 子\n- 次"
+        let location = (source as NSString).range(of: "親").location
+        let next = try! XCTUnwrap(MarkdownSelectionExpansion.next(in: source,
+            selection: NSRange(location: location, length: 0)))
+        XCTAssertEqual((source as NSString).substring(with: next), "- 親\n  - 子\n")
+    }
+
+    func testSelectionExpansionIgnoresLinkSyntaxInsideCodeSpan() {
+        let source = "`[literal](target)` and [real](target)"
+        let location = (source as NSString).range(of: "literal").location
+        let next = try! XCTUnwrap(MarkdownSelectionExpansion.next(in: source,
+            selection: NSRange(location: location, length: 0)))
+        XCTAssertNotEqual((source as NSString).substring(with: next), "[literal](target)")
+    }
+
     func testRestoredSelectionIsClampedToCurrentDocument() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.string = "short"
