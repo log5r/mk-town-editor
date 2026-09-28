@@ -44,6 +44,7 @@
 		A10000000000000000000026 /* FilePathCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* FilePathCompletion.swift */; };
 		A10000000000000000000027 /* MarkdownLinkCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000027 /* MarkdownLinkCompletion.swift */; };
 		A10000000000000000000028 /* MarkdownURLPaste.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000028 /* MarkdownURLPaste.swift */; };
+		A10000000000000000000029 /* MarkdownLinkDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -87,6 +88,7 @@
 		A20000000000000000000026 /* FilePathCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePathCompletion.swift; sourceTree = "<group>"; };
 		A20000000000000000000027 /* MarkdownLinkCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkCompletion.swift; sourceTree = "<group>"; };
 		A20000000000000000000028 /* MarkdownURLPaste.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownURLPaste.swift; sourceTree = "<group>"; };
+		A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkDiagnostics.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 				A20000000000000000000026 /* FilePathCompletion.swift */,
 				A20000000000000000000027 /* MarkdownLinkCompletion.swift */,
 				A20000000000000000000028 /* MarkdownURLPaste.swift */,
+				A20000000000000000000029 /* MarkdownLinkDiagnostics.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -249,6 +252,7 @@
 				A10000000000000000000026 /* FilePathCompletion.swift in Sources */,
 				A10000000000000000000027 /* MarkdownLinkCompletion.swift in Sources */,
 				A10000000000000000000028 /* MarkdownURLPaste.swift in Sources */,
+				A10000000000000000000029 /* MarkdownLinkDiagnostics.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

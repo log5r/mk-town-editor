@@ -21,7 +21,35 @@ struct MarkdownImageDraft: Identifiable {
     let alt: String
 }
 
+struct MarkdownInlineLink: Equatable {
+    let range: NSRange
+    let destination: String
+    let isImage: Bool
+}
+
 enum MarkdownLinkSyntax {
+    static func inlineLinks(in text: String) -> [MarkdownInlineLink] {
+        let source = text as NSString
+        var result: [MarkdownInlineLink] = []
+        var cursor = 0
+        while cursor < source.length {
+            guard source.character(at: cursor) == 91, !isEscaped(source, at: cursor),
+                  let parsed = parseLink(source, opening: cursor) else {
+                cursor += 1
+                continue
+            }
+            let isImage = cursor > 0 && source.character(at: cursor - 1) == 33 &&
+                !isEscaped(source, at: cursor - 1)
+            let range = isImage
+                ? NSRange(location: cursor - 1, length: parsed.range.length + 1) : parsed.range
+            result.append(MarkdownInlineLink(range: range,
+                                             destination: unescape(parsed.destination),
+                                             isImage: isImage))
+            cursor = NSMaxRange(parsed.range)
+        }
+        return result
+    }
+
     static func imageDraft(in text: String, selection: NSRange) -> MarkdownImageDraft {
         let source = text as NSString
         let location = min(max(selection.location, 0), source.length)
