@@ -155,6 +155,16 @@ struct MarkdownCommands: Commands {
                     .disabled(editorModel?.canEditTable(.insertColumn) != true)
                 Button("列を削除") { editorModel?.editTable(.deleteColumn) }
                     .disabled(editorModel?.canEditTable(.deleteColumn) != true)
+                Divider()
+                Picker("選択列の配置", selection: Binding<MarkdownTable.Alignment?>(
+                    get: { editorModel?.selectedTableAlignment },
+                    set: { if let alignment = $0 { editorModel?.editTable(.alignColumn(alignment)) } }
+                )) {
+                    Text("左揃え").tag(MarkdownTable.Alignment.leading as MarkdownTable.Alignment?)
+                    Text("中央揃え").tag(MarkdownTable.Alignment.center as MarkdownTable.Alignment?)
+                    Text("右揃え").tag(MarkdownTable.Alignment.trailing as MarkdownTable.Alignment?)
+                }
+                .disabled(editorModel?.selectedTableAlignment == nil)
             }
             Menu("見出しレベル") {
                 commandButton(.heading(level: 0))
