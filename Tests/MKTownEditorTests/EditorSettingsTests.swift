@@ -74,6 +74,7 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertNil(decoded.tabWidth)
         XCTAssertNil(decoded.listIndentWidth)
         XCTAssertNil(decoded.codeIndentWidth)
+        XCTAssertNil(decoded.tableAddsRowOnTab)
         XCTAssertNil(decoded.editorZoom)
         XCTAssertNil(decoded.previewZoom)
     }
@@ -133,6 +134,15 @@ final class EditorSettingsTests: XCTestCase {
             wrapsLines: false, listIndentWidth: 4, codeIndentWidth: 8
         ))
         XCTAssertEqual(restored.textStyle(for: nil).tabWidth, 6)
+    }
+
+    func testTableTabPreferencePersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var app = store.app
+        app.tableAddsRowOnTab = false
+        store.setAppSettings(app)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.tableAddsRowOnTab, false)
     }
 
     func testEditorAndPreviewZoomPersistIndependentlyAndClamp() {

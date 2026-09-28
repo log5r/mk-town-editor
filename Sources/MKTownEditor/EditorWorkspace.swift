@@ -445,6 +445,7 @@ struct EditorWorkspace: View {
                            layoutOptions: settingsStore.layoutOptions(),
                            sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
+                           tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
                            onImageDrop: dropImage, onImagePaste: pasteImage,
                            onVisibleSourceChange: synchronizePreview(to:))
     }

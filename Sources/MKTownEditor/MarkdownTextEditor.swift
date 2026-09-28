@@ -10,6 +10,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var sharedSnapshot: DocumentSnapshot?
     var usesSharedAnalysis = false
     var imageImportMode: ImageImportMode = .managedCopy
+    var tableAddsRowOnTab = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var onVisibleSourceChange: ((Int) -> Void)?
@@ -55,6 +56,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.appliedLayoutOptions = layoutOptions
         model.listIndentWidth = layoutOptions.listIndentWidth
         model.codeIndentWidth = layoutOptions.codeIndentWidth
+        model.tableAddsRowOnTab = tableAddsRowOnTab
         let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
         scrollView.verticalRulerView = lineNumberRuler
         scrollView.hasVerticalRuler = true
@@ -118,6 +120,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         context.coordinator.model.listIndentWidth = layoutOptions.listIndentWidth
         context.coordinator.model.codeIndentWidth = layoutOptions.codeIndentWidth
+        context.coordinator.model.tableAddsRowOnTab = tableAddsRowOnTab
         if context.coordinator.appliedTextStyle != textStyle {
             textStyle.apply(to: textView)
             context.coordinator.appliedTextStyle = textStyle
@@ -251,11 +254,13 @@ final class EditorTextView: NSTextView {
     }
 
     override func insertTab(_ sender: Any?) {
+        if commandModel?.moveTableCell(backwards: false) == true { return }
         if commandModel?.changeIndentation(.indent) == true { return }
         super.insertTab(sender)
     }
 
     override func insertBacktab(_ sender: Any?) {
+        if commandModel?.moveTableCell(backwards: true) == true { return }
         if commandModel?.changeIndentation(.outdent) == true { return }
         super.insertBacktab(sender)
     }

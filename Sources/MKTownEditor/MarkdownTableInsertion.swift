@@ -56,7 +56,104 @@ enum MarkdownTableOperation: Equatable {
     case alignColumn(MarkdownTable.Alignment)
 }
 
+enum MarkdownTableTabAction: Equatable {
+    case select(NSRange)
+    case edit(MarkdownEdit)
+}
+
 enum MarkdownTableEditing {
+    static func tabAction(in text: String, selection: NSRange,
+                          backwards: Bool, addsRowAtEnd: Bool) -> MarkdownTableTabAction? {
+        let source = text as NSString
+        guard selection.location >= 0, selection.location < source.length,
+              let block = MarkdownAnalysis(text).blocks.first(where: {
+                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
+              }), let table = block.table else { return nil }
+        let header = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
+        let delimiter = source.lineRange(for: NSRange(location: NSMaxRange(header), length: 0))
+        let rows = [header] + table.rowRanges
+        let currentLine = source.lineRange(for: NSRange(location: selection.location, length: 0))
+        let currentRow = rows.firstIndex(of: currentLine)
+        let currentColumn: Int
+        if let currentRow {
+            let content = lineContent(source.substring(with: rows[currentRow])).content
+            guard let currentCells = cells(in: content, expected: table.header.count) else { return nil }
+            currentColumn = columnIndex(at: selection.location - rows[currentRow].location,
+                                        cells: currentCells)
+        } else if currentLine == delimiter {
+            currentColumn = backwards ? 0 : table.header.count - 1
+        } else {
+            return nil
+        }
+        let targetRow: Int
+        let targetColumn: Int
+        if backwards {
+            targetRow = currentColumn > 0 ? (currentRow ?? 1) : max(0, (currentRow ?? 1) - 1)
+            targetColumn = currentColumn > 0 ? currentColumn - 1 : table.header.count - 1
+            if currentRow == 0 && currentColumn == 0 {
+                return .select(cellRange(in: source, row: header, column: 0,
+                                         count: table.header.count) ?? selection)
+            }
+        } else if currentColumn + 1 < table.header.count {
+            targetRow = currentRow ?? 0
+            targetColumn = currentColumn + 1
+        } else {
+            targetRow = (currentRow ?? 0) + 1
+            targetColumn = 0
+        }
+        if targetRow < rows.count {
+            if let target = cellRange(in: source, row: rows[targetRow], column: targetColumn,
+                                      count: table.header.count) {
+                return .select(target)
+            }
+            return normalizedRow(in: source, row: rows[targetRow], column: targetColumn,
+                                 count: table.header.count).map(MarkdownTableTabAction.edit)
+        }
+        if backwards { return nil }
+        if addsRowAtEnd,
+           let edit = edit(in: text, selection: selection, operation: .insertRow) {
+            return .edit(edit)
+        }
+        return .select(NSRange(location: NSMaxRange(block.sourceRange), length: 0))
+    }
+
+    private static func cellRange(in source: NSString, row: NSRange,
+                                  column: Int, count: Int) -> NSRange? {
+        let content = lineContent(source.substring(with: row)).content
+        guard let ranges = cells(in: content, expected: count), column < ranges.count else { return nil }
+        if ranges[column].length == 0 && ranges[column].location == (content as NSString).length {
+            return nil
+        }
+        let line = content as NSString
+        var start = ranges[column].location
+        var end = NSMaxRange(ranges[column])
+        while start < end && (line.character(at: start) == 32 || line.character(at: start) == 9) {
+            start += 1
+        }
+        while end > start && (line.character(at: end - 1) == 32 || line.character(at: end - 1) == 9) {
+            end -= 1
+        }
+        return NSRange(location: row.location + start, length: end - start)
+    }
+
+    private static func normalizedRow(in source: NSString, row: NSRange,
+                                      column: Int, count: Int) -> MarkdownEdit? {
+        let content = lineContent(source.substring(with: row)).content
+        guard let ranges = cells(in: content, expected: count) else { return nil }
+        let raw = content as NSString
+        let values = ranges.map { raw.substring(with: $0).trimmingCharacters(in: .whitespaces) }
+        let prefix = tablePrefix(content)
+        let replacement = prefix + "| " + values.joined(separator: " | ") + " |"
+        let preceding = values.prefix(column)
+        let offset = (prefix as NSString).length + 2 + preceding.reduce(0) {
+            $0 + ($1 as NSString).length + 3
+        }
+        return MarkdownEdit(range: NSRange(location: row.location, length: raw.length),
+                            replacement: replacement,
+                            selection: NSRange(location: row.location + offset,
+                                               length: (values[column] as NSString).length))
+    }
+
     static func alignment(in text: String, selection: NSRange) -> MarkdownTable.Alignment? {
         let source = text as NSString
         guard selection.location >= 0, selection.location < source.length,

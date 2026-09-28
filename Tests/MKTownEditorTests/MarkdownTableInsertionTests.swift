@@ -36,6 +36,46 @@ final class MarkdownTableInsertionTests: XCTestCase {
 }
 
 final class MarkdownTableEditingTests: XCTestCase {
+    func testTabMovesThroughSourceCellsAndBackwards() throws {
+        let source = "| 名前 | 値 |\n| --- | --- |\n| あ | 1 |\n"
+        let name = (source as NSString).range(of: "名前")
+        let value = (source as NSString).range(of: "値")
+        let firstBody = (source as NSString).range(of: "あ")
+        XCTAssertEqual(MarkdownTableEditing.tabAction(in: source, selection: name,
+                                                       backwards: false, addsRowAtEnd: true),
+                       .select(value))
+        XCTAssertEqual(MarkdownTableEditing.tabAction(in: source, selection: value,
+                                                       backwards: false, addsRowAtEnd: true),
+                       .select(firstBody))
+        XCTAssertEqual(MarkdownTableEditing.tabAction(in: source, selection: firstBody,
+                                                       backwards: true, addsRowAtEnd: true),
+                       .select(value))
+    }
+
+    func testTabAtLastCellAddsRowOrLeavesTableByPreference() throws {
+        let source = "| A | B |\n| --- | --- |\n| x | y |"
+        let selection = NSRange(location: (source as NSString).range(of: "y").location, length: 0)
+        let action = try XCTUnwrap(MarkdownTableEditing.tabAction(in: source, selection: selection,
+                                                                   backwards: false, addsRowAtEnd: true))
+        guard case let .edit(edit) = action else { return XCTFail("行追加が必要") }
+        XCTAssertEqual(MarkdownAnalysis(edit.applying(to: source)).rootBlocks.first?.table?.rows.count, 2)
+        XCTAssertEqual(MarkdownTableEditing.tabAction(in: source, selection: selection,
+                                                       backwards: false, addsRowAtEnd: false),
+                       .select(NSRange(location: (source as NSString).length, length: 0)))
+    }
+
+    func testTabMaterializesMissingCellBeforeSelectingIt() throws {
+        let source = "| A | B |\n| --- | --- |\n| only |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "only").location,
+                                length: 0)
+        let action = try XCTUnwrap(MarkdownTableEditing.tabAction(in: source, selection: selection,
+                                                                   backwards: false, addsRowAtEnd: true))
+        guard case let .edit(edit) = action else { return XCTFail("空セルの追加が必要") }
+        let result = edit.applying(to: source)
+        XCTAssertEqual(MarkdownAnalysis(result).rootBlocks.first?.table?.rows, [["only", ""]])
+        XCTAssertTrue(edit.selection.location < NSMaxRange((result as NSString).range(of: "| only |  |")))
+    }
+
     func testColumnAlignmentChangesOnlySelectedDelimiterAndReportsCurrentValue() throws {
         let source = "| 名前 | 点数 |\n| --- | :---: |\n| あ | 10 |\n"
         let selection = NSRange(location: (source as NSString).range(of: "10").location, length: 0)
@@ -124,6 +164,27 @@ final class MarkdownTableEditingTests: XCTestCase {
 
 @MainActor
 final class MarkdownTableInsertionEditorTests: XCTestCase {
+    func testTabUsesCellNavigationAndAddsUndoableRow() {
+        let source = "| A | B |\n| --- | --- |\n| x | y |"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.setSelectedRange((source as NSString).range(of: "A"))
+        view.insertTab(nil)
+        XCTAssertEqual((view.string as NSString).substring(with: view.selectedRange()), "B")
+        view.setSelectedRange(NSRange(location: (source as NSString).range(of: "y").location, length: 0))
+        view.insertTab(nil)
+        XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows.count, 2)
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+    }
+
     func testCommandOpensSheetDraftAndCommitIsUndoable() {
         let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.allowsUndo = true

@@ -32,6 +32,7 @@ struct EditorPreferencesView: View {
             Stepper(value: binding(\.codeIndentWidth, default: 4), in: 2...8) {
                 Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
             }
+            Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
         }
         .formStyle(.grouped)
         .frame(width: 430)
