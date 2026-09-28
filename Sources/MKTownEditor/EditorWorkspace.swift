@@ -25,6 +25,7 @@ struct EditorWorkspace: View {
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
+    @State private var synchronizedBlockID: Int?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -187,6 +188,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: fileURL) { oldURL, newURL in
             navigationHistory.moveDocument(from: oldURL, to: newURL)
+            synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
@@ -203,6 +205,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: document.text) { _, newText in
             analysisStore.update(source: newText)
+            synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
         }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
@@ -230,7 +233,8 @@ struct EditorWorkspace: View {
                                 snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                                 navigationTarget: previewNavigationTarget,
                                 onOpenHeading: navigateToHeading,
-                                onOpenDocument: openLinkedDocument)
+                                onOpenDocument: openLinkedDocument,
+                                onVisibleBlockChange: synchronizeEditor(to:))
                     .frame(minWidth: 280)
             }
         case .preview:
@@ -379,12 +383,29 @@ struct EditorWorkspace: View {
 
     private func scrollPreview(to sourceLocation: Int) {
         guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return }
-        let visible = snapshot.analysis.blocks.filter { $0.kind != .quote }
-        guard let block = visible.last(where: { $0.sourceRange.location <= sourceLocation }) ?? visible.first else {
-            return
-        }
+        guard let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
+                                                 in: snapshot.analysis) else { return }
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+    }
+
+    private func synchronizePreview(to sourceLocation: Int) {
+        guard mode.wrappedValue == .split,
+              let snapshot = analysisStore.snapshot, snapshot.source == document.text,
+              let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
+                                                  in: snapshot.analysis),
+              block.id != synchronizedBlockID else { return }
+        synchronizedBlockID = block.id
+        navigationSequence += 1
+        previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+    }
+
+    private func synchronizeEditor(to blockID: Int) {
+        guard mode.wrappedValue == .split, blockID != synchronizedBlockID,
+              let snapshot = analysisStore.snapshot, snapshot.source == document.text,
+              let block = snapshot.analysis.blocks.first(where: { $0.id == blockID }) else { return }
+        synchronizedBlockID = blockID
+        editorModel.scrollToTop(sourceLocation: block.sourceRange.location)
     }
 
     private func revealEditorForUnstructuredPreview() {
@@ -400,7 +421,8 @@ struct EditorWorkspace: View {
                            layoutOptions: settingsStore.layoutOptions(),
                            sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
-                           onImageDrop: dropImage, onImagePaste: pasteImage)
+                           onImageDrop: dropImage, onImagePaste: pasteImage,
+                           onVisibleSourceChange: synchronizePreview(to:))
     }
 
     private func dropImage(_ url: URL, at location: Int) {

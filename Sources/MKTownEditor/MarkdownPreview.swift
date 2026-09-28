@@ -15,6 +15,7 @@ struct MarkdownPreview: View {
     var navigationTarget: PreviewNavigationTarget?
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
+    var onVisibleBlockChange: ((Int) -> Void)?
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -22,7 +23,7 @@ struct MarkdownPreview: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
-            if PreviewAccessibility.requiresStructuredView(analysis.blocks) {
+            if PreviewAccessibility.requiresStructuredView(analysis.blocks) || onVisibleBlockChange != nil {
                 let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
@@ -47,18 +48,28 @@ struct MarkdownPreview: View {
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .id(block.id)
+                                .background(GeometryReader { geometry in
+                                    Color.clear.preference(key: PreviewBlockOriginsKey.self,
+                                        value: [block.id: geometry.frame(in: .named("markdownPreview")).minY])
+                                })
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 24)
                     }
+                    .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
                         if let navigationTarget { proxy.scrollTo(navigationTarget.blockID, anchor: .top) }
                     }
                     .onChange(of: navigationTarget) { _, target in
                         if let target { proxy.scrollTo(target.blockID, anchor: .top) }
+                    }
+                    .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
+                        if let blockID = PreviewScrollSync.topBlockID(from: origins) {
+                            onVisibleBlockChange?(blockID)
+                        }
                     }
                 }
                 .environment(\.openURL, OpenURLAction { url in
@@ -176,6 +187,14 @@ struct MarkdownPreview: View {
         case .center: .center
         case .trailing: .trailing
         }
+    }
+}
+
+private struct PreviewBlockOriginsKey: PreferenceKey {
+    static var defaultValue: [Int: CGFloat] { [:] }
+
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 
