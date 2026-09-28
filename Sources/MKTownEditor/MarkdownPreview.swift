@@ -8,7 +8,7 @@ struct MarkdownPreview: View {
 
     var body: some View {
         let analysis = MarkdownAnalysis(markdown)
-        if analysis.blocks.contains(where: { $0.kind == .table || $0.task != nil }) {
+        if PreviewAccessibility.requiresStructuredView(analysis.blocks) {
             let visibleBlocks = analysis.blocks.filter { $0.kind != .quote }
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -18,6 +18,7 @@ struct MarkdownPreview: View {
                                 Rectangle()
                                     .fill(Color.secondary.opacity(0.5))
                                     .frame(width: 2)
+                                    .accessibilityHidden(true)
                             }
                             if let table = block.table {
                                 tableView(table, in: analysis)
@@ -26,10 +27,7 @@ struct MarkdownPreview: View {
                             } else if let task = block.task {
                                 taskView(block, task: task, in: analysis)
                             } else {
-                                Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
-                                                                                 documentContext: documentContext)))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                blockText(block, in: analysis)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -39,8 +37,26 @@ struct MarkdownPreview: View {
                 .padding(.horizontal, 28)
                 .padding(.vertical, 24)
             }
+            .focusable()
         } else {
             MarkdownTextPreview(markdown: markdown, documentContext: documentContext)
+        }
+    }
+
+    @ViewBuilder
+    private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
+        let rendered = MarkdownRenderer.renderLeaf(block, in: analysis,
+                                                   documentContext: documentContext)
+        if case let .heading(level) = block.kind {
+            Text(AttributedString(rendered))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
+        } else {
+            Text(AttributedString(rendered))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -53,7 +69,7 @@ struct MarkdownPreview: View {
             ))
             .toggleStyle(.checkbox)
             .help(task.isChecked ? "未完了にする" : "完了にする")
-            .accessibilityLabel(task.content.isEmpty ? "タスクの完了" : "\(task.content) の完了")
+            .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
             Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis,
@@ -90,7 +106,8 @@ struct MarkdownPreview: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel("Markdown 表")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("表、\(table.header.count) 列、\(table.rows.count + 1) 行")
     }
 
     private func tableRow(
@@ -107,9 +124,9 @@ struct MarkdownPreview: View {
                     .background(rowNumber == 0 ? Color.secondary.opacity(0.08) : Color.clear)
                     .overlay(Rectangle().stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
                     .textSelection(.enabled)
-                    .accessibilityLabel(rowNumber == 0
-                        ? "見出し \(cells[column])"
-                        : "\(table.header[column])、\(rowNumber) 行目、\(cells[column])")
+                    .accessibilityLabel(PreviewAccessibility.tableCellLabel(
+                        header: table.header[column], value: cells[column], rowNumber: rowNumber))
+                    .accessibilityAddTraits(rowNumber == 0 ? .isHeader : [])
             }
         }
     }
@@ -120,6 +137,27 @@ struct MarkdownPreview: View {
         case .center: .center
         case .trailing: .trailing
         }
+    }
+}
+
+enum PreviewAccessibility {
+    static func requiresStructuredView(_ blocks: [MarkdownBlock]) -> Bool {
+        blocks.contains { block in
+            if case .heading = block.kind { return true }
+            return block.kind == .table || block.task != nil
+        }
+    }
+
+    static func headingLabel(level: Int, text: String) -> String {
+        "見出しレベル \(level)、\(text)"
+    }
+
+    static func taskLabel(_ content: String) -> String {
+        content.isEmpty ? "タスクの完了" : "\(content) の完了"
+    }
+
+    static func tableCellLabel(header: String, value: String, rowNumber: Int) -> String {
+        rowNumber == 0 ? "列見出し \(header)" : "\(header) 列、\(rowNumber) 行目、\(value)"
     }
 }
 
