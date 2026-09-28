@@ -48,6 +48,10 @@ private struct ExportExternalActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct ImportRichTextActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 private struct PageSetupActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -138,6 +142,10 @@ extension FocusedValues {
         get { self[ExportExternalActionKey.self] }
         set { self[ExportExternalActionKey.self] = newValue }
     }
+    var importRichTextAction: (() -> Void)? {
+        get { self[ImportRichTextActionKey.self] }
+        set { self[ImportRichTextActionKey.self] = newValue }
+    }
     var pageSetupAction: (() -> Void)? {
         get { self[PageSetupActionKey.self] }
         set { self[PageSetupActionKey.self] = newValue }
@@ -190,6 +198,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportHTMLAction) private var exportHTMLAction
     @FocusedValue(\.exportPDFAction) private var exportPDFAction
     @FocusedValue(\.exportExternalAction) private var exportExternalAction
+    @FocusedValue(\.importRichTextAction) private var importRichTextAction
     @FocusedValue(\.pageSetupAction) private var pageSetupAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @FocusedValue(\.copyRichAction) private var copyRichAction
@@ -275,6 +284,10 @@ struct MarkdownCommands: Commands {
                 }
             }
             .disabled(textFormatActions == nil)
+        }
+        CommandMenu("取り込み") {
+            Button("HTML・RTFからMarkdownへ…") { importRichTextAction?() }
+                .disabled(importRichTextAction == nil)
         }
         CommandMenu("表示倍率") {
             Text("編集: \(Int((settingsStore.zoom(for: .editor) * 100).rounded()))%")

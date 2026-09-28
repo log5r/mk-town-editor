@@ -51,6 +51,7 @@ struct EditorWorkspace: View {
     @State private var richCopyError: String?
     @State private var showingPlainExport = false
     @State private var showingExternalExport = false
+    @State private var showingRichImport = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
     @State private var plainExportError: String?
@@ -280,6 +281,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
         .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
+        .focusedSceneValue(\.importRichTextAction) { showingRichImport = true }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
@@ -333,6 +335,20 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $showingExternalExport) {
             ExternalConversionSheet(markdown: document.text, documentURL: fileURL,
                 dialect: settingsStore.markdownDialect(for: fileURL))
+        }
+        .sheet(isPresented: $showingRichImport) {
+            RichTextImportSheet(currentText: $document.text) { imported, expected in
+                guard document.text == expected else { return false }
+                if editorModel.hasActiveEditor {
+                    let range = NSRange(location: 0, length: (expected as NSString).length)
+                    let edit = MarkdownEdit(range: range, replacement: imported,
+                        selection: NSRange(location: 0, length: 0))
+                    return editorModel.applyRegexEdit(edit, expectedSource: expected)
+                }
+                previewTaskUndoTarget.replaceText(imported, in: $document.text,
+                    undoManager: undoManager, actionName: "HTML・RTFを取り込む")
+                return true
+            }
         }
         .sheet(item: $exportFormat, onDismiss: {
             guard let request = pendingExport else { return }
