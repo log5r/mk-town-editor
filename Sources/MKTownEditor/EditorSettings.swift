@@ -152,6 +152,20 @@ enum EditorZoomSurface: CaseIterable {
     var title: String { self == .editor ? "編集" : "プレビュー" }
 }
 
+enum EditorSplitOrientation: String, Codable, CaseIterable {
+    case sideBySide = "左右"
+    case stacked = "上下"
+}
+
+enum EditorSplitSizing {
+    static func editorExtent(total: CGFloat, ratio: Double, minimum: CGFloat) -> CGFloat {
+        let available = max(1, total - 8)
+        let effectiveMinimum = min(minimum, available / 2)
+        return max(effectiveMinimum,
+                   min(available - effectiveMinimum, available * ratio))
+    }
+}
+
 struct FolderEditorSettings: Codable, Equatable {
     var defaultMode: EditorMode?
     var fontSize: Double?
@@ -165,6 +179,8 @@ struct DocumentDisplayState: Codable, Equatable {
     var scrollY: Double? = nil
     var scrollX: Double? = nil
     var splitRatio: Double? = nil
+    var splitOrientation: EditorSplitOrientation? = nil
+    var previewFirst: Bool? = nil
     var sidebarTab: String? = nil
     var sidebarVisible: Bool? = nil
     var writingGoal: Int? = nil
@@ -321,7 +337,9 @@ final class EditorSettingsStore: ObservableObject {
     }
 
     func savePosition(for documentURL: URL, selection: NSRange, scrollX: Double, scrollY: Double,
-                      splitRatio: Double, sidebarTab: String, sidebarVisible: Bool) {
+                      splitRatio: Double, sidebarTab: String, sidebarVisible: Bool,
+                      splitOrientation: EditorSplitOrientation = .sideBySide,
+                      previewFirst: Bool = false) {
         let key = Self.key(for: documentURL)
         var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         state.selectionLocation = max(0, selection.location)
@@ -329,6 +347,8 @@ final class EditorSettingsStore: ObservableObject {
         state.scrollY = max(0, scrollY)
         state.scrollX = max(0, scrollX)
         state.splitRatio = min(0.8, max(0.2, splitRatio))
+        state.splitOrientation = splitOrientation
+        state.previewFirst = previewFirst
         state.sidebarTab = sidebarTab
         state.sidebarVisible = sidebarVisible
         guard values.documents[key] != state else { return }
