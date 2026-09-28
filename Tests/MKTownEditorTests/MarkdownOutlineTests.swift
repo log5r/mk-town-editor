@@ -37,4 +37,13 @@ final class MarkdownOutlineTests: XCTestCase {
                                                      in: entries)?.id, entries[1].id)
         XCTAssertEqual(MarkdownOutline.currentSection(at: source.length, in: entries)?.id, entries[2].id)
     }
+
+    func testQuickSearchIgnoresCaseAndKeepsDuplicateHeadingLocations() {
+        let entries = MarkdownOutline.entries(in: MarkdownAnalysis("# Alpha\n## beta\n# ALPHA"))
+        XCTAssertEqual(MarkdownOutline.search("  alpha  ", in: entries).map(\.id),
+                       [entries[0].id, entries[2].id])
+        XCTAssertEqual(MarkdownOutline.search("BETA", in: entries).map(\.id), [entries[1].id])
+        XCTAssertEqual(MarkdownOutline.search("", in: entries), entries)
+        XCTAssertTrue(MarkdownOutline.search("missing", in: entries).isEmpty)
+    }
 }

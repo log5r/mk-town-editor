@@ -23,4 +23,10 @@ enum MarkdownOutline {
         guard sourceLocation >= 0 else { return nil }
         return entries.last { $0.sourceRange.location <= sourceLocation }
     }
+
+    static func search(_ query: String, in entries: [MarkdownOutlineEntry]) -> [MarkdownOutlineEntry] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return entries }
+        return entries.filter { $0.title.localizedStandardContains(term) }
+    }
 }
