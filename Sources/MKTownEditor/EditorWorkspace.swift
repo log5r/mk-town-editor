@@ -22,6 +22,9 @@ struct EditorWorkspace: View {
     @State private var navigationHistory = NavigationHistory()
     @State private var missingHeading: String?
     @State private var documentLinkError: String?
+    @State private var showingLinkDiagnostics = false
+    @State private var isCheckingLinks = false
+    @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -69,6 +72,14 @@ struct EditorWorkspace: View {
                 }
             }
 
+            ToolbarItem(placement: .primaryAction) {
+                Button("リンク診断", systemImage: "link") {
+                    showingLinkDiagnostics = true
+                    checkLinks()
+                }
+                .help("ローカルリンクの参照先を確認")
+            }
+
             ToolbarItem(placement: .principal) {
                 Picker("表示", selection: mode) {
                     ForEach(EditorMode.allCases) { value in
@@ -100,6 +111,14 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $showingGoToHeading) {
             GoToHeadingSheet(entries: analysisStore.snapshot?.source == document.text ? outlineEntries : []) {
                 navigate(to: $0)
+            }
+        }
+        .sheet(isPresented: $showingLinkDiagnostics) {
+            LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,
+                                 source: document.text) { diagnostic in
+                showingLinkDiagnostics = false
+                if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                navigate(to: diagnostic.sourceRange.location)
             }
         }
         .alert("見出しが見つかりません", isPresented: Binding(
@@ -168,6 +187,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: fileURL) { oldURL, newURL in
             navigationHistory.moveDocument(from: oldURL, to: newURL)
+            if showingLinkDiagnostics { checkLinks() }
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
                 settingsStore.moveDocumentState(from: oldURL, to: newURL)
@@ -183,6 +203,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: document.text) { _, newText in
             analysisStore.update(source: newText)
+            if showingLinkDiagnostics { checkLinks() }
         }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receivePendingDocumentLink()
@@ -304,6 +325,23 @@ struct EditorWorkspace: View {
         guard let fileURL, analysisStore.snapshot?.source == document.text,
               let fragment = documentLinkNavigation.take(for: fileURL) else { return }
         navigateToHeading(fragment)
+    }
+
+    private func checkLinks() {
+        let source = document.text
+        let cachedAnalysis = analysisStore.snapshot?.source == source
+            ? analysisStore.snapshot?.analysis : nil
+        let context = documentContext
+        isCheckingLinks = true
+        Task {
+            let diagnostics = await Task.detached(priority: .userInitiated) {
+                let analysis = cachedAnalysis ?? MarkdownAnalysis(source)
+                return MarkdownLinkDiagnostics.inspect(source, analysis: analysis, context: context)
+            }.value
+            guard document.text == source else { return }
+            linkDiagnostics = diagnostics
+            isCheckingLinks = false
+        }
     }
 
     private var currentNavigationPoint: NavigationPoint {
@@ -442,6 +480,50 @@ struct EditorWorkspace: View {
         }
         .help(command.title)
         .disabled(!command.canExecute(in: editorModel))
+    }
+}
+
+private struct LinkDiagnosticsSheet: View {
+    let diagnostics: [MarkdownLinkDiagnostic]
+    let isChecking: Bool
+    let source: String
+    let onSelect: (MarkdownLinkDiagnostic) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("リンク診断").font(.headline)
+                Spacer()
+                Button("閉じる") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            if isChecking {
+                ProgressView("リンクを確認中")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if diagnostics.isEmpty {
+                ContentUnavailableView("リンクの問題は見つかりません", systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let lines = MarkdownLineIndex(source)
+                List(diagnostics) { diagnostic in
+                    Button {
+                        onSelect(diagnostic)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(diagnostic.title).fontWeight(.medium)
+                            Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(minWidth: 560, minHeight: 350)
+        .padding(20)
     }
 }
 
