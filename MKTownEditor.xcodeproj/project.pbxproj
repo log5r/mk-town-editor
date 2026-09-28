@@ -19,6 +19,7 @@
 		A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* MarkdownTextEditor.swift */; };
 		A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* MarkdownPositionMap.swift */; };
 		A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* MarkdownAnalysis.swift */; };
+		A10000000000000000000010 /* DocumentContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DocumentContext.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000E /* MarkdownPositionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPositionMap.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* MarkdownAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownAnalysis.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* DocumentContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentContext.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,6 +71,7 @@
 				A2000000000000000000000B /* MarkdownTextEditor.swift */,
 				A2000000000000000000000E /* MarkdownPositionMap.swift */,
 				A2000000000000000000000F /* MarkdownAnalysis.swift */,
+				A20000000000000000000010 /* DocumentContext.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -149,6 +152,7 @@
 				A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */,
 				A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */,
 				A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */,
+				A10000000000000000000010 /* DocumentContext.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
