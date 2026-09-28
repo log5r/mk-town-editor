@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 final class PreviewAccessibilityTests: XCTestCase {
+    func testCodeCopyWritesOnlyCodeContentToPasteboard() throws {
+        let analysis = MarkdownAnalysis("```swift\nlet value = 1\nprint(value)\n```")
+        let block = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
+        let board = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
+        defer { board.clearContents() }
+
+        XCTAssertTrue(MarkdownCodeCopy.copy(block, to: board))
+        XCTAssertEqual(board.string(forType: .string), "let value = 1\nprint(value)")
+        XCTAssertFalse(board.string(forType: .string)!.contains("```"))
+        let paragraph = try XCTUnwrap(MarkdownAnalysis("plain").blocks.first)
+        XCTAssertFalse(MarkdownCodeCopy.copy(paragraph, to: board))
+    }
+
     func testHeadingsUseStructuredPreviewAtEveryLevelAndKeepLinkAttribute() {
         let source = "# [案内](https://example.com)\n\n###### 詳細"
         let analysis = MarkdownAnalysis(source)

@@ -41,6 +41,7 @@ struct MarkdownPreview: View {
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
+                analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
                 !analysis.footnotes.entries.isEmpty ||
                 (showsFrontMatter && analysis.frontMatter != nil) {
@@ -86,6 +87,19 @@ struct MarkdownPreview: View {
                                         tableView(table, in: analysis)
                                     } else if block.kind == .blank {
                                         Text(" ").frame(height: 12)
+                                    } else if block.kind == .codeBlock {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Spacer()
+                                                Button("コードをコピー", systemImage: "doc.on.doc") {
+                                                    _ = MarkdownCodeCopy.copy(block)
+                                                }
+                                                .labelStyle(.iconOnly)
+                                                .buttonStyle(.borderless)
+                                                .help("フェンスを除いたコード本文をコピー")
+                                            }
+                                            blockText(block, in: analysis)
+                                        }
                                     } else if let task = block.task {
                                         taskView(block, task: task, in: analysis)
                                     } else {
@@ -556,5 +570,16 @@ private struct DetachedPreviewContent: View {
                         zoom: settingsStore.zoom(for: .preview),
                         loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
             .frame(minWidth: 420, minHeight: 300)
+    }
+}
+
+@MainActor
+enum MarkdownCodeCopy {
+    @discardableResult
+    static func copy(_ block: MarkdownBlock,
+                     to pasteboard: NSPasteboard = .general) -> Bool {
+        guard block.kind == .codeBlock else { return false }
+        pasteboard.clearContents()
+        return pasteboard.setString(block.content, forType: .string)
     }
 }
