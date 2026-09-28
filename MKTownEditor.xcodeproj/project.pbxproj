@@ -41,6 +41,7 @@
 		A10000000000000000000023 /* NavigationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* NavigationHistory.swift */; };
 		A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* MarkdownHeadingIndex.swift */; };
 		A10000000000000000000025 /* MarkdownDocumentLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* MarkdownDocumentLink.swift */; };
+		A10000000000000000000026 /* FilePathCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* FilePathCompletion.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -81,6 +82,7 @@
 		A20000000000000000000023 /* NavigationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationHistory.swift; sourceTree = "<group>"; };
 		A20000000000000000000024 /* MarkdownHeadingIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHeadingIndex.swift; sourceTree = "<group>"; };
 		A20000000000000000000025 /* MarkdownDocumentLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocumentLink.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* FilePathCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePathCompletion.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -135,6 +137,7 @@
 				A20000000000000000000023 /* NavigationHistory.swift */,
 				A20000000000000000000024 /* MarkdownHeadingIndex.swift */,
 				A20000000000000000000025 /* MarkdownDocumentLink.swift */,
+				A20000000000000000000026 /* FilePathCompletion.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -237,6 +240,7 @@
 				A10000000000000000000023 /* NavigationHistory.swift in Sources */,
 				A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */,
 				A10000000000000000000025 /* MarkdownDocumentLink.swift in Sources */,
+				A10000000000000000000026 /* FilePathCompletion.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

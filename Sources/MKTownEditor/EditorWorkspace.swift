@@ -119,7 +119,7 @@ struct EditorWorkspace: View {
             Text(documentLinkError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
-            LinkEditorSheet(draft: draft) { label, destination, title in
+            LinkEditorSheet(draft: draft, documentContext: documentContext) { label, destination, title in
                 editorModel.commitLink(label: label, destination: destination, title: title)
             }
         }
@@ -457,15 +457,19 @@ final class PreviewTaskUndoTarget {
 
 private struct LinkEditorSheet: View {
     let draft: MarkdownLinkDraft
+    let documentContext: DocumentContext
     let onSave: (String, String, String) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var label: String
     @State private var destination: String
     @State private var title: String
     @State private var showsSaveError = false
+    @State private var fileCandidates: [FilePathSuggestion] = []
 
-    init(draft: MarkdownLinkDraft, onSave: @escaping (String, String, String) -> Bool) {
+    init(draft: MarkdownLinkDraft, documentContext: DocumentContext,
+         onSave: @escaping (String, String, String) -> Bool) {
         self.draft = draft
+        self.documentContext = documentContext
         self.onSave = onSave
         _label = State(initialValue: draft.label)
         _destination = State(initialValue: draft.destination)
@@ -483,6 +487,31 @@ private struct LinkEditorSheet: View {
             }
             .formStyle(.grouped)
             .frame(height: 180)
+            let suggestions = FilePathCompletion.matches(destination, in: fileCandidates)
+            if !suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("この書類のフォルダ内")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(suggestions) { suggestion in
+                        Button {
+                            destination = suggestion.path
+                        } label: {
+                            Label(suggestion.path, systemImage: suggestion.isDirectory ? "folder" : "doc")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("リンク先候補、\(suggestion.path)")
+                    }
+                }
+                .padding(8)
+                .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if documentContext.directoryURL == nil {
+                Text("ファイルへの相対リンクを補完するには、先に書類を保存してください。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if showsSaveError {
                 Text("リンクを保存できません。本文と編集状態を確認してください。")
                     .foregroundStyle(.red)
@@ -505,5 +534,14 @@ private struct LinkEditorSheet: View {
         }
         .frame(width: 480)
         .padding(20)
+        .task(id: documentContext.directoryURL) {
+            guard let directory = documentContext.directoryURL else {
+                fileCandidates = []
+                return
+            }
+            fileCandidates = await Task.detached(priority: .userInitiated) {
+                FilePathCompletion.scan(in: directory)
+            }.value
+        }
     }
 }
