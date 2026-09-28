@@ -149,7 +149,8 @@ enum WorkspaceFileOperations {
                                  inspectedDocuments: inspectedDocuments)
     }
 
-    static func create(name: String, in directory: URL, root: URL, folder: Bool) throws -> URL {
+    static func create(name: String, in directory: URL, root: URL, folder: Bool,
+                       contents: String = "") throws -> URL {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, trimmed != ".", trimmed != "..",
               !trimmed.contains("/"), !trimmed.contains(":"), !trimmed.hasPrefix(".") else {
@@ -173,7 +174,15 @@ enum WorkspaceFileOperations {
             }
             let descriptor = open(destination.path, O_WRONLY | O_CREAT | O_EXCL, 0o644)
             guard descriptor >= 0 else { throw CocoaError(.fileWriteUnknown) }
-            close(descriptor)
+            let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+            do {
+                try handle.write(contentsOf: Data(contents.utf8))
+                try handle.close()
+            } catch {
+                try? handle.close()
+                try? FileManager.default.removeItem(at: destination)
+                throw error
+            }
         }
         return destination
     }

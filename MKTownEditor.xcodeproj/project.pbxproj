@@ -63,6 +63,7 @@
 		A10000000000000000000045 /* WorkspaceFileOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000045 /* WorkspaceFileOperations.swift */; };
 		A10000000000000000000046 /* WorkspaceFileOperationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000046 /* WorkspaceFileOperationSheet.swift */; };
 		A10000000000000000000047 /* WorkspaceViewSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000047 /* WorkspaceViewSettings.swift */; };
+		A10000000000000000000048 /* WorkspaceDocumentTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000048 /* WorkspaceDocumentTemplate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -125,6 +126,7 @@
 		A20000000000000000000045 /* WorkspaceFileOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFileOperations.swift; sourceTree = "<group>"; };
 		A20000000000000000000046 /* WorkspaceFileOperationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFileOperationSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000047 /* WorkspaceViewSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceViewSettings.swift; sourceTree = "<group>"; };
+		A20000000000000000000048 /* WorkspaceDocumentTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDocumentTemplate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -201,6 +203,7 @@
 				A20000000000000000000045 /* WorkspaceFileOperations.swift */,
 				A20000000000000000000046 /* WorkspaceFileOperationSheet.swift */,
 				A20000000000000000000047 /* WorkspaceViewSettings.swift */,
+				A20000000000000000000048 /* WorkspaceDocumentTemplate.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -325,6 +328,7 @@
 				A10000000000000000000045 /* WorkspaceFileOperations.swift in Sources */,
 				A10000000000000000000046 /* WorkspaceFileOperationSheet.swift in Sources */,
 				A10000000000000000000047 /* WorkspaceViewSettings.swift in Sources */,
+				A10000000000000000000048 /* WorkspaceDocumentTemplate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

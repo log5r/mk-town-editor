@@ -31,6 +31,7 @@ struct WorkspaceFileOperationSheet: View {
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @State private var name: String
     @State private var destinationPath: String
+    @State private var template: WorkspaceDocumentTemplate = .blank
     @State private var plan: WorkspaceMovePlan?
     @State private var isWorking = false
     @State private var errorMessage: String?
@@ -73,6 +74,23 @@ struct WorkspaceFileOperationSheet: View {
             case .trash:
                 Text("ファイルをゴミ箱へ移動します。このファイルを指すリンクは更新されません。")
                     .foregroundStyle(.secondary)
+            }
+            if case let .createDocument(directory) = action {
+                Text("保存先: \(directory.path)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Picker("テンプレート", selection: $template) {
+                    ForEach(WorkspaceDocumentTemplate.allCases) { item in
+                        Text(item.title).tag(item)
+                    }
+                }
+                Text(template.text.isEmpty ? "本文なし" : template.text)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             }
             if let plan {
                 Text("\(actionIsTrash ? "影響を受けるリンク" : "更新するリンク"): \(plan.changedLinks)件 / 書類: \(plan.changes.filter { $0.linkCount > 0 }.count)件")
@@ -190,6 +208,7 @@ struct WorkspaceFileOperationSheet: View {
         let action = action
         let root = rootURL
         let enteredName = name
+        let selectedText = template.text
         let movePlan = plan
         isWorking = true
         Task {
@@ -198,7 +217,8 @@ struct WorkspaceFileOperationSheet: View {
                     switch action {
                     case let .createDocument(directory):
                         _ = try WorkspaceFileOperations.create(name: enteredName, in: directory,
-                                                               root: root, folder: false)
+                                                               root: root, folder: false,
+                                                               contents: selectedText)
                     case let .createFolder(directory):
                         _ = try WorkspaceFileOperations.create(name: enteredName, in: directory,
                                                                root: root, folder: true)
