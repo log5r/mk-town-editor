@@ -51,12 +51,12 @@ enum EditorCommand: Hashable {
         case .link: "link"
         case .strikethrough: "strikethrough"
         case .inlineCode: "inline-code"
-        case .heading: "heading"
+        case let .heading(level): "heading-\(level)"
         case .quote: "quote"
         case .unorderedList: "unordered-list"
         case .orderedList: "ordered-list"
         case .taskList: "task-list"
-        case .codeBlock: "code-block"
+        case let .codeBlock(language): "code-block-\(language?.rawValue ?? "plain")"
         case .horizontalRule: "horizontal-rule"
         case .image: "image"
         case .table: "table"
@@ -203,12 +203,13 @@ enum EditorCommand: Hashable {
     }
 
     @MainActor
-    static func paletteMatches(_ query: String, in model: MarkdownEditorModel?) -> [Self] {
+    static func paletteMatches(_ query: String, in model: MarkdownEditorModel?,
+                               shortcutLabel: (Self) -> String? = { $0.shortcutLabel }) -> [Self] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return palette.filter { command in
             command.canExecute(in: model) &&
                 (term.isEmpty || command.title.localizedStandardContains(term) ||
-                    command.shortcutLabel?.localizedStandardContains(term) == true)
+                    shortcutLabel(command)?.localizedStandardContains(term) == true)
         }
     }
 

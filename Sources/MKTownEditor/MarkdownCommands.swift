@@ -348,7 +348,7 @@ struct MarkdownCommands: Commands {
                 .keyboardShortcut("-", modifiers: [.command, .option])
                 .disabled(zoomActions == nil)
             Button("プレビューを標準サイズに戻す") { zoomActions?.reset(.preview) }
-                .keyboardShortcut("0", modifiers: [.command, .option])
+                .keyboardShortcut("0", modifiers: [.command, .option, .shift])
                 .disabled(zoomActions == nil)
         }
         CommandMenu("書き出し") {
@@ -490,8 +490,8 @@ struct MarkdownCommands: Commands {
     private func commandButton(_ command: EditorCommand) -> some View {
         let button = Button(command.title) { command.perform(on: editorModel) }
             .disabled(!command.canExecute(in: editorModel))
-        if let shortcut = command.shortcut {
-            button.keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
+        if let shortcut = settingsStore.shortcut(for: command), let key = shortcut.keyEquivalent {
+            button.keyboardShortcut(key, modifiers: shortcut.modifiers)
         } else {
             button
         }
