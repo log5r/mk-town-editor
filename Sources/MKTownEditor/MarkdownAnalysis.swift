@@ -1,12 +1,12 @@
 import Foundation
 
-enum MarkdownLineBreak: Equatable, Sendable {
+enum MarkdownLineBreak: Hashable, Sendable {
     case soft
     case hard
 }
 
 struct MarkdownTable: Equatable, Sendable {
-    enum Alignment: Equatable, Sendable {
+    enum Alignment: Hashable, Sendable {
         case leading
         case center
         case trailing
@@ -30,7 +30,7 @@ struct MarkdownReference: Equatable, Sendable {
 }
 
 struct MarkdownBlock: Equatable, Sendable {
-    enum Kind: Equatable, Sendable {
+    enum Kind: Hashable, Sendable {
         case paragraph
         case heading(level: Int)
         case quote
