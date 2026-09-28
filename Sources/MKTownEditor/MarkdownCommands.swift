@@ -37,6 +37,7 @@ struct MarkdownCommands: Commands {
             commandButton(.quote)
             commandButton(.unorderedList)
             commandButton(.orderedList)
+            commandButton(.taskList)
         }
     }
 

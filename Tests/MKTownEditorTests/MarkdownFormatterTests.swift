@@ -279,4 +279,50 @@ final class MarkdownFormatterTests: XCTestCase {
             XCTAssertEqual(edit.selection, NSRange(location: location + 3, length: 0))
         }
     }
+
+    func testTaskListConvertsMultipleBulletsAndNumberedItems() {
+        let source = "- one\n2. two\nplain"
+        let edit = MarkdownFormatter.apply(.taskList, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "- [ ] one\n- [ ] two\n- [ ] plain")
+    }
+
+    func testTaskAndBulletCommandsConvertInBothDirections() {
+        let tasks = "- [x] done\n- [ ] todo\n- [X] upper"
+        let bullets = MarkdownFormatter.apply(.unorderedList, to: tasks,
+                                              selection: NSRange(location: 0, length: (tasks as NSString).length))
+        XCTAssertEqual(bullets.applying(to: tasks), "- done\n- todo\n- upper")
+
+        let unchanged = MarkdownFormatter.apply(.taskList, to: tasks,
+                                                selection: NSRange(location: 0, length: (tasks as NSString).length))
+        XCTAssertEqual(unchanged.applying(to: tasks), tasks)
+    }
+
+    func testOrderedListKeepsTaskStateWhenConvertingTaskItems() {
+        let source = "- [x] done\n- [ ] todo"
+        let edit = MarkdownFormatter.apply(.orderedList, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "1. [x] done\n2. [ ] todo")
+    }
+
+    func testTaskListKeepsBlankLinesIndentationCRLFAndUTF16Selection() {
+        let source = "  - 🙂\r\n\r\n  - 次"
+        let edit = MarkdownFormatter.apply(.taskList, to: source,
+                                           selection: NSRange(location: 0, length: (source as NSString).length))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "  - [ ] 🙂\r\n\r\n  - [ ] 次")
+        XCTAssertEqual(edit.selection.length, (updated as NSString).length)
+    }
+
+    func testTaskListAtEmptyDocumentAndBlankLinePlacesCaretAfterMarker() {
+        for (source, location, expected) in [
+            ("", 0, "- [ ] "),
+            ("前\n\n後", 2, "前\n- [ ] \n後")
+        ] {
+            let edit = MarkdownFormatter.apply(.taskList, to: source,
+                                               selection: NSRange(location: location, length: 0))
+            XCTAssertEqual(edit.applying(to: source), expected)
+            XCTAssertEqual(edit.selection, NSRange(location: location + 6, length: 0))
+        }
+    }
 }
