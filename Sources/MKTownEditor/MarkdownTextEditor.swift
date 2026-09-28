@@ -7,6 +7,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     let model: MarkdownEditorModel
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
+    var onImagePaste: ((Data) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -64,6 +65,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.commandModel = model
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
+        textView.onImagePaste = onImagePaste
         textView.registerForDraggedTypes([.fileURL])
         MarkdownSyntaxHighlighter.apply(to: textView)
         context.coordinator.isRestoringSession = false
@@ -92,6 +94,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         guard let textView = scrollView.documentView as? EditorTextView else { return }
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
+        textView.onImagePaste = onImagePaste
         guard textView.string != text else { return }
         let selection = textView.selectedRange()
         textView.string = text
@@ -149,6 +152,8 @@ final class EditorTextView: NSTextView {
     weak var commandModel: MarkdownEditorModel?
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
+    var onImagePaste: ((Data) -> Void)?
+    var imagePasteboard: NSPasteboard = .general
     private var selectionBeforeImageDrag: NSRange?
     private var imageDropLocation: Int? {
         didSet { needsDisplay = true }
@@ -179,6 +184,19 @@ final class EditorTextView: NSTextView {
         if let typed = insertString as? String,
            commandModel?.completeSymbol(typed, replacementRange: replacementRange) == true { return }
         super.insertText(insertString, replacementRange: replacementRange)
+    }
+
+    override func paste(_ sender: Any?) {
+        guard isEditable, !hasMarkedText(), let onImagePaste,
+              let data = Self.imageData(in: imagePasteboard) else {
+            super.paste(sender)
+            return
+        }
+        onImagePaste(data)
+    }
+
+    static func imageData(in pasteboard: NSPasteboard) -> Data? {
+        pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff)
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
