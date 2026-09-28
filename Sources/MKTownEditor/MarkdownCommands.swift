@@ -32,6 +32,10 @@ private struct ZoomActionsKey: FocusedValueKey {
     typealias Value = ZoomActions
 }
 
+private struct RegexSearchActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -54,6 +58,10 @@ extension FocusedValues {
         get { self[ZoomActionsKey.self] }
         set { self[ZoomActionsKey.self] = newValue }
     }
+    var regexSearchAction: (() -> Void)? {
+        get { self[RegexSearchActionKey.self] }
+        set { self[RegexSearchActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -62,6 +70,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
     @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
     @FocusedValue(\.zoomActions) private var zoomActions
+    @FocusedValue(\.regexSearchAction) private var regexSearchAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -118,6 +127,10 @@ struct MarkdownCommands: Commands {
             Button("すべて置換") { editorModel?.replaceAllMatches() }
                 .keyboardShortcut("r", modifiers: [.command, .option, .shift])
                 .disabled(editorModel?.canExecuteCommand != true)
+            Divider()
+            Button("正規表現検索・置換…") { regexSearchAction?() }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(regexSearchAction == nil)
         }
 
         CommandMenu("Markdown") {

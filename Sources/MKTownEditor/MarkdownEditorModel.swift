@@ -302,6 +302,18 @@ final class MarkdownEditorModel: ObservableObject {
         performFinderAction(.replaceAll)
     }
 
+    @discardableResult
+    func applyRegexEdit(_ edit: MarkdownEdit, expectedSource: String) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              textView.string == expectedSource,
+              edit.range.location >= 0,
+              edit.range.location <= (expectedSource as NSString).length,
+              edit.range.length >= 0,
+              edit.range.length <= (expectedSource as NSString).length - edit.range.location else { return false }
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     private func performFinderAction(_ action: NSTextFinder.Action) {
         guard let textView else { return }
         textView.window?.makeFirstResponder(textView)

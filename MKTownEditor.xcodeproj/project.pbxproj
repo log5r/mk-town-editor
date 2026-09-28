@@ -49,6 +49,8 @@
 		A10000000000000000000031 /* PreviewTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* PreviewTypography.swift */; };
 		A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* CodeSyntaxHighlighter.swift */; };
 		A10000000000000000000033 /* PreviewRenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* PreviewRenderCache.swift */; };
+		A10000000000000000000034 /* RegexSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* RegexSearch.swift */; };
+		A10000000000000000000035 /* RegexSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* RegexSearchSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -97,6 +99,8 @@
 		A20000000000000000000031 /* PreviewTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTypography.swift; sourceTree = "<group>"; };
 		A20000000000000000000032 /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
 		A20000000000000000000033 /* PreviewRenderCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderCache.swift; sourceTree = "<group>"; };
+		A20000000000000000000034 /* RegexSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearch.swift; sourceTree = "<group>"; };
+		A20000000000000000000035 /* RegexSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearchSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -159,6 +163,8 @@
 				A20000000000000000000031 /* PreviewTypography.swift */,
 				A20000000000000000000032 /* CodeSyntaxHighlighter.swift */,
 				A20000000000000000000033 /* PreviewRenderCache.swift */,
+				A20000000000000000000034 /* RegexSearch.swift */,
+				A20000000000000000000035 /* RegexSearchSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -269,6 +275,8 @@
 				A10000000000000000000031 /* PreviewTypography.swift in Sources */,
 				A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */,
 				A10000000000000000000033 /* PreviewRenderCache.swift in Sources */,
+				A10000000000000000000034 /* RegexSearch.swift in Sources */,
+				A10000000000000000000035 /* RegexSearchSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

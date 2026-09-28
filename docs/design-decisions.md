@@ -133,3 +133,5 @@ Returnキーでのリスト・引用継続は`NSTextView.insertNewline`から編
 検索・置換は`NSTextView`で有効にした標準検索バーを使う。検索・次／前・置換画面・すべて置換を`NSTextFinder.Action`のタグで`performTextFinderAction`へ渡し、標準の検索条件とUndoを利用する。メニューには置換とすべて置換を明示し、置換画面はOption+Command+Fで開く。IME変換中は一括置換を実行しない。参照: [Apple NSTextFinder](https://developer.apple.com/documentation/appkit/nstextfinder)、[置換画面アクション](https://developer.apple.com/documentation/appkit/nstextfinder/action/showreplaceinterface)。
 
 大文字小文字・単語単位などの検索条件はAppKitの標準検索バーが提供し、条件メタデータは検索用ペーストボードに保持される。[確認記録](find-bar-verification.md)にSDK/APIの根拠と実機確認の残件を記す。
+
+正規表現検索は標準検索バーと区別したシートで扱う。`NSRegularExpression`をバックグラウンドで実行し、UTF-16の一致範囲を一覧と原文移動へ渡す。置換文字列の`$0`・`$1`等は対象一致のキャプチャへ展開し、存在しない番号をエラーにする。ゼロ幅一致も有限個の一致として処理する。すべて置換は最初から最後の一致を覆う範囲を1回の差分編集にまとめ、Undoで元へ戻せるようにする。選択済みの一致は1件置換でその位置を優先し、次を検索では次の一致へ進む。本文が検索開始時から変わった場合やIME変換中は編集を拒否する。
