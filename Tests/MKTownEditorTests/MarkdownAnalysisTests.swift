@@ -122,4 +122,80 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(code.children(of: code.rootBlocks[0]).map(\.kind), [.codeBlock])
         XCTAssertEqual(unclosedCode.rootBlocks.map(\.kind), [.quote, .paragraph])
     }
+
+    func testFencesKeepMarkerLengthLanguageAndLiteralContent() {
+        let source = "  ~~~~swift title\n   let x = 1\n~~~\n```\n  ~~~~~ \nnext"
+        let blocks = MarkdownAnalysis(source).rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [.codeBlock, .paragraph])
+        XCTAssertEqual(blocks[0].codeFenceMarker, "~")
+        XCTAssertEqual(blocks[0].codeFenceLength, 4)
+        XCTAssertEqual(blocks[0].codeLanguage, "swift")
+        XCTAssertEqual(blocks[0].content, " let x = 1\n~~~\n```")
+        XCTAssertEqual((source as NSString).substring(with: blocks[0].sourceRange),
+                       "  ~~~~swift title\n   let x = 1\n~~~\n```\n  ~~~~~ \n")
+    }
+
+    func testIndentedCodeKeepsInteriorBlankLinesAndDoesNotInterruptParagraph() {
+        let source = "    one\n\n        two\n\nplain\n    continuation\n\n\tthree"
+        let blocks = MarkdownAnalysis(source).rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [.codeBlock, .blank, .paragraph, .blank, .codeBlock])
+        XCTAssertEqual(blocks[0].content, "one\n\n    two")
+        XCTAssertEqual(blocks[0].codeFenceLength, nil)
+        XCTAssertEqual(blocks[0].codeLanguage, nil)
+        XCTAssertEqual(blocks[2].content, "plain\n    continuation")
+        XCTAssertEqual(blocks[4].content, "three")
+        XCTAssertEqual((source as NSString).substring(with: blocks[0].sourceRange), "    one\n\n        two\n")
+    }
+
+    func testFourSpaceFenceIsIndentedCodeAndBacktickInfoCannotContainBacktick() {
+        let blocks = MarkdownAnalysis("    ```\n    literal\n    ```\n\n```swift`bad\ntext").rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [.codeBlock, .blank, .paragraph])
+        XCTAssertEqual(blocks[0].content, "```\nliteral\n```")
+        XCTAssertNil(blocks[0].codeFenceLength)
+        XCTAssertEqual(blocks[2].content, "```swift`bad\ntext")
+    }
+
+    func testIndentedCodeInsideQuoteDoesNotAbsorbOutsideParagraph() {
+        let analysis = MarkdownAnalysis(">     code\noutside")
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.quote, .paragraph])
+        XCTAssertEqual(analysis.children(of: analysis.rootBlocks[0]).map(\.kind), [.codeBlock])
+        XCTAssertEqual(analysis.children(of: analysis.rootBlocks[0])[0].content, "code")
+    }
+
+    func testIndentedCodeInsideListIsAChildRatherThanContinuationText() {
+        let analysis = MarkdownAnalysis("- item\n      code\n        extra\n- next")
+        let first = analysis.rootBlocks[0]
+        let code = analysis.children(of: first)[0]
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.unorderedList, .unorderedList])
+        XCTAssertEqual(first.content, "item")
+        XCTAssertEqual(code.kind, .codeBlock)
+        XCTAssertEqual(code.content, "code\n  extra")
+        XCTAssertEqual(code.nestingDepth, 1)
+    }
+
+    func testIndentedSyntaxAfterParagraphStaysInParagraph() {
+        let analysis = MarkdownAnalysis("plain\n    # not a heading\n    ```\n\n    # code")
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.paragraph, .blank, .codeBlock])
+        XCTAssertEqual(analysis.rootBlocks[0].content, "plain\n    # not a heading\n    ```")
+        XCTAssertEqual(analysis.rootBlocks[2].content, "# code")
+    }
+
+    func testTabIndentKeepsColumnsBeyondListCodeIndent() {
+        let analysis = MarkdownAnalysis("- item\n\t\tcode")
+
+        XCTAssertEqual(analysis.children(of: analysis.rootBlocks[0])[0].content, "  code")
+    }
+
+    func testCodeAfterQuoteIsNotConfusedWithQuoteChildParagraph() {
+        let analysis = MarkdownAnalysis("> quoted\n    code")
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.quote, .codeBlock])
+        XCTAssertEqual(analysis.rootBlocks[1].content, "code")
+    }
 }
