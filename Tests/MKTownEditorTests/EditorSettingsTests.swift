@@ -144,6 +144,15 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertTrue(EditorProofingSettings().correctsSpelling)
     }
 
+    func testFrontMatterPreviewVisibilityPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        settings.showsFrontMatterInPreview = true
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.showsFrontMatterInPreview, true)
+    }
+
     func testProofingContextExcludesCodeAndURLsButNotAdjacentProse() {
         let source = "text `coode` https://exaample.com next\n```\ncoode\n```\nnormal"
         let text = source as NSString

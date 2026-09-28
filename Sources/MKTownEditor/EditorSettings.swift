@@ -135,6 +135,7 @@ struct AppEditorSettings: Codable, Equatable {
     var readingEstimate: ReadingEstimateSettings?
     var disabledLintRules: Set<MarkdownLintRule>?
     var proofing: EditorProofingSettings?
+    var showsFrontMatterInPreview: Bool?
 }
 
 enum EditorZoomSurface: CaseIterable {

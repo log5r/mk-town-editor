@@ -37,11 +37,39 @@ struct MarkdownFootnote: Equatable, Sendable {
     let firstReferenceRange: NSRange
 }
 
+struct MarkdownFrontMatter: Equatable, Sendable {
+    let raw: String
+    let content: String
+    let sourceRange: NSRange
+
+    init?(source: String) {
+        let text = source as NSString
+        let starts = MarkdownLineIndex(source).starts
+        guard starts.count >= 2 else { return nil }
+        func line(_ index: Int) -> String {
+            let start = starts[index]
+            let end = index + 1 < starts.count ? starts[index + 1] : text.length
+            return text.substring(with: NSRange(location: start, length: end - start))
+                .trimmingCharacters(in: .newlines)
+        }
+        guard line(0) == "---" else { return nil }
+        guard let closing = (1..<starts.count).first(where: {
+            line($0) == "---" || line($0) == "..."
+        }) else { return nil }
+        let end = closing + 1 < starts.count ? starts[closing + 1] : text.length
+        sourceRange = NSRange(location: 0, length: end)
+        raw = text.substring(with: sourceRange)
+        let firstContent = starts[1]
+        content = text.substring(with: NSRange(location: firstContent,
+            length: starts[closing] - firstContent))
+    }
+}
+
 struct MarkdownFootnoteIndex: Sendable {
     let entries: [MarkdownFootnote]
     let definitionRanges: [NSRange]
 
-    init(source: String, codeRanges: [NSRange]) {
+    init(source: String, codeRanges: [NSRange], excludedRanges: [NSRange] = []) {
         guard source.contains("[^") else {
             entries = []
             definitionRanges = []
@@ -60,6 +88,7 @@ struct MarkdownFootnoteIndex: Sendable {
                 .trimmingCharacters(in: .newlines)
             let lineRange = NSRange(location: 0, length: (line as NSString).length)
             guard !codeRanges.contains(where: { NSLocationInRange(start, $0) }),
+                  !excludedRanges.contains(where: { NSLocationInRange(start, $0) }),
                   let match = pattern.firstMatch(in: line, range: lineRange) else {
                 lineIndex += 1
                 continue
@@ -94,6 +123,7 @@ struct MarkdownFootnoteIndex: Sendable {
             range: NSRange(location: 0, length: text.length)) {
             guard !definitionRanges.contains(where: { NSLocationInRange(match.range.location, $0) }),
                   !codeRanges.contains(where: { NSLocationInRange(match.range.location, $0) }),
+                  !excludedRanges.contains(where: { NSLocationInRange(match.range.location, $0) }),
                   !inlineCode.contains(where: { NSLocationInRange(match.range.location, $0) }) else { continue }
             let id = text.substring(with: match.range(at: 1)).lowercased()
             guard let definition = definitions[id], seen.insert(id).inserted else { continue }
@@ -160,25 +190,29 @@ struct MarkdownAnalysis: Sendable {
     let positionMap: MarkdownPositionMap
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
+    let frontMatter: MarkdownFrontMatter?
 
     init(_ markdown: String) {
         positionMap = MarkdownPositionMap(markdown)
         let preliminary = Self.parse(markdown)
+        let frontMatter = MarkdownFrontMatter(source: markdown)
+        self.frontMatter = frontMatter
         let index = MarkdownFootnoteIndex(source: markdown,
-            codeRanges: preliminary.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange))
+            codeRanges: preliminary.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange),
+            excludedRanges: [frontMatter?.sourceRange].compactMap { $0 })
         footnotes = index
-        let parsed = index.definitionRanges.isEmpty ? preliminary
-            : Self.parse(Self.maskedFootnoteDefinitions(in: markdown,
-                ranges: index.definitionRanges))
+        let excluded = index.definitionRanges + [frontMatter?.sourceRange].compactMap { $0 }
+        let parsed = excluded.isEmpty ? preliminary
+            : Self.parse(Self.maskedRegions(in: markdown, ranges: excluded))
         blocks = parsed.blocks.filter { block in
-            !index.definitionRanges.contains { NSLocationInRange(block.sourceRange.location, $0) }
+            !excluded.contains { NSLocationInRange(block.sourceRange.location, $0) }
         }
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }
 
-    private static func maskedFootnoteDefinitions(in source: String, ranges: [NSRange]) -> String {
+    private static func maskedRegions(in source: String, ranges: [NSRange]) -> String {
         var units = Array(source.utf16)
         for range in ranges {
             for index in range.location..<NSMaxRange(range) where units[index] != 10 && units[index] != 13 {

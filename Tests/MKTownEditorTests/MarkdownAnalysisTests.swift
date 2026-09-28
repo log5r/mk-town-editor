@@ -22,6 +22,23 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertTrue(analysis.blocks.contains { $0.content.contains("Following") })
     }
 
+    func testYAMLFrontMatterKeepsOriginalRangeButLeavesPreviewBody() {
+        let source = "---\r\ntitle: Draft\r\nnotes: 🙂\r\n---\r\n# Body\r\nText"
+        let analysis = MarkdownAnalysis(source)
+        XCTAssertEqual(analysis.frontMatter?.content, "title: Draft\r\nnotes: 🙂\r\n")
+        XCTAssertEqual(analysis.frontMatter?.raw, "---\r\ntitle: Draft\r\nnotes: 🙂\r\n---\r\n")
+        XCTAssertEqual(analysis.blocks.first(where: { $0.kind == .heading(level: 1) })?.content, "Body")
+        XCTAssertFalse(analysis.blocks.contains { $0.content.contains("title: Draft") })
+        XCTAssertNil(MarkdownAnalysis("---\nNo closing marker").frontMatter)
+    }
+
+    func testFootnoteSyntaxInsideFrontMatterIsNotAnActiveFootnote() {
+        let source = "---\n[^hidden]: metadata\n---\nText[^hidden]"
+        let analysis = MarkdownAnalysis(source)
+        XCTAssertTrue(analysis.footnotes.entries.isEmpty)
+        XCTAssertTrue(analysis.footnotes.definitionRanges.isEmpty)
+    }
+
     func testEveryBlockRangePointsIntoOriginalUnicodeSource() {
         let source = "# 題🙂\r\n\r\n- 一\r\n  - 二\r\n"
         let analysis = MarkdownAnalysis(source)
