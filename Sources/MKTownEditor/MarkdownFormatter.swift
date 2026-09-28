@@ -54,6 +54,7 @@ enum MarkdownFormattingStyle {
     case link
     case heading(level: Int)
     case quote
+    case plainBlock
     case unorderedList
     case orderedList
     case taskList
@@ -120,7 +121,9 @@ enum MarkdownFormatter {
         case let .heading(level):
             return heading(text, selection: safeSelection, level: level)
         case .quote:
-            return prefixLines(text, selection: safeSelection, prefix: "> ")
+            return toggleQuote(text, selection: safeSelection)
+        case .plainBlock:
+            return removeBlockMarkers(text, selection: safeSelection)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -382,21 +385,87 @@ enum MarkdownFormatter {
         return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))
     }
 
-    private static func prefixLines(_ text: String, selection: NSRange, prefix: String) -> MarkdownEdit {
-        let nsText = text as NSString
-        let lineRange = nsText.lineRange(for: selection)
-        let lines = nsText.substring(with: lineRange)
-        let endsWithNewline = lines.hasSuffix("\n")
-        let body = endsWithNewline ? String(lines.dropLast()) : lines
-        let replacement = body
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { prefix + $0 }
-            .joined(separator: "\n") + (endsWithNewline ? "\n" : "")
-        return MarkdownEdit(
-            range: lineRange,
-            replacement: replacement,
-            selection: NSRange(location: lineRange.location, length: (replacement as NSString).length)
-        )
+    private static let quoteMarkerExpression = try! NSRegularExpression(pattern: #"^([ \t]*)>[ \t]?"#)
+
+    private static func toggleQuote(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let lines = selectedLines(in: text, selection: selection)
+        let nonblank = lines.parts.filter { !$0.content.trimmingCharacters(in: .whitespaces).isEmpty }
+        let allQuoted = !nonblank.isEmpty && nonblank.allSatisfy { quoteMarker(in: $0.content) != nil }
+        let allListed = !nonblank.isEmpty && nonblank.allSatisfy { listMarker(in: $0.content) != nil }
+        let replacement = lines.parts.map { part in
+            let content: String
+            if allQuoted, let marker = quoteMarker(in: part.content) {
+                content = strippingQuote(part.content, marker: marker)
+            } else if allListed, let marker = listMarker(in: part.content) {
+                let source = part.content as NSString
+                content = source.substring(with: marker.range(at: 1)) + "> " +
+                    source.substring(with: marker.range(at: 3))
+            } else if !allQuoted && quoteMarker(in: part.content) == nil {
+                content = "> " + part.content
+            } else {
+                content = part.content
+            }
+            return content + part.ending
+        }.joined()
+        return MarkdownEdit(range: lines.range, replacement: replacement,
+            selection: NSRange(location: lines.range.location, length: (replacement as NSString).length))
+    }
+
+    private static func removeBlockMarkers(_ text: String, selection: NSRange) -> MarkdownEdit {
+        let lines = selectedLines(in: text, selection: selection)
+        let replacement = lines.parts.map { part in
+            var content = part.content
+            if let marker = quoteMarker(in: content) {
+                content = strippingQuote(content, marker: marker)
+            } else if let marker = listMarker(in: content) {
+                let source = content as NSString
+                content = source.substring(with: marker.range(at: 1)) +
+                    source.substring(with: marker.range(at: 3))
+            } else if let marker = headingExpression.firstMatch(in: content,
+                range: NSRange(location: 0, length: (content as NSString).length)) {
+                let source = content as NSString
+                content = source.substring(with: marker.range(at: 1)) +
+                    source.substring(from: NSMaxRange(marker.range))
+            }
+            return content + part.ending
+        }.joined()
+        return MarkdownEdit(range: lines.range, replacement: replacement,
+            selection: NSRange(location: lines.range.location, length: (replacement as NSString).length))
+    }
+
+    private static func quoteMarker(in content: String) -> NSTextCheckingResult? {
+        quoteMarkerExpression.firstMatch(in: content,
+            range: NSRange(location: 0, length: (content as NSString).length))
+    }
+
+    private static func listMarker(in content: String) -> NSTextCheckingResult? {
+        listMarkerExpression.firstMatch(in: content,
+            range: NSRange(location: 0, length: (content as NSString).length))
+    }
+
+    private static func strippingQuote(_ content: String, marker: NSTextCheckingResult) -> String {
+        let source = content as NSString
+        return source.substring(with: marker.range(at: 1)) +
+            source.substring(from: NSMaxRange(marker.range))
+    }
+
+    private static func selectedLines(in text: String, selection: NSRange) ->
+        (range: NSRange, parts: [(content: String, ending: String)]) {
+        let source = text as NSString
+        let lineRange = source.lineRange(for: selection)
+        var parts: [(String, String)] = []
+        var cursor = lineRange.location
+        repeat {
+            var start = 0
+            var end = 0
+            var contentEnd = 0
+            source.getLineStart(&start, end: &end, contentsEnd: &contentEnd,
+                for: NSRange(location: cursor, length: 0))
+            parts.append((source.substring(with: NSRange(location: start, length: contentEnd - start)),
+                          source.substring(with: NSRange(location: contentEnd, length: end - contentEnd))))
+            cursor = end
+        } while cursor < NSMaxRange(lineRange)
+        return (lineRange, parts)
     }
 
     private static let listMarkerExpression = try! NSRegularExpression(
@@ -432,6 +501,9 @@ enum MarkdownFormatter {
     private static func convertList(_ text: String, selection: NSRange, target: ListTarget) -> MarkdownEdit {
         let source = text as NSString
         let lineRange = source.lineRange(for: selection)
+        let selected = selectedLines(in: text, selection: selection)
+        let quoteScope = selected.parts.filter { !$0.content.trimmingCharacters(in: .whitespaces).isEmpty }
+            .allSatisfy { quoteMarker(in: $0.content) != nil }
         if lineRange.length == 0 {
             return MarkdownEdit(range: lineRange, replacement: target.marker,
                                 selection: NSRange(location: lineRange.location +
@@ -445,7 +517,13 @@ enum MarkdownFormatter {
             var contentsEnd = 0
             source.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd,
                                 for: NSRange(location: cursor, length: 0))
-            let raw = source.substring(with: NSRange(location: lineStart, length: contentsEnd - lineStart))
+            let original = source.substring(with: NSRange(location: lineStart, length: contentsEnd - lineStart))
+            let raw: String
+            if quoteScope, let marker = quoteMarker(in: original) {
+                raw = strippingQuote(original, marker: marker)
+            } else {
+                raw = original
+            }
             let ending = source.substring(with: NSRange(location: contentsEnd, length: lineEnd - contentsEnd))
             if let match = listMarkerExpression.firstMatch(in: raw,
                                                            range: NSRange(location: 0, length: (raw as NSString).length)) {

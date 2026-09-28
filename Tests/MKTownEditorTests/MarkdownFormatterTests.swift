@@ -67,6 +67,46 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.applying(to: source), "one\n> two\nthree")
     }
 
+    func testQuoteCanBeRemovedWithoutChangingNestedIndentOrLineEndings() {
+        let source = "前\r\n  > - 親\r\n  >   - 子\r\n後"
+        let selection = (source as NSString).range(of: "親\r\n  >   - 子")
+        let edit = MarkdownFormatter.apply(.quote, to: source, selection: selection)
+        XCTAssertEqual(edit.applying(to: source), "前\r\n  - 親\r\n    - 子\r\n後")
+    }
+
+    func testQuoteCommandQuotesOnlyUnquotedLinesInMixedSelection() {
+        let source = "> 引用\n本文"
+        let edit = MarkdownFormatter.apply(.quote, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "> 引用\n> 本文")
+    }
+
+    func testQuoteConvertsToListAndPreservesNestedItems() {
+        let source = "> 親\n>   子"
+        let edit = MarkdownFormatter.apply(.unorderedList, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "- 親\n  - 子")
+    }
+
+    func testListConvertsToQuoteAndKeepsIndentAndTaskState() {
+        let source = "- 親\n  - 子\n- [x] 完了"
+        let edit = MarkdownFormatter.apply(.quote, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "> 親\n  > 子\n> [x] 完了")
+    }
+
+    func testPlainBlockRemovesOneOuterMarkerPerLine() {
+        let source = "> - 引用のリスト\n  - 親\n    - 子\n## 見出し"
+        let edit = MarkdownFormatter.apply(.plainBlock, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "- 引用のリスト\n  親\n    子\n見出し")
+    }
+
+    func testQuoteAtEmptyDocumentCreatesMarker() {
+        let edit = MarkdownFormatter.apply(.quote, to: "", selection: NSRange(location: 0, length: 0))
+        XCTAssertEqual(edit.applying(to: ""), "> ")
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
