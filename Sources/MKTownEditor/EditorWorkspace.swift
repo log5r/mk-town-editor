@@ -32,6 +32,11 @@ struct EditorWorkspace: View {
     @State private var htmlExportError: String?
     @State private var pdfExportError: String?
     @State private var isExportingPDF = false
+    @State private var showingPrintSettings = false
+    @State private var printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
+    @State private var printSettings = MarkdownPrintSettings()
+    @State private var printError: String?
+    @State private var printRequested = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -118,6 +123,8 @@ struct EditorWorkspace: View {
         }
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
+        .focusedSceneValue(\.pageSetupAction) { pageSetup() }
+        .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
     }
 
     private var sheetView: some View {
@@ -127,6 +134,16 @@ struct EditorWorkspace: View {
             GoToLineSheet(lineCount: index.lineCount,
                           initialLine: index.line(containingUTF16Offset: editorModel.selectedRange.location)) { line in
                 goToLine(line)
+            }
+        }
+        .sheet(isPresented: $showingPrintSettings, onDismiss: {
+            guard printRequested else { return }
+            printRequested = false
+            printDocument()
+        }) {
+            MarkdownPrintSettingsSheet(settings: printSettings, paperSize: printInfo.paperSize) { settings in
+                printSettings = settings
+                printRequested = true
             }
         }
         .sheet(isPresented: $showingGoToHeading) {
@@ -189,6 +206,14 @@ struct EditorWorkspace: View {
             Button("OK") { pdfExportError = nil }
         } message: {
             Text(pdfExportError ?? "")
+        }
+        .alert("印刷できません", isPresented: Binding(
+            get: { printError != nil },
+            set: { if !$0 { printError = nil } }
+        )) {
+            Button("OK") { printError = nil }
+        } message: {
+            Text(printError ?? "")
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
@@ -449,6 +474,28 @@ struct EditorWorkspace: View {
         }
     }
 
+    private func pageSetup() {
+        _ = NSPageLayout().runModal(with: printInfo)
+    }
+
+    private func printDocument() {
+        do {
+            let info = printInfo.copy() as! NSPrintInfo
+            try printSettings.apply(to: info)
+            let title = fileURL?.deletingPathExtension().lastPathComponent ?? "無題"
+            let view = try MarkdownPDFExporter.printableView(document.text, documentURL: fileURL,
+                                                             printInfo: info, title: title,
+                                                             header: printSettings.header,
+                                                             footer: printSettings.footer)
+            let operation = NSPrintOperation(view: view, printInfo: info)
+            operation.jobTitle = title
+            operation.showsPrintPanel = true
+            _ = operation.run()
+        } catch {
+            printError = error.localizedDescription
+        }
+    }
+
     private var currentNavigationPoint: NavigationPoint {
         NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
     }
@@ -603,6 +650,45 @@ struct EditorWorkspace: View {
         }
         .help(command.title)
         .disabled(!command.canExecute(in: editorModel))
+    }
+}
+
+private struct MarkdownPrintSettingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var settings: MarkdownPrintSettings
+    let paperSize: NSSize
+    let onPrint: (MarkdownPrintSettings) -> Void
+
+    var body: some View {
+        Form {
+            Section("余白（pt）") {
+                TextField("上", value: $settings.topMargin, format: .number)
+                TextField("下", value: $settings.bottomMargin, format: .number)
+                TextField("左", value: $settings.leftMargin, format: .number)
+                TextField("右", value: $settings.rightMargin, format: .number)
+            }
+            Section("ヘッダーとフッター") {
+                Toggle("ヘッダーに書類名を表示", isOn: $settings.header)
+                Toggle("フッターにページ番号を表示", isOn: $settings.footer)
+            }
+            if !settings.isValid(for: paperSize) {
+                Text("余白を小さくしてください。本文領域には縦横100pt以上が必要です。")
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("印刷…") {
+                    dismiss()
+                    onPrint(settings)
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!settings.isValid(for: paperSize))
+            }
+        }
+        .frame(width: 360)
+        .padding(20)
     }
 }
 
