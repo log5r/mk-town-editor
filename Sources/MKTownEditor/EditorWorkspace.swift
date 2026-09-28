@@ -59,6 +59,11 @@ struct EditorWorkspace: View {
             }
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
+        .sheet(item: $editorModel.linkDraft) { draft in
+            LinkEditorSheet(draft: draft) { label, destination, title in
+                editorModel.commitLink(label: label, destination: destination, title: title)
+            }
+        }
         .onAppear {
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -157,5 +162,58 @@ final class PreviewTaskUndoTarget {
             }
             undoManager.setActionName("タスクの完了切替")
         }
+    }
+}
+
+private struct LinkEditorSheet: View {
+    let draft: MarkdownLinkDraft
+    let onSave: (String, String, String) -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var label: String
+    @State private var destination: String
+    @State private var title: String
+    @State private var showsSaveError = false
+
+    init(draft: MarkdownLinkDraft, onSave: @escaping (String, String, String) -> Bool) {
+        self.draft = draft
+        self.onSave = onSave
+        _label = State(initialValue: draft.label)
+        _destination = State(initialValue: draft.destination)
+        _title = State(initialValue: draft.title)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(draft.isExisting ? "リンクを編集" : "リンクを挿入")
+                .font(.headline)
+            Form {
+                TextField("表示名", text: $label)
+                TextField("URL", text: $destination)
+                TextField("タイトル（任意）", text: $title)
+            }
+            .formStyle(.grouped)
+            .frame(height: 180)
+            if showsSaveError {
+                Text("リンクを保存できません。本文と編集状態を確認してください。")
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(draft.isExisting ? "更新" : "挿入") {
+                    if onSave(label, destination, title) {
+                        dismiss()
+                    } else {
+                        showsSaveError = true
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .frame(width: 480)
+        .padding(20)
     }
 }

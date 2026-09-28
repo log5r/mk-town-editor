@@ -148,4 +148,18 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(EditorCommand.horizontalRule.title, "区切り線")
         XCTAssertNil(EditorCommand.horizontalRule.shortcut)
     }
+
+    func testLinkCommandOpensDraftWithoutMutatingDocument() {
+        let view = NSTextView()
+        view.string = "selected"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: 8))
+
+        EditorCommand.link.perform(on: model)
+
+        XCTAssertEqual(view.string, "selected")
+        XCTAssertEqual(model.linkDraft?.label, "selected")
+        XCTAssertFalse(model.linkDraft?.isExisting ?? true)
+    }
 }

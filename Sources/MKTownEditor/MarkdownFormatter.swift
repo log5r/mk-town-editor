@@ -377,8 +377,8 @@ enum MarkdownFormatter {
         let nsText = text as NSString
         let selected = nsText.substring(with: selection)
         let label = selected.isEmpty ? "リンク" : selected
-        let replacement = "[\(label)](https://)"
-        let urlStart = selection.location + ("[\(label)](" as NSString).length
+        let replacement = MarkdownLinkSyntax.makeLink(label: label, destination: "https://")
+        let urlStart = selection.location + (replacement as NSString).range(of: "https://").location
         return MarkdownEdit(range: selection, replacement: replacement, selection: NSRange(location: urlStart, length: 8))
     }
 

@@ -116,6 +116,41 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "print(1)")
     }
 
+    func testLinkDialogEditsExistingLinkAndUndoRestoresIt() {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "before [old](url \"title\") after"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: (view.string as NSString).range(of: "old").location, length: 0))
+
+        model.presentLinkEditor()
+        XCTAssertEqual(model.linkDraft?.label, "old")
+        XCTAssertEqual(model.linkDraft?.destination, "url")
+        XCTAssertEqual(model.linkDraft?.title, "title")
+        XCTAssertTrue(model.commitLink(label: "new", destination: "path (one)", title: "next"))
+        XCTAssertNil(model.linkDraft)
+        XCTAssertEqual(view.string, "before [new](path%20\\(one\\) \"next\") after")
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, "before [old](url \"title\") after")
+    }
+
+    func testLinkDialogRejectsStaleSourceWithoutChangingText() {
+        let view = NSTextView()
+        view.string = "[old](url)"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 2, length: 0))
+        model.presentLinkEditor()
+        view.string = "[changed](url)"
+
+        XCTAssertFalse(model.commitLink(label: "new", destination: "next", title: ""))
+        XCTAssertEqual(view.string, "[changed](url)")
+    }
+
     func testDisconnectAndReconnectRestoreSelectionWithoutKeepingOldView() {
         let oldView = NSTextView()
         oldView.string = "前🙂後"
