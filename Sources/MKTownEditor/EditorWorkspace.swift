@@ -33,6 +33,7 @@ struct EditorWorkspace: View {
     @State private var showingMarkdownLint = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
+    @State private var showingAutoFormat = false
     @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
@@ -200,11 +201,14 @@ struct EditorWorkspace: View {
                 .help("ローカルリンクの参照先を確認")
             }
             ToolbarItem(placement: .primaryAction) {
-                Button("Markdown診断", systemImage: "checkmark.seal") {
-                    showingMarkdownLint = true
-                    checkMarkdownLint()
+                Menu("文章ツール", systemImage: "text.badge.checkmark") {
+                    Button("Markdown診断") {
+                        showingMarkdownLint = true
+                        checkMarkdownLint()
+                    }
+                    Button("自動整形…") { showingAutoFormat = true }
                 }
-                .help("見出し・リンク・リスト表記を診断")
+                .help("Markdown診断と自動整形")
             }
 
             ToolbarItem(placement: .principal) {
@@ -381,6 +385,18 @@ struct EditorWorkspace: View {
                                   if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
                                   navigate(to: diagnostic.sourceRange.location)
                               })
+        }
+        .sheet(isPresented: $showingAutoFormat) {
+            MarkdownAutoFormatSheet(source: document.text,
+                                    selectedRange: editorModel.selectedRange) { plan in
+                guard document.text == plan.source else { return false }
+                if editorModel.hasActiveEditor {
+                    return editorModel.applyRegexEdit(plan.edit, expectedSource: plan.source)
+                }
+                previewTaskUndoTarget.replaceText(plan.edit.applying(to: plan.source),
+                    in: $document.text, undoManager: undoManager, actionName: "Markdownを自動整形")
+                return true
+            }
         }
     }
 
@@ -1574,17 +1590,82 @@ private struct MarkdownLintSheet: View {
     }
 }
 
+private struct MarkdownAutoFormatSheet: View {
+    let source: String
+    let selectedRange: NSRange
+    let onApply: (MarkdownAutoFormatPlan) -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectionOnly = false
+    @State private var applyFailed = false
+
+    private var plan: MarkdownAutoFormatPlan? {
+        MarkdownAutoFormat.plan(source, selection: selectionOnly ? selectedRange : nil)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Markdownの自動整形").font(.headline)
+                Spacer()
+                Button("閉じる") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            Picker("対象", selection: $selectionOnly) {
+                Text("文書全体").tag(false)
+                Text("選択範囲の行").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .disabled(selectedRange.length == 0)
+            Text("箇条書き記号と見出しの空白を揃え、不要な行末空白を除きます。コード、明示改行、フロントマターは保持します。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let plan {
+                Text("\(plan.changes.count) 行を変更します。")
+                List(plan.changes, id: \.line) { change in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("行 \(change.line)").fontWeight(.semibold)
+                        Text("− \(change.before)").foregroundStyle(.secondary)
+                        Text("+ \(change.after)")
+                    }
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                }
+            } else {
+                ContentUnavailableView("変更箇所はありません", systemImage: "checkmark.circle")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if applyFailed {
+                Text("本文が変更されたか編集中のため、整形を適用できませんでした。")
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("整形を適用") {
+                    guard let plan else { return }
+                    if onApply(plan) { dismiss() } else { applyFailed = true }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(plan == nil)
+            }
+        }
+        .frame(width: 650, height: 450)
+        .padding(20)
+    }
+}
+
 @MainActor
 final class PreviewTaskUndoTarget {
-    func replaceText(_ newText: String, in text: Binding<String>, undoManager: UndoManager?) {
+    func replaceText(_ newText: String, in text: Binding<String>, undoManager: UndoManager?,
+                     actionName: String = "タスクの完了切替") {
         let previous = text.wrappedValue
         guard previous != newText else { return }
         text.wrappedValue = newText
         if let undoManager {
             undoManager.registerUndo(withTarget: self) { [weak undoManager] target in
-                target.replaceText(previous, in: text, undoManager: undoManager)
+                target.replaceText(previous, in: text, undoManager: undoManager,
+                                   actionName: actionName)
             }
-            undoManager.setActionName("タスクの完了切替")
+            undoManager.setActionName(actionName)
         }
     }
 }
