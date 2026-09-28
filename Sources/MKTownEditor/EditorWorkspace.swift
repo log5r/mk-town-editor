@@ -10,6 +10,7 @@ struct EditorWorkspace: View {
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
     @State private var imageDropError: String?
+    @State private var pasteNeedsSave = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -75,13 +76,23 @@ struct EditorWorkspace: View {
                 editorModel.commitTable(rows: rows, columns: columns)
             }
         }
-        .alert("画像を挿入できません", isPresented: Binding(
-            get: { imageDropError != nil },
-            set: { if !$0 { imageDropError = nil } }
+        .alert(pasteNeedsSave ? "先に書類を保存" : "画像を挿入できません", isPresented: Binding(
+            get: { imageDropError != nil || pasteNeedsSave },
+            set: { if !$0 { imageDropError = nil; pasteNeedsSave = false } }
         )) {
-            Button("OK", role: .cancel) { imageDropError = nil }
+            if pasteNeedsSave {
+                Button("キャンセル", role: .cancel) { pasteNeedsSave = false }
+                Button("保存…") {
+                    pasteNeedsSave = false
+                    NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
+                }
+            } else {
+                Button("OK", role: .cancel) { imageDropError = nil }
+            }
         } message: {
-            Text(imageDropError ?? "")
+            Text(pasteNeedsSave
+                 ? "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。"
+                 : imageDropError ?? "")
         }
         .onAppear {
             if let fileURL {
@@ -129,7 +140,7 @@ struct EditorWorkspace: View {
     private var sourceEditor: some View {
         MarkdownTextEditor(text: $document.text, model: editorModel,
                            imageImportMode: settingsStore.imageImportMode(for: fileURL),
-                           onImageDrop: dropImage)
+                           onImageDrop: dropImage, onImagePaste: pasteImage)
     }
 
     private func dropImage(_ url: URL, at location: Int) {
@@ -142,6 +153,24 @@ struct EditorWorkspace: View {
                                                            mode: mode, context: context,
                                                            model: editorModel,
                                                            currentContext: { documentContext })
+            } catch {
+                imageDropError = error.localizedDescription
+            }
+        }
+    }
+
+    private func pasteImage(_ data: Data) {
+        guard let draft = editorModel.imagePasteDraft() else { return }
+        let context = documentContext
+        guard context.directoryURL != nil else {
+            pasteNeedsSave = true
+            return
+        }
+        Task {
+            do {
+                try await ImageInsertionService.insertPaste(imageData: data, draft: draft,
+                                                            context: context, model: editorModel,
+                                                            currentContext: { documentContext })
             } catch {
                 imageDropError = error.localizedDescription
             }

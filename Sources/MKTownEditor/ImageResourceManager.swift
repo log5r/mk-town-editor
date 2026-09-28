@@ -128,6 +128,48 @@ struct ImageResourceManager {
         throw ImageResourceError.noAvailableName
     }
 
+    func savePastedImage(_ data: Data, for context: DocumentContext,
+                         now: Date = Date()) throws -> ImportedImage {
+        guard let directoryURL = context.directoryURL else { throw ImageResourceError.unsavedDocument }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceGetCount(source) > 0,
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+            throw ImageResourceError.invalidImage
+        }
+        let encoded = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(encoded, "public.png" as CFString, 1, nil) else {
+            throw ImageResourceError.invalidImage
+        }
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else { throw ImageResourceError.invalidImage }
+
+        let directory = directoryURL.standardizedFileURL.resolvingSymlinksInPath()
+        let directoryPath = directory.path.hasSuffix("/") ? directory.path : directory.path + "/"
+        let assets = directory.appendingPathComponent("assets", isDirectory: true)
+        try fileManager.createDirectory(at: assets, withIntermediateDirectories: true)
+        guard assets.resolvingSymlinksInPath().path.hasPrefix(directoryPath) else {
+            throw ImageResourceError.unsafeAssetsDirectory
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let base = "screenshot-\(formatter.string(from: now))"
+        for suffix in 1...10_000 {
+            let name = suffix == 1 ? "\(base).png" : "\(base)-\(suffix).png"
+            let url = assets.appendingPathComponent(name)
+            if fileManager.fileExists(atPath: url.path) { continue }
+            do {
+                try (encoded as Data).write(to: url, options: .withoutOverwriting)
+                return ImportedImage(relativePath: "assets/\(name)", createdFileURL: url)
+            } catch {
+                if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
+                throw error
+            }
+        }
+        throw ImageResourceError.noAvailableName
+    }
+
     func rollback(_ imported: ImportedImage) {
         guard let createdFileURL = imported.createdFileURL else { return }
         try? fileManager.removeItem(at: createdFileURL)
@@ -170,6 +212,21 @@ enum ImageInsertionService {
         let alt = fileURL.deletingPathExtension().lastPathComponent
         guard !Task.isCancelled, currentContext() == context,
               model.commitDroppedImage(draft, alt: alt.isEmpty ? "画像" : alt,
+                                       destination: imported.relativePath) else {
+            ImageResourceManager().rollback(imported)
+            throw ImageInsertionError.documentChanged
+        }
+    }
+
+    @MainActor
+    static func insertPaste(imageData: Data, draft: MarkdownImageDraft,
+                            context: DocumentContext, model: MarkdownEditorModel,
+                            currentContext: () -> DocumentContext) async throws {
+        let imported = try await Task.detached(priority: .userInitiated) {
+            try ImageResourceManager().savePastedImage(imageData, for: context)
+        }.value
+        guard !Task.isCancelled, currentContext() == context,
+              model.commitDroppedImage(draft, alt: "スクリーンショット",
                                        destination: imported.relativePath) else {
             ImageResourceManager().rollback(imported)
             throw ImageInsertionError.documentChanged

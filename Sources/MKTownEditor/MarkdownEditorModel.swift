@@ -171,6 +171,12 @@ final class MarkdownEditorModel: ObservableObject {
                                              selection: NSRange(location: sourceLocation, length: 0))
     }
 
+    func imagePasteDraft() -> MarkdownImageDraft? {
+        guard canExecuteCommand, let textView else { return nil }
+        return MarkdownLinkSyntax.imageDraft(in: textView.string,
+                                             selection: textView.selectedRange())
+    }
+
     func commitDroppedImage(_ draft: MarkdownImageDraft, alt: String, destination: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
