@@ -115,6 +115,37 @@ struct EditorWorkspace: View {
         })
     }
 
+    private var readingEstimate: ReadingEstimateSettings {
+        settingsStore.app.readingEstimate ?? ReadingEstimateSettings()
+    }
+
+    private func updateReadingEstimate(_ update: (inout ReadingEstimateSettings) -> Void) {
+        var value = readingEstimate
+        update(&value)
+        var settings = settingsStore.app
+        settings.readingEstimate = value
+        settingsStore.setAppSettings(settings)
+    }
+
+    private var readingLanguageBinding: Binding<ReadingLanguage> {
+        Binding(get: { readingEstimate.language },
+                set: { language in updateReadingEstimate { $0.language = language } })
+    }
+
+    private func rateBinding(spoken: Bool) -> Binding<Int> {
+        Binding(get: { spoken ? readingEstimate.speakingRate : readingEstimate.readingRate },
+                set: { rate in
+                    updateReadingEstimate { value in
+                        switch (value.language, spoken) {
+                        case (.japanese, false): value.japaneseReadingRate = rate
+                        case (.japanese, true): value.japaneseSpeakingRate = rate
+                        case (.english, false): value.englishReadingRate = rate
+                        case (.english, true): value.englishSpeakingRate = rate
+                        }
+                    }
+                })
+    }
+
     private var sectionStatistics: (title: String, value: DocumentStatistics)? {
         guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return nil }
         let entries = MarkdownOutline.entries(in: snapshot.analysis)
@@ -1191,6 +1222,25 @@ struct EditorWorkspace: View {
                         Text("\(displayedWordCount) 語。\(wordCountMode.explanation)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Divider()
+                        Picker("時間の推定言語", selection: readingLanguageBinding) {
+                            ForEach(ReadingLanguage.allCases, id: \.self) { language in
+                                Text(language.title).tag(language)
+                            }
+                        }
+                        let speedRange = readingEstimate.language == .japanese ? 100...2000 : 50...500
+                        Stepper(value: rateBinding(spoken: false), in: speedRange, step: 10) {
+                            Text("読む速度: \(readingEstimate.readingRate) \(readingEstimate.language.unit)")
+                        }
+                        Stepper(value: rateBinding(spoken: true), in: speedRange, step: 10) {
+                            Text("音読速度: \(readingEstimate.speakingRate) \(readingEstimate.language.unit)")
+                        }
+                        Text("読了の目安: \(estimatedTimeLabel(spoken: false)) / 音読の目安: \(estimatedTimeLabel(spoken: true))")
+                            .font(.caption)
+                        Text("Markdown原文を対象にした推定値です。実際の所要時間は読み方で変わります。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Divider()
                         statisticsRow("全文", value: statistics)
                         if let selectionStatistics {
                             statisticsRow("選択範囲", value: selectionStatistics)
@@ -1235,6 +1285,13 @@ struct EditorWorkspace: View {
             Text("空白込み \(value.characters) 文字 / 空白除外 \(value.nonWhitespaceCharacters) 文字")
                 .font(.caption)
         }
+    }
+
+    private func estimatedTimeLabel(spoken: Bool) -> String {
+        guard let minutes = readingEstimate.estimatedMinutes(for: document.text, spoken: spoken) else {
+            return "—"
+        }
+        return "約\(minutes) 分"
     }
 
     private func formatButton(_ command: EditorCommand) -> some View {

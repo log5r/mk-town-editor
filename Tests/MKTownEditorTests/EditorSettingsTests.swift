@@ -105,6 +105,19 @@ final class EditorSettingsTests: XCTestCase {
         let old = try JSONDecoder().decode(AppEditorSettings.self,
             from: Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8))
         XCTAssertNil(old.wordCountMode)
+        XCTAssertNil(old.readingEstimate)
+    }
+
+    func testReadingEstimateSettingsPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        var estimate = ReadingEstimateSettings()
+        estimate.language = .english
+        estimate.englishReadingRate = 240
+        settings.readingEstimate = estimate
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.readingEstimate, estimate)
     }
 
     func testOldAppSettingsDecodeWithoutImageImportMode() throws {

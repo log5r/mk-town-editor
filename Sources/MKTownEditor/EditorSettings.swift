@@ -104,6 +104,7 @@ struct AppEditorSettings: Codable, Equatable {
     var editorZoom: Double?
     var previewZoom: Double?
     var wordCountMode: WordCountMode?
+    var readingEstimate: ReadingEstimateSettings?
 }
 
 enum EditorZoomSurface: CaseIterable {
