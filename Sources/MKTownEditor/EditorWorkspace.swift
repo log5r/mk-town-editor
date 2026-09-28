@@ -16,6 +16,7 @@ struct EditorWorkspace: View {
     @State private var previewNavigationTarget: PreviewNavigationTarget?
     @State private var navigationSequence = 0
     @State private var showingGoToLine = false
+    @State private var showingGoToHeading = false
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -78,11 +79,17 @@ struct EditorWorkspace: View {
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
         .focusedSceneValue(\.goToLineAction) { showingGoToLine = true }
+        .focusedSceneValue(\.goToHeadingAction) { showingGoToHeading = true }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
                           initialLine: index.line(containingUTF16Offset: editorModel.selectedRange.location)) { line in
                 goToLine(line)
+            }
+        }
+        .sheet(isPresented: $showingGoToHeading) {
+            GoToHeadingSheet(entries: analysisStore.snapshot?.source == document.text ? outlineEntries : []) {
+                navigate(to: $0)
             }
         }
         .sheet(item: $editorModel.linkDraft) { draft in

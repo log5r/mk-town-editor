@@ -37,6 +37,7 @@
 		A1000000000000000000001F /* MarkdownOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* MarkdownOutline.swift */; };
 		A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* MarkdownLineIndex.swift */; };
 		A10000000000000000000021 /* GoToLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* GoToLineSheet.swift */; };
+		A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* GoToHeadingSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +74,7 @@
 		A2000000000000000000001F /* MarkdownOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownOutline.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* MarkdownLineIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineIndex.swift; sourceTree = "<group>"; };
 		A20000000000000000000021 /* GoToLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToLineSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* GoToHeadingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToHeadingSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +125,7 @@
 				A2000000000000000000001F /* MarkdownOutline.swift */,
 				A20000000000000000000020 /* MarkdownLineIndex.swift */,
 				A20000000000000000000021 /* GoToLineSheet.swift */,
+				A20000000000000000000022 /* GoToHeadingSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -221,6 +224,7 @@
 				A1000000000000000000001F /* MarkdownOutline.swift in Sources */,
 				A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */,
 				A10000000000000000000021 /* GoToLineSheet.swift in Sources */,
+				A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
