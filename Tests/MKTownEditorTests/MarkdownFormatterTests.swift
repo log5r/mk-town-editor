@@ -416,4 +416,48 @@ final class MarkdownFormatterTests: XCTestCase {
                                            selection: NSRange(location: 0, length: (multiline as NSString).length))
         XCTAssertEqual(full.applying(to: multiline), "```\none\n```")
     }
+
+    func testHorizontalRuleSeparatesAdjacentParagraphs() {
+        let source = "前の段落\n次の段落"
+        let location = (source as NSString).range(of: "次の段落").location
+        let edit = MarkdownFormatter.apply(.horizontalRule, to: source,
+                                           selection: NSRange(location: location, length: 0))
+        let updated = edit.applying(to: source)
+        XCTAssertEqual(updated, "前の段落\n\n***\n\n次の段落")
+        XCTAssertEqual(MarkdownAnalysis(updated).rootBlocks.map(\.kind),
+                       [.paragraph, .blank, .horizontalRule, .blank, .paragraph])
+    }
+
+    func testHorizontalRuleInMiddleOfLinePreservesBothSides() {
+        let source = "beforeafter"
+        let edit = MarkdownFormatter.apply(.horizontalRule, to: source,
+                                           selection: NSRange(location: 6, length: 0))
+        XCTAssertEqual(edit.applying(to: source), "before\n\n***\n\nafter")
+        XCTAssertEqual(edit.selection, NSRange(location: 13, length: 0))
+    }
+
+    func testHorizontalRuleAtDocumentStartCannotBecomeFrontMatterOrSetext() {
+        for source in ["", "heading"] {
+            let edit = MarkdownFormatter.apply(.horizontalRule, to: source,
+                                               selection: NSRange(location: 0, length: 0))
+            let updated = edit.applying(to: source)
+            XCTAssertTrue(updated.hasPrefix("***"))
+            XCTAssertEqual(MarkdownAnalysis(updated).rootBlocks.first?.kind, .horizontalRule)
+        }
+    }
+
+    func testHorizontalRulePreservesExistingBlankLinesAndCRLF() {
+        let source = "one\r\n\r\ntwo"
+        let location = (source as NSString).range(of: "two").location
+        let edit = MarkdownFormatter.apply(.horizontalRule, to: source,
+                                           selection: NSRange(location: location, length: 0))
+        XCTAssertEqual(edit.applying(to: source), "one\r\n\r\n***\r\n\r\ntwo")
+    }
+
+    func testHorizontalRuleReplacesSelectedTextWithoutChangingSurroundingParagraphs() {
+        let source = "one\nreplace\ntwo"
+        let edit = MarkdownFormatter.apply(.horizontalRule, to: source,
+                                           selection: (source as NSString).range(of: "replace"))
+        XCTAssertEqual(edit.applying(to: source), "one\n\n***\n\ntwo")
+    }
 }
