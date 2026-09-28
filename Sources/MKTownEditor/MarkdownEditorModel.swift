@@ -14,6 +14,7 @@ final class MarkdownEditorModel: ObservableObject {
     private var pendingNavigationLocation: Int?
     var listIndentWidth = 2
     var codeIndentWidth = 4
+    var tableAddsRowOnTab = true
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
@@ -251,6 +252,23 @@ final class MarkdownEditorModel: ObservableObject {
                                                     selection: textView.selectedRange(),
                                                     operation: operation) else { return false }
         return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
+    func moveTableCell(backwards: Bool) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let action = MarkdownTableEditing.tabAction(in: textView.string,
+                  selection: textView.selectedRange(), backwards: backwards,
+                  addsRowAtEnd: tableAddsRowOnTab) else { return false }
+        switch action {
+        case let .select(range):
+            textView.setSelectedRange(range)
+            textView.scrollRangeToVisible(range)
+            selectedRange = range
+        case let .edit(edit):
+            perform(edit, in: textView, storage: storage, focusEditor: true)
+        }
+        return true
     }
 
     func commitImage(alt: String, destination: String, title: String) -> Bool {

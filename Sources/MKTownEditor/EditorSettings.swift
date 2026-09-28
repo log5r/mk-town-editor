@@ -100,6 +100,7 @@ struct AppEditorSettings: Codable, Equatable {
     var tabWidth: Int?
     var listIndentWidth: Int?
     var codeIndentWidth: Int?
+    var tableAddsRowOnTab: Bool?
     var editorZoom: Double?
     var previewZoom: Double?
 }
