@@ -72,6 +72,7 @@ struct EditorWorkspace: View {
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
+        case inspector = "インスペクタ"
         case bookmarks = "ブックマーク"
         case files = "ファイル"
     }
@@ -759,8 +760,46 @@ struct EditorWorkspace: View {
             .padding(8)
             switch sidebarTab {
             case .outline: outlineSidebar
+            case .inspector: contentInspectorSidebar
             case .bookmarks: bookmarksSidebar
             case .files: fileSidebar
+            }
+        }
+    }
+
+    private var contentInspectorSidebar: some View {
+        let isReady = analysisStore.snapshot?.source == document.text
+        let items = analysisStore.snapshot.flatMap { snapshot in
+            snapshot.source == document.text
+                ? MarkdownContentInspector.items(in: document.text, analysis: snapshot.analysis)
+                : nil
+        } ?? []
+        return List {
+            ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
+                let matching = items.filter { $0.kind == kind }
+                Section("\(kind.rawValue)（\(matching.count)）") {
+                    ForEach(matching) { item in
+                        Button { navigate(to: item.sourceRange.location) } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(item.label).lineLimit(2)
+                                if let destination = item.destination {
+                                    Text(destination).font(.caption)
+                                        .foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(kind.rawValue)、\(item.label)")
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .overlay {
+            if !isReady {
+                ProgressView("項目を解析中…")
+            } else if items.isEmpty {
+                ContentUnavailableView("項目がありません", systemImage: "list.bullet.rectangle")
             }
         }
     }
