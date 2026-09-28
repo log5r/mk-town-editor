@@ -56,6 +56,7 @@ final class MarkdownEditorModel: ObservableObject {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText() else { return }
         let edit = MarkdownFormatter.apply(style, to: textView.string, selection: textView.selectedRange())
+        guard (storage.string as NSString).substring(with: edit.range) != edit.replacement else { return }
         guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else {
             return
         }

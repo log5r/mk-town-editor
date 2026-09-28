@@ -66,4 +66,35 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(edit.replacement, "> two\n")
         XCTAssertEqual(edit.applying(to: source), "one\n> two\nthree")
     }
+
+    func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
+        let source = "  ## 見出し 🙂 ##\n本文"
+        let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
+
+        XCTAssertEqual(edit.applying(to: source), "  #### 見出し 🙂\n本文")
+        XCTAssertEqual(edit.range.location, 0)
+    }
+
+    func testHeadingCanBecomeBodyWithoutChangingOtherLines() {
+        let source = "前\n### 見出し\r\n後"
+        let selection = (source as NSString).range(of: "見出し")
+        let edit = MarkdownFormatter.apply(.heading(level: 0), to: source, selection: selection)
+
+        XCTAssertEqual(edit.applying(to: source), "前\n見出し\r\n後")
+        XCTAssertEqual(edit.replacement, "見出し\r\n")
+    }
+
+    func testHeadingChangesEachSelectedLine() {
+        let source = "# 一\n## 二\n三"
+        let edit = MarkdownFormatter.apply(.heading(level: 2), to: source, selection: NSRange(location: 0, length: 8))
+
+        XCTAssertEqual(edit.applying(to: source), "## 一\n## 二\n三")
+    }
+
+    func testHeadingOnEmptyDocumentPlacesInsertionAfterMarker() {
+        let edit = MarkdownFormatter.apply(.heading(level: 3), to: "", selection: NSRange(location: 0, length: 0))
+
+        XCTAssertEqual(edit.applying(to: ""), "### ")
+        XCTAssertEqual(edit.selection, NSRange(location: 4, length: 0))
+    }
 }
