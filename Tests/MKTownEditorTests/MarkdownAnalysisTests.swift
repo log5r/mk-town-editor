@@ -306,4 +306,24 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertNil(blocks[1].task)
         XCTAssertEqual(blocks[2].task, MarkdownTask(isChecked: false, content: "\ncontinues"))
     }
+
+    func testReferenceDefinitionsAreCollectedAcrossDocumentAndFirstWins() {
+        let source = "[Example][  Mixed  CASE ]\n\n[ mixed case ]: /first \"Title\"\n[MIXED CASE]: /second"
+        let analysis = MarkdownAnalysis(source)
+        let reference = try! XCTUnwrap(analysis.references["mixed case"])
+
+        XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.paragraph, .blank])
+        XCTAssertEqual(reference.destination, "/first")
+        XCTAssertEqual(reference.title, "Title")
+        XCTAssertEqual((source as NSString).substring(with: reference.sourceRange),
+                       "[ mixed case ]: /first \"Title\"\n")
+    }
+
+    func testDefinitionsInsideQuoteAreAvailableOutsideAndFencesAreIgnored() {
+        let source = "> [label]: /quote\n\n```\n[hidden]: /code\n```\n\n[label] [hidden]"
+        let analysis = MarkdownAnalysis(source)
+
+        XCTAssertEqual(analysis.references["label"]?.destination, "/quote")
+        XCTAssertNil(analysis.references["hidden"])
+    }
 }

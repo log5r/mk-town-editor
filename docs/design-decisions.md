@@ -49,3 +49,5 @@ GFM表はヘッダーと区切り行の列数が一致する場合だけ表ブ�
 GFMの`[ ]`・`[x]`・`[X]`はリスト項目の最初の段落の先頭だけでタスク状態として認識する。原文と選択用のUTF-16範囲を変えず、表示時に記号を「☐ 未完了」「☑ 完了」へ置き換える。プレビューはテキストとしてキーボード選択でき、状態名を文字で含むため読み上げ時も区別できる。チェック操作による本文変更は表示機能とは別の編集コマンドとして扱う。仕様の参照: [GFM Task list items](https://github.github.com/gfm/#task-list-items-extension-)。
 
 取り消し線の調査では、FoundationのMarkdownパーサーが`~~文字~~`をインライン意図として解析する一方、`NSAttributedString`への変換結果では意図属性の値が`NSNumber`になり、従来の`InlinePresentationIntent`への直接キャストで取り出せないことが分かった。数値から意図を復元し、取り消し線には`strikethroughStyle`を適用する。同じ経路を通る太字・斜体・インラインコードも回帰テストで確認する。取り消し線の構文は[GFM Strikethrough](https://github.github.com/gfm/#strikethrough-extension-)に従う。
+
+参照形式のリンク・画像は、ブロック解析中に文書全体の定義を先に集め、最初の定義を採用する。ラベルは前後や連続する空白を正規化して小文字化し、通常の`[文字][ラベル]`、`[ラベル][]`、`[ラベル]`を解決する。定義行はプレビューから除き、原文のUTF-16範囲を参照情報に保存する。引用・リスト・表セルでも共通の定義を使う。インラインコード内やエスケープした構文は置換しない。画像参照は画像表示機能の追加前は「画像: 代替テキスト」という参照先へのリンクで示す。仕様の参照: [CommonMark Link reference definitions](https://spec.commonmark.org/0.31.2/#link-reference-definitions)。
