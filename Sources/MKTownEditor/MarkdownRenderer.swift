@@ -4,18 +4,54 @@ import Foundation
 @MainActor
 enum MarkdownRenderer {
     static func render(_ markdown: String) -> NSAttributedString {
-        let output = NSMutableAttributedString()
-        let blocks = MarkdownAnalysis(markdown).blocks
+        let analysis = MarkdownAnalysis(markdown)
+        return renderSequence(analysis.rootBlocks, in: analysis)
+    }
 
+    private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis) -> NSAttributedString {
+        let output = NSMutableAttributedString()
         for (index, block) in blocks.enumerated() {
-            let rendered = render(block)
-            output.append(rendered)
+            output.append(renderTree(block, in: analysis))
             if index < blocks.count - 1 {
                 output.append(NSAttributedString(string: "\n"))
             }
         }
-
         return output
+    }
+
+    private static func renderTree(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> NSAttributedString {
+        let children = analysis.children(of: block)
+        if block.kind == .quote {
+            return quote(renderSequence(children, in: analysis))
+        }
+        let output = NSMutableAttributedString(attributedString: render(block))
+        if !children.isEmpty {
+            output.append(NSAttributedString(string: "\n"))
+            output.append(renderSequence(children, in: analysis))
+        }
+        return output
+    }
+
+    private static func quote(_ content: NSAttributedString) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        let source = content.string as NSString
+        let prefix = NSAttributedString(
+            string: "│  ",
+            attributes: baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)
+        )
+        var cursor = 0
+        repeat {
+            result.append(prefix)
+            let newline = source.range(of: "\n", range: NSRange(location: cursor, length: source.length - cursor))
+            let end = newline.location == NSNotFound ? source.length : newline.location
+            if end > cursor {
+                result.append(content.attributedSubstring(from: NSRange(location: cursor, length: end - cursor)))
+            }
+            if newline.location == NSNotFound { break }
+            result.append(NSAttributedString(string: "\n"))
+            cursor = end + 1
+        } while cursor <= source.length
+        return result
     }
 
     private static func render(_ block: MarkdownBlock) -> NSAttributedString {
@@ -39,9 +75,7 @@ enum MarkdownRenderer {
                 paragraphSpacing: level < 3 ? 14 : 9
             )
         case .quote:
-            let content = inline(block.content, baseFont: .systemFont(ofSize: 15), color: .secondaryLabelColor)
-            content.insert(NSAttributedString(string: "│  ", attributes: baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)), at: 0)
-            return content
+            return NSAttributedString(string: "")
         case .unorderedList:
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
             content.insert(NSAttributedString(string: "•  ", attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
