@@ -551,3 +551,93 @@ enum MarkdownFormatter {
         return NSRange(location: location, length: min(max(selection.length, 0), length - location))
     }
 }
+
+struct MarkdownAutoFormatChange: Equatable {
+    let line: Int
+    let before: String
+    let after: String
+}
+
+struct MarkdownAutoFormatPlan: Equatable {
+    let source: String
+    let edit: MarkdownEdit
+    let changes: [MarkdownAutoFormatChange]
+}
+
+enum MarkdownAutoFormat {
+    private static let listMarker = try! NSRegularExpression(pattern: #"^([ \t]*)[+*][ \t]+"#)
+    private static let headingSpace = try! NSRegularExpression(pattern: #"^( {0,3}#{1,6})[ \t]+"#)
+
+    static func plan(_ source: String, selection: NSRange? = nil) -> MarkdownAutoFormatPlan? {
+        let text = source as NSString
+        let fullRange = NSRange(location: 0, length: text.length)
+        let scope: NSRange
+        if let selection {
+            guard selection.location >= 0, selection.location <= text.length,
+                  selection.length >= 0,
+                  selection.length <= text.length - selection.location else { return nil }
+            scope = text.lineRange(for: selection)
+        } else {
+            scope = fullRange
+        }
+        let analysis = MarkdownAnalysis(source)
+        let codeRanges = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
+        let listStarts = Set(analysis.blocks.filter { $0.kind == .unorderedList }
+            .map(\.sourceRange.location))
+        let frontMatterEnd = frontMatterEnd(in: source)
+        let starts = MarkdownLineIndex(source).starts
+        var replacement = ""
+        var changes: [MarkdownAutoFormatChange] = []
+        for (index, start) in starts.enumerated() {
+            guard start >= scope.location, start < NSMaxRange(scope) else { continue }
+            let end = index + 1 < starts.count ? starts[index + 1] : text.length
+            let complete = text.substring(with: NSRange(location: start, length: end - start))
+            let content = complete.trimmingCharacters(in: .newlines)
+            let newline = String(complete.dropFirst(content.count))
+            let protected = start < frontMatterEnd || codeRanges.contains { NSLocationInRange(start, $0) }
+            let formatted = protected ? content : formatLine(content, isList: listStarts.contains(start))
+            if content != formatted {
+                changes.append(MarkdownAutoFormatChange(line: index + 1,
+                                                       before: content, after: formatted))
+            }
+            replacement += formatted + newline
+        }
+        guard !changes.isEmpty else { return nil }
+        let edit = MarkdownEdit(range: scope, replacement: replacement,
+            selection: NSRange(location: scope.location + (replacement as NSString).length, length: 0))
+        return MarkdownAutoFormatPlan(source: source, edit: edit, changes: changes)
+    }
+
+    private static func formatLine(_ line: String, isList: Bool) -> String {
+        let whitespace = line.reversed().prefix { $0 == " " || $0 == "\t" }
+        let trimmed = whitespace.count >= 2 && whitespace.allSatisfy { $0 == " " }
+            ? line : String(line.dropLast(whitespace.count))
+        let range = NSRange(location: 0, length: (trimmed as NSString).length)
+        if isList, let match = listMarker.firstMatch(in: trimmed, range: range) {
+            let prefix = (trimmed as NSString).substring(with: match.range(at: 1))
+            return prefix + "- " + (trimmed as NSString).substring(from: NSMaxRange(match.range))
+        }
+        if let match = headingSpace.firstMatch(in: trimmed, range: range) {
+            let prefix = (trimmed as NSString).substring(with: match.range(at: 1))
+            return prefix + " " + (trimmed as NSString).substring(from: NSMaxRange(match.range))
+        }
+        return trimmed
+    }
+
+    private static func frontMatterEnd(in source: String) -> Int {
+        let starts = MarkdownLineIndex(source).starts
+        let text = source as NSString
+        guard starts.count > 1 else { return 0 }
+        func line(at index: Int) -> String {
+            let start = starts[index]
+            let end = index + 1 < starts.count ? starts[index + 1] : text.length
+            return text.substring(with: NSRange(location: start, length: end - start))
+                .trimmingCharacters(in: .newlines)
+        }
+        guard line(at: 0) == "---" else { return 0 }
+        for index in 1..<starts.count where line(at: index) == "---" || line(at: index) == "..." {
+            return index + 1 < starts.count ? starts[index + 1] : text.length
+        }
+        return text.length
+    }
+}

@@ -460,4 +460,24 @@ final class MarkdownFormatterTests: XCTestCase {
                                            selection: (source as NSString).range(of: "replace"))
         XCTAssertEqual(edit.applying(to: source), "one\n\n***\n\ntwo")
     }
+
+    func testAutoFormatPreservesFrontMatterCodeAndHardBreaksAndIsIdempotent() throws {
+        let source = "---\ntitle: keep  \n---\n#  Title \n+ item\nline  \n```md\n+ code  \n```\n"
+        let plan = try XCTUnwrap(MarkdownAutoFormat.plan(source))
+        let updated = plan.edit.applying(to: source)
+        XCTAssertEqual(updated,
+            "---\ntitle: keep  \n---\n# Title\n- item\nline  \n```md\n+ code  \n```\n")
+        XCTAssertEqual(plan.changes.map(\.line), [4, 5])
+        XCTAssertNil(MarkdownAutoFormat.plan(updated))
+    }
+
+    func testAutoFormatSelectionChangesOnlySelectedLinesAndKeepsCRLF() throws {
+        let source = "#  One\r\n+ first\r\n* second\r\n"
+        let selection = (source as NSString).range(of: "+ first")
+        let plan = try XCTUnwrap(MarkdownAutoFormat.plan(source, selection: selection))
+        XCTAssertEqual(plan.edit.applying(to: source), "#  One\r\n- first\r\n* second\r\n")
+        XCTAssertEqual(plan.changes.map(\.line), [2])
+        XCTAssertNil(MarkdownAutoFormat.plan(source,
+            selection: NSRange(location: NSNotFound, length: 1)))
+    }
 }
