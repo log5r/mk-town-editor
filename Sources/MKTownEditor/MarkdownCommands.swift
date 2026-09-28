@@ -60,6 +60,10 @@ private struct ExportPlainTextActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct OpenQuickFileActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -110,6 +114,10 @@ extension FocusedValues {
         get { self[ExportPlainTextActionKey.self] }
         set { self[ExportPlainTextActionKey.self] = newValue }
     }
+    var openQuickFileAction: (() -> Void)? {
+        get { self[OpenQuickFileActionKey.self] }
+        set { self[OpenQuickFileActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -125,6 +133,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
     @FocusedValue(\.copyRichAction) private var copyRichAction
     @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
+    @FocusedValue(\.openQuickFileAction) private var openQuickFileAction
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
@@ -159,6 +168,9 @@ struct MarkdownCommands: Commands {
         CommandMenu("ワークスペース") {
             Button("フォルダを開く…") { workspaceStore.chooseFolder() }
                 .keyboardShortcut("o", modifiers: [.command, .option])
+            Button("ファイル名で開く…") { openQuickFileAction?() }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(openQuickFileAction == nil || workspaceStore.rootURL == nil)
             Button("ファイル一覧を更新") { workspaceStore.refresh(force: true) }
                 .disabled(workspaceStore.rootURL == nil)
         }

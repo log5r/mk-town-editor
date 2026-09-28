@@ -58,6 +58,8 @@
 		A10000000000000000000040 /* MarkdownExportPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000040 /* MarkdownExportPreset.swift */; };
 		A10000000000000000000041 /* MarkdownExportPresetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000041 /* MarkdownExportPresetSheet.swift */; };
 		A10000000000000000000042 /* WorkspaceFileIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000042 /* WorkspaceFileIndex.swift */; };
+		A10000000000000000000043 /* WorkspaceQuickOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000043 /* WorkspaceQuickOpen.swift */; };
+		A10000000000000000000044 /* WorkspaceQuickOpenSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000044 /* WorkspaceQuickOpenSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -115,6 +117,8 @@
 		A20000000000000000000040 /* MarkdownExportPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownExportPreset.swift; sourceTree = "<group>"; };
 		A20000000000000000000041 /* MarkdownExportPresetSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownExportPresetSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000042 /* WorkspaceFileIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFileIndex.swift; sourceTree = "<group>"; };
+		A20000000000000000000043 /* WorkspaceQuickOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceQuickOpen.swift; sourceTree = "<group>"; };
+		A20000000000000000000044 /* WorkspaceQuickOpenSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceQuickOpenSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -186,6 +190,8 @@
 				A20000000000000000000040 /* MarkdownExportPreset.swift */,
 				A20000000000000000000041 /* MarkdownExportPresetSheet.swift */,
 				A20000000000000000000042 /* WorkspaceFileIndex.swift */,
+				A20000000000000000000043 /* WorkspaceQuickOpen.swift */,
+				A20000000000000000000044 /* WorkspaceQuickOpenSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -305,6 +311,8 @@
 				A10000000000000000000040 /* MarkdownExportPreset.swift in Sources */,
 				A10000000000000000000041 /* MarkdownExportPresetSheet.swift in Sources */,
 				A10000000000000000000042 /* WorkspaceFileIndex.swift in Sources */,
+				A10000000000000000000043 /* WorkspaceQuickOpen.swift in Sources */,
+				A10000000000000000000044 /* WorkspaceQuickOpenSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
