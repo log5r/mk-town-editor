@@ -62,6 +62,7 @@ enum MarkdownFormattingStyle {
     case moveLinesUp
     case moveLinesDown
     case deleteLines
+    case comment
     case unorderedList
     case orderedList
     case taskList
@@ -145,6 +146,8 @@ enum MarkdownFormatter {
             return editLines(text, selection: safeSelection, operation: .moveDown)
         case .deleteLines:
             return editLines(text, selection: safeSelection, operation: .delete)
+        case .comment:
+            return commentEdit(in: text, selection: safeSelection) ?? unchangedEdit(text, selection: safeSelection)
         case .unorderedList:
             return convertList(text, selection: safeSelection, target: .unordered)
         case .orderedList:
@@ -556,6 +559,36 @@ enum MarkdownFormatter {
     private static func unchangedEdit(_ text: String, selection: NSRange) -> MarkdownEdit {
         MarkdownEdit(range: selection, replacement: (text as NSString).substring(with: selection),
             selection: selection)
+    }
+
+    private static let commentExpression = try! NSRegularExpression(pattern: #"<!--[\s\S]*?-->"#)
+
+    static func commentEdit(in text: String, selection: NSRange) -> MarkdownEdit? {
+        let source = text as NSString
+        let selection = clamped(selection, in: text)
+        let matches = commentExpression.matches(in: text,
+            range: NSRange(location: 0, length: source.length))
+        if let existing = matches.first(where: { match in
+            selection.length == 0
+                ? selection.location > match.range.location && selection.location < NSMaxRange(match.range)
+                : selection.location >= match.range.location &&
+                    NSMaxRange(selection) <= NSMaxRange(match.range)
+        }) {
+            let inner = source.substring(with: NSRange(location: existing.range.location + 4,
+                length: existing.range.length - 7))
+            let content = inner.hasPrefix(" ") && inner.hasSuffix(" ")
+                ? String(inner.dropFirst().dropLast()) : inner
+            return MarkdownEdit(range: existing.range, replacement: content,
+                selection: NSRange(location: existing.range.location,
+                    length: (content as NSString).length))
+        }
+        let selected = source.substring(with: selection)
+        guard !selected.contains("--"), !selected.contains("<!--") else { return nil }
+        let replacement = "<!-- " + selected + " -->"
+        let innerStart = selection.location + 5
+        return MarkdownEdit(range: selection, replacement: replacement,
+            selection: NSRange(location: innerStart,
+                length: (selected as NSString).length))
     }
 
     private static func removeFormatting(_ text: String, selection: NSRange) -> MarkdownEdit {

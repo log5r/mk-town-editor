@@ -17,6 +17,7 @@ enum EditorCommand: Hashable {
     case moveLinesUp
     case moveLinesDown
     case deleteLines
+    case comment
     case unorderedList
     case orderedList
     case taskList
@@ -50,6 +51,7 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: "行を上へ移動"
         case .moveLinesDown: "行を下へ移動"
         case .deleteLines: "行を削除"
+        case .comment: "コメントにする／解除"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -82,6 +84,7 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: "arrow.up"
         case .moveLinesDown: "arrow.down"
         case .deleteLines: "trash"
+        case .comment: "text.bubble"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -111,6 +114,7 @@ enum EditorCommand: Hashable {
         case .tableOfContents: nil
         case .renumberList: nil
         case .duplicateLines, .moveLinesUp, .moveLinesDown, .deleteLines: nil
+        case .comment: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -136,6 +140,10 @@ enum EditorCommand: Hashable {
             guard let view = model?.textView else { return false }
             return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
                                             direction: .outdent) != nil
+        case .comment:
+            guard let view = model?.textView else { return false }
+            return MarkdownFormatter.commentEdit(in: view.string,
+                selection: view.selectedRange()) != nil
         default: return true
         }
     }
@@ -160,6 +168,7 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: model.apply(.moveLinesUp)
         case .moveLinesDown: model.apply(.moveLinesDown)
         case .deleteLines: model.apply(.deleteLines)
+        case .comment: model.apply(.comment)
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)

@@ -228,6 +228,27 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual(first.applying(to: multi), "two\nthree")
     }
 
+    func testCommentWrapsAndUnwrapsMultilineSelectionWithoutChangingContent() {
+        let source = "前\r\n🙂\r\n後"
+        let selection = (source as NSString).range(of: "🙂\r\n後")
+        let wrapped = try! XCTUnwrap(MarkdownFormatter.commentEdit(in: source, selection: selection))
+        let commented = wrapped.applying(to: source)
+        XCTAssertEqual(commented, "前\r\n<!-- 🙂\r\n後 -->")
+
+        let unwrapped = try! XCTUnwrap(MarkdownFormatter.commentEdit(in: commented,
+            selection: (commented as NSString).range(of: "🙂")))
+        XCTAssertEqual(unwrapped.applying(to: commented), source)
+    }
+
+    func testCommentAtEmptySelectionPlacesCaretInsideAndRejectsInvalidContent() {
+        let edit = try! XCTUnwrap(MarkdownFormatter.commentEdit(in: "",
+            selection: NSRange(location: 0, length: 0)))
+        XCTAssertEqual(edit.applying(to: ""), "<!--  -->")
+        XCTAssertEqual(edit.selection, NSRange(location: 5, length: 0))
+        XCTAssertNil(MarkdownFormatter.commentEdit(in: "a--b",
+            selection: NSRange(location: 0, length: 4)))
+    }
+
     func testHeadingLevelReplacesExistingMarkerAndClosingHashes() {
         let source = "  ## 見出し 🙂 ##\n本文"
         let edit = MarkdownFormatter.apply(.heading(level: 4), to: source, selection: NSRange(location: 6, length: 0))
