@@ -75,6 +75,19 @@ final class ImagePasteTests: XCTestCase {
         }
     }
 
+    func testFailedAssetMoveRemovesPastedStagingFile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let context = DocumentContext(fileURL: root.appendingPathComponent("README.md"))
+        let manager = ImageResourceManager(fileManager: FailingImageMoveManager())
+
+        XCTAssertThrowsError(try manager.savePastedImage(png, for: context))
+        let contents = try FileManager.default.contentsOfDirectory(
+            atPath: root.appendingPathComponent("assets").path)
+        XCTAssertTrue(contents.isEmpty)
+    }
+
     func testPasteReplacesSelectionAndIsUndoable() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -124,5 +137,11 @@ final class ImagePasteTests: XCTestCase {
         let assets = root.appendingPathComponent("assets")
         XCTAssertTrue((try FileManager.default.contentsOfDirectory(atPath: assets.path)).isEmpty)
         XCTAssertEqual(view.string, "changed")
+    }
+}
+
+private final class FailingImageMoveManager: FileManager {
+    override func moveItem(at srcURL: URL, to dstURL: URL) throws {
+        throw CocoaError(.fileWriteNoPermission)
     }
 }
