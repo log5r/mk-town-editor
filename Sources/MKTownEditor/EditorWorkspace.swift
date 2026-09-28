@@ -493,6 +493,11 @@ struct EditorWorkspace: View {
                                 editorModel.commitLink(label: label, destination: destination, title: title)
                             }, onSaveReference: { label, referenceID in
                                 editorModel.commitReferenceLink(label: label, referenceID: referenceID)
+                            }, onAttach: { label, url, mode in
+                                let context = documentContext
+                                try await AttachmentInsertionService.insert(label: label,
+                                    fileURL: url, mode: mode, context: context,
+                                    model: editorModel, currentContext: { documentContext })
                             })
         }
         .sheet(item: $editorModel.imageDraft) { draft in
@@ -1707,6 +1712,7 @@ private struct LinkEditorSheet: View {
     let analysis: MarkdownAnalysis?
     let onSave: (String, String, String) -> Bool
     let onSaveReference: (String, String) -> Bool
+    let onAttach: @MainActor (String, URL, ImageImportMode) async throws -> Void
     @Environment(\.dismiss) private var dismiss
     private enum LinkForm: String, CaseIterable { case inline = "URL", reference = "参照ID" }
     @State private var form: LinkForm = .inline
@@ -1717,15 +1723,22 @@ private struct LinkEditorSheet: View {
     @State private var showsSaveError = false
     @State private var fileCandidates: [FilePathSuggestion] = []
     @State private var headingSuggestions: [HeadingLinkSuggestion] = []
+    @State private var attachmentURL: URL?
+    @State private var attachmentMode: ImageImportMode = .managedCopy
+    @State private var showsAttachmentImporter = false
+    @State private var isAttaching = false
+    @State private var attachmentError: String?
 
     init(draft: MarkdownLinkDraft, documentContext: DocumentContext, analysis: MarkdownAnalysis?,
          onSave: @escaping (String, String, String) -> Bool,
-         onSaveReference: @escaping (String, String) -> Bool) {
+         onSaveReference: @escaping (String, String) -> Bool,
+         onAttach: @escaping @MainActor (String, URL, ImageImportMode) async throws -> Void) {
         self.draft = draft
         self.documentContext = documentContext
         self.analysis = analysis
         self.onSave = onSave
         self.onSaveReference = onSaveReference
+        self.onAttach = onAttach
         _label = State(initialValue: draft.label)
         _destination = State(initialValue: draft.destination)
         _title = State(initialValue: draft.title)
@@ -1758,6 +1771,27 @@ private struct LinkEditorSheet: View {
             }
             .formStyle(.grouped)
             .frame(height: 180)
+            if form == .inline && !draft.isExisting {
+                HStack {
+                    Button("ファイルを選択…") { showsAttachmentImporter = true }
+                        .disabled(documentContext.directoryURL == nil || isAttaching)
+                    Text(attachmentURL?.lastPathComponent ?? "ファイル未選択")
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                if attachmentURL != nil {
+                    Picker("添付方法", selection: $attachmentMode) {
+                        ForEach(ImageImportMode.allCases, id: \.self) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    Button("ファイルを添付") { attachFile() }
+                        .disabled(isAttaching || label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            if let attachmentError {
+                Text(attachmentError).foregroundStyle(.red)
+            }
             let fileSuggestions = form == .inline
                 ? FilePathCompletion.matches(destination, in: fileCandidates) : []
             if !fileSuggestions.isEmpty {
@@ -1828,6 +1862,17 @@ private struct LinkEditorSheet: View {
                            : referenceID.isEmpty))
             }
         }
+        .fileImporter(isPresented: $showsAttachmentImporter, allowedContentTypes: [.item],
+                      allowsMultipleSelection: false) { outcome in
+            switch outcome {
+            case let .success(urls):
+                attachmentURL = urls.first
+                if label == "リンク", let file = urls.first {
+                    label = file.deletingPathExtension().lastPathComponent
+                }
+            case let .failure(error): attachmentError = error.localizedDescription
+            }
+        }
         .frame(width: 480)
         .padding(20)
         .task(id: documentContext.directoryURL) {
@@ -1847,6 +1892,21 @@ private struct LinkEditorSheet: View {
                 MarkdownLinkCompletion.headings(for: query, current: analysis, context: context)
             }.value
             if !Task.isCancelled { headingSuggestions = suggestions }
+        }
+    }
+
+    private func attachFile() {
+        guard let attachmentURL else { return }
+        isAttaching = true
+        attachmentError = nil
+        Task {
+            do {
+                try await onAttach(label, attachmentURL, attachmentMode)
+                dismiss()
+            } catch {
+                attachmentError = error.localizedDescription
+            }
+            isAttaching = false
         }
     }
 }

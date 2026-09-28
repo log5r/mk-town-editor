@@ -186,6 +186,7 @@ struct ImportedImage: Sendable {
 enum ImageResourceError: LocalizedError, Equatable {
     case unsavedDocument
     case invalidImage
+    case invalidAttachment
     case noAvailableName
     case unsafeAssetsDirectory
 
@@ -193,6 +194,7 @@ enum ImageResourceError: LocalizedError, Equatable {
         switch self {
         case .unsavedDocument: "ファイル画像を挿入するには、先に文書を保存してください。"
         case .invalidImage: "選択したファイルは対応する画像ではありません。"
+        case .invalidAttachment: "選択したファイルを添付できません。"
         case .noAvailableName: "画像の保存名を決められません。"
         case .unsafeAssetsDirectory: "画像保存先の assets フォルダを確認してください。"
         }
@@ -483,6 +485,88 @@ enum ImageInsertionService {
         guard !Task.isCancelled, currentContext() == context,
               model.commitDroppedImage(draft, alt: "スクリーンショット",
                                        destination: imported.relativePath) else {
+            ImageResourceManager().rollback(imported)
+            throw ImageInsertionError.documentChanged
+        }
+    }
+}
+
+struct FileAttachmentManager {
+    func importFile(at fileURL: URL, for context: DocumentContext,
+                    mode: ImageImportMode) throws -> ImportedImage {
+        guard let directory = context.directoryURL else { throw ImageResourceError.unsavedDocument }
+        let hasAccess = fileURL.startAccessingSecurityScopedResource()
+        defer { if hasAccess { fileURL.stopAccessingSecurityScopedResource() } }
+        let source = fileURL.standardizedFileURL.resolvingSymlinksInPath()
+        guard source.isFileURL,
+              (try? source.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        else { throw ImageResourceError.invalidAttachment }
+        let base = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let prefix = base.path.hasSuffix("/") ? base.path : base.path + "/"
+        if source.path.hasPrefix(prefix) {
+            return ImportedImage(relativePath: String(source.path.dropFirst(prefix.count)),
+                                 createdFileURL: nil)
+        }
+        if mode == .relativeReference {
+            let baseParts = base.pathComponents
+            let sourceParts = source.pathComponents
+            let common = zip(baseParts, sourceParts).prefix(while: { $0.0 == $0.1 }).count
+            let parts = Array(repeating: "..", count: baseParts.count - common) +
+                Array(sourceParts.dropFirst(common))
+            return ImportedImage(relativePath: parts.joined(separator: "/"), createdFileURL: nil)
+        }
+        let assets = base.appendingPathComponent("assets", isDirectory: true)
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        guard assets.resolvingSymlinksInPath().path.hasPrefix(prefix) else {
+            throw ImageResourceError.unsafeAssetsDirectory
+        }
+        let staging = assets.appendingPathComponent(".attach-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: staging) }
+        try FileManager.default.copyItem(at: source, to: staging)
+        let size = try staging.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        let existing = try FileManager.default.contentsOfDirectory(at: assets,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]).first { candidate in
+                guard let values = try? candidate.resourceValues(forKeys: [.isRegularFileKey,
+                    .isSymbolicLinkKey, .fileSizeKey]) else { return false }
+                return values.isRegularFile == true && values.isSymbolicLink != true &&
+                    candidate.pathExtension.lowercased() == source.pathExtension.lowercased() &&
+                    values.fileSize == size &&
+                    FileManager.default.contentsEqual(atPath: staging.path, andPath: candidate.path)
+            }
+        if let existing {
+            return ImportedImage(relativePath: "assets/\(existing.lastPathComponent)",
+                                 createdFileURL: nil)
+        }
+        let name = source.deletingPathExtension().lastPathComponent
+        let ext = source.pathExtension
+        for suffix in 1...10_000 {
+            let filename = suffix == 1 ? source.lastPathComponent :
+                "\(name)-\(suffix)" + (ext.isEmpty ? "" : ".\(ext)")
+            let target = assets.appendingPathComponent(filename)
+            if FileManager.default.fileExists(atPath: target.path) { continue }
+            do {
+                try FileManager.default.moveItem(at: staging, to: target)
+                return ImportedImage(relativePath: "assets/\(filename)", createdFileURL: target)
+            } catch {
+                if (error as? CocoaError)?.code == .fileWriteFileExists { continue }
+                throw error
+            }
+        }
+        throw ImageResourceError.noAvailableName
+    }
+}
+
+enum AttachmentInsertionService {
+    @MainActor
+    static func insert(label: String, fileURL: URL, mode: ImageImportMode,
+                       context: DocumentContext, model: MarkdownEditorModel,
+                       currentContext: () -> DocumentContext) async throws {
+        let imported = try await Task.detached(priority: .userInitiated) {
+            try FileAttachmentManager().importFile(at: fileURL, for: context, mode: mode)
+        }.value
+        guard !Task.isCancelled, currentContext() == context,
+              model.commitLink(label: label, destination: imported.relativePath, title: "") else {
             ImageResourceManager().rollback(imported)
             throw ImageInsertionError.documentChanged
         }

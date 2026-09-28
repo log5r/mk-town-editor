@@ -155,6 +155,11 @@ struct MarkdownPreview: View {
                             inspectedImage = ImageInspectionItem(url: imageURL)
                             return .handled
                         }
+                        if let fileURL = MarkdownAttachmentInspectionLink.localFile(url,
+                            context: documentContext) {
+                            inspectedImage = ImageInspectionItem(url: fileURL)
+                            return .handled
+                        }
                         if url.scheme == "mktown-footnote" {
                             proxy.scrollTo("footnote-\(url.lastPathComponent)", anchor: .center)
                             return .handled
@@ -381,6 +386,11 @@ private struct MarkdownTextPreview: NSViewRepresentable {
                 onInspectImage?(imageURL)
                 return true
             }
+            if let fileURL = MarkdownAttachmentInspectionLink.localFile(url,
+                context: documentContext) {
+                onInspectImage?(fileURL)
+                return true
+            }
             if let fragment = MarkdownHeadingIndex.localFragment(in: url), let onOpenHeading {
                 onOpenHeading(fragment)
                 return true
@@ -412,6 +422,17 @@ private struct MarkdownTextPreview: NSViewRepresentable {
 private struct ImageInspectionItem: Identifiable {
     let id = UUID()
     let url: URL
+}
+
+enum MarkdownAttachmentInspectionLink {
+    static func localFile(_ link: URL, context: DocumentContext) -> URL? {
+        guard link.scheme == nil,
+              let file = context.resolveLocalResource(link.relativeString),
+              !["md", "markdown", "txt"].contains(file.pathExtension.lowercased()),
+              (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        else { return nil }
+        return file
+    }
 }
 
 private struct ImageInspectionView: View {

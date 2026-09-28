@@ -163,6 +163,39 @@ final class ImageResourceManagerTests: XCTestCase {
         }
         XCTAssertFalse(options.isValid)
     }
+
+    func testFileAttachmentCopiesOrReferencesWithoutChangingOriginal() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let docs = root.appendingPathComponent("docs")
+        try FileManager.default.createDirectory(at: docs, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("仕様 one.pdf")
+        let original = Data("pdf-content".utf8)
+        try original.write(to: file)
+        let context = DocumentContext(fileURL: docs.appendingPathComponent("note.md"))
+        let manager = FileAttachmentManager()
+
+        let referenced = try manager.importFile(at: file, for: context,
+            mode: .relativeReference)
+        XCTAssertEqual(referenced.relativePath, "../仕様 one.pdf")
+        XCTAssertNil(referenced.createdFileURL)
+
+        let copied = try manager.importFile(at: file, for: context, mode: .managedCopy)
+        let repeated = try manager.importFile(at: file, for: context, mode: .managedCopy)
+        XCTAssertEqual(copied.relativePath, "assets/仕様 one.pdf")
+        XCTAssertEqual(repeated.relativePath, copied.relativePath)
+        XCTAssertNil(repeated.createdFileURL)
+        XCTAssertEqual(try Data(contentsOf: file), original)
+        XCTAssertEqual(try Data(contentsOf: copied.createdFileURL!), original)
+        XCTAssertEqual(MarkdownLinkSyntax.makeLink(label: "仕様", destination: copied.relativePath),
+            "[仕様](assets/仕様%20one.pdf)")
+        let other = root.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let different = other.appendingPathComponent("仕様 one.pdf")
+        try Data("changed".utf8).write(to: different)
+        let numbered = try manager.importFile(at: different, for: context, mode: .managedCopy)
+        XCTAssertEqual(numbered.relativePath, "assets/仕様 one-2.pdf")
+    }
 }
 
 private final class FailingImageCopyManager: FileManager {
