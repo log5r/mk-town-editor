@@ -128,6 +128,67 @@ enum MarkdownSectionLevel {
     }
 }
 
+enum MarkdownContentKind: String, CaseIterable {
+    case task = "タスク"
+    case link = "リンク"
+    case image = "画像"
+}
+
+struct MarkdownContentItem: Identifiable, Equatable {
+    let kind: MarkdownContentKind
+    let label: String
+    let destination: String?
+    let sourceRange: NSRange
+
+    var id: String { "\(kind.rawValue):\(sourceRange.location):\(sourceRange.length)" }
+}
+
+enum MarkdownContentInspector {
+    private static let reference = try! NSRegularExpression(
+        pattern: #"(!?)\[([^\]\n]+)\](?:\[([^\]\n]*)\])?"#)
+
+    static func items(in text: String, analysis: MarkdownAnalysis) -> [MarkdownContentItem] {
+        let source = text as NSString
+        let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
+            MarkdownInlineSyntax.codeSpanRanges(in: text)
+        func isExcluded(_ range: NSRange) -> Bool {
+            excluded.contains { NSIntersectionRange($0, range).length > 0 }
+        }
+        var items = analysis.blocks.compactMap { block -> MarkdownContentItem? in
+            guard let task = block.task else { return nil }
+            return MarkdownContentItem(kind: .task,
+                label: (task.isChecked ? "完了: " : "未完了: ") + task.content,
+                destination: nil, sourceRange: block.sourceRange)
+        }
+        let inline = MarkdownLinkSyntax.inlineLinks(in: text).filter {
+            !isExcluded($0.range)
+        }
+        for link in inline {
+            let label = source.substring(with: link.labelRange)
+            items.append(MarkdownContentItem(kind: link.isImage ? .image : .link,
+                label: label, destination: link.destination, sourceRange: link.range))
+        }
+        for match in reference.matches(in: text,
+            range: NSRange(location: 0, length: source.length)) {
+            if isExcluded(match.range) || inline.contains(where: {
+                NSIntersectionRange($0.range, match.range).length > 0
+            }) { continue }
+            let end = NSMaxRange(match.range)
+            if end < source.length && [40, 58].contains(source.character(at: end)) { continue }
+            let label = source.substring(with: match.range(at: 2))
+            let explicit = match.range(at: 3)
+            let id = explicit.location == NSNotFound || explicit.length == 0
+                ? label : source.substring(with: explicit)
+            guard let definition = analysis.references[MarkdownAnalysis.normalizedReferenceLabel(id)]
+            else { continue }
+            let image = match.range(at: 1).length > 0
+            items.append(MarkdownContentItem(kind: image ? .image : .link,
+                label: label, destination: definition.destination, sourceRange: match.range))
+        }
+        return items.sorted { $0.sourceRange.location < $1.sourceRange.location }
+    }
+}
+
 enum MarkdownSelectionExpansion {
     static func next(in text: String, selection: NSRange) -> NSRange? {
         let length = (text as NSString).length

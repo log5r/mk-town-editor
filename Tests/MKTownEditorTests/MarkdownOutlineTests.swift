@@ -106,4 +106,21 @@ final class MarkdownOutlineTests: XCTestCase {
             headingLocation: 0, by: -1))
         XCTAssertEqual(crlfEdit.applying(to: crlf), "# 親\r\n## 子\r\n本文")
     }
+
+    func testContentInspectorListsTasksLinksImagesAndSkipsCode() {
+        let text = "- [ ] 未完了\n- [x] 完了\n\n[site](https://example.com) " +
+            "![図](assets/a.png) [参照][id] ![参照画像][image]\n\n" +
+            "[id]: note.md\n[image]: assets/b.png\n\n" +
+            "`[fake](ignored.md)`\n\n```md\n![code](ignored.png)\n```"
+        let items = MarkdownContentInspector.items(in: text,
+            analysis: MarkdownAnalysis(text))
+        XCTAssertEqual(items.filter { $0.kind == .task }.map(\.label),
+            ["未完了: 未完了", "完了: 完了"])
+        XCTAssertEqual(items.filter { $0.kind == .link }.map(\.destination),
+            ["https://example.com", "note.md"])
+        XCTAssertEqual(items.filter { $0.kind == .image }.map(\.destination),
+            ["assets/a.png", "assets/b.png"])
+        XCTAssertEqual((text as NSString).substring(with: items[2].sourceRange),
+            "[site](https://example.com)")
+    }
 }
