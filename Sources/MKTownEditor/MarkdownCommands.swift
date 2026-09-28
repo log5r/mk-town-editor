@@ -64,6 +64,10 @@ private struct OpenQuickFileActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct OpenEncodingImportActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -118,6 +122,10 @@ extension FocusedValues {
         get { self[OpenQuickFileActionKey.self] }
         set { self[OpenQuickFileActionKey.self] = newValue }
     }
+    var openEncodingImportAction: (() -> Void)? {
+        get { self[OpenEncodingImportActionKey.self] }
+        set { self[OpenEncodingImportActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -134,6 +142,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.copyRichAction) private var copyRichAction
     @FocusedValue(\.exportPlainTextAction) private var exportPlainTextAction
     @FocusedValue(\.openQuickFileAction) private var openQuickFileAction
+    @FocusedValue(\.openEncodingImportAction) private var openEncodingImportAction
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
@@ -173,6 +182,10 @@ struct MarkdownCommands: Commands {
                 .disabled(openQuickFileAction == nil || workspaceStore.rootURL == nil)
             Button("ファイル一覧を更新") { workspaceStore.refresh(force: true) }
                 .disabled(workspaceStore.rootURL == nil)
+        }
+        CommandMenu("文字コード") {
+            Button("文字コードを指定して取り込む…") { openEncodingImportAction?() }
+                .disabled(openEncodingImportAction == nil)
         }
         CommandMenu("表示倍率") {
             Text("編集: \(Int((settingsStore.zoom(for: .editor) * 100).rounded()))%")
