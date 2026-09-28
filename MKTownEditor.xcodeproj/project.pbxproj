@@ -69,6 +69,8 @@
 		A10000000000000000000051 /* MarkdownTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000051 /* MarkdownTextFormat.swift */; };
 		A10000000000000000000052 /* WorkspaceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000052 /* WorkspaceSearch.swift */; };
 		A10000000000000000000053 /* WorkspaceSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000053 /* WorkspaceSearchSheet.swift */; };
+		A10000000000000000000054 /* WorkspaceReplace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000054 /* WorkspaceReplace.swift */; };
+		A10000000000000000000055 /* WorkspaceReplaceSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000055 /* WorkspaceReplaceSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -137,6 +139,8 @@
 		A20000000000000000000051 /* MarkdownTextFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextFormat.swift; sourceTree = "<group>"; };
 		A20000000000000000000052 /* WorkspaceSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000053 /* WorkspaceSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearchSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000054 /* WorkspaceReplace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReplace.swift; sourceTree = "<group>"; };
+		A20000000000000000000055 /* WorkspaceReplaceSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReplaceSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -219,6 +223,8 @@
 				A20000000000000000000051 /* MarkdownTextFormat.swift */,
 				A20000000000000000000052 /* WorkspaceSearch.swift */,
 				A20000000000000000000053 /* WorkspaceSearchSheet.swift */,
+				A20000000000000000000054 /* WorkspaceReplace.swift */,
+				A20000000000000000000055 /* WorkspaceReplaceSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -349,6 +355,8 @@
 				A10000000000000000000051 /* MarkdownTextFormat.swift in Sources */,
 				A10000000000000000000052 /* WorkspaceSearch.swift in Sources */,
 				A10000000000000000000053 /* WorkspaceSearchSheet.swift in Sources */,
+				A10000000000000000000054 /* WorkspaceReplace.swift in Sources */,
+				A10000000000000000000055 /* WorkspaceReplaceSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

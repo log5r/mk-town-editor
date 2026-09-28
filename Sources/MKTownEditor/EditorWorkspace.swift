@@ -51,6 +51,7 @@ struct EditorWorkspace: View {
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
     @State private var showingWorkspaceSearch = false
+    @State private var showingWorkspaceReplace = false
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -158,6 +159,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
         .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
         .focusedSceneValue(\.searchWorkspaceAction) { showingWorkspaceSearch = true }
+        .focusedSceneValue(\.replaceWorkspaceAction) { showingWorkspaceReplace = true }
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,
@@ -217,6 +219,11 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingWorkspaceSearch) {
             WorkspaceSearchSheet { result in openWorkspaceSearchResult(result) }
+        }
+        .sheet(isPresented: $showingWorkspaceReplace) {
+            WorkspaceReplaceSheet(currentDocumentURL: fileURL) {
+                workspaceStore.refresh(force: true)
+            }
         }
         .sheet(item: $fileAction) { action in
             if let root = workspaceStore.rootURL {
