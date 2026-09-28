@@ -69,6 +69,11 @@ struct EditorWorkspace: View {
                 try await insertImage(alt: alt, input: input, title: title)
             }
         }
+        .sheet(item: $editorModel.tableDraft) { _ in
+            TableInsertionSheet { rows, columns in
+                editorModel.commitTable(rows: rows, columns: columns)
+            }
+        }
         .onAppear {
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
