@@ -70,7 +70,7 @@ enum MarkdownRenderer {
         case let .heading(level):
             let sizes: [CGFloat] = [28, 23, 20, 18, 16, 15]
             return inline(
-                block.content,
+                paragraphContent(block),
                 baseFont: .systemFont(ofSize: sizes[level - 1], weight: level < 3 ? .bold : .semibold),
                 paragraphSpacing: level < 3 ? 14 : 9
             )

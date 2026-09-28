@@ -198,4 +198,41 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(analysis.rootBlocks.map(\.kind), [.quote, .codeBlock])
         XCTAssertEqual(analysis.rootBlocks[1].content, "code")
     }
+
+    func testSetextHeadingsCaptureMultilineSourceAndPreferParagraphOverDashRule() {
+        let source = "first🙂\nsecond\n---\nnext\n===\n---"
+        let blocks = MarkdownAnalysis(source).rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [
+            .heading(level: 2), .heading(level: 1), .horizontalRule
+        ])
+        XCTAssertEqual(blocks[0].content, "first🙂\nsecond")
+        XCTAssertEqual(blocks[0].lineBreaks, [.soft])
+        XCTAssertEqual((source as NSString).substring(with: blocks[0].sourceRange),
+                       "first🙂\nsecond\n---\n")
+    }
+
+    func testATXClosingHashesAndThematicBreakSpacing() {
+        let blocks = MarkdownAnalysis("  ##  title  ###  \n# no-close#\n# escaped \\###\n- - -\n *  * *\n___\n    ***").rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [
+            .heading(level: 2), .heading(level: 1), .heading(level: 1),
+            .horizontalRule, .horizontalRule, .horizontalRule, .codeBlock
+        ])
+        XCTAssertEqual(blocks[0].content, "title")
+        XCTAssertEqual(blocks[1].content, "no-close#")
+        XCTAssertEqual(blocks[2].content, "escaped \\###")
+        XCTAssertEqual(blocks[6].content, "***")
+    }
+
+    func testThematicBreakInterruptsParagraphButSetextDoesNotBecomeStandaloneHeading() {
+        let blocks = MarkdownAnalysis("alpha\n* * *\n===\n\n---\n##\n####### invalid").rootBlocks
+
+        XCTAssertEqual(blocks.map(\.kind), [
+            .paragraph, .horizontalRule, .paragraph, .blank,
+            .horizontalRule, .heading(level: 2), .paragraph
+        ])
+        XCTAssertEqual(blocks[2].content, "===")
+        XCTAssertEqual(blocks[5].content, "")
+    }
 }
