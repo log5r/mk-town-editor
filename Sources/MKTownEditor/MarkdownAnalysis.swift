@@ -18,6 +18,11 @@ struct MarkdownTable: Equatable {
     let rowRanges: [NSRange]
 }
 
+struct MarkdownTask: Equatable {
+    let isChecked: Bool
+    let content: String
+}
+
 struct MarkdownBlock: Equatable {
     enum Kind: Equatable {
         case paragraph
@@ -43,6 +48,24 @@ struct MarkdownBlock: Equatable {
     let lineBreaks: [MarkdownLineBreak]
     let sourceIndent: String?
     let nestingDepth: Int
+
+    var task: MarkdownTask? {
+        switch kind {
+        case .unorderedList, .orderedList: break
+        default: return nil
+        }
+        let text = content.drop(while: { $0 == " " || $0 == "\t" })
+        guard text.count >= 3, text.first == "[" else { return nil }
+        let marker = text[text.index(after: text.startIndex)]
+        guard marker == " " || marker == "\t" || marker == "x" || marker == "X",
+              text[text.index(text.startIndex, offsetBy: 2)] == "]" else { return nil }
+        var remainder = text.dropFirst(3)
+        guard remainder.isEmpty || remainder.first?.isWhitespace == true else { return nil }
+        while remainder.first == " " || remainder.first == "\t" {
+            remainder = remainder.dropFirst()
+        }
+        return MarkdownTask(isChecked: marker == "x" || marker == "X", content: String(remainder))
+    }
 }
 
 /// One snapshot of a document. Every block refers to the unchanged source text.

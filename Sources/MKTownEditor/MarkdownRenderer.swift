@@ -89,13 +89,18 @@ enum MarkdownRenderer {
         case .quote:
             return NSAttributedString(string: "")
         case .unorderedList:
-            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
-            content.insert(NSAttributedString(string: "•  ", attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            let task = block.task
+            let content = inline(paragraphContent(block, content: task?.content), baseFont: .systemFont(ofSize: 15))
+            let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
+            content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case let .orderedList(number):
-            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
-            content.insert(NSAttributedString(string: "\(number).  ", attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            let task = block.task
+            let content = inline(paragraphContent(block, content: task?.content), baseFont: .systemFont(ofSize: 15))
+            let prefix = task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
+                ?? "\(number).  "
+            content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
@@ -107,8 +112,8 @@ enum MarkdownRenderer {
         }
     }
 
-    private static func paragraphContent(_ block: MarkdownBlock) -> String {
-        let lines = block.content.components(separatedBy: "\n")
+    private static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
+        let lines = (content ?? block.content).components(separatedBy: "\n")
         var result = ""
         for (index, line) in lines.enumerated() {
             var content = line

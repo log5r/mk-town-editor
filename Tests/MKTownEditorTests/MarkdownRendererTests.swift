@@ -126,4 +126,12 @@ final class MarkdownRendererTests: XCTestCase {
             XCTAssertTrue(areas.contains(where: \.hasHorizontalScroller))
         }
     }
+
+    @MainActor
+    func testTasksShowExplicitStateForKeyboardAndVoiceOverReading() {
+        let markdown = "- [ ] first\n  - [x] child\n2. [X] done\n- plain"
+
+        XCTAssertEqual(MarkdownRenderer.render(markdown).string,
+                       "☐ 未完了  first\n☑ 完了  child\n2.  ☑ 完了  done\n•  plain")
+    }
 }
