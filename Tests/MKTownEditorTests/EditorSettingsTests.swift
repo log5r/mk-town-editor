@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testSplitSizingReservesMinimumForBothPanes() {
+        XCTAssertEqual(EditorSplitSizing.editorExtent(total: 1000, ratio: 0.3,
+            minimum: 280), 297.6, accuracy: 0.001)
+        XCTAssertEqual(EditorSplitSizing.editorExtent(total: 1000, ratio: 0,
+            minimum: 280), 280)
+        XCTAssertEqual(EditorSplitSizing.editorExtent(total: 1000, ratio: 1,
+            minimum: 280), 712)
+        XCTAssertEqual(EditorSplitSizing.editorExtent(total: 600, ratio: 0.5,
+            minimum: 180), 296)
+        XCTAssertEqual(EditorSplitSizing.editorExtent(total: 400, ratio: 0,
+            minimum: 280), 196)
+    }
+
     func testBookmarksPersistAndFollowDocumentRename() {
         let defaults = isolatedDefaults()
         let original = URL(fileURLWithPath: "/tmp/work/old.md")
@@ -91,7 +104,8 @@ final class EditorSettingsTests: XCTestCase {
         let store = EditorSettingsStore(defaults: defaults)
         store.savePosition(for: url, selection: NSRange(location: 42, length: 5), scrollX: 12,
                            scrollY: 123, splitRatio: 0.65,
-                           sidebarTab: "ファイル", sidebarVisible: true)
+                           sidebarTab: "ファイル", sidebarVisible: true,
+                           splitOrientation: .stacked, previewFirst: true)
         store.setMode(.preview, for: url)
         let restored = try XCTUnwrap(EditorSettingsStore(defaults: defaults).displayState(for: url))
         XCTAssertEqual(restored.mode, .preview)
@@ -100,6 +114,8 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(restored.scrollY, 123)
         XCTAssertEqual(restored.scrollX, 12)
         XCTAssertEqual(restored.splitRatio, 0.65)
+        XCTAssertEqual(restored.splitOrientation, .stacked)
+        XCTAssertEqual(restored.previewFirst, true)
         XCTAssertEqual(restored.sidebarTab, "ファイル")
         XCTAssertEqual(restored.sidebarVisible, true)
         store.moveDocumentState(from: url, to: url.deletingLastPathComponent()
@@ -112,6 +128,8 @@ final class EditorSettingsTests: XCTestCase {
                                              from: Data(#"{"mode":"split"}"#.utf8))
         XCTAssertNil(state.selectionLocation)
         XCTAssertNil(state.splitRatio)
+        XCTAssertNil(state.splitOrientation)
+        XCTAssertNil(state.previewFirst)
         XCTAssertNil(state.sidebarTab)
     }
 

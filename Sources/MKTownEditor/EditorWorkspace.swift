@@ -19,6 +19,8 @@ struct EditorWorkspace: View {
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     @State private var splitRatio = 0.5
+    @State private var splitOrientation: EditorSplitOrientation = .sideBySide
+    @State private var previewFirst = false
     @State private var splitDragStart: Double?
     @State private var previewNavigationTarget: PreviewNavigationTarget?
     @State private var navigationSequence = 0
@@ -225,6 +227,17 @@ struct EditorWorkspace: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 220)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu("分割配置", systemImage: "rectangle.split.2x1") {
+                    Picker("方向", selection: $splitOrientation) {
+                        ForEach(EditorSplitOrientation.allCases, id: \.self) { orientation in
+                            Text(orientation.rawValue).tag(orientation)
+                        }
+                    }
+                    Toggle("プレビューを先に表示", isOn: $previewFirst)
+                }
+                .disabled(mode.wrappedValue != .split)
             }
         }
         .focusedSceneValue(\.markdownEditorModel, editorModel)
@@ -632,6 +645,8 @@ struct EditorWorkspace: View {
         }
         .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
+        .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
+        .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receivePendingDocumentLink()
             if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
@@ -671,51 +686,93 @@ struct EditorWorkspace: View {
 
     private var splitEditor: some View {
         GeometryReader { geometry in
-            let width = max(560, geometry.size.width - 8)
-            let editorWidth = max(280, min(width - 280, width * splitRatio))
-            HStack(spacing: 0) {
-                sourceEditor.frame(width: editorWidth)
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.35))
-                    .frame(width: 1)
-                    .frame(width: 8)
-                    .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 1)
-                        .onChanged { value in
-                            if splitDragStart == nil { splitDragStart = splitRatio }
-                            let proposed = (splitDragStart ?? splitRatio) + value.translation.width / width
-                            splitRatio = max(280 / width, min(1 - 280 / width, proposed))
-                        }
-                        .onEnded { _ in
-                            splitDragStart = nil
-                            savePosition(for: fileURL)
-                        })
-                    .accessibilityElement()
-                    .accessibilityLabel("編集とプレビューの分割位置")
-                    .accessibilityValue("\(Int(splitRatio * 100))%")
-                    .accessibilityAdjustableAction { direction in
-                        switch direction {
-                        case .increment: splitRatio = min(0.8, splitRatio + 0.05)
-                        case .decrement: splitRatio = max(0.2, splitRatio - 0.05)
-                        @unknown default: break
-                        }
-                        savePosition(for: fileURL)
+            if splitOrientation == .sideBySide {
+                let extent = EditorSplitSizing.editorExtent(total: geometry.size.width,
+                    ratio: splitRatio, minimum: 280)
+                HStack(spacing: 0) {
+                    if previewFirst {
+                        splitPreview.frame(maxWidth: .infinity)
+                        splitDivider(total: geometry.size.width, minimum: 280,
+                            horizontal: true)
+                        sourceEditor.frame(width: extent)
+                    } else {
+                        sourceEditor.frame(width: extent)
+                        splitDivider(total: geometry.size.width, minimum: 280,
+                            horizontal: true)
+                        splitPreview.frame(maxWidth: .infinity)
                     }
-                MarkdownPreview(markdown: document.text, documentContext: documentContext,
-                                onToggleTask: previewTaskAction,
-                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                                navigationTarget: previewNavigationTarget,
-                                searchRange: previewSearchRange,
-                                onOpenHeading: navigateToHeading,
-                                onOpenDocument: openLinkedDocument,
-                                onVisibleBlockChange: synchronizeEditor(to:),
-                                onRevealSource: revealSource,
-                                showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
-                                zoom: settingsStore.zoom(for: .preview),
-                                loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
-                    .frame(maxWidth: .infinity)
+                }
+            } else {
+                let extent = EditorSplitSizing.editorExtent(total: geometry.size.height,
+                    ratio: splitRatio, minimum: 180)
+                VStack(spacing: 0) {
+                    if previewFirst {
+                        splitPreview.frame(maxHeight: .infinity)
+                        splitDivider(total: geometry.size.height, minimum: 180,
+                            horizontal: false)
+                        sourceEditor.frame(height: extent)
+                    } else {
+                        sourceEditor.frame(height: extent)
+                        splitDivider(total: geometry.size.height, minimum: 180,
+                            horizontal: false)
+                        splitPreview.frame(maxHeight: .infinity)
+                    }
+                }
             }
         }
+    }
+
+    private var splitPreview: some View {
+        MarkdownPreview(markdown: document.text, documentContext: documentContext,
+                        onToggleTask: previewTaskAction,
+                        snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
+                        navigationTarget: previewNavigationTarget,
+                        searchRange: previewSearchRange,
+                        onOpenHeading: navigateToHeading,
+                        onOpenDocument: openLinkedDocument,
+                        onVisibleBlockChange: synchronizeEditor(to:),
+                        onRevealSource: revealSource,
+                        showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+                        zoom: settingsStore.zoom(for: .preview),
+                        loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+    }
+
+    private func splitDivider(total: CGFloat, minimum: CGFloat,
+                              horizontal: Bool) -> some View {
+        let available = max(1, total - 8)
+        let effectiveMinimum = min(minimum, available / 2)
+        return Color.clear
+            .frame(width: horizontal ? 8 : nil, height: horizontal ? nil : 8)
+            .overlay {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(width: horizontal ? 1 : nil, height: horizontal ? nil : 1)
+            }
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    if splitDragStart == nil { splitDragStart = splitRatio }
+                    let delta = horizontal ? value.translation.width : value.translation.height
+                    let sign: CGFloat = previewFirst ? -1 : 1
+                    let proposed = (splitDragStart ?? splitRatio) + Double(sign * delta / available)
+                    splitRatio = max(Double(effectiveMinimum / available),
+                                     min(1 - Double(effectiveMinimum / available), proposed))
+                }
+                .onEnded { _ in
+                    splitDragStart = nil
+                    savePosition(for: fileURL)
+                })
+            .accessibilityElement()
+            .accessibilityLabel("編集とプレビューの分割位置")
+            .accessibilityValue("編集 \(Int(splitRatio * 100))%")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: splitRatio = min(0.8, splitRatio + 0.05)
+                case .decrement: splitRatio = max(0.2, splitRatio - 0.05)
+                @unknown default: break
+                }
+                savePosition(for: fileURL)
+            }
     }
 
     private func savePosition(for url: URL?) {
@@ -724,7 +781,9 @@ struct EditorWorkspace: View {
                                    scrollX: editorModel.scrollOrigin.x,
                                    scrollY: editorModel.scrollOrigin.y, splitRatio: splitRatio,
                                    sidebarTab: sidebarTab.rawValue,
-                                   sidebarVisible: sidebarVisibility != .detailOnly)
+                                   sidebarVisible: sidebarVisibility != .detailOnly,
+                                   splitOrientation: splitOrientation,
+                                   previewFirst: previewFirst)
     }
 
     private func restorePosition(for url: URL?) {
@@ -736,6 +795,8 @@ struct EditorWorkspace: View {
                                         scrollY: state.scrollY ?? 0)
         }
         if let ratio = state.splitRatio { splitRatio = ratio }
+        if let orientation = state.splitOrientation { splitOrientation = orientation }
+        if let first = state.previewFirst { previewFirst = first }
         if let tab = state.sidebarTab.flatMap(SidebarTab.init(rawValue:)) { sidebarTab = tab }
         if let visible = state.sidebarVisible { sidebarVisibility = visible ? .all : .detailOnly }
     }
