@@ -23,6 +23,12 @@ struct MarkdownTask: Equatable {
     let content: String
 }
 
+struct MarkdownReference: Equatable {
+    let destination: String
+    let title: String?
+    let sourceRange: NSRange
+}
+
 struct MarkdownBlock: Equatable {
     enum Kind: Equatable {
         case paragraph
@@ -72,10 +78,13 @@ struct MarkdownBlock: Equatable {
 struct MarkdownAnalysis {
     let blocks: [MarkdownBlock]
     let positionMap: MarkdownPositionMap
+    let references: [String: MarkdownReference]
 
     init(_ markdown: String) {
         positionMap = MarkdownPositionMap(markdown)
-        blocks = Self.parse(markdown)
+        let parsed = Self.parse(markdown)
+        blocks = parsed.blocks
+        references = parsed.references
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }
@@ -97,16 +106,24 @@ struct MarkdownAnalysis {
     }
 
     private static let listPattern = try! NSRegularExpression(pattern: #"^([ \t]*)([-+*]|[0-9]{1,9}[.)])[ \t]+(.*)$"#)
+    private static let referencePattern = try! NSRegularExpression(
+        pattern: #"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(?:<([^<>]*)>|([^\s]+))(?:[ \t]+(?:\"([^\"]*)\"|'([^']*)'|\(([^)]*)\)))?[ \t]*$"#
+    )
 
-    private static func parse(_ markdown: String) -> [MarkdownBlock] {
+    private static func parse(_ markdown: String) ->
+        (blocks: [MarkdownBlock], references: [String: MarkdownReference]) {
         var nextID = 0
-        return parseLines(sourceLines(markdown), parentID: nil, nextID: &nextID)
+        var references: [String: MarkdownReference] = [:]
+        let blocks = parseLines(sourceLines(markdown), parentID: nil,
+                                nextID: &nextID, references: &references)
+        return (blocks, references)
     }
 
     private static func parseLines(
         _ lines: [SourceLine],
         parentID: Int?,
-        nextID: inout Int
+        nextID: inout Int,
+        references: inout [String: MarkdownReference]
     ) -> [MarkdownBlock] {
         var result: [MarkdownBlock] = []
         var listAncestors: [(indent: Int, contentIndent: Int, id: Int, depth: Int)] = []
@@ -156,8 +173,21 @@ struct MarkdownAnalysis {
                     table: nil,
                     lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
-                result.append(contentsOf: parseLines(quoteLines, parentID: quoteID, nextID: &nextID))
+                result.append(contentsOf: parseLines(quoteLines, parentID: quoteID,
+                                                     nextID: &nextID, references: &references))
                 listAncestors.removeAll()
+                continue
+            }
+
+            if let definition = parseReferenceDefinition(line.text),
+                result.last(where: { $0.parentID == parentID })?.kind != .paragraph {
+                if references[definition.key] == nil {
+                    references[definition.key] = MarkdownReference(
+                        destination: definition.destination, title: definition.title,
+                        sourceRange: line.range
+                    )
+                }
+                index += 1
                 continue
             }
 
@@ -482,6 +512,25 @@ struct MarkdownAnalysis {
             }
         }
         return (header.cells, alignments)
+    }
+
+    static func normalizedReferenceLabel(_ label: String) -> String {
+        label.split(whereSeparator: \.isWhitespace).joined(separator: " ").lowercased()
+    }
+
+    private static func parseReferenceDefinition(_ line: String) ->
+        (key: String, destination: String, title: String?)? {
+        let source = line as NSString
+        guard let match = referencePattern.firstMatch(in: line,
+            range: NSRange(location: 0, length: source.length)) else { return nil }
+        func group(_ index: Int) -> String? {
+            let range = match.range(at: index)
+            return range.location == NSNotFound ? nil : source.substring(with: range)
+        }
+        guard let label = group(1), let destination = group(2) ?? group(3) else { return nil }
+        let key = normalizedReferenceLabel(label)
+        guard !key.isEmpty else { return nil }
+        return (key, destination, group(4) ?? group(5) ?? group(6))
     }
 
     private static func splitTableRow(_ line: String) -> (cells: [String], hasPipe: Bool) {

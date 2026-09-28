@@ -3,17 +3,21 @@ import Foundation
 
 @MainActor
 enum MarkdownRenderer {
+    private static let referencePattern = try! NSRegularExpression(
+        pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
+    )
+
     static func render(_ markdown: String) -> NSAttributedString {
         let analysis = MarkdownAnalysis(markdown)
         return renderSequence(analysis.rootBlocks, in: analysis)
     }
 
-    static func renderLeaf(_ block: MarkdownBlock) -> NSAttributedString {
-        render(block)
+    static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> NSAttributedString {
+        render(block, references: analysis.references)
     }
 
-    static func renderTableCell(_ markdown: String) -> NSAttributedString {
-        inline(markdown, baseFont: .systemFont(ofSize: 14))
+    static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis) -> NSAttributedString {
+        inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references)
     }
 
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis) -> NSAttributedString {
@@ -32,7 +36,7 @@ enum MarkdownRenderer {
         if block.kind == .quote {
             return quote(renderSequence(children, in: analysis))
         }
-        let output = NSMutableAttributedString(attributedString: render(block))
+        let output = NSMutableAttributedString(attributedString: render(block, references: analysis.references))
         if !children.isEmpty {
             output.append(NSAttributedString(string: "\n"))
             output.append(renderSequence(children, in: analysis))
@@ -62,7 +66,9 @@ enum MarkdownRenderer {
         return result
     }
 
-    private static func render(_ block: MarkdownBlock) -> NSAttributedString {
+    private static func render(
+        _ block: MarkdownBlock, references: [String: MarkdownReference]
+    ) -> NSAttributedString {
         switch block.kind {
         case .blank:
             return NSAttributedString(string: "")
@@ -84,27 +90,30 @@ enum MarkdownRenderer {
             return inline(
                 paragraphContent(block),
                 baseFont: .systemFont(ofSize: sizes[level - 1], weight: level < 3 ? .bold : .semibold),
-                paragraphSpacing: level < 3 ? 14 : 9
+                paragraphSpacing: level < 3 ? 14 : 9, references: references
             )
         case .quote:
             return NSAttributedString(string: "")
         case .unorderedList:
             let task = block.task
-            let content = inline(paragraphContent(block, content: task?.content), baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block, content: task?.content),
+                                 baseFont: .systemFont(ofSize: 15), references: references)
             let prefix = task.map { $0.isChecked ? "☑ 完了  " : "☐ 未完了  " } ?? "•  "
             content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case let .orderedList(number):
             let task = block.task
-            let content = inline(paragraphContent(block, content: task?.content), baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block, content: task?.content),
+                                 baseFont: .systemFont(ofSize: 15), references: references)
             let prefix = task.map { "\(number).  " + ($0.isChecked ? "☑ 完了  " : "☐ 未完了  ") }
                 ?? "\(number).  "
             content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
-            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15))
+            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
+                                 references: references)
             if block.parentID != nil {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
             }
@@ -136,14 +145,16 @@ enum MarkdownRenderer {
         _ markdown: String,
         baseFont: NSFont,
         color: NSColor = .textColor,
-        paragraphSpacing: CGFloat = 8
+        paragraphSpacing: CGFloat = 8,
+        references: [String: MarkdownReference] = [:]
     ) -> NSMutableAttributedString {
+        let resolved = resolveReferences(in: markdown, using: references)
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
         )
-        let parsed = (try? AttributedString(markdown: markdown, options: options))
-            .map(NSAttributedString.init) ?? NSAttributedString(string: markdown)
+        let parsed = (try? AttributedString(markdown: resolved, options: options))
+            .map(NSAttributedString.init) ?? NSAttributedString(string: resolved)
         let result = NSMutableAttributedString(attributedString: parsed)
         let fullRange = NSRange(location: 0, length: result.length)
         result.addAttributes(baseAttributes(font: baseFont, color: color, paragraphSpacing: paragraphSpacing), range: fullRange)
@@ -170,6 +181,79 @@ enum MarkdownRenderer {
         }
 
         return result
+    }
+
+    private static func resolveReferences(
+        in markdown: String, using references: [String: MarkdownReference]
+    ) -> String {
+        guard !references.isEmpty else { return markdown }
+        let source = markdown as NSString
+        let result = NSMutableString(string: markdown)
+        let codeSpans = codeSpanRanges(in: source)
+        let matches = referencePattern.matches(in: markdown,
+            range: NSRange(location: 0, length: source.length))
+        for match in matches.reversed() {
+            if codeSpans.contains(where: { NSLocationInRange(match.range.location, $0) }) { continue }
+            let end = NSMaxRange(match.range)
+            if end < source.length, source.character(at: end) == 40 { continue }
+            if match.range.location > 0 {
+                let prefix = source.substring(to: match.range.location)
+                if prefix.reversed().prefix(while: { $0 == "\\" }).count % 2 == 1 { continue }
+            }
+            let label = source.substring(with: match.range(at: 2))
+            let explicitRange = match.range(at: 3)
+            let key = explicitRange.location == NSNotFound || explicitRange.length == 0
+                ? label : source.substring(with: explicitRange)
+            guard let reference = references[MarkdownAnalysis.normalizedReferenceLabel(key)] else { continue }
+            let isImage = match.range(at: 1).length > 0
+            let title = isImage ? "画像: \(label)" : label
+            result.replaceCharacters(in: match.range,
+                                     with: "[\(title)](<\(reference.destination)>)")
+        }
+        return result as String
+    }
+
+    private static func codeSpanRanges(in source: NSString) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var cursor = 0
+        while cursor < source.length {
+            guard source.character(at: cursor) == 96 else {
+                cursor += 1
+                continue
+            }
+            var backslashes = 0
+            var before = cursor - 1
+            while before >= 0 && source.character(at: before) == 92 {
+                backslashes += 1
+                before -= 1
+            }
+            if backslashes % 2 == 1 {
+                cursor += 1
+                continue
+            }
+            let opening = cursor
+            while cursor < source.length && source.character(at: cursor) == 96 { cursor += 1 }
+            let length = cursor - opening
+            var search = cursor
+            var closing: Int?
+            while search < source.length {
+                guard source.character(at: search) == 96 else {
+                    search += 1
+                    continue
+                }
+                let runStart = search
+                while search < source.length && source.character(at: search) == 96 { search += 1 }
+                if search - runStart == length {
+                    closing = search
+                    break
+                }
+            }
+            if let closing {
+                ranges.append(NSRange(location: opening, length: closing - opening))
+                cursor = closing
+            }
+        }
+        return ranges
     }
 
     private static func baseAttributes(

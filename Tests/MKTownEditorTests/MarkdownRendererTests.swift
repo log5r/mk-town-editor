@@ -163,4 +163,79 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNotNil(output.attribute(.backgroundColor, at: code, effectiveRange: nil))
         XCTAssertNotNil(output.attribute(.strikethroughStyle, at: struck, effectiveRange: nil))
     }
+
+    @MainActor
+    func testFullCollapsedShortcutAndImageReferencesResolveWithLaterDefinitions() {
+        let markdown = "[Full][Key] [key][] [KEY] ![photo][key]\n\n[KEY]: https://example.com/photo.png"
+        let rendered = MarkdownRenderer.render(markdown)
+        let text = rendered.string as NSString
+
+        XCTAssertEqual(rendered.string, "Full key KEY 画像: photo\n")
+        for label in ["Full", "key", "KEY", "画像: photo"] {
+            let range = text.range(of: label)
+            XCTAssertNotEqual(range.location, NSNotFound)
+            if range.location != NSNotFound {
+                XCTAssertEqual(rendered.attribute(.link, at: range.location, effectiveRange: nil) as? URL,
+                               URL(string: "https://example.com/photo.png"))
+            }
+        }
+    }
+
+    @MainActor
+    func testReferenceResolutionLeavesInlineLinksAndUnknownLabelsAlone() {
+        let markdown = "[known](https://example.com/inline) [unknown] [known]\n\n[known]: /reference"
+        let rendered = MarkdownRenderer.render(markdown)
+        let text = rendered.string as NSString
+
+        XCTAssertEqual(rendered.string, "known [unknown] known\n")
+        XCTAssertEqual(rendered.attribute(.link, at: text.range(of: "known").location,
+            effectiveRange: nil) as? URL, URL(string: "https://example.com/inline"))
+        XCTAssertEqual(rendered.attribute(.link, at: text.range(of: "known", options: .backwards).location,
+            effectiveRange: nil) as? URL, URL(string: "/reference"))
+    }
+
+    @MainActor
+    func testReferenceSyntaxInsideCodeSpanRemainsLiteral() {
+        let rendered = MarkdownRenderer.render("`[ref]` [ref]\n\n[ref]: /url")
+        let text = rendered.string as NSString
+
+        XCTAssertEqual(rendered.string, "[ref] ref\n")
+        XCTAssertNil(rendered.attribute(.link, at: text.range(of: "[ref]").location,
+            effectiveRange: nil))
+        XCTAssertEqual(rendered.attribute(.link, at: text.range(of: "ref", options: .backwards).location,
+            effectiveRange: nil) as? URL, URL(string: "/url"))
+    }
+
+    @MainActor
+    func testReferencesResolveInsideQuotesListsAndTableCells() {
+        let markdown = "> [quoted][Ref]\n- [listed][ref]\n\n| Link |\n| --- |\n| [cell][REF] |\n\n[ref]: https://example.com"
+        let analysis = MarkdownAnalysis(markdown)
+        let rendered = MarkdownRenderer.render(markdown)
+        let text = rendered.string as NSString
+
+        for label in ["quoted", "listed"] {
+            let range = text.range(of: label)
+            XCTAssertNotEqual(range.location, NSNotFound)
+            if range.location != NSNotFound {
+                XCTAssertEqual(rendered.attribute(.link, at: range.location,
+                    effectiveRange: nil) as? URL, URL(string: "https://example.com"))
+            }
+        }
+        let cell = MarkdownRenderer.renderTableCell("[cell][REF]", in: analysis)
+        XCTAssertEqual(cell.string, "cell")
+        XCTAssertEqual(cell.attribute(.link, at: 0, effectiveRange: nil) as? URL,
+                       URL(string: "https://example.com"))
+    }
+
+    @MainActor
+    func testEscapedBackticksDoNotHideReferenceLinks() {
+        let rendered = MarkdownRenderer.render("\\`[ref]\\`\n\n[ref]: /url")
+        let range = (rendered.string as NSString).range(of: "ref")
+
+        XCTAssertNotEqual(range.location, NSNotFound)
+        if range.location != NSNotFound {
+            XCTAssertEqual(rendered.attribute(.link, at: range.location,
+                effectiveRange: nil) as? URL, URL(string: "/url"))
+        }
+    }
 }

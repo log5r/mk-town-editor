@@ -19,11 +19,11 @@ struct MarkdownPreview: View {
                                     .frame(width: 2)
                             }
                             if let table = block.table {
-                                tableView(table)
+                                tableView(table, in: analysis)
                             } else if block.kind == .blank {
                                 Text(" ").frame(height: 12)
                             } else {
-                                Text(AttributedString(MarkdownRenderer.renderLeaf(block)))
+                                Text(AttributedString(MarkdownRenderer.renderLeaf(block, in: analysis)))
                                     .textSelection(.enabled)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -50,16 +50,16 @@ struct MarkdownPreview: View {
         return depth
     }
 
-    private func tableView(_ table: MarkdownTable) -> some View {
+    private func tableView(_ table: MarkdownTable, in analysis: MarkdownAnalysis) -> some View {
         let widths = table.header.indices.map { column in
             let values = [table.header[column]] + table.rows.map { $0[column] }
             return CGFloat(min(360, max(120, (values.map(\.count).max() ?? 0) * 8 + 24)))
         }
         return ScrollView(.horizontal) {
             VStack(spacing: 0) {
-                tableRow(table.header, table: table, widths: widths, rowNumber: 0)
+                tableRow(table.header, table: table, widths: widths, rowNumber: 0, in: analysis)
                 ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
-                    tableRow(row, table: table, widths: widths, rowNumber: index + 1)
+                    tableRow(row, table: table, widths: widths, rowNumber: index + 1, in: analysis)
                 }
             }
             .fixedSize(horizontal: true, vertical: false)
@@ -69,11 +69,12 @@ struct MarkdownPreview: View {
     }
 
     private func tableRow(
-        _ cells: [String], table: MarkdownTable, widths: [CGFloat], rowNumber: Int
+        _ cells: [String], table: MarkdownTable, widths: [CGFloat], rowNumber: Int,
+        in analysis: MarkdownAnalysis
     ) -> some View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
-                Text(AttributedString(MarkdownRenderer.renderTableCell(cells[column])))
+                Text(AttributedString(MarkdownRenderer.renderTableCell(cells[column], in: analysis)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
