@@ -166,6 +166,16 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    @discardableResult
+    func pasteURLAsLink(_ pastedText: String) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownURLPaste.edit(in: textView.string,
+                                               selection: textView.selectedRange(),
+                                               pastedText: pastedText) else { return false }
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func presentImageEditor() {
         guard canExecuteCommand, let textView else { return }
         imageDraft = MarkdownLinkSyntax.imageDraft(in: textView.string, selection: textView.selectedRange())
