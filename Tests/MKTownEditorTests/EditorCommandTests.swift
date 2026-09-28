@@ -4,6 +4,22 @@ import XCTest
 
 @MainActor
 final class EditorCommandTests: XCTestCase {
+    func testCustomizableToolbarUsesUniqueStableCommandsAndSharedActions() {
+        let identifiers = EditorCommand.toolbar.map(\.toolbarIdentifier)
+        XCTAssertEqual(Set(identifiers).count, identifiers.count)
+        XCTAssertEqual(EditorCommand.defaultToolbar, [.bold, .italic, .link])
+        XCTAssertTrue(EditorCommand.defaultToolbar.isSubset(of: Set(EditorCommand.toolbar)))
+        XCTAssertTrue(EditorCommand.toolbar.contains(.image))
+        XCTAssertTrue(EditorCommand.toolbar.contains(.table))
+        let view = NSTextView()
+        view.string = "word"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: 4))
+        EditorCommand.toolbar.first(where: { $0 == .strikethrough })?.perform(on: model)
+        XCTAssertEqual(view.string, "~~word~~")
+    }
+
     func testCommandPaletteSearchesNamesAndShortcutsAndFiltersUnavailableCommands() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.string = "本文"

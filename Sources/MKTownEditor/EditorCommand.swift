@@ -37,7 +37,33 @@ enum EditorCommand: Hashable {
     case table
     case find
 
-    static let toolbar: [Self] = [.bold, .italic, .link]
+    static let toolbar: [Self] = [
+        .bold, .italic, .link, .strikethrough, .inlineCode,
+        .heading(level: 1), .quote, .unorderedList, .orderedList, .taskList,
+        .codeBlock(language: nil), .horizontalRule, .image, .table, .footnote
+    ]
+    static let defaultToolbar: Set<Self> = [.bold, .italic, .link]
+
+    var toolbarIdentifier: String {
+        switch self {
+        case .bold: "bold"
+        case .italic: "italic"
+        case .link: "link"
+        case .strikethrough: "strikethrough"
+        case .inlineCode: "inline-code"
+        case .heading: "heading"
+        case .quote: "quote"
+        case .unorderedList: "unordered-list"
+        case .orderedList: "ordered-list"
+        case .taskList: "task-list"
+        case .codeBlock: "code-block"
+        case .horizontalRule: "horizontal-rule"
+        case .image: "image"
+        case .table: "table"
+        case .footnote: "footnote"
+        default: "other-\(String(describing: self))"
+        }
+    }
     static let palette: [Self] = [
         .bold, .italic, .strikethrough, .inlineCode, .removeFormatting,
         .link, .convertLinkForm, .footnote, .image, .table, .snippet,
