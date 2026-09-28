@@ -72,3 +72,36 @@ enum MarkdownSelectionExpansion {
         }.min { $0.length < $1.length }
     }
 }
+
+struct MarkdownFoldPlan: Equatable {
+    let headerLocation: Int
+    let hiddenRange: NSRange
+
+    static func at(_ location: Int, in text: String) -> MarkdownFoldPlan? {
+        let source = text as NSString
+        let analysis = MarkdownAnalysis(text)
+        if let code = analysis.blocks.first(where: { block in
+            block.kind == .codeBlock && location >= block.sourceRange.location &&
+                location < NSMaxRange(block.sourceRange)
+        }) {
+            let hiddenStart = NSMaxRange(source.lineRange(for:
+                NSRange(location: code.sourceRange.location, length: 0)))
+            let end = NSMaxRange(code.sourceRange)
+            guard hiddenStart < end else { return nil }
+            return MarkdownFoldPlan(headerLocation: code.sourceRange.location,
+                hiddenRange: NSRange(location: hiddenStart, length: end - hiddenStart))
+        }
+        guard let section = DocumentStatistics.sectionRange(at: location,
+            in: analysis, documentLength: source.length),
+              let heading = MarkdownOutline.currentSection(at: location,
+                in: MarkdownOutline.entries(in: analysis)) else { return nil }
+        let lastHeaderCharacter = max(heading.sourceRange.location,
+            NSMaxRange(heading.sourceRange) - 1)
+        let hiddenStart = NSMaxRange(source.lineRange(for:
+            NSRange(location: lastHeaderCharacter, length: 0)))
+        let end = NSMaxRange(section)
+        guard hiddenStart < end else { return nil }
+        return MarkdownFoldPlan(headerLocation: heading.sourceRange.location,
+            hiddenRange: NSRange(location: hiddenStart, length: end - hiddenStart))
+    }
+}

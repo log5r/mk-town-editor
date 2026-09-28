@@ -117,8 +117,16 @@ final class MarkdownLineNumberRulerView: NSRulerView {
             .font: font,
             .foregroundColor: NSColor.secondaryLabelColor
         ]
+        let lineStarts = MarkdownLineNumberIndex(editor.string).starts
         for label in MarkdownLineNumberLayout.labels(in: editor, visibleRect: editor.visibleRect) {
             let point = convert(label.origin, from: editor)
+            if let foldingEditor = editor as? EditorTextView,
+               label.number <= lineStarts.count,
+               foldingEditor.foldedHeaderLocations.contains(lineStarts[label.number - 1]) {
+                ("▶" as NSString).draw(at: NSPoint(x: 3,
+                    y: point.y + (label.height - font.pointSize) / 2),
+                    withAttributes: attributes)
+            }
             let text = String(label.number) as NSString
             let size = text.size(withAttributes: attributes)
             text.draw(at: NSPoint(x: ruleThickness - size.width - 9,

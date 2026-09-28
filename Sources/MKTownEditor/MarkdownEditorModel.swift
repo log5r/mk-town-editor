@@ -112,6 +112,16 @@ final class MarkdownEditorModel: ObservableObject {
         selectAndReveal(previous)
     }
 
+    func toggleFold() {
+        guard let textView = textView as? EditorTextView,
+              !textView.hasMarkedText() else { return }
+        _ = textView.toggleFold(at: textView.selectedRange().location)
+    }
+
+    func unfoldAll() {
+        (textView as? EditorTextView)?.clearFolds()
+    }
+
     func navigate(to sourceLocation: Int) {
         let location = max(0, sourceLocation)
         guard let textView else {
@@ -121,6 +131,7 @@ final class MarkdownEditorModel: ObservableObject {
         }
         pendingNavigationLocation = nil
         let range = NSRange(location: min(location, (textView.string as NSString).length), length: 0)
+        (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
         textView.window?.makeFirstResponder(textView)
@@ -138,6 +149,7 @@ final class MarkdownEditorModel: ObservableObject {
         let safeLocation = min(location, length)
         let range = NSRange(location: safeLocation,
                             length: min(max(0, sourceRange.length), length - safeLocation))
+        (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
         textView.window?.makeFirstResponder(textView)
