@@ -49,11 +49,19 @@ struct EditorWorkspace: View {
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
     @State private var fileAction: WorkspaceFileAction?
+    @State private var encodingImport: EncodingImport?
+    @State private var encodingImportError: String?
     @State private var workspaceViewActive = false
 
     private enum SidebarTab: String, CaseIterable {
         case outline = "アウトライン"
         case files = "ファイル"
+    }
+
+    private struct EncodingImport: Identifiable {
+        let id = UUID()
+        let url: URL
+        let data: Data
     }
 
     private var mode: Binding<EditorMode> {
@@ -146,6 +154,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
         .focusedSceneValue(\.exportPlainTextAction) { showingPlainExport = true }
         .focusedSceneValue(\.openQuickFileAction) { showingQuickOpen = true }
+        .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
     }
 
     private var sheetView: some View {
@@ -202,6 +211,14 @@ struct EditorWorkspace: View {
                 WorkspaceFileOperationSheet(action: action, rootURL: root,
                                             currentDocumentURL: fileURL) {
                     workspaceStore.refresh(force: true)
+                }
+            }
+        }
+        .sheet(item: $encodingImport) { input in
+            MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
+                Task {
+                    do { try await openDocument(at: url) }
+                    catch { encodingImportError = error.localizedDescription }
                 }
             }
         }
@@ -343,6 +360,14 @@ struct EditorWorkspace: View {
             Text(pasteNeedsSave
                  ? "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。"
                  : imageDropError ?? "")
+        }
+        .alert("文字コードの取り込みに失敗", isPresented: Binding(
+            get: { encodingImportError != nil },
+            set: { if !$0 { encodingImportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { encodingImportError = nil }
+        } message: {
+            Text(encodingImportError ?? "")
         }
     }
 
@@ -683,6 +708,20 @@ struct EditorWorkspace: View {
             guard document.text == source else { return }
             linkDiagnostics = diagnostics
             isCheckingLinks = false
+        }
+    }
+
+    private func chooseEncodingImport() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [MarkdownDocument.markdownType, .plainText]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            encodingImport = EncodingImport(url: url, data: try Data(contentsOf: url))
+        } catch {
+            encodingImportError = error.localizedDescription
         }
     }
 
