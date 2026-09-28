@@ -12,6 +12,9 @@ struct EditorWorkspace: View {
     @State private var unsavedMode: EditorMode = .split
     @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
+    @State private var previewNavigationTarget: PreviewNavigationTarget?
+    @State private var navigationSequence = 0
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -35,13 +38,24 @@ struct EditorWorkspace: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            editorContent
-            Divider()
-            statusBar
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            outlineSidebar
+                .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 320)
+        } detail: {
+            VStack(spacing: 0) {
+                editorContent
+                Divider()
+                statusBar
+            }
+            .frame(minWidth: 720, minHeight: 480)
         }
-        .frame(minWidth: 720, minHeight: 480)
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                Button("アウトライン", systemImage: "sidebar.left") {
+                    sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
+                }
+                .help("アウトラインを表示または隠す")
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 ForEach(EditorCommand.toolbar, id: \.self) { command in
                     formatButton(command)
@@ -137,19 +151,54 @@ struct EditorWorkspace: View {
                     .frame(minWidth: 280)
                 MarkdownPreview(markdown: document.text, documentContext: documentContext,
                                 onToggleTask: previewTaskAction,
-                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true)
+                                snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
+                                navigationTarget: previewNavigationTarget)
                     .frame(minWidth: 280)
             }
         case .preview:
             MarkdownPreview(markdown: document.text, documentContext: documentContext,
                             onToggleTask: previewTaskAction,
-                            snapshot: analysisStore.snapshot, usesSharedAnalysis: true)
+                            snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
+                            navigationTarget: previewNavigationTarget)
         }
     }
 
     private var previewTaskAction: ((Int) -> Void)? {
         guard analysisStore.snapshot?.source == document.text else { return nil }
         return { toggleTask(at: $0) }
+    }
+
+    private var outlineEntries: [MarkdownOutlineEntry] {
+        analysisStore.snapshot.map { MarkdownOutline.entries(in: $0.analysis) } ?? []
+    }
+
+    private var outlineSidebar: some View {
+        List(outlineEntries) { entry in
+            Button {
+                navigate(to: entry)
+            } label: {
+                Text(entry.title)
+                    .lineLimit(1)
+                    .padding(.leading, CGFloat(entry.level - 1) * 12)
+            }
+            .buttonStyle(.plain)
+            .disabled(analysisStore.snapshot?.source != document.text)
+            .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
+        }
+        .listStyle(.sidebar)
+        .navigationTitle("アウトライン")
+        .overlay {
+            if outlineEntries.isEmpty {
+                ContentUnavailableView("見出しがありません", systemImage: "list.bullet.indent")
+            }
+        }
+    }
+
+    private func navigate(to entry: MarkdownOutlineEntry) {
+        guard analysisStore.snapshot?.source == document.text else { return }
+        editorModel.navigate(to: entry.sourceRange.location)
+        navigationSequence += 1
+        previewNavigationTarget = PreviewNavigationTarget(blockID: entry.id, sequence: navigationSequence)
     }
 
     private var sourceEditor: some View {

@@ -11,6 +11,7 @@ final class MarkdownEditorModel: ObservableObject {
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
+    private var pendingNavigationLocation: Int?
     var listIndentWidth = 2
     var codeIndentWidth = 4
 
@@ -24,6 +25,10 @@ final class MarkdownEditorModel: ObservableObject {
             length: min(selectedRange.length, length - location)
         ))
         if let scrollView { restoreScroll(in: scrollView) }
+        if pendingNavigationLocation != nil {
+            textView.scrollRangeToVisible(textView.selectedRange())
+            pendingNavigationLocation = nil
+        }
     }
 
     func disconnect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
@@ -57,6 +62,21 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func selectionDidChange(_ range: NSRange) {
+        selectedRange = range
+    }
+
+    func navigate(to sourceLocation: Int) {
+        let location = max(0, sourceLocation)
+        guard let textView else {
+            selectedRange = NSRange(location: location, length: 0)
+            pendingNavigationLocation = location
+            return
+        }
+        pendingNavigationLocation = nil
+        let range = NSRange(location: min(location, (textView.string as NSString).length), length: 0)
+        textView.setSelectedRange(range)
+        textView.scrollRangeToVisible(range)
+        textView.window?.makeFirstResponder(textView)
         selectedRange = range
     }
 
