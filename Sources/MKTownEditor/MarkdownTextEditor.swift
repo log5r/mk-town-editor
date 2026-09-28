@@ -1,9 +1,12 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct MarkdownTextEditor: NSViewRepresentable {
     @Binding var text: String
     let model: MarkdownEditorModel
+    var imageImportMode: ImageImportMode = .managedCopy
+    var onImageDrop: ((URL, Int) -> Void)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -59,6 +62,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.isRestoringSession = true
         model.connect(textView, scrollView: scrollView)
         textView.commandModel = model
+        textView.imageImportMode = imageImportMode
+        textView.onImageDrop = onImageDrop
+        textView.registerForDraggedTypes([.fileURL])
         MarkdownSyntaxHighlighter.apply(to: textView)
         context.coordinator.isRestoringSession = false
         textView.onFocused = { [weak textView, weak model] in
@@ -83,9 +89,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView, textView.string != text else {
-            return
-        }
+        guard let textView = scrollView.documentView as? EditorTextView else { return }
+        textView.imageImportMode = imageImportMode
+        textView.onImageDrop = onImageDrop
+        guard textView.string != text else { return }
         let selection = textView.selectedRange()
         textView.string = text
         MarkdownSyntaxHighlighter.apply(to: textView)
@@ -140,6 +147,12 @@ private final class EditorScrollView: NSScrollView {
 final class EditorTextView: NSTextView {
     var onFocused: (() -> Void)?
     weak var commandModel: MarkdownEditorModel?
+    var imageImportMode: ImageImportMode = .managedCopy
+    var onImageDrop: ((URL, Int) -> Void)?
+    private var selectionBeforeImageDrag: NSRange?
+    private var imageDropLocation: Int? {
+        didSet { needsDisplay = true }
+    }
 
     override func becomeFirstResponder() -> Bool {
         let didBecome = super.becomeFirstResponder()
@@ -166,6 +179,83 @@ final class EditorTextView: NSTextView {
         if let typed = insertString as? String,
            commandModel?.completeSymbol(typed, replacementRange: replacementRange) == true { return }
         super.insertText(insertString, replacementRange: replacementRange)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard Self.imageURL(in: sender.draggingPasteboard) != nil, onImageDrop != nil,
+              isEditable, !hasMarkedText() else { return super.draggingEntered(sender) }
+        selectionBeforeImageDrag = selectedRange()
+        imageDropLocation = dropInsertionLocation(for: sender.draggingLocation)
+        return imageImportMode == .managedCopy ? .copy : .link
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard Self.imageURL(in: sender.draggingPasteboard) != nil, onImageDrop != nil,
+              isEditable, !hasMarkedText() else { return super.draggingUpdated(sender) }
+        setSelectedRange(NSRange(location: dropInsertionLocation(for: sender.draggingLocation), length: 0))
+        imageDropLocation = selectedRange().location
+        return imageImportMode == .managedCopy ? .copy : .link
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        if let selectionBeforeImageDrag {
+            setSelectedRange(selectionBeforeImageDrag)
+            self.selectionBeforeImageDrag = nil
+            imageDropLocation = nil
+            return
+        }
+        selectionBeforeImageDrag = nil
+        imageDropLocation = nil
+        super.draggingExited(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let url = Self.imageURL(in: sender.draggingPasteboard), let onImageDrop,
+              isEditable, !hasMarkedText() else { return super.performDragOperation(sender) }
+        let location = dropInsertionLocation(for: sender.draggingLocation)
+        setSelectedRange(NSRange(location: location, length: 0))
+        selectionBeforeImageDrag = nil
+        imageDropLocation = nil
+        onImageDrop(url, location)
+        return true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let imageDropLocation,
+              let indicator = imageDropIndicatorRect(at: imageDropLocation),
+              indicator.intersects(dirtyRect) else { return }
+        NSColor.controlAccentColor.setFill()
+        indicator.fill()
+    }
+
+    func imageDropIndicatorRect(at location: Int) -> NSRect? {
+        guard let window, location >= 0,
+              location <= (string as NSString).length else { return nil }
+        let screen = firstRect(forCharacterRange: NSRange(location: location, length: 0),
+                               actualRange: nil)
+        let local = convert(window.convertFromScreen(screen), from: nil)
+        return NSRect(x: local.minX, y: local.minY, width: 2,
+                      height: max(local.height, font?.pointSize ?? 13))
+    }
+
+    func dropInsertionLocation(for windowPoint: NSPoint) -> Int {
+        guard let layoutManager, let textContainer else { return (string as NSString).length }
+        let local = convert(windowPoint, from: nil)
+        let containerPoint = NSPoint(x: local.x - textContainerOrigin.x,
+                                     y: local.y - textContainerOrigin.y)
+        return min((string as NSString).length,
+                   layoutManager.characterIndex(for: containerPoint, in: textContainer,
+                                                fractionOfDistanceBetweenInsertionPoints: nil))
+    }
+
+    static func imageURL(in pasteboard: NSPasteboard) -> URL? {
+        let urls = pasteboard.readObjects(forClasses: [NSURL.self],
+                                          options: [.urlReadingFileURLsOnly: true]) as? [URL]
+        guard let urls, urls.count == 1,
+              let url = urls.first, url.isFileURL,
+              UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true else { return nil }
+        return url
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

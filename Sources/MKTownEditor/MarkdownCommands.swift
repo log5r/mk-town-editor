@@ -13,6 +13,7 @@ extension FocusedValues {
 
 struct MarkdownCommands: Commands {
     @FocusedValue(\.markdownEditorModel) private var editorModel
+    @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
         CommandGroup(after: .textEditing) {
@@ -51,6 +52,15 @@ struct MarkdownCommands: Commands {
                 }
             }
             commandButton(.horizontalRule)
+            Divider()
+            Picker("画像ドロップ", selection: Binding(
+                get: { settingsStore.imageImportMode(for: nil) },
+                set: { settingsStore.setImageImportMode($0) }
+            )) {
+                ForEach(ImageImportMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
         }
     }
 

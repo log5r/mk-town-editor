@@ -8,6 +8,18 @@ enum ImageInput: Sendable {
     case file(URL)
 }
 
+enum ImageImportMode: String, Codable, CaseIterable, Sendable {
+    case managedCopy
+    case relativeReference
+
+    var title: String {
+        switch self {
+        case .managedCopy: "assets にコピー"
+        case .relativeReference: "元ファイルを参照"
+        }
+    }
+}
+
 struct ImportedImage: Sendable {
     let relativePath: String
     let createdFileURL: URL?
@@ -62,7 +74,8 @@ struct ImageResourceManager {
         return image
     }
 
-    func importImage(at fileURL: URL, for context: DocumentContext) throws -> ImportedImage {
+    func importImage(at fileURL: URL, for context: DocumentContext,
+                     mode: ImageImportMode = .managedCopy) throws -> ImportedImage {
         guard let directoryURL = context.directoryURL else { throw ImageResourceError.unsavedDocument }
         let hasAccess = fileURL.startAccessingSecurityScopedResource()
         defer { if hasAccess { fileURL.stopAccessingSecurityScopedResource() } }
@@ -79,6 +92,14 @@ struct ImageResourceManager {
         if source.path.hasPrefix(directoryPath) {
             return ImportedImage(relativePath: String(source.path.dropFirst(directoryPath.count)),
                                  createdFileURL: nil)
+        }
+
+        if mode == .relativeReference {
+            let base = directory.pathComponents
+            let target = source.pathComponents
+            let common = zip(base, target).prefix(while: { $0.0 == $0.1 }).count
+            let relative = Array(repeating: "..", count: base.count - common) + Array(target.dropFirst(common))
+            return ImportedImage(relativePath: relative.joined(separator: "/"), createdFileURL: nil)
         }
 
         let assets = directory.appendingPathComponent("assets", isDirectory: true)
@@ -134,6 +155,23 @@ enum ImageInsertionService {
         guard !Task.isCancelled, currentContext() == context,
               model.commitImage(alt: alt, destination: destination, title: title) else {
             if let imported { ImageResourceManager().rollback(imported) }
+            throw ImageInsertionError.documentChanged
+        }
+    }
+
+    @MainActor
+    static func insertDrop(fileURL: URL, draft: MarkdownImageDraft,
+                           mode: ImageImportMode, context: DocumentContext,
+                           model: MarkdownEditorModel,
+                           currentContext: () -> DocumentContext) async throws {
+        let imported = try await Task.detached(priority: .userInitiated) {
+            try ImageResourceManager().importImage(at: fileURL, for: context, mode: mode)
+        }.value
+        let alt = fileURL.deletingPathExtension().lastPathComponent
+        guard !Task.isCancelled, currentContext() == context,
+              model.commitDroppedImage(draft, alt: alt.isEmpty ? "画像" : alt,
+                                       destination: imported.relativePath) else {
+            ImageResourceManager().rollback(imported)
             throw ImageInsertionError.documentChanged
         }
     }

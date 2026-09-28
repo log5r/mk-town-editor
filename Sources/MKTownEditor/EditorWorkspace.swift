@@ -9,6 +9,7 @@ struct EditorWorkspace: View {
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
+    @State private var imageDropError: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -74,6 +75,14 @@ struct EditorWorkspace: View {
                 editorModel.commitTable(rows: rows, columns: columns)
             }
         }
+        .alert("画像を挿入できません", isPresented: Binding(
+            get: { imageDropError != nil },
+            set: { if !$0 { imageDropError = nil } }
+        )) {
+            Button("OK", role: .cancel) { imageDropError = nil }
+        } message: {
+            Text(imageDropError ?? "")
+        }
         .onAppear {
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -118,7 +127,25 @@ struct EditorWorkspace: View {
     }
 
     private var sourceEditor: some View {
-        MarkdownTextEditor(text: $document.text, model: editorModel)
+        MarkdownTextEditor(text: $document.text, model: editorModel,
+                           imageImportMode: settingsStore.imageImportMode(for: fileURL),
+                           onImageDrop: dropImage)
+    }
+
+    private func dropImage(_ url: URL, at location: Int) {
+        guard let draft = editorModel.imageDropDraft(at: location) else { return }
+        let context = documentContext
+        let mode = settingsStore.imageImportMode(for: fileURL)
+        Task {
+            do {
+                try await ImageInsertionService.insertDrop(fileURL: url, draft: draft,
+                                                           mode: mode, context: context,
+                                                           model: editorModel,
+                                                           currentContext: { documentContext })
+            } catch {
+                imageDropError = error.localizedDescription
+            }
+        }
     }
 
     private func toggleTask(at sourceLocation: Int) {
