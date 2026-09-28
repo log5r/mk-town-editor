@@ -15,6 +15,7 @@ final class MarkdownEditorModel: ObservableObject {
     var listIndentWidth = 2
     var codeIndentWidth = 4
     var tableAddsRowOnTab = true
+    var tablePasteboard: NSPasteboard = .general
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
@@ -269,6 +270,41 @@ final class MarkdownEditorModel: ObservableObject {
             perform(edit, in: textView, storage: storage, focusEditor: true)
         }
         return true
+    }
+
+    func convertClipboardTable() {
+        guard canExecuteCommand, let textView,
+              let clipboard = tablePasteboard.string(forType: .string) else { return }
+        let original = textView.string
+        let selection = textView.selectedRange()
+        guard let conversion = MarkdownTableInsertion.conversion(in: original,
+            selection: selection, delimitedText: clipboard) else {
+            if let window = textView.window {
+                let alert = NSAlert()
+                alert.messageText = "TSV・CSVを表に変換できません"
+                alert.informativeText = "区切り文字、引用符、行の内容を確認してください。"
+                alert.beginSheetModal(for: window)
+            }
+            return
+        }
+        let applyConversion = { [weak self, weak textView] in
+            guard let self, let textView, let storage = textView.textStorage,
+                  textView.string == original, textView.selectedRange() == selection,
+                  textView.isEditable, !textView.hasMarkedText() else { return }
+            self.perform(conversion.edit, in: textView, storage: storage, focusEditor: true)
+        }
+        guard conversion.hasMultilineCells, let window = textView.window else {
+            applyConversion()
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "セル内改行を変換します"
+        alert.informativeText = "Markdown表ではセル内改行を直接表せないため、<br>に置き換えます。"
+        alert.addButton(withTitle: "変換")
+        alert.addButton(withTitle: "キャンセル")
+        alert.beginSheetModal(for: window) { response in
+            if response == .alertFirstButtonReturn { applyConversion() }
+        }
     }
 
     func commitImage(alt: String, destination: String, title: String) -> Bool {

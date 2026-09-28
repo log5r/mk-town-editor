@@ -6,7 +6,145 @@ struct MarkdownTableDraft: Identifiable {
     let originalText: String
 }
 
+struct MarkdownTableConversion {
+    let edit: MarkdownEdit
+    let hasMultilineCells: Bool
+}
+
 enum MarkdownTableInsertion {
+    static func conversion(in text: String, selection: NSRange,
+                           delimitedText: String) -> MarkdownTableConversion? {
+        let source = text as NSString
+        guard selection.location >= 0, selection.location <= source.length,
+              selection.length >= 0, selection.length <= source.length - selection.location,
+              let parsed = parseDelimited(delimitedText) else { return nil }
+        let width = parsed.rows.map(\.count).max() ?? 0
+        guard width > 0, width <= 100, parsed.rows.count <= 10_000 else { return nil }
+        let newline = text.contains("\r\n") ? "\r\n" : text.contains("\r") ? "\r" : "\n"
+        let before = source.substring(to: selection.location)
+        let after = source.substring(from: NSMaxRange(selection))
+        let leading = spacing(before: before, newline: newline)
+        let trailing = spacing(after: after, newline: newline)
+        let lines = parsed.rows.enumerated().map { index, row in
+            let cells = row + Array(repeating: "", count: width - row.count)
+            let body = "| " + cells.map(escapedCell).joined(separator: " | ") + " |"
+            if index == 0 {
+                return [body, "| " + Array(repeating: "---", count: width).joined(separator: " | ") + " |"]
+            }
+            return [body]
+        }.flatMap { $0 }
+        let replacement = leading + lines.joined(separator: newline) + trailing
+        let firstCell = escapedCell(parsed.rows[0][0])
+        let location = selection.location + (leading as NSString).length + 2
+        let edit = MarkdownEdit(range: selection, replacement: replacement,
+                                selection: NSRange(location: location,
+                                                   length: (firstCell as NSString).length))
+        return MarkdownTableConversion(edit: edit, hasMultilineCells: parsed.hasMultilineCells)
+    }
+
+    private static func escapedCell(_ value: String) -> String {
+        var result = ""
+        for character in value {
+            switch character {
+            case "\n", "\r": result += "<br>"
+            case "&": result += "&amp;"
+            case "<": result += "&lt;"
+            case ">": result += "&gt;"
+            case "\\", "|", "*", "_", "`", "[", "]": result += "\\" + String(character)
+            default: result.append(character)
+            }
+        }
+        return result
+    }
+
+    private static func parseDelimited(_ input: String) ->
+        (rows: [[String]], hasMultilineCells: Bool)? {
+        guard !input.isEmpty else { return nil }
+        let characters = Array(input.unicodeScalars)
+        let separator = delimiter(in: characters)
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var quoted = false
+        var afterQuote = false
+        var multiline = false
+        var index = 0
+        var lastWasNewline = false
+        while index < characters.count {
+            let character = characters[index]
+            if quoted {
+                if character == "\"" {
+                    if index + 1 < characters.count && characters[index + 1] == "\"" {
+                        field.append("\"")
+                        index += 2
+                        continue
+                    }
+                    quoted = false
+                    afterQuote = true
+                } else if character == "\r" || character == "\n" {
+                    field.append("\n")
+                    multiline = true
+                    if character == "\r" && index + 1 < characters.count && characters[index + 1] == "\n" {
+                        index += 1
+                    }
+                } else {
+                    field.unicodeScalars.append(character)
+                }
+            } else if character == separator {
+                row.append(field)
+                field = ""
+                afterQuote = false
+                lastWasNewline = false
+            } else if character == "\r" || character == "\n" {
+                row.append(field)
+                rows.append(row)
+                row = []
+                field = ""
+                afterQuote = false
+                lastWasNewline = true
+                if character == "\r" && index + 1 < characters.count && characters[index + 1] == "\n" {
+                    index += 1
+                }
+            } else if character == "\"" && field.isEmpty && !afterQuote {
+                quoted = true
+                lastWasNewline = false
+            } else if character == "\"" || afterQuote {
+                return nil
+            } else {
+                field.unicodeScalars.append(character)
+                lastWasNewline = false
+            }
+            index += 1
+        }
+        guard !quoted else { return nil }
+        if !lastWasNewline || !row.isEmpty || !field.isEmpty {
+            row.append(field)
+            rows.append(row)
+        }
+        guard !rows.isEmpty, rows.count > 1 || rows[0].count > 1 else { return nil }
+        return (rows, multiline)
+    }
+
+    private static func delimiter(in characters: [Unicode.Scalar]) -> Unicode.Scalar {
+        var quoted = false
+        var index = 0
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\"" {
+                if quoted && index + 1 < characters.count && characters[index + 1] == "\"" {
+                    index += 2
+                    continue
+                }
+                quoted.toggle()
+            } else if !quoted {
+                if character == "\t" { return "\t" }
+                if character == "\r" || character == "\n" { break }
+            }
+            index += 1
+        }
+        return ","
+    }
+
     static func draft(in text: String, selection: NSRange) -> MarkdownTableDraft {
         let length = (text as NSString).length
         let location = min(max(selection.location, 0), length)
