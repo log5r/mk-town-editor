@@ -28,7 +28,8 @@ struct MarkdownPreview: View {
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown)
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
-                onVisibleBlockChange != nil || onRevealSource != nil {
+                onVisibleBlockChange != nil || onRevealSource != nil ||
+                !analysis.footnotes.entries.isEmpty {
                 let layout = PreviewLayoutIndex(analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
@@ -69,6 +70,28 @@ struct MarkdownPreview: View {
                                     onRevealSource?(block.sourceRange)
                                 }
                             }
+                            if !analysis.footnotes.entries.isEmpty {
+                                Text("脚注").font(.headline)
+                                    .padding(.top, 20)
+                                ForEach(analysis.footnotes.entries, id: \.number) { note in
+                                    HStack(alignment: .top, spacing: 8) {
+                                        Text("\(note.number).")
+                                        Text(AttributedString(MarkdownRenderer.render(note.content,
+                                            documentContext: documentContext)))
+                                            .textSelection(.enabled)
+                                        Button("本文に戻る", systemImage: "arrow.uturn.backward") {
+                                            if let block = layout.visibleBlocks.first(where: {
+                                                NSLocationInRange(note.firstReferenceRange.location,
+                                                                  $0.sourceRange)
+                                            }) {
+                                                proxy.scrollTo(block.id, anchor: .center)
+                                            }
+                                        }
+                                        .labelStyle(.iconOnly)
+                                    }
+                                    .id("footnote-\(note.number)")
+                                }
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 28)
@@ -87,8 +110,11 @@ struct MarkdownPreview: View {
                             onVisibleBlockChange?(blockID)
                         }
                     }
-                }
-                .environment(\.openURL, OpenURLAction { url in
+                    .environment(\.openURL, OpenURLAction { url in
+                    if url.scheme == "mktown-footnote" {
+                        proxy.scrollTo("footnote-\(url.lastPathComponent)", anchor: .center)
+                        return .handled
+                    }
                     if let fragment = MarkdownHeadingIndex.localFragment(in: url),
                        let onOpenHeading {
                         onOpenHeading(fragment)
@@ -100,7 +126,8 @@ struct MarkdownPreview: View {
                         return .handled
                     }
                     return .systemAction
-                })
+                    })
+                }
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,

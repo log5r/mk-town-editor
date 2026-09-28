@@ -82,4 +82,18 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertEqual(layout.quoteDepth(for: nested.id), 2)
         XCTAssertEqual(layout.quoteDepth(for: regular.id), 0)
     }
+
+    func testFootnoteRenumberingInvalidatesCachedBlock() throws {
+        let first = MarkdownAnalysis("Text[^a]\n\n[^a]: Alpha\n[^b]: Beta")
+        let changed = MarkdownAnalysis("Other[^b]\n\nText[^a]\n\n[^a]: Alpha\n[^b]: Beta")
+        let cache = PreviewRenderCache()
+        let context = DocumentContext(fileURL: nil)
+        let oldBlock = try XCTUnwrap(first.blocks.first { $0.content.contains("Text") })
+        let newBlock = try XCTUnwrap(changed.blocks.first { $0.content.contains("Text") })
+        let before = cache.render(oldBlock, in: first, context: context, zoom: 1)
+        let after = cache.render(newBlock, in: changed, context: context, zoom: 1)
+        XCTAssertFalse(before === after)
+        XCTAssertEqual(before.string, "Text1")
+        XCTAssertEqual(after.string, "Text2")
+    }
 }

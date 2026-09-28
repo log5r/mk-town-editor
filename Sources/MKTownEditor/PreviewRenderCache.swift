@@ -61,9 +61,16 @@ final class PreviewRenderCache: ObservableObject {
         let title: String?
     }
 
+    private struct FootnoteSignature: Equatable {
+        let id: String
+        let number: Int
+        let content: String
+    }
+
     private var blocks: [BlockSignature: NSAttributedString] = [:]
     private var cells: [String: NSAttributedString] = [:]
     private var references: [String: ReferenceSignature]?
+    private var footnotes: [FootnoteSignature]?
     private var context: DocumentContext?
     private var zoom: Double?
     private(set) var renderCount = 0
@@ -71,7 +78,8 @@ final class PreviewRenderCache: ObservableObject {
     func render(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                 context: DocumentContext, zoom: Double,
                 showsTaskPrefix: Bool = true) -> NSAttributedString {
-        prepare(references: analysis.references, context: context, zoom: zoom)
+        prepare(references: analysis.references, footnotes: analysis.footnotes,
+                context: context, zoom: zoom)
         let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
         if let cached = blocks[signature] { return cached }
         let rendered = PreviewTypography.scaled(
@@ -86,7 +94,8 @@ final class PreviewRenderCache: ObservableObject {
     func renderCell(_ markdown: String,
                     in analysis: MarkdownAnalysis, context: DocumentContext,
                     zoom: Double) -> NSAttributedString {
-        prepare(references: analysis.references, context: context, zoom: zoom)
+        prepare(references: analysis.references, footnotes: analysis.footnotes,
+                context: context, zoom: zoom)
         if let cached = cells[markdown] { return cached }
         let rendered = PreviewTypography.scaled(
             MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context),
@@ -98,14 +107,20 @@ final class PreviewRenderCache: ObservableObject {
     }
 
     private func prepare(references newReferences: [String: MarkdownReference],
+                         footnotes newFootnotes: MarkdownFootnoteIndex,
                          context newContext: DocumentContext, zoom newZoom: Double) {
         let signatures = newReferences.mapValues {
             ReferenceSignature(destination: $0.destination, title: $0.title)
         }
-        guard references != signatures || context != newContext || zoom != newZoom else { return }
+        let noteSignatures = newFootnotes.entries.map {
+            FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
+        }
+        guard references != signatures || footnotes != noteSignatures ||
+              context != newContext || zoom != newZoom else { return }
         blocks.removeAll()
         cells.removeAll()
         references = signatures
+        footnotes = noteSignatures
         context = newContext
         zoom = newZoom
     }

@@ -29,6 +29,86 @@ struct MarkdownReference: Equatable, Sendable {
     let sourceRange: NSRange
 }
 
+struct MarkdownFootnote: Equatable, Sendable {
+    let id: String
+    let number: Int
+    let content: String
+    let definitionRange: NSRange
+    let firstReferenceRange: NSRange
+}
+
+struct MarkdownFootnoteIndex: Sendable {
+    let entries: [MarkdownFootnote]
+    let definitionRanges: [NSRange]
+
+    init(source: String, codeRanges: [NSRange]) {
+        guard source.contains("[^") else {
+            entries = []
+            definitionRanges = []
+            return
+        }
+        let text = source as NSString
+        let starts = MarkdownLineIndex(source).starts
+        let pattern = try! NSRegularExpression(pattern: #"^[ ]{0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$"#)
+        var definitions: [String: (content: String, range: NSRange)] = [:]
+        var definitionRanges: [NSRange] = []
+        var lineIndex = 0
+        while lineIndex < starts.count {
+            let start = starts[lineIndex]
+            let end = lineIndex + 1 < starts.count ? starts[lineIndex + 1] : text.length
+            let line = text.substring(with: NSRange(location: start, length: end - start))
+                .trimmingCharacters(in: .newlines)
+            let lineRange = NSRange(location: 0, length: (line as NSString).length)
+            guard !codeRanges.contains(where: { NSLocationInRange(start, $0) }),
+                  let match = pattern.firstMatch(in: line, range: lineRange) else {
+                lineIndex += 1
+                continue
+            }
+            let id = (line as NSString).substring(with: match.range(at: 1)).lowercased()
+            var content = (line as NSString).substring(with: match.range(at: 2))
+            var lastEnd = end
+            var next = lineIndex + 1
+            while next < starts.count {
+                let continuationStart = starts[next]
+                let continuationEnd = next + 1 < starts.count ? starts[next + 1] : text.length
+                let continuation = text.substring(with: NSRange(
+                    location: continuationStart, length: continuationEnd - continuationStart))
+                    .trimmingCharacters(in: .newlines)
+                guard continuation.hasPrefix("    ") || continuation.hasPrefix("\t") else { break }
+                content += "\n" + (continuation.hasPrefix("\t")
+                    ? String(continuation.dropFirst()) : String(continuation.dropFirst(4)))
+                lastEnd = continuationEnd
+                next += 1
+            }
+            let range = NSRange(location: start, length: lastEnd - start)
+            definitionRanges.append(range)
+            if definitions[id] == nil { definitions[id] = (content, range) }
+            lineIndex = next
+        }
+        self.definitionRanges = definitionRanges
+        let referencePattern = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let inlineCode = MarkdownInlineSyntax.codeSpanRanges(in: source)
+        var ordered: [MarkdownFootnote] = []
+        var seen = Set<String>()
+        for match in referencePattern.matches(in: source,
+            range: NSRange(location: 0, length: text.length)) {
+            guard !definitionRanges.contains(where: { NSLocationInRange(match.range.location, $0) }),
+                  !codeRanges.contains(where: { NSLocationInRange(match.range.location, $0) }),
+                  !inlineCode.contains(where: { NSLocationInRange(match.range.location, $0) }) else { continue }
+            let id = text.substring(with: match.range(at: 1)).lowercased()
+            guard let definition = definitions[id], seen.insert(id).inserted else { continue }
+            ordered.append(MarkdownFootnote(id: id, number: ordered.count + 1,
+                content: definition.content, definitionRange: definition.range,
+                firstReferenceRange: match.range))
+        }
+        entries = ordered
+    }
+
+    func entry(for id: String) -> MarkdownFootnote? {
+        entries.first { $0.id == id.lowercased() }
+    }
+}
+
 struct MarkdownBlock: Equatable, Sendable {
     enum Kind: Hashable, Sendable {
         case paragraph
@@ -79,15 +159,34 @@ struct MarkdownAnalysis: Sendable {
     let blocks: [MarkdownBlock]
     let positionMap: MarkdownPositionMap
     let references: [String: MarkdownReference]
+    let footnotes: MarkdownFootnoteIndex
 
     init(_ markdown: String) {
         positionMap = MarkdownPositionMap(markdown)
-        let parsed = Self.parse(markdown)
-        blocks = parsed.blocks
-        references = parsed.references
+        let preliminary = Self.parse(markdown)
+        let index = MarkdownFootnoteIndex(source: markdown,
+            codeRanges: preliminary.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange))
+        footnotes = index
+        let parsed = index.definitionRanges.isEmpty ? preliminary
+            : Self.parse(Self.maskedFootnoteDefinitions(in: markdown,
+                ranges: index.definitionRanges))
+        blocks = parsed.blocks.filter { block in
+            !index.definitionRanges.contains { NSLocationInRange(block.sourceRange.location, $0) }
+        }
+        references = parsed.references.filter { !$0.key.hasPrefix("^") }
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }
+
+    private static func maskedFootnoteDefinitions(in source: String, ranges: [NSRange]) -> String {
+        var units = Array(source.utf16)
+        for range in ranges {
+            for index in range.location..<NSMaxRange(range) where units[index] != 10 && units[index] != 13 {
+                units[index] = 32
+            }
+        }
+        return String(decoding: units, as: UTF16.self)
+    }
 
     func children(of block: MarkdownBlock) -> [MarkdownBlock] {
         blocks.filter { $0.parentID == block.id }
