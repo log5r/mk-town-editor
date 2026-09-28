@@ -52,6 +52,10 @@ private struct PrintDocumentActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct CopyRichActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 extension FocusedValues {
     var markdownEditorModel: MarkdownEditorModel? {
         get { self[MarkdownEditorModelKey.self] }
@@ -94,6 +98,10 @@ extension FocusedValues {
         get { self[PrintDocumentActionKey.self] }
         set { self[PrintDocumentActionKey.self] = newValue }
     }
+    var copyRichAction: (() -> Void)? {
+        get { self[CopyRichActionKey.self] }
+        set { self[CopyRichActionKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -107,6 +115,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.exportPDFAction) private var exportPDFAction
     @FocusedValue(\.pageSetupAction) private var pageSetupAction
     @FocusedValue(\.printDocumentAction) private var printDocumentAction
+    @FocusedValue(\.copyRichAction) private var copyRichAction
     @ObservedObject var settingsStore: EditorSettingsStore
 
     var body: some Commands {
@@ -116,6 +125,11 @@ struct MarkdownCommands: Commands {
             Button("印刷…") { printDocumentAction?() }
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(printDocumentAction == nil)
+        }
+        CommandGroup(after: .pasteboard) {
+            Button("HTML・RTFとしてコピー") { copyRichAction?() }
+                .disabled(copyRichAction == nil || editorModel?.hasActiveEditor != true ||
+                          editorModel?.selectedRange.length == 0)
         }
         CommandMenu("移動") {
             Button("戻る") { navigationHistoryActions?.goBack() }
