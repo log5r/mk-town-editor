@@ -134,4 +134,33 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertEqual(MarkdownRenderer.render(markdown).string,
                        "☐ 未完了  first\n☑ 完了  child\n2.  ☑ 完了  done\n•  plain")
     }
+
+    @MainActor
+    func testGFMStrikethroughRendersWithAttribute() {
+        let output = MarkdownRenderer.render("before ~~削除🙂~~ after")
+        let range = (output.string as NSString).range(of: "削除🙂")
+
+        XCTAssertEqual(output.string, "before 削除🙂 after")
+        XCTAssertNotEqual(range.location, NSNotFound)
+        if range.location != NSNotFound {
+            XCTAssertNotNil(output.attribute(.strikethroughStyle, at: range.location, effectiveRange: nil))
+        }
+    }
+
+    @MainActor
+    func testInlineIntentConversionAlsoPreservesBoldItalicAndCode() {
+        let output = MarkdownRenderer.render("**bold** *italic* `code` ~~struck~~")
+        let text = output.string as NSString
+        let bold = text.range(of: "bold").location
+        let italic = text.range(of: "italic").location
+        let code = text.range(of: "code").location
+        let struck = text.range(of: "struck").location
+
+        XCTAssertTrue(NSFontManager.shared.traits(of: output.attribute(.font, at: bold,
+            effectiveRange: nil) as! NSFont).contains(.boldFontMask))
+        XCTAssertTrue(NSFontManager.shared.traits(of: output.attribute(.font, at: italic,
+            effectiveRange: nil) as! NSFont).contains(.italicFontMask))
+        XCTAssertNotNil(output.attribute(.backgroundColor, at: code, effectiveRange: nil))
+        XCTAssertNotNil(output.attribute(.strikethroughStyle, at: struck, effectiveRange: nil))
+    }
 }

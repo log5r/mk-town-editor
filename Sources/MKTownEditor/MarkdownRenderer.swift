@@ -149,7 +149,9 @@ enum MarkdownRenderer {
         result.addAttributes(baseAttributes(font: baseFont, color: color, paragraphSpacing: paragraphSpacing), range: fullRange)
 
         result.enumerateAttribute(.inlinePresentationIntent, in: fullRange) { value, range, _ in
-            guard let intent = value as? InlinePresentationIntent else { return }
+            let intent = (value as? InlinePresentationIntent) ??
+                (value as? NSNumber).map { InlinePresentationIntent(rawValue: $0.uintValue) }
+            guard let intent else { return }
             var font = baseFont
             if intent.contains(.stronglyEmphasized) {
                 font = NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask)
@@ -160,6 +162,9 @@ enum MarkdownRenderer {
             if intent.contains(.code) {
                 font = .monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
                 result.addAttribute(.backgroundColor, value: NSColor.controlBackgroundColor, range: range)
+            }
+            if intent.contains(.strikethrough) {
+                result.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
             }
             result.addAttribute(.font, value: font, range: range)
         }
