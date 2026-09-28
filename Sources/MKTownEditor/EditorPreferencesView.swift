@@ -35,6 +35,16 @@ struct EditorPreferencesView: View {
             Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
             Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
             Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
+            Section("プレビュー") {
+                Picker("配色", selection: binding(\.previewTheme, default: .system)) {
+                    ForEach(PreviewTheme.allCases, id: \.self) { theme in
+                        Text(theme.title).tag(theme)
+                    }
+                }
+                Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
+                    Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
+                }
+            }
             Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
                 ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
                     Text(directory.title).tag(directory)

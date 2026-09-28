@@ -83,18 +83,21 @@ final class PreviewRenderCache: ObservableObject {
     private var context: DocumentContext?
     private var zoom: Double?
     private var remoteRevision: Int?
+    private var theme: PreviewTheme?
     private(set) var renderCount = 0
 
     func render(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                 context: DocumentContext, zoom: Double,
-                showsTaskPrefix: Bool = true, remoteRevision: Int = 0) -> NSAttributedString {
+                showsTaskPrefix: Bool = true, remoteRevision: Int = 0,
+                theme: PreviewTheme = .system) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
-                context: context, zoom: zoom, remoteRevision: remoteRevision)
+                context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
         if let cached = blocks[signature] { return cached }
-        let rendered = PreviewTypography.scaled(
+        let rendered = PreviewTypography.themed(PreviewTypography.scaled(
             MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: showsTaskPrefix,
-                                        documentContext: context), by: zoom)
+                                        documentContext: context), by: zoom),
+            kind: block.kind, theme: theme)
         blocks[signature] = rendered
         renderCount += 1
         trimIfNeeded()
@@ -103,13 +106,14 @@ final class PreviewRenderCache: ObservableObject {
 
     func renderCell(_ markdown: String,
                     in analysis: MarkdownAnalysis, context: DocumentContext,
-                    zoom: Double, remoteRevision: Int = 0) -> NSAttributedString {
+                    zoom: Double, remoteRevision: Int = 0,
+                    theme: PreviewTheme = .system) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
-                context: context, zoom: zoom, remoteRevision: remoteRevision)
+                context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         if let cached = cells[markdown] { return cached }
-        let rendered = PreviewTypography.scaled(
+        let rendered = PreviewTypography.themed(PreviewTypography.scaled(
             MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context),
-            by: zoom)
+            by: zoom), kind: nil, theme: theme)
         cells[markdown] = rendered
         renderCount += 1
         trimIfNeeded()
@@ -119,7 +123,7 @@ final class PreviewRenderCache: ObservableObject {
     private func prepare(references newReferences: [String: MarkdownReference],
                          footnotes newFootnotes: MarkdownFootnoteIndex,
                          context newContext: DocumentContext, zoom newZoom: Double,
-                         remoteRevision newRemoteRevision: Int) {
+                         remoteRevision newRemoteRevision: Int, theme newTheme: PreviewTheme) {
         let signatures = newReferences.mapValues {
             ReferenceSignature(destination: $0.destination, title: $0.title)
         }
@@ -128,7 +132,7 @@ final class PreviewRenderCache: ObservableObject {
         }
         guard references != signatures || footnotes != noteSignatures ||
               context != newContext || zoom != newZoom ||
-              remoteRevision != newRemoteRevision else { return }
+              remoteRevision != newRemoteRevision || theme != newTheme else { return }
         blocks.removeAll()
         cells.removeAll()
         references = signatures
@@ -136,6 +140,7 @@ final class PreviewRenderCache: ObservableObject {
         context = newContext
         zoom = newZoom
         remoteRevision = newRemoteRevision
+        theme = newTheme
     }
 
     private func trimIfNeeded() {

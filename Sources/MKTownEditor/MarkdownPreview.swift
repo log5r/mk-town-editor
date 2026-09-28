@@ -8,6 +8,7 @@ struct PreviewNavigationTarget: Equatable {
 }
 
 struct MarkdownPreview: View {
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
     @State private var inspectedImage: ImageInspectionItem?
@@ -25,6 +26,8 @@ struct MarkdownPreview: View {
     var showsFrontMatter = false
     var zoom: Double = 1
     var loadsRemoteImages = false
+    var theme: PreviewTheme = .system
+    var bodyWidth = 900
 
     private var remoteImageTaskID: Int {
         var hasher = Hasher()
@@ -45,6 +48,7 @@ struct MarkdownPreview: View {
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
                 !analysis.footnotes.entries.isEmpty ||
+                theme != .system || bodyWidth != 900 ||
                 (showsFrontMatter && analysis.frontMatter != nil) {
                 let layout = PreviewLayoutIndex(analysis)
                 ScrollViewReader { proxy in
@@ -148,7 +152,8 @@ struct MarkdownPreview: View {
                                 }
                             }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: CGFloat(bodyWidth), alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 24)
                     }
@@ -201,6 +206,8 @@ struct MarkdownPreview: View {
             }
         }
         }
+        .environment(\.colorScheme, theme == .paper ? .light : colorScheme)
+        .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
         .task(id: remoteImageTaskID) {
             remoteImages.setEnabled(loadsRemoteImages)
             guard loadsRemoteImages else { return }
@@ -219,7 +226,7 @@ struct MarkdownPreview: View {
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: documentContext,
-            zoom: zoom, remoteRevision: remoteImages.revision)
+            zoom: zoom, remoteRevision: remoteImages.revision, theme: theme)
         if case let .heading(level) = block.kind {
             Text(AttributedString(rendered))
                 .textSelection(.enabled)
@@ -247,7 +254,8 @@ struct MarkdownPreview: View {
 
             Text(AttributedString(renderCache.render(block, in: analysis, context: documentContext,
                                                     zoom: zoom, showsTaskPrefix: false,
-                                                    remoteRevision: remoteImages.revision)))
+                                                    remoteRevision: remoteImages.revision,
+                                                    theme: theme)))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -281,7 +289,7 @@ struct MarkdownPreview: View {
             ForEach(cells.indices, id: \.self) { column in
                 Text(AttributedString(renderCache.renderCell(cells[column], in: analysis,
                     context: documentContext, zoom: zoom,
-                    remoteRevision: remoteImages.revision)))
+                    remoteRevision: remoteImages.revision, theme: theme)))
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -577,7 +585,9 @@ private struct DetachedPreviewContent: View {
                             usesSharedAnalysis: updates.state.isPaused,
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),
-                            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false)
+                            loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
+                            theme: settingsStore.app.previewTheme ?? .system,
+                            bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         }
         .frame(minWidth: 420, minHeight: 300)
     }

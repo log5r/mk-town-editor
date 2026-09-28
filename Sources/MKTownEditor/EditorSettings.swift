@@ -60,6 +60,26 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum PreviewTheme: String, Codable, CaseIterable, Sendable {
+    case system
+    case paper
+
+    var title: String { self == .system ? "システム" : "紙色" }
+
+    var background: NSColor? {
+        self == .paper ? NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1) : nil
+    }
+    var bodyColor: NSColor? {
+        self == .paper ? NSColor(srgbRed: 0.18, green: 0.16, blue: 0.13, alpha: 1) : nil
+    }
+    var headingColor: NSColor? {
+        self == .paper ? NSColor(srgbRed: 0.31, green: 0.19, blue: 0.11, alpha: 1) : nil
+    }
+    var codeColor: NSColor? {
+        self == .paper ? NSColor(srgbRed: 0.34, green: 0.18, blue: 0.10, alpha: 1) : nil
+    }
+}
+
 enum AttachmentDirectory: String, Codable, CaseIterable, Sendable {
     case assets
     case images
@@ -165,6 +185,8 @@ struct AppEditorSettings: Codable, Equatable {
     var loadsRemoteImages: Bool?
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
+    var previewTheme: PreviewTheme?
+    var previewBodyWidth: Int?
 }
 
 enum EditorZoomSurface: CaseIterable {
