@@ -35,4 +35,19 @@ final class WorkspaceFileIndexTests: XCTestCase {
         try FileManager.default.removeItem(at: file)
         XCTAssertTrue(WorkspaceFileIndex.scan(root: root).nodes.isEmpty)
     }
+
+    func testOpenDocumentRegistryCountsMultipleWindows() throws {
+        let suite = "mktown-workspace-registry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = WorkspaceStore(defaults: defaults)
+        let document = URL(fileURLWithPath: "/private/tmp/shared.md")
+        store.registerOpenDocument(document)
+        store.registerOpenDocument(document)
+        XCTAssertEqual(store.openDocumentURLs.count, 1)
+        store.unregisterOpenDocument(document)
+        XCTAssertEqual(store.openDocumentURLs.count, 1)
+        store.unregisterOpenDocument(document)
+        XCTAssertTrue(store.openDocumentURLs.isEmpty)
+    }
 }
