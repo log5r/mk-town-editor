@@ -18,6 +18,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
+    @State private var missingHeading: String?
 
     private var mode: Binding<EditorMode> {
         Binding(
@@ -98,6 +99,14 @@ struct EditorWorkspace: View {
                 navigate(to: $0)
             }
         }
+        .alert("見出しが見つかりません", isPresented: Binding(
+            get: { missingHeading != nil },
+            set: { if !$0 { missingHeading = nil } }
+        )) {
+            Button("OK") { missingHeading = nil }
+        } message: {
+            Text("#\(missingHeading ?? "") に対応する見出しがありません。")
+        }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft) { label, destination, title in
                 editorModel.commitLink(label: label, destination: destination, title: title)
@@ -175,14 +184,16 @@ struct EditorWorkspace: View {
                 MarkdownPreview(markdown: document.text, documentContext: documentContext,
                                 onToggleTask: previewTaskAction,
                                 snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                                navigationTarget: previewNavigationTarget)
+                                navigationTarget: previewNavigationTarget,
+                                onOpenHeading: navigateToHeading)
                     .frame(minWidth: 280)
             }
         case .preview:
             MarkdownPreview(markdown: document.text, documentContext: documentContext,
                             onToggleTask: previewTaskAction,
                             snapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                            navigationTarget: previewNavigationTarget)
+                            navigationTarget: previewNavigationTarget,
+                            onOpenHeading: navigateToHeading)
         }
     }
 
@@ -236,6 +247,15 @@ struct EditorWorkspace: View {
         let destination = MarkdownLineIndex(document.text).destination(for: requestedLine)
         if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
         navigate(to: destination.utf16Location)
+    }
+
+    private func navigateToHeading(_ fragment: String) {
+        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return }
+        guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
+            missingHeading = fragment
+            return
+        }
+        navigate(to: entry)
     }
 
     private var currentNavigationPoint: NavigationPoint {

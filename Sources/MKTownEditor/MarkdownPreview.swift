@@ -13,6 +13,7 @@ struct MarkdownPreview: View {
     var snapshot: DocumentSnapshot?
     var usesSharedAnalysis = false
     var navigationTarget: PreviewNavigationTarget?
+    var onOpenHeading: ((String) -> Void)?
 
     var body: some View {
         if usesSharedAnalysis && snapshot == nil {
@@ -59,9 +60,15 @@ struct MarkdownPreview: View {
                         if let target { proxy.scrollTo(target.blockID, anchor: .top) }
                     }
                 }
+                .environment(\.openURL, OpenURLAction { url in
+                    guard let fragment = MarkdownHeadingIndex.localFragment(in: url),
+                          let onOpenHeading else { return .systemAction }
+                    onOpenHeading(fragment)
+                    return .handled
+                })
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
-                                    analysis: snapshot?.analysis)
+                                    analysis: snapshot?.analysis, onOpenHeading: onOpenHeading)
             }
         }
     }
@@ -188,6 +195,9 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let markdown: String
     let documentContext: DocumentContext
     let analysis: MarkdownAnalysis?
+    let onOpenHeading: ((String) -> Void)?
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -196,6 +206,8 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         scrollView.borderType = .noBorder
 
         let textView = NSTextView()
+        textView.delegate = context.coordinator
+        context.coordinator.onOpenHeading = onOpenHeading
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -216,7 +228,20 @@ private struct MarkdownTextPreview: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        context.coordinator.onOpenHeading = onOpenHeading
         update(textView)
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var onOpenHeading: ((String) -> Void)?
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            let url = link as? URL ?? (link as? String).flatMap(URL.init(string:))
+            guard let url, let fragment = MarkdownHeadingIndex.localFragment(in: url),
+                  let onOpenHeading else { return false }
+            onOpenHeading(fragment)
+            return true
+        }
     }
 
     private func update(_ textView: NSTextView) {
