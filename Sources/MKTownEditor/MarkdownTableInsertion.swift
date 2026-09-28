@@ -53,9 +53,23 @@ enum MarkdownTableOperation: Equatable {
     case deleteRow
     case insertColumn
     case deleteColumn
+    case alignColumn(MarkdownTable.Alignment)
 }
 
 enum MarkdownTableEditing {
+    static func alignment(in text: String, selection: NSRange) -> MarkdownTable.Alignment? {
+        let source = text as NSString
+        guard selection.location >= 0, selection.location < source.length,
+              let block = MarkdownAnalysis(text).blocks.first(where: {
+                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
+              }), let table = block.table else { return nil }
+        let lineRange = source.lineRange(for: NSRange(location: selection.location, length: 0))
+        guard let selectedCells = cells(in: lineContent(source.substring(with: lineRange)).content,
+                                        expected: table.header.count) else { return nil }
+        let column = columnIndex(at: selection.location - lineRange.location, cells: selectedCells)
+        return table.alignments[column]
+    }
+
     static func edit(in text: String, selection: NSRange,
                      operation: MarkdownTableOperation) -> MarkdownEdit? {
         let source = text as NSString
@@ -115,6 +129,28 @@ enum MarkdownTableEditing {
             return MarkdownEdit(range: block.sourceRange, replacement: replacement,
                                 selection: NSRange(location: block.sourceRange.location + selectedLocation,
                                                    length: 0))
+        case let .alignColumn(alignment):
+            let line = lineContent(source.substring(with: delimiterRange))
+            guard let delimiters = cells(in: line.content, expected: table.header.count) else { return nil }
+            let cell = delimiters[column]
+            let marker: String
+            switch alignment {
+            case .leading: marker = "---"
+            case .center: marker = ":---:"
+            case .trailing: marker = "---:"
+            }
+            let replacement = " " + marker + " "
+            let range = NSRange(location: delimiterRange.location + cell.location, length: cell.length)
+            let location: Int
+            if selection.location >= NSMaxRange(range) {
+                location = selection.location + (replacement as NSString).length - range.length
+            } else if selection.location >= range.location {
+                location = range.location + 1
+            } else {
+                location = selection.location
+            }
+            return MarkdownEdit(range: range, replacement: replacement,
+                                selection: NSRange(location: location, length: 0))
         }
     }
 

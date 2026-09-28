@@ -237,6 +237,12 @@ final class MarkdownEditorModel: ObservableObject {
                                          operation: operation) != nil
     }
 
+    var selectedTableAlignment: MarkdownTable.Alignment? {
+        guard let textView else { return nil }
+        return MarkdownTableEditing.alignment(in: textView.string,
+                                              selection: textView.selectedRange())
+    }
+
     @discardableResult
     func editTable(_ operation: MarkdownTableOperation) -> Bool {
         guard let textView, let storage = textView.textStorage,

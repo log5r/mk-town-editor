@@ -36,6 +36,19 @@ final class MarkdownTableInsertionTests: XCTestCase {
 }
 
 final class MarkdownTableEditingTests: XCTestCase {
+    func testColumnAlignmentChangesOnlySelectedDelimiterAndReportsCurrentValue() throws {
+        let source = "| 名前 | 点数 |\n| --- | :---: |\n| あ | 10 |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "10").location, length: 0)
+        XCTAssertEqual(MarkdownTableEditing.alignment(in: source, selection: selection), .center)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .alignColumn(.trailing)))
+        let result = edit.applying(to: source)
+        XCTAssertTrue(result.contains("| --- | ---: |"))
+        XCTAssertEqual(MarkdownTableEditing.alignment(in: result, selection: edit.selection), .trailing)
+        XCTAssertEqual(MarkdownAnalysis(result).rootBlocks.first?.table?.alignments,
+                       [.leading, .trailing])
+    }
+
     func testAddingAndDeletingRowsPreservesColumnCountAndCRLF() throws {
         let source = "| 名前 | 値 |\r\n| --- | --- |\r\n| あ | 1 |\r\n"
         let selection = NSRange(location: (source as NSString).range(of: "あ").location, length: 0)
