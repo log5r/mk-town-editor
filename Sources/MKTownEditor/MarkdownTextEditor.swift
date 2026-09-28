@@ -54,6 +54,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.isRestoringSession = true
         model.connect(textView, scrollView: scrollView)
         textView.commandModel = model
+        MarkdownSyntaxHighlighter.apply(to: textView)
         context.coordinator.isRestoringSession = false
         textView.onFocused = { [weak textView, weak model] in
             guard let textView, let model else { return }
@@ -82,6 +83,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         let selection = textView.selectedRange()
         textView.string = text
+        MarkdownSyntaxHighlighter.apply(to: textView)
         let length = (text as NSString).length
         let location = min(selection.location, length)
         textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
@@ -102,6 +104,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             text = textView.string
+            MarkdownSyntaxHighlighter.apply(to: textView)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {

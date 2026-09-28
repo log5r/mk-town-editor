@@ -25,6 +25,7 @@
 		A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* MarkdownLinkSyntax.swift */; };
 		A10000000000000000000014 /* ImageResourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* ImageResourceManager.swift */; };
 		A10000000000000000000015 /* ImageEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* ImageEditorSheet.swift */; };
+		A10000000000000000000016 /* MarkdownSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* MarkdownSyntaxHighlighter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		A20000000000000000000013 /* MarkdownLinkSyntax.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkSyntax.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* ImageResourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageResourceManager.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* ImageEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditorSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000016 /* MarkdownSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSyntaxHighlighter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 				A20000000000000000000013 /* MarkdownLinkSyntax.swift */,
 				A20000000000000000000014 /* ImageResourceManager.swift */,
 				A20000000000000000000015 /* ImageEditorSheet.swift */,
+				A20000000000000000000016 /* MarkdownSyntaxHighlighter.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -173,6 +176,7 @@
 				A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */,
 				A10000000000000000000014 /* ImageResourceManager.swift in Sources */,
 				A10000000000000000000015 /* ImageEditorSheet.swift in Sources */,
+				A10000000000000000000016 /* MarkdownSyntaxHighlighter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
