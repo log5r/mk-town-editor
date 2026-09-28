@@ -42,8 +42,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.textContainer?.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
 
         scrollView.documentView = textView
+        let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
+        scrollView.verticalRulerView = lineNumberRuler
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
+        context.coordinator.lineNumberRuler = lineNumberRuler
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator,
@@ -84,6 +89,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         let selection = textView.selectedRange()
         textView.string = text
         MarkdownSyntaxHighlighter.apply(to: textView)
+        context.coordinator.lineNumberRuler?.refresh()
         let length = (text as NSString).length
         let location = min(selection.location, length)
         textView.setSelectedRange(NSRange(location: location, length: min(selection.length, length - location)))
@@ -94,6 +100,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         let model: MarkdownEditorModel
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
+        weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
@@ -105,6 +112,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView else { return }
             text = textView.string
             MarkdownSyntaxHighlighter.apply(to: textView)
+            lineNumberRuler?.refresh()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -113,6 +121,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
 
         @MainActor @objc func clipViewBoundsDidChange(_ notification: Notification) {
+            lineNumberRuler?.needsDisplay = true
             guard let scrollView, !isRestoringSession else { return }
             model.scrollDidChange(scrollView.contentView.bounds.origin)
         }

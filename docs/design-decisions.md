@@ -71,3 +71,5 @@ GFMの`[ ]`・`[x]`・`[X]`はリスト項目の最初の段落の先頭だけ�
 画像挿入シートはURLとファイルを選択でき、代替テキストを必須、タイトルを任意とする。画像構文はリンクと同じURL・タイトルのエスケープ処理を使う。文書内にある画像ファイルは相対パスで参照し、文書外のファイルは文書横の`assets`へコピーする。保存名が重なる場合は連番を付け、画像形式は拡張子とImageIOの内容判定で確認する。`assets`が文書外へのシンボリックリンクならコピーを拒否する。ファイルコピーは別タスクで行い、本文変更などで挿入できなかった場合は今回作成したファイルを削除する。未保存文書ではファイル選択を使えず、保存後に挿入する。相対パスの解決は`DocumentContext`を使い、後続のローカル画像表示・ドラッグ＆ドロップ・貼り付けも同じ`ImageResourceManager`を使えるようにする。
 
 編集画面のMarkdown構文色分けは`NSTextStorage`を書き換えず、`NSLayoutManager`の一時的な文字色属性を使う。ブロックの見出し・コード・区切り線・表は`MarkdownAnalysis`の原文範囲から求め、引用・リスト・タスクの記号とインラインコード・リンク・強調記号をUTF-16範囲で補う。コードブロックとコードスパン内の他の構文は装飾しない。入力と外部更新の後に再適用し、IME未確定文字列がある間は更新しない。表示のみの処理なのでUndo履歴と原文は変えない。大きい文書向けの差分解析・再描画はB07で検討する。
+
+行番号は`NSScrollView`の縦`NSRulerView`に表示し、本文の保存内容には含めない。`NSLayoutManager`の行フラグメントから画面上の位置を得て、各フラグメントの先頭が原文の論理行頭である場合だけ番号を描く。これにより折り返し行で番号が重複しない。空文書と末尾改行後の空行も1行として表示し、CRLFを1つの行区切りとして数える。入力・外部更新・スクロールでガターを再描画し、桁数に応じて幅を変える。TextKitの行フラグメント列挙と`NSRulerView`の描画・幅変更はAppleの[NSLayoutManager](https://developer.apple.com/documentation/appkit/nslayoutmanager/enumeratelinefragments(forGlyphRange:using:))と[NSRulerView](https://developer.apple.com/documentation/appkit/nsrulerview)を使用する。
