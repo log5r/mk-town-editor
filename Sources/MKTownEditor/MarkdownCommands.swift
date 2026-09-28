@@ -377,6 +377,7 @@ struct MarkdownCommands: Commands {
                 }
             }
             commandButton(.quote)
+            commandButton(.plainBlock)
             commandButton(.unorderedList)
             commandButton(.orderedList)
             commandButton(.taskList)
