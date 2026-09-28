@@ -29,6 +29,7 @@
 		A10000000000000000000017 /* MarkdownLineNumberRulerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* MarkdownLineNumberRulerView.swift */; };
 		A10000000000000000000018 /* MarkdownLineContinuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* MarkdownLineContinuation.swift */; };
 		A10000000000000000000019 /* MarkdownIndentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* MarkdownIndentation.swift */; };
+		A1000000000000000000001A /* MarkdownSymbolCompletion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001A /* MarkdownSymbolCompletion.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +58,7 @@
 		A20000000000000000000017 /* MarkdownLineNumberRulerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineNumberRulerView.swift; sourceTree = "<group>"; };
 		A20000000000000000000018 /* MarkdownLineContinuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineContinuation.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* MarkdownIndentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownIndentation.swift; sourceTree = "<group>"; };
+		A2000000000000000000001A /* MarkdownSymbolCompletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSymbolCompletion.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +101,7 @@
 				A20000000000000000000017 /* MarkdownLineNumberRulerView.swift */,
 				A20000000000000000000018 /* MarkdownLineContinuation.swift */,
 				A20000000000000000000019 /* MarkdownIndentation.swift */,
+				A2000000000000000000001A /* MarkdownSymbolCompletion.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -189,6 +192,7 @@
 				A10000000000000000000017 /* MarkdownLineNumberRulerView.swift in Sources */,
 				A10000000000000000000018 /* MarkdownLineContinuation.swift in Sources */,
 				A10000000000000000000019 /* MarkdownIndentation.swift in Sources */,
+				A1000000000000000000001A /* MarkdownSymbolCompletion.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

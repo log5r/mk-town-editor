@@ -162,6 +162,12 @@ final class EditorTextView: NSTextView {
         super.insertBacktab(sender)
     }
 
+    override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        if let typed = insertString as? String,
+           commandModel?.completeSymbol(typed, replacementRange: replacementRange) == true { return }
+        super.insertText(insertString, replacementRange: replacementRange)
+    }
+
     override func menu(for event: NSEvent) -> NSMenu? {
         makeMarkdownMenu(baseMenu: super.menu(for: event))
     }
