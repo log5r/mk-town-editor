@@ -56,6 +56,7 @@ struct EditorWorkspace: View {
     @State private var showingQuickOpen = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
+    @State private var showingAttachmentAudit = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
     @State private var previewSearchCaseSensitive = false
@@ -318,6 +319,16 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $showingWorkspaceReplace) {
             WorkspaceReplaceSheet(currentDocumentURL: fileURL) {
                 workspaceStore.refresh(force: true)
+            }
+        }
+        .sheet(isPresented: $showingAttachmentAudit) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceAttachmentAuditSheet(root: root) { url in
+                    Task {
+                        do { try await openDocument(at: url) }
+                        catch { workspaceOpenError = error.localizedDescription }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingPreviewSearch) {
@@ -800,6 +811,8 @@ struct EditorWorkspace: View {
                                 }
                             }
                         }
+                        Divider()
+                        Button("添付ファイルを確認…") { showingAttachmentAudit = true }
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease")
                     }

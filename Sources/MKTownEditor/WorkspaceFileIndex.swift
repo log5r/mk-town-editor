@@ -42,7 +42,8 @@ enum WorkspaceOpenBufferError: LocalizedError {
 
 enum WorkspaceFileIndex {
     private static let supportedExtensions: Set<String> = [
-        "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp", "pdf"
+        "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp",
+        "heic", "tif", "tiff", "bmp", "pdf"
     ]
     private static let maximumEntries = 10_000
     private static let maximumDepth = 16

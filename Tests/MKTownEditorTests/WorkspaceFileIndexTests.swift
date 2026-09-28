@@ -50,4 +50,36 @@ final class WorkspaceFileIndexTests: XCTestCase {
         store.unregisterOpenDocument(document)
         XCTAssertTrue(store.openDocumentURLs.isEmpty)
     }
+
+    func testAttachmentAuditFindsMissingAndUnusedAcrossDocuments() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let assets = root.appendingPathComponent("assets")
+        let chapter = root.appendingPathComponent("chapter")
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: chapter, withIntermediateDirectories: true)
+        let used = assets.appendingPathComponent("図 one.png")
+        let unused = assets.appendingPathComponent("old.heic")
+        try Data([1]).write(to: used)
+        try Data([2]).write(to: unused)
+        let first = root.appendingPathComponent("index.md")
+        let second = chapter.appendingPathComponent("note.md")
+        try "![used](assets/%E5%9B%B3%20one.png)\n![missing](assets/lost.png)\n`![code](assets/old.heic)`".write(
+            to: first, atomically: true, encoding: .utf8)
+        try "![reference][figure]\n\n[figure]: ../assets/%E5%9B%B3%20one.png".write(
+            to: second, atomically: true, encoding: .utf8)
+
+        let result = try await WorkspaceAttachmentAudit.scan(root: root)
+
+        XCTAssertEqual(result.missing.map { $0.url.lastPathComponent }, ["lost.png"])
+        XCTAssertEqual(result.missing[0].sources, [first])
+        XCTAssertEqual(result.unused.map { $0.url.lastPathComponent }, ["old.heic"])
+        XCTAssertEqual(result.used.map { $0.url.lastPathComponent }, ["図 one.png"])
+        XCTAssertEqual(Set(result.used[0].sources), Set([first, second]))
+
+        let changed = try await WorkspaceAttachmentAudit.scan(root: root,
+            openDocuments: [first: Data("![now used](assets/old.heic)".utf8)])
+        XCTAssertTrue(changed.unused.isEmpty)
+        XCTAssertEqual(changed.used.first(where: { $0.url == unused })?.sources, [first])
+    }
 }
