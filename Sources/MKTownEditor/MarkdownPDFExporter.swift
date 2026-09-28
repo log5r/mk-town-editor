@@ -41,13 +41,13 @@ struct MarkdownPrintSettings {
 
 @MainActor
 enum MarkdownPDFExporter {
-    static func printInfo(destination: URL) -> NSPrintInfo {
+    static func printInfo(destination: URL, preset: MarkdownExportPreset = .standard) -> NSPrintInfo {
         let info = NSPrintInfo.shared.copy() as! NSPrintInfo
         info.paperSize = NSSize(width: 595.28, height: 841.89)
-        info.leftMargin = 48
-        info.rightMargin = 48
-        info.topMargin = 48
-        info.bottomMargin = 48
+        info.leftMargin = CGFloat(preset.margin)
+        info.rightMargin = CGFloat(preset.margin)
+        info.topMargin = CGFloat(preset.margin)
+        info.bottomMargin = CGFloat(preset.margin)
         info.horizontalPagination = .fit
         info.verticalPagination = .automatic
         info.jobDisposition = .save
@@ -55,9 +55,11 @@ enum MarkdownPDFExporter {
         return info
     }
 
-    static func export(_ markdown: String, documentURL: URL?, to destination: URL) throws {
-        let info = printInfo(destination: destination)
-        let textView = try printableView(markdown, documentURL: documentURL, printInfo: info)
+    static func export(_ markdown: String, documentURL: URL?, to destination: URL,
+                       preset: MarkdownExportPreset = .standard) throws {
+        let info = printInfo(destination: destination, preset: preset)
+        let textView = try printableView(markdown, documentURL: documentURL, printInfo: info,
+                                         preset: preset)
         let operation = NSPrintOperation(view: textView, printInfo: info)
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
@@ -69,22 +71,32 @@ enum MarkdownPDFExporter {
     }
 
     static func printableView(_ markdown: String, documentURL: URL?, printInfo info: NSPrintInfo,
-                              title: String = "", header: Bool = false, footer: Bool = false) throws -> NSTextView {
-        let width = info.paperSize.width - info.leftMargin - info.rightMargin
+                              title: String = "", header: Bool = false, footer: Bool = false,
+                              preset: MarkdownExportPreset = .standard) throws -> NSTextView {
+        let preferredWidth = CGFloat(preset.bodyWidth) * 0.75
+        let width = min(info.paperSize.width - info.leftMargin - info.rightMargin, preferredWidth)
         let height = info.paperSize.height - info.topMargin - info.bottomMargin
         guard width >= 100, height >= 100 else { throw MarkdownPDFExportError.invalidMargins }
-        let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL)
+        let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL,
+                                               preset: preset, printLayout: true)
         let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
             .documentType: NSAttributedString.DocumentType.html,
             .characterEncoding: String.Encoding.utf8.rawValue
         ]
-        let attributed = try NSAttributedString(data: Data(html.utf8), options: options,
-                                                 documentAttributes: nil)
+        let attributed = NSMutableAttributedString(attributedString: try NSAttributedString(
+            data: Data(html.utf8), options: options, documentAttributes: nil
+        ))
         let textView = PDFTextView(frame: NSRect(x: 0, y: 0, width: width, height: 100))
         textView.printableHeight = height
+        textView.preferredWidth = preferredWidth
         textView.headerTitle = title
         textView.showsHeader = header
         textView.showsFooter = footer
+        let markerRange = (attributed.string as NSString).range(of: MarkdownHTMLExporter.coverBreakMarker)
+        if markerRange.location != NSNotFound {
+            attributed.deleteCharacters(in: markerRange)
+            textView.coverBreakCharacter = markerRange.location
+        }
         textView.isRichText = true
         textView.isEditable = false
         textView.textContainerInset = .zero
@@ -101,9 +113,11 @@ enum MarkdownPDFExporter {
 
 private final class PDFTextView: NSTextView {
     var printableHeight: CGFloat = 740
+    var preferredWidth: CGFloat = 600
     var headerTitle = ""
     var showsHeader = false
     var showsFooter = false
+    var coverBreakCharacter: Int?
     private var pageRects: [NSRect] = []
 
     override var pageHeader: NSAttributedString {
@@ -120,7 +134,8 @@ private final class PDFTextView: NSTextView {
     override func knowsPageRange(_ range: NSRangePointer) -> Bool {
         guard let layoutManager, let textStorage else { return false }
         if let info = NSPrintOperation.current?.printInfo {
-            let width = max(100, info.paperSize.width - info.leftMargin - info.rightMargin)
+            let width = max(100, min(info.paperSize.width - info.leftMargin - info.rightMargin,
+                                     preferredWidth))
             printableHeight = max(100, info.paperSize.height - info.topMargin - info.bottomMargin)
             if abs(bounds.width - width) > 0.5 {
                 frame.size.width = width
@@ -139,12 +154,20 @@ private final class PDFTextView: NSTextView {
         var glyph = 0
         var paragraphLocation = NSNotFound
         var paragraphStart: CGFloat = 0
+        var insertedCoverBreak = false
         let text = textStorage.string as NSString
         while glyph < layoutManager.numberOfGlyphs {
             var effective = NSRange()
             let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &effective)
             let characters = layoutManager.characterRange(forGlyphRange: effective,
                                                           actualGlyphRange: nil)
+            if !insertedCoverBreak, let coverBreakCharacter,
+               characters.location >= coverBreakCharacter, line.minY > start {
+                pageRects.append(NSRect(x: 0, y: start, width: bounds.width,
+                                        height: line.minY - start))
+                start = line.minY
+                insertedCoverBreak = true
+            }
             let paragraph = text.paragraphRange(for: characters)
             if paragraph.location != paragraphLocation {
                 paragraphLocation = paragraph.location
