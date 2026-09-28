@@ -46,6 +46,28 @@ struct EditorPreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("スニペット") {
+                ForEach(settingsStore.app.snippets ?? []) { snippet in
+                    VStack(alignment: .leading) {
+                        HStack {
+                            TextField("短縮語", text: snippetBinding(snippet.id, \.trigger))
+                            Button("削除", role: .destructive) { removeSnippet(snippet.id) }
+                        }
+                        TextEditor(text: snippetBinding(snippet.id, \.template))
+                            .frame(height: 64)
+                            .accessibilityLabel("\(snippet.trigger) のテンプレート")
+                    }
+                }
+                Button("スニペットを追加") {
+                    var settings = settingsStore.app
+                    settings.snippets = (settings.snippets ?? []) +
+                        [EditorSnippet(trigger: "", template: "${1:入力}$0")]
+                    settingsStore.setAppSettings(settings)
+                }
+                Text("${1:文字}、${2:文字}をTabで順に選択し、$0を最後のカーソル位置にします。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 430)
@@ -85,5 +107,51 @@ struct EditorPreferencesView: View {
                     settings.proofing = proofing
                     settingsStore.setAppSettings(settings)
                 })
+    }
+
+    private func snippetBinding(_ id: UUID, _ keyPath: WritableKeyPath<EditorSnippet, String>) -> Binding<String> {
+        Binding(get: {
+            (settingsStore.app.snippets ?? []).first(where: { $0.id == id })?[keyPath: keyPath] ?? ""
+        }, set: { value in
+            var settings = settingsStore.app
+            guard let index = settings.snippets?.firstIndex(where: { $0.id == id }) else { return }
+            settings.snippets?[index][keyPath: keyPath] = value
+            settingsStore.setAppSettings(settings)
+        })
+    }
+
+    private func removeSnippet(_ id: UUID) {
+        var settings = settingsStore.app
+        settings.snippets?.removeAll { $0.id == id }
+        settingsStore.setAppSettings(settings)
+    }
+}
+
+struct SnippetPickerView: View {
+    @Environment(\.dismiss) private var dismiss
+    let snippets: [EditorSnippet]
+    let onSelect: (EditorSnippet) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("スニペットを挿入").font(.headline)
+            List(snippets) { snippet in
+                Button {
+                    onSelect(snippet)
+                    dismiss()
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text(snippet.trigger.isEmpty ? "定型文" : snippet.trigger)
+                        Text(snippet.template).lineLimit(2).font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(snippet.template.isEmpty)
+            }
+            Button("キャンセル") { dismiss() }
+                .keyboardShortcut(.cancelAction)
+        }
+        .padding()
+        .frame(width: 420, height: 320)
     }
 }

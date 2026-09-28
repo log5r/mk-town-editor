@@ -390,6 +390,7 @@ struct MarkdownCommands: Commands {
             commandButton(.shrinkSelection)
             commandButton(.toggleFold)
             commandButton(.unfoldAll)
+            commandButton(.snippet)
             commandButton(.unorderedList)
             commandButton(.orderedList)
             commandButton(.taskList)

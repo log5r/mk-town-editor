@@ -22,6 +22,7 @@ enum EditorCommand: Hashable {
     case shrinkSelection
     case toggleFold
     case unfoldAll
+    case snippet
     case unorderedList
     case orderedList
     case taskList
@@ -60,6 +61,7 @@ enum EditorCommand: Hashable {
         case .shrinkSelection: "選択範囲を縮小"
         case .toggleFold: "見出し・コードを折りたたむ／展開"
         case .unfoldAll: "すべて展開"
+        case .snippet: "スニペットを挿入…"
         case .unorderedList: "箇条書き"
         case .orderedList: "番号付きリスト"
         case .taskList: "タスクリスト"
@@ -97,6 +99,7 @@ enum EditorCommand: Hashable {
         case .shrinkSelection: "arrow.down.right.and.arrow.up.left"
         case .toggleFold: "chevron.right"
         case .unfoldAll: "chevron.down"
+        case .snippet: "text.insert"
         case .unorderedList: "list.bullet"
         case .orderedList: "list.number"
         case .taskList: "checklist"
@@ -129,6 +132,7 @@ enum EditorCommand: Hashable {
         case .comment: nil
         case .expandSelection, .shrinkSelection: nil
         case .toggleFold, .unfoldAll: nil
+        case .snippet: nil
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
@@ -158,6 +162,8 @@ enum EditorCommand: Hashable {
             guard let view = model?.textView else { return false }
             return MarkdownFormatter.commentEdit(in: view.string,
                 selection: view.selectedRange()) != nil
+        case .snippet:
+            return !(model?.snippets.isEmpty ?? true)
         default: return true
         }
     }
@@ -187,6 +193,7 @@ enum EditorCommand: Hashable {
         case .shrinkSelection: model.shrinkSelection()
         case .toggleFold: model.toggleFold()
         case .unfoldAll: model.unfoldAll()
+        case .snippet: model.presentSnippetPicker()
         case .unorderedList: model.apply(.unorderedList)
         case .orderedList: model.apply(.orderedList)
         case .taskList: model.apply(.taskList)

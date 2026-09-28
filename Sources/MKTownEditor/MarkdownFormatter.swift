@@ -102,6 +102,63 @@ struct MarkdownEdit: Equatable {
     }
 }
 
+struct MarkdownSnippetPlan {
+    let edit: MarkdownEdit
+    let placeholders: [NSRange]
+    let finalCaret: Int
+
+    static func make(_ snippet: EditorSnippet, in text: String, selection: NSRange) -> Self? {
+        guard !snippet.template.isEmpty else { return nil }
+        let source = text as NSString
+        guard selection.location >= 0, NSMaxRange(selection) <= source.length else { return nil }
+        var replacementRange = selection
+        if selection.length == 0, !snippet.trigger.isEmpty {
+            let before = source.substring(to: selection.location) as NSString
+            let triggerLength = (snippet.trigger as NSString).length
+            if before.length >= triggerLength &&
+                before.substring(from: before.length - triggerLength) == snippet.trigger &&
+                (before.length == triggerLength || {
+                    let previous = before.substring(with: NSRange(location:
+                        before.length - triggerLength - 1, length: 1))
+                    return !previous.unicodeScalars.contains {
+                        CharacterSet.alphanumerics.contains($0) || $0 == "_"
+                    }
+                }()) {
+                replacementRange = NSRange(location: selection.location - triggerLength,
+                    length: triggerLength)
+            }
+        }
+        let pattern = try! NSRegularExpression(pattern: #"\$\{([1-9][0-9]*):([^}]*)\}|\$0"#)
+        let template = snippet.template as NSString
+        let matches = pattern.matches(in: snippet.template,
+            range: NSRange(location: 0, length: template.length))
+        var result = ""
+        var previous = 0
+        var positions: [(order: Int, range: NSRange)] = []
+        var finalCaret: Int?
+        for match in matches {
+            result += template.substring(with: NSRange(location: previous,
+                length: match.range.location - previous))
+            if match.range(at: 1).location != NSNotFound {
+                let value = template.substring(with: match.range(at: 2))
+                positions.append((Int(template.substring(with: match.range(at: 1))) ?? 1,
+                    NSRange(location: replacementRange.location + (result as NSString).length,
+                        length: (value as NSString).length)))
+                result += value
+            } else {
+                finalCaret = replacementRange.location + (result as NSString).length
+            }
+            previous = NSMaxRange(match.range)
+        }
+        result += template.substring(from: previous)
+        let ordered = positions.sorted { $0.order < $1.order }.map(\.range)
+        let caret = finalCaret ?? replacementRange.location + (result as NSString).length
+        let first = ordered.first ?? NSRange(location: caret, length: 0)
+        return MarkdownSnippetPlan(edit: MarkdownEdit(range: replacementRange,
+            replacement: result, selection: first), placeholders: ordered, finalCaret: caret)
+    }
+}
+
 enum MarkdownFormatter {
     private static let headingExpression = try! NSRegularExpression(pattern: #"^( {0,3})(#{1,6})(?:[ \t]+|$)"#)
     private static let taskLineExpression = try! NSRegularExpression(

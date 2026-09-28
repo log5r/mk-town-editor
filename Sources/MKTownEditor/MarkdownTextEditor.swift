@@ -12,6 +12,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var imageImportMode: ImageImportMode = .managedCopy
     var tableAddsRowOnTab = true
     var proofing = EditorProofingSettings()
+    var snippets: [EditorSnippet] = []
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -60,6 +61,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         model.listIndentWidth = layoutOptions.listIndentWidth
         model.codeIndentWidth = layoutOptions.codeIndentWidth
         model.tableAddsRowOnTab = tableAddsRowOnTab
+        model.snippets = snippets
         let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
         scrollView.verticalRulerView = lineNumberRuler
         scrollView.hasVerticalRuler = true
@@ -130,6 +132,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.model.listIndentWidth = layoutOptions.listIndentWidth
         context.coordinator.model.codeIndentWidth = layoutOptions.codeIndentWidth
         context.coordinator.model.tableAddsRowOnTab = tableAddsRowOnTab
+        context.coordinator.model.snippets = snippets
         if context.coordinator.appliedTextStyle != textStyle {
             textStyle.apply(to: textView)
             context.coordinator.appliedTextStyle = textStyle
@@ -363,12 +366,15 @@ final class EditorTextView: NSTextView {
     }
 
     override func insertTab(_ sender: Any?) {
+        if commandModel?.advanceSnippetPlaceholder(backwards: false) == true { return }
+        if commandModel?.expandSnippetTrigger() == true { return }
         if commandModel?.moveTableCell(backwards: false) == true { return }
         if commandModel?.changeIndentation(.indent) == true { return }
         super.insertTab(sender)
     }
 
     override func insertBacktab(_ sender: Any?) {
+        if commandModel?.advanceSnippetPlaceholder(backwards: true) == true { return }
         if commandModel?.moveTableCell(backwards: true) == true { return }
         if commandModel?.changeIndentation(.outdent) == true { return }
         super.insertBacktab(sender)

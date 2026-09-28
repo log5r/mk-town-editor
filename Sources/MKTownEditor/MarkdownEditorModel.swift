@@ -8,6 +8,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var linkDraft: MarkdownLinkDraft?
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
+    @Published var showingSnippetPicker = false
     weak var textView: NSTextView?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
@@ -19,6 +20,14 @@ final class MarkdownEditorModel: ObservableObject {
     var codeIndentWidth = 4
     var tableAddsRowOnTab = true
     var tablePasteboard: NSPasteboard = .general
+    var snippets: [EditorSnippet] = []
+    private struct SnippetSession {
+        var snapshot: String
+        var placeholders: [NSRange]
+        var index: Int
+        var finalCaret: Int
+    }
+    private var snippetSession: SnippetSession?
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
@@ -120,6 +129,95 @@ final class MarkdownEditorModel: ObservableObject {
 
     func unfoldAll() {
         (textView as? EditorTextView)?.clearFolds()
+    }
+
+    func presentSnippetPicker() {
+        guard canExecuteCommand, !snippets.isEmpty else { return }
+        showingSnippetPicker = true
+    }
+
+    func expandSnippetTrigger() -> Bool {
+        guard canExecuteCommand, let textView,
+              textView.selectedRange().length == 0 else { return false }
+        let selection = textView.selectedRange()
+        for snippet in snippets.sorted(by: { $0.trigger.count > $1.trigger.count }) where !snippet.trigger.isEmpty {
+            guard let plan = MarkdownSnippetPlan.make(snippet, in: textView.string,
+                selection: selection), plan.edit.range.length > 0 else { continue }
+            return insertSnippet(snippet)
+        }
+        return false
+    }
+
+    @discardableResult
+    func insertSnippet(_ snippet: EditorSnippet) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              canExecuteCommand,
+              let plan = MarkdownSnippetPlan.make(snippet, in: textView.string,
+                  selection: textView.selectedRange()),
+              perform(plan.edit, in: textView, storage: storage, focusEditor: true) else { return false }
+        snippetSession = plan.placeholders.isEmpty ? nil : SnippetSession(
+            snapshot: textView.string, placeholders: plan.placeholders,
+            index: 0, finalCaret: plan.finalCaret)
+        showingSnippetPicker = false
+        return true
+    }
+
+    func advanceSnippetPlaceholder(backwards: Bool) -> Bool {
+        guard let textView, !textView.hasMarkedText(),
+              var session = snippetSession else { return false }
+        guard updateSnippetSession(&session, to: textView.string) else {
+            snippetSession = nil
+            return false
+        }
+        let current = session.placeholders[session.index]
+        let selected = textView.selectedRange()
+        guard selected.location >= current.location,
+              NSMaxRange(selected) <= NSMaxRange(current) else {
+            snippetSession = nil
+            return false
+        }
+        if backwards {
+            guard session.index > 0 else { return true }
+            session.index -= 1
+            snippetSession = session
+            selectAndReveal(session.placeholders[session.index])
+        } else if session.index + 1 < session.placeholders.count {
+            session.index += 1
+            snippetSession = session
+            selectAndReveal(session.placeholders[session.index])
+        } else {
+            snippetSession = nil
+            selectAndReveal(NSRange(location: session.finalCaret, length: 0))
+        }
+        return true
+    }
+
+    private func updateSnippetSession(_ session: inout SnippetSession, to text: String) -> Bool {
+        guard text != session.snapshot else { return true }
+        let old = session.snapshot as NSString
+        let new = text as NSString
+        var prefix = 0
+        while prefix < min(old.length, new.length),
+              old.character(at: prefix) == new.character(at: prefix) { prefix += 1 }
+        var suffix = 0
+        while suffix < min(old.length, new.length) - prefix,
+              old.character(at: old.length - suffix - 1) == new.character(at: new.length - suffix - 1) {
+            suffix += 1
+        }
+        let removedEnd = old.length - suffix
+        let delta = new.length - old.length
+        let current = session.placeholders[session.index]
+        guard prefix >= current.location, removedEnd <= NSMaxRange(current) else { return false }
+        for index in session.placeholders.indices {
+            if index == session.index {
+                session.placeholders[index].length += delta
+            } else if session.placeholders[index].location >= removedEnd {
+                session.placeholders[index].location += delta
+            }
+        }
+        if session.finalCaret >= removedEnd { session.finalCaret += delta }
+        session.snapshot = text
+        return true
     }
 
     func navigate(to sourceLocation: Int) {

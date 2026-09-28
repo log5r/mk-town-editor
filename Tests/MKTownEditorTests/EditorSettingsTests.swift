@@ -4,6 +4,15 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testUserSnippetsPersistWithoutChangingDocument() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        var settings = store.app
+        settings.snippets = [EditorSnippet(trigger: "sig", template: "${1:名前}$0")]
+        store.setAppSettings(settings)
+        let reloaded = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(reloaded.app.snippets, settings.snippets)
+    }
     func testDefaultsAndDocumentFolderAppPrecedence() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
