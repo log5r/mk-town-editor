@@ -53,6 +53,7 @@ struct EditorWorkspace: View {
     @State private var showingExternalExport = false
     @State private var showingRichImport = false
     @State private var showingPortablePackage = false
+    @State private var showingBatchExport = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
     @State private var plainExportError: String?
@@ -284,6 +285,7 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
         .focusedSceneValue(\.importRichTextAction) { showingRichImport = true }
         .focusedSceneValue(\.exportPortablePackageAction) { showingPortablePackage = true }
+        .focusedSceneValue(\.exportWorkspaceBatchAction) { showingBatchExport = true }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
         .focusedSceneValue(\.printDocumentAction) { showingPrintSettings = true }
         .focusedSceneValue(\.copyRichAction) { copyRichSelection() }
@@ -356,6 +358,7 @@ struct EditorWorkspace: View {
             PortablePackageSheet(source: document.text, documentURL: fileURL,
                                  dialect: settingsStore.markdownDialect(for: fileURL))
         }
+        .sheet(isPresented: $showingBatchExport) { WorkspaceBatchExportSheet() }
         .sheet(item: $exportFormat, onDismiss: {
             guard let request = pendingExport else { return }
             pendingExport = nil
