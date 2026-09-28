@@ -67,6 +67,8 @@
 		A10000000000000000000049 /* MarkdownEncodingConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000049 /* MarkdownEncodingConverter.swift */; };
 		A10000000000000000000050 /* MarkdownEncodingImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000050 /* MarkdownEncodingImportSheet.swift */; };
 		A10000000000000000000051 /* MarkdownTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000051 /* MarkdownTextFormat.swift */; };
+		A10000000000000000000052 /* WorkspaceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000052 /* WorkspaceSearch.swift */; };
+		A10000000000000000000053 /* WorkspaceSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000053 /* WorkspaceSearchSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -133,6 +135,8 @@
 		A20000000000000000000049 /* MarkdownEncodingConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEncodingConverter.swift; sourceTree = "<group>"; };
 		A20000000000000000000050 /* MarkdownEncodingImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEncodingImportSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000051 /* MarkdownTextFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextFormat.swift; sourceTree = "<group>"; };
+		A20000000000000000000052 /* WorkspaceSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearch.swift; sourceTree = "<group>"; };
+		A20000000000000000000053 /* WorkspaceSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearchSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -213,6 +217,8 @@
 				A20000000000000000000049 /* MarkdownEncodingConverter.swift */,
 				A20000000000000000000050 /* MarkdownEncodingImportSheet.swift */,
 				A20000000000000000000051 /* MarkdownTextFormat.swift */,
+				A20000000000000000000052 /* WorkspaceSearch.swift */,
+				A20000000000000000000053 /* WorkspaceSearchSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -341,6 +347,8 @@
 				A10000000000000000000049 /* MarkdownEncodingConverter.swift in Sources */,
 				A10000000000000000000050 /* MarkdownEncodingImportSheet.swift in Sources */,
 				A10000000000000000000051 /* MarkdownTextFormat.swift in Sources */,
+				A10000000000000000000052 /* WorkspaceSearch.swift in Sources */,
+				A10000000000000000000053 /* WorkspaceSearchSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
