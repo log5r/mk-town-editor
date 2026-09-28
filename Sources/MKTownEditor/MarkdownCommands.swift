@@ -340,6 +340,7 @@ struct MarkdownCommands: Commands {
             commandButton(.inlineCode)
             Divider()
             commandButton(.link)
+            commandButton(.convertLinkForm)
             commandButton(.footnote)
             commandButton(.image)
             commandButton(.table)

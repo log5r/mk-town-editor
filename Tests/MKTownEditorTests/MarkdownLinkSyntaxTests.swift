@@ -89,6 +89,47 @@ final class MarkdownLinkSyntaxTests: XCTestCase {
                        "![a\\]b](assets/a%20b\\(c\\).png \"A \\\"title\\\"\")")
     }
 
+    func testConvertInlineLinkToReferenceAndBackWithoutDeletingSharedDefinition() throws {
+        let source = "[案内](guide%20one.md \"説明\") と [別](other.md)"
+        let selection = (source as NSString).range(of: "案内")
+        let edit = try XCTUnwrap(MarkdownReferenceConversion.edit(in: source,
+            selection: selection))
+        let converted = try XCTUnwrap(edit.applying(to: source))
+        XCTAssertTrue(converted.contains("[案内][案内] と [別](other.md)"))
+        XCTAssertTrue(converted.contains("[案内]: guide%20one.md \"説明\""))
+        let back = try XCTUnwrap(MarkdownReferenceConversion.edit(in: converted,
+            selection: NSRange(location: 2, length: 0)))
+        let restored = try XCTUnwrap(back.applying(to: converted))
+        XCTAssertTrue(restored.contains("[案内](guide%20one.md \"説明\")"))
+        XCTAssertTrue(restored.contains("[案内]: guide%20one.md \"説明\""))
+    }
+
+    func testConvertInlineLinkReusesMatchingDefinitionAndSkipsCode() throws {
+        let source = "[site](https://example.com) [shared][id]\n\n[id]: https://example.com"
+        let range = (source as NSString).range(of: "site")
+        let edit = try XCTUnwrap(MarkdownReferenceConversion.edit(in: source,
+            selection: range))
+        XCTAssertEqual(edit.applying(to: source),
+            "[site][id] [shared][id]\n\n[id]: https://example.com")
+        let code = "`[site](https://example.com)`"
+        XCTAssertNil(MarkdownReferenceConversion.edit(in: code,
+            selection: (code as NSString).range(of: "site")))
+    }
+
+    func testConvertLinkKeepsConflictingReferenceAndEscapedLabel() throws {
+        let source = "[site](new.md)\n\n[site]: old.md"
+        let edit = try XCTUnwrap(MarkdownReferenceConversion.edit(in: source,
+            selection: NSRange(location: 2, length: 0)))
+        let converted = try XCTUnwrap(edit.applying(to: source))
+        XCTAssertTrue(converted.contains("[site][site-2]"))
+        XCTAssertTrue(converted.contains("[site]: old.md"))
+        XCTAssertTrue(converted.contains("[site-2]: new.md"))
+        let escaped = "[a\\]b][id]\n\n[id]: doc.md"
+        let back = try XCTUnwrap(MarkdownReferenceConversion.edit(in: escaped,
+            selection: NSRange(location: 2, length: 0)))
+        XCTAssertTrue(try XCTUnwrap(back.applying(to: escaped)).hasPrefix("[a\\]b](doc.md)"))
+    }
+
     func testImageDraftUsesSelectedTextAndRejectsStaleDocument() {
         let source = "前🙂後"
         let draft = MarkdownLinkSyntax.imageDraft(in: source,
