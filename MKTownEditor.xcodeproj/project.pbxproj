@@ -83,6 +83,7 @@
 		A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000005F /* EditorInvisibleCharacters.swift */; };
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
 		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
+		A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* ExternalDocumentOpen.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -165,6 +166,7 @@
 		A2000000000000000000005F /* EditorInvisibleCharacters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorInvisibleCharacters.swift; sourceTree = "<group>"; };
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A20000000000000000000062 /* ExternalDocumentOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDocumentOpen.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -261,6 +263,7 @@
 				A2000000000000000000005F /* EditorInvisibleCharacters.swift */,
 				A20000000000000000000060 /* EditorShortcuts.swift */,
 				A20000000000000000000061 /* Localizable.xcstrings */,
+				A20000000000000000000062 /* ExternalDocumentOpen.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -404,6 +407,7 @@
 				A1000000000000000000005E /* WorkspaceBatchExporter.swift in Sources */,
 				A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */,
 				A10000000000000000000060 /* EditorShortcuts.swift in Sources */,
+				A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

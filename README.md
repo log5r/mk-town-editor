@@ -137,6 +137,14 @@ Xcode で `MKTownEditor.xcodeproj` を開き、`MKTownEditor` スキームを実
 swift run MKTownEditor
 ```
 
+インストール済みのアプリ、または一度起動してURLスキームを登録したアプリへ、書類と行番号を渡せます。
+
+```sh
+swift Tools/mktown-open.swift --line 42 ~/notes/example.md
+```
+
+ファイルURLも指定できます。`mktowneditor://open?url=<パーセントエンコードしたfile URL>&line=42`を開いても同じ操作になります。行番号を省略すると書類だけを開きます。既に開いている書類はそのウインドウを使います。
+
 ## テスト
 
 ```sh
