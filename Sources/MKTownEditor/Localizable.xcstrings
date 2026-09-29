@@ -7984,6 +7984,106 @@
           }
         }
       }
+    },
+    "%lld書類・%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld documents · %@"
+          }
+        }
+      }
+    },
+    "レイアウトを削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Layout"
+          }
+        }
+      }
+    },
+    "レイアウト名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout Name"
+          }
+        }
+      }
+    },
+    "作業レイアウト": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Work Layouts"
+          }
+        }
+      }
+    },
+    "保存したレイアウトはありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No saved layouts"
+          }
+        }
+      }
+    },
+    "同じ名前で保存すると、そのレイアウトを更新します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving with the same name updates that layout."
+          }
+        }
+      }
+    },
+    "名前付きレイアウト…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Named Layouts…"
+          }
+        }
+      }
+    },
+    "現在の配置を保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save Current Layout"
+          }
+        }
+      }
+    },
+    "開いている書類、表示モード、サイドバー、分割配置を保存します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save open documents, display mode, sidebar, and split layout."
+          }
+        }
+      }
+    },
+    "開けなかった書類: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open documents: %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
