@@ -140,6 +140,10 @@ enum MarkdownHTMLExporter {
             let anchor = escape(anchors[block.id] ?? "section")
             return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context))</h\(level)>\n"
         case .paragraph:
+            if context.markdownDialect == .extended,
+               let formula = MarkdownMath.displayFormula(block.content) {
+                return "<div class=\"math-block\">\(MarkdownMathRenderer.htmlImage(formula, fontSize: 21) ?? escape(formula.source))</div>\n"
+            }
             let content = MarkdownRenderer.paragraphContent(block)
             let layout = MarkdownImageLayout.parse(
                 MarkdownRenderer.resolveReferences(in: content, using: analysis.references))
@@ -184,7 +188,9 @@ enum MarkdownHTMLExporter {
         let layout = MarkdownImageLayout.parse(
             MarkdownRenderer.resolveReferences(
                 in: MarkdownSafeHTML.previewMarkdown(markdown), using: analysis.references))
-        let resolved = layout.markdown
+        let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
+            ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
+        let resolved = math.text
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
@@ -226,6 +232,10 @@ enum MarkdownHTMLExporter {
                 run = "<a href=\"\(escape(destination))\">\(run)</a>"
             }
             html += run
+        }
+        for (token, formula) in math.formulas {
+            html = html.replacingOccurrences(of: token,
+                with: MarkdownMathRenderer.htmlImage(formula) ?? escape(formula.source))
         }
         return html
     }

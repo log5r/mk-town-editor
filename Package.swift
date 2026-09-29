@@ -10,9 +10,13 @@ let package = Package(
     products: [
         .executable(name: "MKTownEditor", targets: ["MKTownEditor"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/mgriebling/SwiftMath.git", exact: "1.7.3")
+    ],
     targets: [
         .executableTarget(
             name: "MKTownEditor",
+            dependencies: [.product(name: "SwiftMath", package: "SwiftMath")],
             path: "Sources/MKTownEditor",
             resources: [.process("Localizable.xcstrings")]
         ),
