@@ -6462,6 +6462,66 @@
           }
         }
       }
+    },
+    "選択行を上へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Selected Row Up"
+          }
+        }
+      }
+    },
+    "選択行を下へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Selected Row Down"
+          }
+        }
+      }
+    },
+    "列を左へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Column Left"
+          }
+        }
+      }
+    },
+    "列を右へ移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Column Right"
+          }
+        }
+      }
+    },
+    "選択列で昇順にソート": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort Ascending by Selected Column"
+          }
+        }
+      }
+    },
+    "選択列で降順にソート": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort Descending by Selected Column"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

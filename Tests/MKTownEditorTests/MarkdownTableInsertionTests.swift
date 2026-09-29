@@ -228,6 +228,60 @@ final class MarkdownTableEditingTests: XCTestCase {
         XCTAssertEqual(table.header.count, 4)
         XCTAssertEqual(table.rows, [["x", "", "", "z"], ["only", "", "", ""]])
     }
+
+    func testMovingRowsPreservesHeaderLineEndingsAndSelection() throws {
+        let source = "| 名前 | 値 |\r\n| --- | --- |\r\n| あ | 1 |\r\n| い | 2 |"
+        let selected = NSRange(location: (source as NSString).range(of: "2").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selected,
+                                                            operation: .moveRowUp))
+        let result = edit.applying(to: source)
+        XCTAssertEqual(result, "| 名前 | 値 |\r\n| --- | --- |\r\n| い | 2 |\r\n| あ | 1 |")
+        XCTAssertEqual((result as NSString).substring(with: edit.selection), "2")
+        let back = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: edit.selection,
+                                                            operation: .moveRowDown))
+        XCTAssertEqual(back.applying(to: result), source)
+        XCTAssertNil(MarkdownTableEditing.edit(in: source,
+                                               selection: NSRange(location: (source as NSString).range(of: "あ").location, length: 0),
+                                               operation: .moveRowUp))
+        XCTAssertNil(MarkdownTableEditing.edit(in: source,
+                                               selection: NSRange(location: (source as NSString).range(of: "名前").location, length: 0),
+                                               operation: .moveRowDown))
+    }
+
+    func testMovingColumnsMovesAlignmentAndEscapedPipe() throws {
+        let source = "| A | B | C |\n| --- | :---: | ---: |\n| x | a\\|b | 3 |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "a\\|b").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .moveColumnRight))
+        let result = edit.applying(to: source)
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first?.table)
+        XCTAssertEqual(table.header, ["A", "C", "B"])
+        XCTAssertEqual(table.alignments, [.leading, .trailing, .center])
+        XCTAssertEqual(table.rows, [["x", "3", "a\\|b"]])
+        XCTAssertEqual((result as NSString).substring(with: edit.selection), "a\\|b")
+        let back = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: edit.selection,
+                                                            operation: .moveColumnLeft))
+        XCTAssertEqual(back.applying(to: result), source)
+        XCTAssertNil(MarkdownTableEditing.edit(in: source,
+                                               selection: NSRange(location: (source as NSString).range(of: "A").location, length: 0),
+                                               operation: .moveColumnLeft))
+    }
+
+    func testSortingSelectedColumnKeepsHeaderStableAndTracksRow() throws {
+        let source = "| Name | Score |\n| --- | ---: |\n| a | 10 |\n| b | 2 |\n| c | 2 |\n"
+        let selection = NSRange(location: (source as NSString).range(of: "10").location, length: 0)
+        let edit = try XCTUnwrap(MarkdownTableEditing.edit(in: source, selection: selection,
+                                                            operation: .sortRowsAscending))
+        let result = edit.applying(to: source)
+        XCTAssertEqual(MarkdownAnalysis(result).rootBlocks.first?.table?.rows,
+                       [["b", "2"], ["c", "2"], ["a", "10"]])
+        XCTAssertEqual((result as NSString).substring(with: edit.selection), "10")
+        let descending = try XCTUnwrap(MarkdownTableEditing.edit(in: result, selection: edit.selection,
+                                                                  operation: .sortRowsDescending))
+        XCTAssertEqual(descending.applying(to: result), source)
+        XCTAssertNil(MarkdownTableEditing.edit(in: "| A |\n| --- |\n| x |", selection: NSRange(location: 2, length: 0),
+                                               operation: .sortRowsAscending))
+    }
 }
 
 @MainActor
@@ -304,6 +358,23 @@ final class MarkdownTableInsertionEditorTests: XCTestCase {
         view.setSelectedRange(NSRange(location: (source as NSString).range(of: "x").location, length: 0))
         XCTAssertTrue(model.editTable(.insertRow))
         XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows.count, 2)
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+    }
+
+    func testTableSortIsOneUndoableEdit() {
+        let source = "| A |\n| --- |\n| b |\n| a |\n"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: (source as NSString).range(of: "b").location, length: 0))
+        XCTAssertTrue(model.editTable(.sortRowsAscending))
+        XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows, [["a"], ["b"]])
         view.undoManager?.undo()
         XCTAssertEqual(view.string, source)
     }

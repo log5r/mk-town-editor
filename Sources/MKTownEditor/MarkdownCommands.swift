@@ -419,10 +419,25 @@ struct MarkdownCommands: Commands {
                 Button("行を削除") { editorModel?.editTable(.deleteRow) }
                     .disabled(editorModel?.canEditTable(.deleteRow) != true)
                 Divider()
+                Button("選択行を上へ移動") { editorModel?.editTable(.moveRowUp) }
+                    .disabled(editorModel?.canEditTable(.moveRowUp) != true)
+                Button("選択行を下へ移動") { editorModel?.editTable(.moveRowDown) }
+                    .disabled(editorModel?.canEditTable(.moveRowDown) != true)
+                Divider()
                 Button("右に列を追加") { editorModel?.editTable(.insertColumn) }
                     .disabled(editorModel?.canEditTable(.insertColumn) != true)
                 Button("列を削除") { editorModel?.editTable(.deleteColumn) }
                     .disabled(editorModel?.canEditTable(.deleteColumn) != true)
+                Divider()
+                Button("列を左へ移動") { editorModel?.editTable(.moveColumnLeft) }
+                    .disabled(editorModel?.canEditTable(.moveColumnLeft) != true)
+                Button("列を右へ移動") { editorModel?.editTable(.moveColumnRight) }
+                    .disabled(editorModel?.canEditTable(.moveColumnRight) != true)
+                Divider()
+                Button("選択列で昇順にソート") { editorModel?.editTable(.sortRowsAscending) }
+                    .disabled(editorModel?.canEditTable(.sortRowsAscending) != true)
+                Button("選択列で降順にソート") { editorModel?.editTable(.sortRowsDescending) }
+                    .disabled(editorModel?.canEditTable(.sortRowsDescending) != true)
                 Divider()
                 Picker("選択列の配置", selection: Binding<MarkdownTable.Alignment?>(
                     get: { editorModel?.selectedTableAlignment },
