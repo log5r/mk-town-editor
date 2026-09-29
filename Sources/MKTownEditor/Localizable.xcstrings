@@ -6684,6 +6684,96 @@
           }
         }
       }
+    },
+    "HTTP %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTTP %lld"
+          }
+        }
+      }
+    },
+    "ページが見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page Not Found"
+          }
+        }
+      }
+    },
+    "ローカルリンク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local Links"
+          }
+        }
+      }
+    },
+    "一時的に確認できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporarily Unavailable"
+          }
+        }
+      }
+    },
+    "到達できます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reachable"
+          }
+        }
+      }
+    },
+    "到達状態を判定できません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Determine Reachability"
+          }
+        }
+      }
+    },
+    "外部URL": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External URLs"
+          }
+        }
+      }
+    },
+    "外部URLを確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check External URLs"
+          }
+        }
+      }
+    },
+    "認証またはアクセス許可が必要です": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authentication or Access Permission Required"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
