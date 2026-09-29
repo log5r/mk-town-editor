@@ -61,23 +61,90 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
     }
 }
 
-enum PreviewTheme: String, Codable, CaseIterable, Sendable {
+enum PreviewTheme: Codable, Hashable, Sendable {
     case system
     case paper
+    case extensionTheme(DeclarativeExtension.Theme)
 
-    var title: String { self == .system ? String(localized: "システム") : String(localized: "紙色") }
+    static let allCases: [Self] = [.system, .paper]
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if let name = try? value.decode(String.self) {
+            switch name {
+            case "system": self = .system
+            case "paper": self = .paper
+            default: throw DecodingError.dataCorruptedError(in: value, debugDescription: "Unknown theme")
+            }
+        } else {
+            self = .extensionTheme(try value.decode(DeclarativeExtension.Theme.self))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var value = encoder.singleValueContainer()
+        switch self {
+        case .system: try value.encode("system")
+        case .paper: try value.encode("paper")
+        case .extensionTheme(let theme): try value.encode(theme)
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .system: String(localized: "システム")
+        case .paper: String(localized: "紙色")
+        case .extensionTheme(let theme): theme.name
+        }
+    }
 
     var background: NSColor? {
-        self == .paper ? NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1) : nil
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.background)
+        }
     }
     var bodyColor: NSColor? {
-        self == .paper ? NSColor(srgbRed: 0.18, green: 0.16, blue: 0.13, alpha: 1) : nil
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.18, green: 0.16, blue: 0.13, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.body)
+        }
     }
     var headingColor: NSColor? {
-        self == .paper ? NSColor(srgbRed: 0.31, green: 0.19, blue: 0.11, alpha: 1) : nil
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.31, green: 0.19, blue: 0.11, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.heading)
+        }
     }
     var codeColor: NSColor? {
-        self == .paper ? NSColor(srgbRed: 0.34, green: 0.18, blue: 0.10, alpha: 1) : nil
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.34, green: 0.18, blue: 0.10, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.code)
+        }
+    }
+    var linkColor: NSColor? {
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.10, green: 0.22, blue: 0.38, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.link)
+        }
+    }
+    var codeBackground: NSColor? {
+        switch self {
+        case .system: nil
+        case .paper: NSColor(srgbRed: 0.91, green: 0.87, blue: 0.79, alpha: 1)
+        case .extensionTheme(let theme): theme.color(\.codeBackground)
+        }
+    }
+    var colorScheme: ColorScheme? {
+        guard let color = background?.usingColorSpace(.sRGB) else { return nil }
+        let luminance = 0.2126 * color.redComponent +
+            0.7152 * color.greenComponent + 0.0722 * color.blueComponent
+        return luminance < 0.5 ? .dark : .light
     }
 }
 
@@ -193,10 +260,17 @@ struct AppEditorSettings: Codable, Equatable {
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
     var previewTheme: PreviewTheme?
+    var extensionPackages: [DeclarativeExtension]?
     var previewBodyWidth: Int?
     var showsInvisibleCharacters: Bool?
     var showsIndentGuides: Bool?
     var shortcutOverrides: [String: ShortcutChord]?
+
+    var effectiveSnippets: [EditorSnippet] {
+        (snippets ?? []) + (extensionPackages ?? []).flatMap { package in
+            package.snippets.map { EditorSnippet(id: $0.id, trigger: $0.trigger, template: $0.template) }
+        }
+    }
 }
 
 enum EditorZoomSurface: CaseIterable {

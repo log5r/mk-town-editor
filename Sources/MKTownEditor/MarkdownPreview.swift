@@ -268,7 +268,7 @@ struct MarkdownPreview: View {
             }
         }
         }
-        .environment(\.colorScheme, theme == .paper ? .light : colorScheme)
+        .environment(\.colorScheme, theme.colorScheme ?? colorScheme)
         .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
         .task(id: remoteImageTaskID) {
             remoteImages.setEnabled(loadsRemoteImages)

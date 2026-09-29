@@ -4,6 +4,7 @@ import SwiftUI
 struct EditorPreferencesView: View {
     @ObservedObject var settingsStore: EditorSettingsStore
     @State private var showingShortcuts = false
+    @State private var extensionError: String?
     @AppStorage("graphvizRendererPath") private var graphvizPath = ""
     @AppStorage("plantUMLJarPath") private var plantUMLPath = ""
 
@@ -47,7 +48,9 @@ struct EditorPreferencesView: View {
             Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))
             Section("プレビュー") {
                 Picker("配色", selection: binding(\.previewTheme, default: .system)) {
-                    ForEach(PreviewTheme.allCases, id: \.self) { theme in
+                    ForEach(PreviewTheme.allCases +
+                        (settingsStore.app.extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) },
+                        id: \.self) { theme in
                         Text(theme.title).tag(theme)
                     }
                 }
@@ -153,12 +156,60 @@ struct EditorPreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("拡張") {
+                ForEach(settingsStore.app.extensionPackages ?? []) { package in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(package.name)
+                            Text("テーマ \(package.theme == nil ? 0 : 1)・スニペット \(package.snippets.count)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("削除", role: .destructive) { removeExtension(package.id) }
+                    }
+                }
+                Button("JSON拡張を読み込む…") { importExtension() }
+                Text("宣言的なテーマとスニペットのみを読み込みます。コードは実行しません。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 560)
         .sheet(isPresented: $showingShortcuts) {
             EditorShortcutPreferencesView(settingsStore: settingsStore)
         }
+        .alert("拡張を読み込めません", isPresented: Binding(get: { extensionError != nil },
+            set: { if !$0 { extensionError = nil } })) {
+            Button("OK") { extensionError = nil }
+        } message: { Text(extensionError ?? "") }
+    }
+
+    private func importExtension() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let package = try DeclarativeExtension.load(from: url)
+            var settings = settingsStore.app
+            if let previous = settings.extensionPackages?.first(where: { $0.id == package.id }),
+               let previousTheme = previous.theme,
+               settings.previewTheme == .extensionTheme(previousTheme) {
+                settings.previewTheme = package.theme.map(PreviewTheme.extensionTheme) ?? .system
+            }
+            settings.extensionPackages = (settings.extensionPackages ?? []).filter { $0.id != package.id } + [package]
+            settingsStore.setAppSettings(settings)
+        } catch { extensionError = error.localizedDescription }
+    }
+
+    private func removeExtension(_ id: String) {
+        var settings = settingsStore.app
+        if case .extensionTheme(let selected) = settings.previewTheme,
+           settings.extensionPackages?.contains(where: { $0.id == id && $0.theme == selected }) == true {
+            settings.previewTheme = .system
+        }
+        settings.extensionPackages?.removeAll { $0.id == id }
+        settingsStore.setAppSettings(settings)
     }
 
     private func chooseDiagramTool(for kind: ExternalDiagramKind) {

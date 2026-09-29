@@ -134,6 +134,7 @@
 		A10000000000000000000098 /* CloudFileStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000097 /* CloudFileStatus.swift */; };
 		A10000000000000000000099 /* CloudFileStatusSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000098 /* CloudFileStatusSheet.swift */; };
 		A1000000000000000000009A /* AutomationDocumentWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000099 /* AutomationDocumentWriter.swift */; };
+		A1000000000000000000009B /* DeclarativeExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009A /* DeclarativeExtension.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -266,6 +267,7 @@
 		A20000000000000000000097 /* CloudFileStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFileStatus.swift; sourceTree = "<group>"; };
 		A20000000000000000000098 /* CloudFileStatusSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFileStatusSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000099 /* AutomationDocumentWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationDocumentWriter.swift; sourceTree = "<group>"; };
+		A2000000000000000000009A /* DeclarativeExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeExtension.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -412,6 +414,7 @@
 				A20000000000000000000097 /* CloudFileStatus.swift */,
 				A20000000000000000000098 /* CloudFileStatusSheet.swift */,
 				A20000000000000000000099 /* AutomationDocumentWriter.swift */,
+				A2000000000000000000009A /* DeclarativeExtension.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -605,6 +608,7 @@
 				A10000000000000000000098 /* CloudFileStatus.swift in Sources */,
 				A10000000000000000000099 /* CloudFileStatusSheet.swift in Sources */,
 				A1000000000000000000009A /* AutomationDocumentWriter.swift in Sources */,
+				A1000000000000000000009B /* DeclarativeExtension.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
