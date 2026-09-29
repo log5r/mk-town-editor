@@ -7074,6 +7074,96 @@
           }
         }
       }
+    },
+    "#%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@"
+          }
+        }
+      }
+    },
+    "%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld"
+          }
+        }
+      }
+    },
+    "タグが見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No tags found"
+          }
+        }
+      }
+    },
+    "タグを読み込めませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Load Tags"
+          }
+        }
+      }
+    },
+    "タグを調査中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning tags"
+          }
+        }
+      }
+    },
+    "タグ一覧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tags"
+          }
+        }
+      }
+    },
+    "タグ一覧…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tags…"
+          }
+        }
+      }
+    },
+    "ファイル一覧が上限に達したため、一部の書類は索引に含まれていません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file list reached its limit, so some documents are not indexed."
+          }
+        }
+      }
+    },
+    "読み込めなかった書類: %lld件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Documents not read: %lld"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
