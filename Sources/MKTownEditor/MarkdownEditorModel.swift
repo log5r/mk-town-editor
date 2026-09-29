@@ -19,6 +19,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     weak var textView: NSTextView?
+    private var transitionSelections: [NSRange]?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
     private var pendingNavigationLocation: Int?
@@ -40,6 +41,7 @@ final class MarkdownEditorModel: ObservableObject {
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        transitionSelections = nil
         hasActiveEditor = true
         let length = (textView.string as NSString).length
         let restored = selectedRanges.map { range in
@@ -59,14 +61,22 @@ final class MarkdownEditorModel: ObservableObject {
 
     func disconnect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         guard self.textView === textView else { return }
-        selectedRange = textView.selectedRange()
-        selectedRanges = textView.selectedRanges.map(\.rangeValue)
+        let selections = transitionSelections ?? textView.selectedRanges.map(\.rangeValue)
+        if let first = selections.first {
+            selectedRange = first
+            selectedRanges = selections
+        }
         if let scrollView { scrollOrigin = scrollView.contentView.bounds.origin }
         if let window = textView.window {
             shouldRestoreFocus = window.firstResponder === textView
         }
         self.textView = nil
         hasActiveEditor = false
+    }
+
+    func prepareForViewTransition() {
+        guard let textView else { return }
+        transitionSelections = textView.selectedRanges.map(\.rangeValue)
     }
 
     func scrollDidChange(_ origin: NSPoint, in scrollView: NSScrollView) {
@@ -114,6 +124,7 @@ final class MarkdownEditorModel: ObservableObject {
     func selectionDidChange(_ range: NSRange) { selectionDidChange([range]) }
 
     func selectionDidChange(_ ranges: [NSRange]) {
+        guard transitionSelections == nil else { return }
         guard let range = ranges.first else { return }
         let unchanged = selectedRange == range
         selectedRange = range
