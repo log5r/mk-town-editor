@@ -435,6 +435,9 @@ struct EditorWorkspace: View {
 
     private var sheetView: some View {
         navigationView
+            // Use one system toolbar background across both editor panes.
+            .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
+            .toolbarBackground(.visible, for: .windowToolbar)
         .sheet(isPresented: $showingGitHistory) {
             if let fileURL { GitHistorySheet(fileURL: fileURL) }
         }

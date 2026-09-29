@@ -35,6 +35,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         scrollView.hasHorizontalScroller = !layoutOptions.wrapsLines
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        // AppKit defaults to unclipped drawing on macOS 14+. Keep the ruler and
+        // scroll background out of the shared window toolbar.
+        scrollView.clipsToBounds = true
         scrollView.drawsBackground = true
 
         let textView = EditorTextView()
