@@ -79,6 +79,9 @@ struct EditorWorkspace: View {
     @State private var showingDailyNote = false
     @State private var showingWorkspaceTasks = false
     @State private var showingLinkGraph = false
+    @State private var showingNoteSplit = false
+    @State private var splitHeadingLocation: Int?
+    @State private var showingNoteMerge = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
@@ -673,6 +676,54 @@ struct EditorWorkspace: View {
                     })
             }
         }
+        .sheet(isPresented: $showingNoteSplit) {
+            if let root = workspaceStore.rootURL, let fileURL,
+               let headingLocation = splitHeadingLocation {
+                WorkspaceNoteSplitSheet(root: root, sourceURL: fileURL,
+                    source: document.text, headingLocation: headingLocation,
+                    workspaceDocuments: WorkspaceQuickOpen.search(
+                        nodes: workspaceStore.nodes, root: root,
+                        query: "", limit: Int.max).map(\.url),
+                    onCreate: { plan, destination, expectedSource in
+                        guard document.text == expectedSource,
+                              !workspaceStore.isDocumentLocked(fileURL) else {
+                            throw WorkspaceNoteOperationError.sourceChanged
+                        }
+                        return try WorkspaceNoteOperations.applySplit(plan,
+                            destinationURL: destination, root: root) {
+                            if editorModel.hasActiveEditor {
+                                return editorModel.applyRegexEdit(plan.sourceEdit,
+                                    expectedSource: expectedSource)
+                            }
+                            previewTaskUndoTarget.replaceText(
+                                plan.sourceEdit.applying(to: expectedSource),
+                                in: $document.text, undoManager: undoManager,
+                                actionName: String(localized: "セクションを分割"))
+                            return true
+                        }
+                    }, onOpen: { url in
+                        workspaceStore.refresh(force: true)
+                        Task {
+                            do { try await openDocument(at: url) }
+                            catch { workspaceOpenError = error.localizedDescription }
+                        }
+                    })
+            }
+        }
+        .sheet(isPresented: $showingNoteMerge) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceNoteMergeSheet(root: root, nodes: workspaceStore.nodes,
+                    loadOpenBuffers: {
+                        try workspaceStore.openBufferSnapshots(under: root)
+                    }, onOpen: { url in
+                        workspaceStore.refresh(force: true)
+                        Task {
+                            do { try await openDocument(at: url) }
+                            catch { workspaceOpenError = error.localizedDescription }
+                        }
+                    })
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -1212,6 +1263,19 @@ struct EditorWorkspace: View {
                 }
                 .disabled(fileURL == nil || workspaceStore.rootURL == nil ||
                     workspaceStore.isDocumentLocked(fileURL))
+            }
+            Section("文書を整理") {
+                Button("現在のセクションを分割…") {
+                    splitHeadingLocation = MarkdownOutline.currentSection(
+                        at: editorModel.selectedRange.location, in: outlineEntries)?.sourceRange.location
+                    showingNoteSplit = splitHeadingLocation != nil
+                }
+                .disabled(fileURL == nil || workspaceStore.rootURL == nil ||
+                    workspaceStore.isDocumentLocked(fileURL) ||
+                    MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
+                        in: outlineEntries) == nil)
+                Button("書類を結合…") { showingNoteMerge = true }
+                    .disabled(workspaceStore.rootURL == nil)
             }
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
                 let matching = items.filter { $0.kind == kind }

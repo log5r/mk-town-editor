@@ -7784,6 +7784,206 @@
           }
         }
       }
+    },
+    "セクション": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Section"
+          }
+        }
+      }
+    },
+    "セクションを分割": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split Section"
+          }
+        }
+      }
+    },
+    "セクションを別書類に分割": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split Section into New Document"
+          }
+        }
+      }
+    },
+    "ファイル名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File Name"
+          }
+        }
+      }
+    },
+    "ワークスペース内の保存先フォルダ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Destination Folder in Workspace"
+          }
+        }
+      }
+    },
+    "元の書類には見出しと移動先を残し、本文を新しい書類へ移します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original document keeps the heading and a link to the new document."
+          }
+        }
+      }
+    },
+    "元の書類を残し、新しい書類に内容をまとめます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combine the content in a new document and keep the originals."
+          }
+        }
+      }
+    },
+    "元の書類を編集できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not edit the original document."
+          }
+        }
+      }
+    },
+    "分割の復元に失敗しました。作成先の書類を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not roll back the split. Check the new document."
+          }
+        }
+      }
+    },
+    "分割前に元の書類が変更されました。もう一度確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original document changed. Review the split again."
+          }
+        }
+      }
+    },
+    "文書を整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Organize Documents"
+          }
+        }
+      }
+    },
+    "書類を結合": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Documents"
+          }
+        }
+      }
+    },
+    "書類を結合…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge Documents…"
+          }
+        }
+      }
+    },
+    "書類を絞り込む": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter Documents"
+          }
+        }
+      }
+    },
+    "書類を読み込めません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read document: %@"
+          }
+        }
+      }
+    },
+    "現在のセクションを分割…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Split Current Section…"
+          }
+        }
+      }
+    },
+    "移動先の書類": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Moved Document"
+          }
+        }
+      }
+    },
+    "結合": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge"
+          }
+        }
+      }
+    },
+    "結合できる書類は一度に10件までです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can merge up to 10 documents at a time."
+          }
+        }
+      }
+    },
+    "選択中: %lld書類": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected: %lld documents"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
