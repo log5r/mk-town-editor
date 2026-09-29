@@ -1626,7 +1626,8 @@ struct EditorWorkspace: View {
                                onVisibleSourceChange: synchronizePreview(to:),
                                documentContext: documentContext,
                                loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
-                               usesInlineLivePresentation: settingsStore.app.usesInlineLivePresentation ?? false)
+                               usesInlineLivePresentation: settingsStore.app.usesInlineLivePresentation ?? false,
+                               usesTypewriterMode: settingsStore.app.usesTypewriterMode ?? false)
             if settingsStore.app.showsMinimap ?? false {
                 Divider()
                 MarkdownMinimapView(source: document.text, viewport: editorModel.viewport) { location in

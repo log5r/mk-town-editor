@@ -86,6 +86,15 @@ final class EditorSettingsTests: XCTestCase {
         store.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.usesInlineLivePresentation, true)
     }
+    func testTypewriterModePreferenceDefaultsOffAndPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.usesTypewriterMode)
+        var settings = store.app
+        settings.usesTypewriterMode = true
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.usesTypewriterMode, true)
+    }
     func testPreviewThemeAndWidthPersist() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)

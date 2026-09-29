@@ -28,6 +28,7 @@ struct EditorPreferencesView: View {
             Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
             Toggle("ミニマップを表示", isOn: binding(\.showsMinimap, default: false))
             Toggle("編集中以外のMarkdown記号を控えめに表示", isOn: binding(\.usesInlineLivePresentation, default: false))
+            Toggle("タイプライターモード", isOn: binding(\.usesTypewriterMode, default: false))
             Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
                 Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
             }

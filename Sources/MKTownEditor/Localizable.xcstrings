@@ -6825,6 +6825,16 @@
         }
       }
     },
+    "タイプライターモード": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Typewriter Mode"
+          }
+        }
+      }
+    },
     "位置 %lld%%": {
       "localizations": {
         "en": {

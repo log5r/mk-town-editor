@@ -21,6 +21,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var documentContext = DocumentContext(fileURL: nil)
     var loadsExternalLinkPreviews = false
     var usesInlineLivePresentation = false
+    var usesTypewriterMode = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -76,6 +77,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRuler = lineNumberRuler
+        scrollView.onManualScroll = { [weak coordinator = context.coordinator] in
+            coordinator?.manualScrollDidStart()
+        }
         scrollView.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator,
@@ -83,6 +87,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
             name: NSView.boundsDidChangeNotification,
             object: scrollView.contentView
         )
+        NotificationCenter.default.addObserver(context.coordinator,
+            selector: #selector(Coordinator.liveScrollDidStart(_:)),
+            name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        NotificationCenter.default.addObserver(context.coordinator,
+            selector: #selector(Coordinator.liveScrollDidEnd(_:)),
+            name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
         context.coordinator.isRestoringSession = true
         model.connect(textView, scrollView: scrollView)
         textView.commandModel = model
@@ -101,6 +111,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         context.coordinator.usesInlineLivePresentation = usesInlineLivePresentation
+        context.coordinator.usesTypewriterMode = usesTypewriterMode
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
@@ -128,6 +139,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
         NotificationCenter.default.removeObserver(coordinator, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+        NotificationCenter.default.removeObserver(coordinator, name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        NotificationCenter.default.removeObserver(coordinator, name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
+        coordinator.cancelTypewriterFollow()
         if let textView = scrollView.documentView as? NSTextView {
             (textView as? EditorTextView)?.cancelLinkHover()
             coordinator.model.disconnect(textView, scrollView: scrollView)
@@ -149,6 +163,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         context.coordinator.usesInlineLivePresentation = usesInlineLivePresentation
+        context.coordinator.usesTypewriterMode = usesTypewriterMode
+        if !usesTypewriterMode { context.coordinator.cancelTypewriterFollow() }
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
@@ -206,6 +222,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
         var sharedSnapshot: DocumentSnapshot?
         var usesSharedAnalysis = false
         var usesInlineLivePresentation = false
+        var usesTypewriterMode = false
+        private var lastManualScroll = Date.distantPast
+        private var isUserScrolling = false
+        private var typewriterFollowTask: Task<Void, Never>?
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
@@ -233,6 +253,56 @@ struct MarkdownTextEditor: NSViewRepresentable {
                 options.synchronizeWidth(of: textView, in: scrollView)
             }
             lineNumberRuler?.refresh()
+            scheduleTypewriterFollow()
+        }
+
+        @MainActor func manualScrollDidStart() {
+            lastManualScroll = Date()
+            cancelTypewriterFollow()
+        }
+
+        @MainActor @objc func liveScrollDidStart(_ notification: Notification) {
+            isUserScrolling = true
+            manualScrollDidStart()
+        }
+
+        @MainActor @objc func liveScrollDidEnd(_ notification: Notification) {
+            isUserScrolling = false
+            lastManualScroll = Date()
+        }
+
+        @MainActor func cancelTypewriterFollow() {
+            typewriterFollowTask?.cancel()
+            typewriterFollowTask = nil
+        }
+
+        @MainActor private func scheduleTypewriterFollow() {
+            cancelTypewriterFollow()
+            guard usesTypewriterMode else { return }
+            typewriterFollowTask = Task { @MainActor [weak self] in
+                await Task.yield()
+                guard !Task.isCancelled else { return }
+                self?.followTypingIfAppropriate()
+            }
+        }
+
+        @MainActor func followTypingIfAppropriate() {
+            guard usesTypewriterMode, let textView, let scrollView,
+                  textView.window?.firstResponder === textView else { return }
+            scrollView.layoutSubtreeIfNeeded()
+            guard let lineMidY = TypewriterScrolling.lineMidY(for: textView,
+                at: textView.selectedRange().location) else { return }
+            let clip = scrollView.contentView
+            let visible = clip.bounds.height
+            let document = scrollView.documentView?.bounds.height ?? textView.bounds.height
+            guard let target = TypewriterScrolling.targetOrigin(
+                lineMidY: lineMidY, visibleHeight: visible, documentHeight: document,
+                currentOrigin: clip.bounds.origin.y,
+                secondsSinceManualScroll: Date().timeIntervalSince(lastManualScroll),
+                isUserScrolling: isUserScrolling, isComposing: textView.hasMarkedText())
+            else { return }
+            clip.scroll(to: NSPoint(x: clip.bounds.origin.x, y: target))
+            scrollView.reflectScrolledClipView(clip)
         }
 
         @MainActor func refreshSyntax() {
@@ -341,6 +411,12 @@ enum MarkdownProofingContext {
 private final class EditorScrollView: NSScrollView {
     var onWindowAttached: (() -> Void)?
     var onLayout: (() -> Void)?
+    var onManualScroll: (() -> Void)?
+
+    override func scrollWheel(with event: NSEvent) {
+        onManualScroll?()
+        super.scrollWheel(with: event)
+    }
 
     override func layout() {
         super.layout()
