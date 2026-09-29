@@ -95,6 +95,18 @@ final class EditorSettingsTests: XCTestCase {
         store.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.usesTypewriterMode, true)
     }
+    func testTerminologyDictionaryAndExclusionsPersist() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.terminologyEntries)
+        var settings = store.app
+        settings.terminologyEntries = [TerminologyEntry(prohibited: "colour", preferred: "color")]
+        settings.terminologyOptions = TerminologyOptions(excludesCode: true, excludesQuotes: false)
+        store.setAppSettings(settings)
+        let restored = EditorSettingsStore(defaults: defaults).app
+        XCTAssertEqual(restored.terminologyEntries, settings.terminologyEntries)
+        XCTAssertEqual(restored.terminologyOptions, settings.terminologyOptions)
+    }
     func testPreviewThemeAndWidthPersist() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)

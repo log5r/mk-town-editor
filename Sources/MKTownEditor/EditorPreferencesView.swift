@@ -74,6 +74,41 @@ struct EditorPreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("用語辞書") {
+                Toggle("コード内を除外", isOn: terminologyOptionBinding(\.excludesCode))
+                Toggle("引用内を除外", isOn: terminologyOptionBinding(\.excludesQuotes))
+                ForEach(settingsStore.app.terminologyEntries ?? []) { entry in
+                    HStack {
+                        TextField("避ける表記", text: terminologyBinding(entry.id, \.prohibited))
+                        Text("→")
+                        TextField("推奨表記", text: terminologyBinding(entry.id, \.preferred))
+                        Button { moveTerminology(entry.id, by: -1) } label: {
+                            Image(systemName: "arrow.up")
+                        }
+                        .accessibilityLabel("優先順を上げる")
+                        .disabled(terminologyIndex(entry.id) == 0)
+                        Button { moveTerminology(entry.id, by: 1) } label: {
+                            Image(systemName: "arrow.down")
+                        }
+                        .accessibilityLabel("優先順を下げる")
+                        .disabled(terminologyIndex(entry.id) >=
+                                  (settingsStore.app.terminologyEntries?.count ?? 0) - 1)
+                        Button(role: .destructive) { removeTerminology(entry.id) } label: {
+                            Image(systemName: "trash")
+                        }
+                        .accessibilityLabel("用語を削除")
+                    }
+                }
+                Button("用語を追加") {
+                    var settings = settingsStore.app
+                    settings.terminologyEntries = (settings.terminologyEntries ?? []) +
+                        [TerminologyEntry(prohibited: "", preferred: "")]
+                    settingsStore.setAppSettings(settings)
+                }
+                Text("上の項目を優先して照合します。空欄の項目は照合しません。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("キーボード") {
                 Button("ショートカット一覧と設定…") { showingShortcuts = true }
             }
@@ -101,7 +136,7 @@ struct EditorPreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 430)
+        .frame(width: 560)
         .sheet(isPresented: $showingShortcuts) {
             EditorShortcutPreferencesView(settingsStore: settingsStore)
         }
@@ -141,6 +176,48 @@ struct EditorPreferencesView: View {
                     settings.proofing = proofing
                     settingsStore.setAppSettings(settings)
                 })
+    }
+
+    private func terminologyOptionBinding(_ keyPath: WritableKeyPath<TerminologyOptions, Bool>) -> Binding<Bool> {
+        Binding(get: { (settingsStore.app.terminologyOptions ?? TerminologyOptions())[keyPath: keyPath] },
+                set: { value in
+                    var settings = settingsStore.app
+                    var options = settings.terminologyOptions ?? TerminologyOptions()
+                    options[keyPath: keyPath] = value
+                    settings.terminologyOptions = options
+                    settingsStore.setAppSettings(settings)
+                })
+    }
+
+    private func terminologyBinding(_ id: UUID,
+                                    _ keyPath: WritableKeyPath<TerminologyEntry, String>) -> Binding<String> {
+        Binding(get: {
+            (settingsStore.app.terminologyEntries ?? []).first(where: { $0.id == id })?[keyPath: keyPath] ?? ""
+        }, set: { value in
+            var settings = settingsStore.app
+            guard let index = settings.terminologyEntries?.firstIndex(where: { $0.id == id }) else { return }
+            settings.terminologyEntries?[index][keyPath: keyPath] = value
+            settingsStore.setAppSettings(settings)
+        })
+    }
+
+    private func terminologyIndex(_ id: UUID) -> Int {
+        settingsStore.app.terminologyEntries?.firstIndex(where: { $0.id == id }) ?? 0
+    }
+
+    private func moveTerminology(_ id: UUID, by offset: Int) {
+        var settings = settingsStore.app
+        guard let index = settings.terminologyEntries?.firstIndex(where: { $0.id == id }),
+              let count = settings.terminologyEntries?.count,
+              (0..<count).contains(index + offset) else { return }
+        settings.terminologyEntries?.swapAt(index, index + offset)
+        settingsStore.setAppSettings(settings)
+    }
+
+    private func removeTerminology(_ id: UUID) {
+        var settings = settingsStore.app
+        settings.terminologyEntries?.removeAll { $0.id == id }
+        settingsStore.setAppSettings(settings)
     }
 
     private func snippetBinding(_ id: UUID, _ keyPath: WritableKeyPath<EditorSnippet, String>) -> Binding<String> {
