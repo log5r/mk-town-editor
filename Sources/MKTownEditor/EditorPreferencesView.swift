@@ -1,8 +1,11 @@
+import AppKit
 import SwiftUI
 
 struct EditorPreferencesView: View {
     @ObservedObject var settingsStore: EditorSettingsStore
     @State private var showingShortcuts = false
+    @AppStorage("graphvizRendererPath") private var graphvizPath = ""
+    @AppStorage("plantUMLJarPath") private var plantUMLPath = ""
 
     var body: some View {
         Form {
@@ -51,6 +54,22 @@ struct EditorPreferencesView: View {
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
                 }
+            }
+            Section("外部の図描画器") {
+                HStack {
+                    TextField("Graphviz dot の実行ファイル", text: $graphvizPath)
+                    Button("選択…") { chooseDiagramTool(for: .graphviz) }
+                }
+                Text(graphvizStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+                HStack {
+                    TextField("PlantUML の JAR ファイル", text: $plantUMLPath)
+                    Button("選択…") { chooseDiagramTool(for: .plantuml) }
+                }
+                Text(plantUMLStatus)
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("使用する描画器だけを指定してください。PlantUMLにはJavaが必要です。図の本文は外部サーバーへ送信しません。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
                 ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
@@ -140,6 +159,29 @@ struct EditorPreferencesView: View {
         .sheet(isPresented: $showingShortcuts) {
             EditorShortcutPreferencesView(settingsStore: settingsStore)
         }
+    }
+
+    private func chooseDiagramTool(for kind: ExternalDiagramKind) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let path = panel.url?.path {
+            if kind == .graphviz { graphvizPath = path }
+            else { plantUMLPath = path }
+        }
+    }
+
+    private var graphvizStatus: String {
+        if graphvizPath.isEmpty { return String(localized: "未設定") }
+        return FileManager.default.isExecutableFile(atPath: graphvizPath)
+            ? String(localized: "利用可能") : String(localized: "実行ファイルが見つかりません。")
+    }
+
+    private var plantUMLStatus: String {
+        if plantUMLPath.isEmpty { return String(localized: "未設定") }
+        return FileManager.default.fileExists(atPath: plantUMLPath)
+            ? String(localized: "選択済み") : String(localized: "JARファイルが見つかりません。")
     }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<AppEditorSettings, Value>) -> Binding<Value> {

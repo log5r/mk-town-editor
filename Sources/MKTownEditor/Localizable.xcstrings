@@ -8134,6 +8134,196 @@
           }
         }
       }
+    },
+    "Graphviz dot の実行ファイル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Graphviz dot executable"
+          }
+        }
+      }
+    },
+    "Graphviz図": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Graphviz diagram"
+          }
+        }
+      }
+    },
+    "PlantUML の JAR ファイル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PlantUML JAR file"
+          }
+        }
+      }
+    },
+    "PlantUML図": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PlantUML diagram"
+          }
+        }
+      }
+    },
+    "再試行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        }
+      }
+    },
+    "図の原文が大きすぎます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The diagram source is too large."
+          }
+        }
+      }
+    },
+    "図の描画が時間内に完了しませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The diagram did not finish rendering in time."
+          }
+        }
+      }
+    },
+    "図の描画に失敗しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The diagram could not be rendered."
+          }
+        }
+      }
+    },
+    "図の描画を中止しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagram rendering was cancelled."
+          }
+        }
+      }
+    },
+    "外部の図描画器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External diagram renderers"
+          }
+        }
+      }
+    },
+    "描画器のファイルを開けません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The renderer file could not be opened."
+          }
+        }
+      }
+    },
+    "描画器を設定で指定してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a renderer in Settings."
+          }
+        }
+      }
+    },
+    "描画結果の画像を読み取れません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rendered image could not be read."
+          }
+        }
+      }
+    },
+    "未設定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not configured"
+          }
+        }
+      }
+    },
+    "利用可能": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available"
+          }
+        }
+      }
+    },
+    "実行ファイルが見つかりません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Executable not found."
+          }
+        }
+      }
+    },
+    "選択済み": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        }
+      }
+    },
+    "JARファイルが見つかりません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "JAR file not found."
+          }
+        }
+      }
+    },
+    "使用する描画器だけを指定してください。PlantUMLにはJavaが必要です。図の本文は外部サーバーへ送信しません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure only the renderers you use. PlantUML requires Java. Diagram source is not sent to an external server."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
