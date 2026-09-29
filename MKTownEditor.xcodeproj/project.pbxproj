@@ -95,6 +95,8 @@
 		A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000071 /* WorkspaceTagsSheet.swift */; };
 		A10000000000000000000072 /* FrontMatterProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000072 /* FrontMatterProperties.swift */; };
 		A10000000000000000000073 /* FrontMatterPropertiesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */; };
+		A10000000000000000000074 /* WorkspaceBacklinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* WorkspaceBacklinks.swift */; };
+		A10000000000000000000075 /* WorkspaceBacklinksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -189,6 +191,8 @@
 		A20000000000000000000071 /* WorkspaceTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTagsSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000072 /* FrontMatterProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontMatterProperties.swift; sourceTree = "<group>"; };
 		A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontMatterPropertiesSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000074 /* WorkspaceBacklinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinks.swift; sourceTree = "<group>"; };
+		A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinksSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -297,6 +301,8 @@
 				A20000000000000000000071 /* WorkspaceTagsSheet.swift */,
 				A20000000000000000000072 /* FrontMatterProperties.swift */,
 				A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */,
+				A20000000000000000000074 /* WorkspaceBacklinks.swift */,
+				A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -452,6 +458,8 @@
 				A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */,
 				A10000000000000000000072 /* FrontMatterProperties.swift in Sources */,
 				A10000000000000000000073 /* FrontMatterPropertiesSheet.swift in Sources */,
+				A10000000000000000000074 /* WorkspaceBacklinks.swift in Sources */,
+				A10000000000000000000075 /* WorkspaceBacklinksSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
