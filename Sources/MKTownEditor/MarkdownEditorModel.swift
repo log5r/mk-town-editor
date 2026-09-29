@@ -1,11 +1,17 @@
 import AppKit
 import Combine
 
+struct EditorViewport: Equatable {
+    let topFraction: Double
+    let visibleFraction: Double
+}
+
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
     @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
     @Published private(set) var selectedRanges = [NSRange(location: 0, length: 0)]
     @Published private(set) var hasActiveEditor = false
+    @Published private(set) var viewport = EditorViewport(topFraction: 0, visibleFraction: 1)
     @Published var linkDraft: MarkdownLinkDraft?
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
@@ -63,8 +69,16 @@ final class MarkdownEditorModel: ObservableObject {
         hasActiveEditor = false
     }
 
-    func scrollDidChange(_ origin: NSPoint) {
+    func scrollDidChange(_ origin: NSPoint, in scrollView: NSScrollView) {
         scrollOrigin = origin
+        let visible = max(1, scrollView.contentView.bounds.height)
+        let document = max(visible, scrollView.documentView?.bounds.height ?? visible)
+        let next = EditorViewport(topFraction: Double(min(1, max(0, origin.y / document))),
+                                  visibleFraction: Double(min(1, visible / document)))
+        if abs(next.topFraction - viewport.topFraction) >= 0.001 ||
+            abs(next.visibleFraction - viewport.visibleFraction) >= 0.001 {
+            viewport = next
+        }
     }
 
     func restorePosition(selection: NSRange, scrollX: Double = 0, scrollY: Double) {
@@ -84,6 +98,7 @@ final class MarkdownEditorModel: ObservableObject {
     func restoreScroll(in scrollView: NSScrollView) {
         scrollView.contentView.scroll(to: scrollOrigin)
         scrollView.reflectScrolledClipView(scrollView.contentView)
+        scrollDidChange(scrollView.contentView.bounds.origin, in: scrollView)
     }
 
     func editorDidGainFocus(_ textView: NSTextView) {

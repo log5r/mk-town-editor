@@ -6794,6 +6794,46 @@
           }
         }
       }
+    },
+    "クリックまたはドラッグして文書内を移動": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click or drag to move through the document"
+          }
+        }
+      }
+    },
+    "ミニマップを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Minimap"
+          }
+        }
+      }
+    },
+    "位置 %lld%%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position %lld%%"
+          }
+        }
+      }
+    },
+    "文書ミニマップ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document Minimap"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

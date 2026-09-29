@@ -1609,22 +1609,30 @@ struct EditorWorkspace: View {
     }
 
     private var sourceEditor: some View {
-        MarkdownTextEditor(text: $document.text, model: editorModel,
-                           textStyle: settingsStore.textStyle(for: fileURL),
-                           layoutOptions: settingsStore.layoutOptions(for: fileURL),
-                           sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
-                           imageImportMode: settingsStore.imageImportMode(for: fileURL),
-                           tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
-                           proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
-                           snippets: settingsStore.app.snippets ?? [],
-                           whitespaceOptions: EditorWhitespaceOptions(
-                               showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
-                               showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
-                           isEditable: !workspaceStore.isDocumentLocked(fileURL),
-                           onImageDrop: dropImage, onImagePaste: pasteImage,
-                           onVisibleSourceChange: synchronizePreview(to:),
-                           documentContext: documentContext,
-                           loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false)
+        HStack(spacing: 0) {
+            MarkdownTextEditor(text: $document.text, model: editorModel,
+                               textStyle: settingsStore.textStyle(for: fileURL),
+                               layoutOptions: settingsStore.layoutOptions(for: fileURL),
+                               sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
+                               imageImportMode: settingsStore.imageImportMode(for: fileURL),
+                               tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
+                               proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
+                               snippets: settingsStore.app.snippets ?? [],
+                               whitespaceOptions: EditorWhitespaceOptions(
+                                   showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
+                                   showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
+                               isEditable: !workspaceStore.isDocumentLocked(fileURL),
+                               onImageDrop: dropImage, onImagePaste: pasteImage,
+                               onVisibleSourceChange: synchronizePreview(to:),
+                               documentContext: documentContext,
+                               loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false)
+            if settingsStore.app.showsMinimap ?? false {
+                Divider()
+                MarkdownMinimapView(source: document.text, viewport: editorModel.viewport) { location in
+                    editorModel.selectAndReveal(NSRange(location: location, length: 0))
+                }
+            }
+        }
     }
 
     private func registerOpenBuffer(for url: URL) {

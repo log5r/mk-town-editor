@@ -26,6 +26,7 @@ struct EditorPreferencesView: View {
             Toggle("行を折り返す", isOn: binding(\.wrapsLines))
             Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
             Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
+            Toggle("ミニマップを表示", isOn: binding(\.showsMinimap, default: false))
             Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
                 Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
             }
