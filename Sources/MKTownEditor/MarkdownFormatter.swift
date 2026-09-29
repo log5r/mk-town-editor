@@ -50,6 +50,9 @@ enum MarkdownFormattingStyle {
     case bold
     case italic
     case strikethrough
+    case highlight
+    case superscript
+    case subscriptText
     case inlineCode
     case link
     case heading(level: Int)
@@ -179,6 +182,12 @@ enum MarkdownFormatter {
             return wrap(text, selection: safeSelection, prefix: "_", suffix: "_", placeholder: String(localized: "斜体"))
         case .strikethrough:
             return wrap(text, selection: safeSelection, prefix: "~~", suffix: "~~", placeholder: String(localized: "取り消し線"))
+        case .highlight:
+            return wrapHTML(text, selection: safeSelection, tag: "mark", placeholder: String(localized: "ハイライト"))
+        case .superscript:
+            return wrapHTML(text, selection: safeSelection, tag: "sup", placeholder: String(localized: "上付き"))
+        case .subscriptText:
+            return wrapHTML(text, selection: safeSelection, tag: "sub", placeholder: String(localized: "下付き"))
         case .inlineCode:
             return wrap(text, selection: safeSelection, prefix: "`", suffix: "`", placeholder: String(localized: "コード"))
         case .link:
@@ -307,6 +316,27 @@ enum MarkdownFormatter {
         }
         return MarkdownEdit(range: selectedLines, replacement: replacement as String,
                             selection: safeSelection)
+    }
+
+    private static func wrapHTML(_ text: String, selection: NSRange,
+                                 tag: String, placeholder: String) -> MarkdownEdit {
+        let source = text as NSString
+        let opening = "<\(tag)>"
+        let closing = "</\(tag)>"
+        let pattern = try! NSRegularExpression(pattern:
+            "<\(tag)>([^<>\\r\\n]*)</\(tag)>")
+        for match in pattern.matches(in: text, range: NSRange(location: 0, length: source.length)) {
+            let inner = match.range(at: 1)
+            if selection.location >= inner.location && NSMaxRange(selection) <= NSMaxRange(inner) {
+                return MarkdownEdit(range: match.range, replacement: source.substring(with: inner),
+                    selection: NSRange(location: selection.location - (opening as NSString).length,
+                                       length: selection.length))
+            }
+        }
+        let selected = selection.length == 0 ? placeholder : source.substring(with: selection)
+        return MarkdownEdit(range: selection, replacement: opening + selected + closing,
+            selection: NSRange(location: selection.location + (opening as NSString).length,
+                               length: (selected as NSString).length))
     }
 
     private static func wrap(

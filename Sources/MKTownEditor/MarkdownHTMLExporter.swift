@@ -222,9 +222,11 @@ enum MarkdownHTMLExporter {
         let cited = context.markdownDialect == .extended && linked.contains("[@")
             ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
             : linked
+        let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
+            ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
         let layout = MarkdownImageLayout.parse(
             MarkdownRenderer.resolveReferences(
-                in: MarkdownSafeHTML.previewMarkdown(cited), using: analysis.references))
+                in: MarkdownSafeHTML.previewMarkdown(extensions.text), using: analysis.references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text
@@ -241,6 +243,10 @@ enum MarkdownHTMLExporter {
             for (token, target) in cross?.targets ?? [] {
                 fallback = fallback.replacingOccurrences(of: token,
                     with: "<a href=\"#\(escape(target.key))\">\(escape(target.label))</a>")
+            }
+            for (token, item) in extensions.items {
+                fallback = fallback.replacingOccurrences(of: token,
+                    with: "<\(item.kind.rawValue)>\(escape(item.content))</\(item.kind.rawValue)>")
             }
             return fallback
         }
@@ -286,6 +292,10 @@ enum MarkdownHTMLExporter {
         for (token, target) in cross?.targets ?? [] {
             html = html.replacingOccurrences(of: token,
                 with: "<a href=\"#\(escape(target.key))\">\(escape(target.label))</a>")
+        }
+        for (token, item) in extensions.items {
+            html = html.replacingOccurrences(of: token,
+                with: "<\(item.kind.rawValue)>\(escape(item.content))</\(item.kind.rawValue)>")
         }
         return html
     }
