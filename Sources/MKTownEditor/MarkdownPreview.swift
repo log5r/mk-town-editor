@@ -115,6 +115,9 @@ struct MarkdownPreview: View {
                                         Text(" ").frame(height: 12)
                                     } else if MermaidDiagram.isDiagram(block) {
                                         MermaidDiagramView(source: block.content)
+                                    } else if block.kind == .codeBlock,
+                                              let kind = ExternalDiagramKind(language: block.codeLanguage) {
+                                        ExternalDiagramView(source: block.content, kind: kind)
                                     } else if block.kind == .codeBlock {
                                         VStack(alignment: .leading, spacing: 4) {
                                             HStack {
