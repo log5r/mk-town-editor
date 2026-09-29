@@ -413,3 +413,9 @@ UIの原文言語は日本語とし、`Localizable.xcstrings`に英語訳を置�
 - [拡張形式](extension-format.md)はJSONのテーマとスニペットに限定する。利用者が選んだファイルを検証してアプリ設定に取り込み、プレビューの既存配色と既存スニペット展開へ接続する。テーマの本文・見出し・リンク・コードは背景に対して、コードはコード背景に対して7:1以上のコントラスト比を要求する。
 - 従来の`system`・`paper`という設定値はそのまま復号でき、拡張テーマのみ色設定を含む値として保存する。再読込時に選択中テーマを更新し、削除時はシステム配色へ戻す。コード実行を許すプラグインのAPI・権限・障害隔離・互換性はまだ設けていない。
 - 調査中、保存済み設定を外部で壊した場合に色の強制アンラップで落ちる経路が見つかった。プレビューの全色を使用前に確認し、不正なテーマ値では元の描画へ戻す。読込時の形式検証に加え、保存済み値からの復元経路も回帰テストで確認する。
+
+## Z07 ブログ・静的サイトへの公開（2026-09-29）
+
+- [WordPress投稿API](https://developer.wordpress.org/rest-api/reference/posts/)は`draft`と`publish`を分け、Markdownを既存のHTML書き出し処理で本文フラグメントへ変換してHTTPSで新規投稿する。[Application Passwords](https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/)をBasic認証へ使用し、通常のログインパスワードは求めない。
+- [GitHub Contents API](https://docs.github.com/en/rest/repos/contents)は指定リポジトリ・ブランチに新規ファイルだけを作る。Jekyllの公開元ルートを前提に、下書きは`_drafts/<slug>.md`、公開記事は`_posts/<日付>-<slug>.md`へフロントマター付きで送る。GitHub Pagesの[公開元設定](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)が別のブランチ・フォルダ・ワークフローなら、その構成に合わせた設定が必要である。
+- 画面には送信URLと送信本文を確認用に表示し、文書や入力を変えたら計画を作り直す。認証情報は[macOS Keychain](https://developer.apple.com/documentation/security/ksecclassgenericpassword)へサービス・公開先・アカウント単位で保存し、通常設定には含めない。リダイレクトを拒否して認証ヘッダーの別ホストへの転送を防ぐ。ネットワーク送信自体は実アカウントなしでは試しておらず、テストはリクエスト生成・宛先検証・下書き／公開の分離を対象とする。
