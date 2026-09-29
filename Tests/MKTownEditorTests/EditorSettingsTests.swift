@@ -151,6 +151,17 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(store.fontSize(for: nil), 14)
     }
 
+    func testFolderLookupTerminatesAtFilesystemRootAfterSavingInTemporaryDirectory() {
+        let store = EditorSettingsStore(defaults: isolatedDefaults())
+        let document = URL(fileURLWithPath: "/private/tmp/mktown-settings-save-regression.md")
+        store.setFolderSettings(FolderEditorSettings(defaultMode: .preview),
+                                for: URL(fileURLWithPath: "/"))
+
+        XCTAssertEqual(store.mode(for: document), .preview)
+        XCTAssertEqual(store.fontSize(for: document), store.app.fontSize)
+        XCTAssertEqual(store.markdownDialect(for: document), .extended)
+    }
+
     func testFolderEditingOverridesInheritNearestConfiguredValueAndPersist() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
