@@ -608,6 +608,33 @@ final class EditorTextView: NSTextView {
         super.insertText(insertString, replacementRange: replacementRange)
     }
 
+    override var rangeForUserCompletion: NSRange {
+        let fallback = super.rangeForUserCompletion
+        guard !hasMarkedText(), selectedRange().length == 0 else { return fallback }
+        let text = string as NSString
+        let end = selectedRange().location
+        var start = end
+        while start > 0, end - start < 32 {
+            let unit = text.character(at: start - 1)
+            if (65...90).contains(unit) || (97...122).contains(unit) ||
+                (48...57).contains(unit) || unit == 95 || unit == 43 || unit == 45 {
+                start -= 1
+            } else { break }
+        }
+        guard start > 0, text.character(at: start - 1) == 58 else { return fallback }
+        return NSRange(location: start - 1, length: end - start + 1)
+    }
+
+    override func completions(forPartialWordRange charRange: NSRange,
+                              indexOfSelectedItem index: UnsafeMutablePointer<Int>) -> [String]? {
+        let matches = MarkdownEmoji.completions(in: string, range: charRange)
+        if !matches.isEmpty {
+            index.pointee = 0
+            return matches
+        }
+        return super.completions(forPartialWordRange: charRange, indexOfSelectedItem: index)
+    }
+
     override func paste(_ sender: Any?) {
         guard isEditable, !hasMarkedText(), selectedRanges.count == 1 else {
             super.paste(sender)

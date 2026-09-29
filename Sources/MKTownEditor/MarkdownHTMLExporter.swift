@@ -224,9 +224,11 @@ enum MarkdownHTMLExporter {
             : linked
         let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
             ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
+        let emoji = context.markdownDialect == .extended
+            ? MarkdownEmoji.replace(in: extensions.text) : extensions.text
         let layout = MarkdownImageLayout.parse(
             MarkdownRenderer.resolveReferences(
-                in: MarkdownSafeHTML.previewMarkdown(extensions.text), using: analysis.references))
+                in: MarkdownSafeHTML.previewMarkdown(emoji), using: analysis.references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text
@@ -246,7 +248,7 @@ enum MarkdownHTMLExporter {
             }
             for (token, item) in extensions.items {
                 fallback = fallback.replacingOccurrences(of: token,
-                    with: "<\(item.kind.rawValue)>\(escape(item.content))</\(item.kind.rawValue)>")
+                    with: "<\(item.kind.rawValue)>\(escape(MarkdownEmoji.replace(in: item.content)))</\(item.kind.rawValue)>")
             }
             return fallback
         }
@@ -295,7 +297,7 @@ enum MarkdownHTMLExporter {
         }
         for (token, item) in extensions.items {
             html = html.replacingOccurrences(of: token,
-                with: "<\(item.kind.rawValue)>\(escape(item.content))</\(item.kind.rawValue)>")
+                with: "<\(item.kind.rawValue)>\(escape(MarkdownEmoji.replace(in: item.content)))</\(item.kind.rawValue)>")
         }
         return html
     }

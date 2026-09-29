@@ -408,6 +408,8 @@ struct MarkdownCommands: Commands {
             commandButton(.superscript)
             commandButton(.subscriptText)
             commandButton(.inlineCode)
+            Button("絵文字ショートコードを補完") { editorModel?.textView?.complete(nil) }
+                .disabled(editorModel?.canExecuteCommand != true)
             Divider()
             commandButton(.link)
             commandButton(.convertLinkForm)

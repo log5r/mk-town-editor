@@ -267,8 +267,10 @@ enum MarkdownRenderer {
             : linked
         let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
             ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
+        let emoji = context.markdownDialect == .extended
+            ? MarkdownEmoji.replace(in: extensions.text) : extensions.text
         let layout = MarkdownImageLayout.parse(resolveReferences(
-            in: MarkdownSafeHTML.previewMarkdown(extensions.text), using: references))
+            in: MarkdownSafeHTML.previewMarkdown(emoji), using: references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text
@@ -395,7 +397,7 @@ enum MarkdownRenderer {
             let range = (result.string as NSString).range(of: token)
             guard range.location != NSNotFound else { continue }
             let inherited = result.attributes(at: range.location, effectiveRange: nil)
-            let replacement = NSMutableAttributedString(string: item.content,
+            let replacement = NSMutableAttributedString(string: MarkdownEmoji.replace(in: item.content),
                 attributes: inherited)
             let contentRange = NSRange(location: 0, length: replacement.length)
             let inheritedFont = inherited[.font] as? NSFont ?? baseFont
