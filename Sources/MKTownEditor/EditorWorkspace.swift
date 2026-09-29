@@ -2120,7 +2120,7 @@ struct EditorWorkspace: View {
                                imageImportMode: settingsStore.imageImportMode(for: fileURL),
                                tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
                                proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
-                               snippets: settingsStore.app.snippets ?? [],
+                               snippets: settingsStore.app.effectiveSnippets,
                                whitespaceOptions: EditorWhitespaceOptions(
                                    showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
                                    showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),

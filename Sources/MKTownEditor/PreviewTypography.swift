@@ -19,35 +19,35 @@ enum PreviewTypography {
 
     static func themed(_ rendered: NSAttributedString, kind: MarkdownBlock.Kind?,
                        theme: PreviewTheme) -> NSAttributedString {
-        guard theme == .paper, rendered.length > 0 else { return rendered }
+        guard theme != .system, rendered.length > 0,
+              let bodyColor = theme.bodyColor,
+              let headingColor = theme.headingColor,
+              let codeColor = theme.codeColor,
+              let codeBackground = theme.codeBackground,
+              let linkColor = theme.linkColor else { return rendered }
         let result = NSMutableAttributedString(attributedString: rendered)
         let range = NSRange(location: 0, length: result.length)
         let color: NSColor
         switch kind {
-        case .heading: color = theme.headingColor!
-        case .codeBlock: color = theme.codeColor!
-        default: color = theme.bodyColor!
+        case .heading: color = headingColor
+        case .codeBlock: color = codeColor
+        default: color = bodyColor
         }
         result.addAttribute(.foregroundColor, value: color, range: range)
         if kind == .codeBlock {
-            result.addAttribute(.backgroundColor,
-                value: NSColor(srgbRed: 0.91, green: 0.87, blue: 0.79, alpha: 1), range: range)
+            result.addAttribute(.backgroundColor, value: codeBackground, range: range)
         }
         result.enumerateAttribute(.link, in: range) { value, subrange, _ in
             if value != nil {
-                result.addAttribute(.foregroundColor,
-                    value: NSColor(srgbRed: 0.10, green: 0.22, blue: 0.38, alpha: 1),
-                    range: subrange)
+                result.addAttribute(.foregroundColor, value: linkColor, range: subrange)
             }
         }
         result.enumerateAttribute(.inlinePresentationIntent, in: range) { value, subrange, _ in
             let intent = (value as? InlinePresentationIntent) ??
                 (value as? NSNumber).map { InlinePresentationIntent(rawValue: $0.uintValue) }
             if intent?.contains(.code) == true {
-                result.addAttribute(.backgroundColor,
-                    value: NSColor(srgbRed: 0.91, green: 0.87, blue: 0.79, alpha: 1),
-                    range: subrange)
-                result.addAttribute(.foregroundColor, value: theme.codeColor!, range: subrange)
+                result.addAttribute(.backgroundColor, value: codeBackground, range: subrange)
+                result.addAttribute(.foregroundColor, value: codeColor, range: subrange)
             }
         }
         return result
