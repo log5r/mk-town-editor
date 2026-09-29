@@ -837,13 +837,17 @@ private struct DetachedPreviewContent: View {
 
     var body: some View {
         let dialect = settingsStore.markdownDialect(for: manager.documentURL)
+        let presentation = PreviewPresentation(
+            snapshot: updates.state.isPaused ? updates.snapshot : nil,
+            requestedSource: updates.state.displayedSource ?? document.text,
+            currentSource: document.text, dialect: dialect)
         VStack(spacing: 0) {
             PreviewUpdateControls(updates: updates, source: document.text, dialect: dialect)
-            MarkdownPreview(markdown: updates.state.displayedSource ?? document.text,
+            MarkdownPreview(markdown: presentation.source,
                             documentContext: DocumentContext(fileURL: manager.documentURL,
                                 attachmentDirectory: settingsStore.attachmentDirectory(for: manager.documentURL),
                                 markdownDialect: dialect),
-                            snapshot: updates.state.isPaused ? updates.snapshot : nil,
+                            snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
                             workspaceDocumentURLs: workspaceStore.rootURL.map { root in
                                 WorkspaceQuickOpen.search(nodes: workspaceStore.nodes,
@@ -929,7 +933,6 @@ final class PreviewUpdateController: ObservableObject {
             task = nil
             return
         }
-        snapshot = nil
         task = Task.detached(priority: .userInitiated) { [weak self] in
             let result = DocumentSnapshot(source: source, dialect: dialect)
             await self?.publish(result, generation: requestedGeneration)

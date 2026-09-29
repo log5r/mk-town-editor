@@ -1,9 +1,63 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
 @MainActor
 final class MarkdownSyntaxHighlighterTests: XCTestCase {
+    func testSharedAnalysisKeepsHeadingColorThroughoutPendingEdits() {
+        let view = NSTextView()
+        view.string = "# Heading\n\nbody"
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string),
+                                                         model: MarkdownEditorModel())
+        coordinator.textView = view
+        coordinator.usesSharedAnalysis = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+
+        for addition in ["a", "b", "日本語"] {
+            view.textStorage?.replaceCharacters(
+                in: NSRange(location: (view.string as NSString).length, length: 0), with: addition)
+            coordinator.refreshSyntax()
+            XCTAssertEqual(color(at: 2, in: view), .systemBlue,
+                           "Pending analysis must not clear the heading's color")
+        }
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+    }
+
+    func testPendingAnalysisPreservesShiftedColorsThenClearsRemovedHeading() {
+        let view = NSTextView()
+        view.string = "body\n\n# Heading"
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string),
+                                                         model: MarkdownEditorModel())
+        coordinator.textView = view
+        coordinator.usesSharedAnalysis = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+
+        view.textStorage?.replaceCharacters(in: NSRange(location: 0, length: 0), with: "😀")
+        let heading = (view.string as NSString).range(of: "Heading")
+        coordinator.refreshSyntax()
+        XCTAssertEqual(color(at: heading.location, in: view), .systemBlue)
+
+        let marker = (view.string as NSString).range(of: "# ")
+        view.textStorage?.replaceCharacters(in: marker, with: "")
+        coordinator.refreshSyntax()
+        let newHeading = (view.string as NSString).range(of: "Heading")
+        XCTAssertEqual(color(at: newHeading.location, in: view), .systemBlue)
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+        XCTAssertNil(color(at: newHeading.location, in: view))
+    }
+
+    private func color(at location: Int, in view: NSTextView) -> NSColor? {
+        view.layoutManager?.temporaryAttribute(.foregroundColor,
+            atCharacterIndex: location, effectiveRange: nil) as? NSColor
+    }
+
     func testBlockAndInlineSyntaxUseUTF16SourceRanges() {
         let text = "# 😀 Title\n> - [x] task\n| a | b |\n|---|---|\n| c | d |\n[link](path) `code` **bold**"
         let source = text as NSString

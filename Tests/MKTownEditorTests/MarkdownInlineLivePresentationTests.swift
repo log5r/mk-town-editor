@@ -5,6 +5,36 @@ import XCTest
 
 @MainActor
 final class MarkdownInlineLivePresentationTests: XCTestCase {
+    func testPendingSharedAnalysisKeepsShiftedInlineMarkersWithoutUsingOldRanges() {
+        let view = NSTextView()
+        view.string = "body\n\n# Heading"
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string),
+                                                         model: MarkdownEditorModel())
+        coordinator.textView = view
+        coordinator.usesSharedAnalysis = true
+        coordinator.usesInlineLivePresentation = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+
+        view.textStorage?.replaceCharacters(in: NSRange(location: 0, length: 0), with: "😀")
+        coordinator.refreshSyntax()
+        let marker = (view.string as NSString).range(of: "#")
+        let heading = (view.string as NSString).range(of: "Heading")
+        XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
+        XCTAssertEqual(color(at: heading.location, in: view), .systemBlue)
+
+        // A late snapshot for an intermediate edit must not replace the current colors.
+        coordinator.sharedSnapshot = DocumentSnapshot(source: "different")
+        coordinator.refreshSyntax()
+        XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
+        XCTAssertEqual(color(at: heading.location, in: view), .systemBlue)
+
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
+        coordinator.refreshSyntax()
+        XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
+        XCTAssertEqual(color(at: heading.location, in: view), .systemBlue)
+    }
+
     func testMarkersExcludeCodeBlocksAndKeepVisibleLabels() {
         let source = "# 😀 Title\n**bold** [label](target.md) `code`\n```md\n**literal** [no](url)\n```"
         let text = source as NSString

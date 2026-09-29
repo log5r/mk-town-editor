@@ -321,6 +321,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView, !textView.hasMarkedText() else { return }
             let source = textView.string
             let snapshotSource = sharedSnapshot?.source
+            // TextKit adjusts existing temporary colors as the text changes. Keep them
+            // until matching analysis arrives instead of clearing them on every keystroke.
+            // Inline marker ranges also belong to the old source and must not be reapplied.
+            if usesSharedAnalysis && snapshotSource != source { return }
             let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
                 highlightedWithSharedAnalysis != usesSharedAnalysis ||
                 highlightedWithLivePresentation != usesInlineLivePresentation

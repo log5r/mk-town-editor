@@ -34,8 +34,8 @@ final class PreviewAccessibilityTests: XCTestCase {
         XCTAssertTrue(updates.state.isStale)
 
         updates.refresh(source: "# Current", preferredSnapshot: DocumentSnapshot(source: "# Other"))
-        XCTAssertNil(updates.snapshot)
-        for _ in 0..<100 where updates.snapshot == nil {
+        XCTAssertEqual(updates.snapshot?.source, "# Frozen")
+        for _ in 0..<100 where updates.snapshot?.source != "# Current" {
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(updates.snapshot?.source, "# Current")
