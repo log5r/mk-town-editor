@@ -34,7 +34,17 @@ enum MarkdownPlainTextExporter {
                               options: MarkdownPlainTextOptions) -> String? {
         switch block.kind {
         case .blank, .horizontalRule: return nil
-        case .heading, .paragraph:
+        case .heading:
+            return inline(MarkdownRenderer.paragraphContent(block), analysis: analysis, options: options)
+        case .paragraph:
+            if let definitions = MarkdownDefinitionList(block, dialect: analysis.dialect) {
+                return definitions.entries.map { entry in
+                    let term = inline(entry.term, analysis: analysis, options: options)
+                    return entry.definitions.map {
+                        term + " — " + inline($0, analysis: analysis, options: options)
+                    }.joined(separator: "\n")
+                }.joined(separator: "\n")
+            }
             return inline(MarkdownRenderer.paragraphContent(block), analysis: analysis, options: options)
         case .quote:
             return analysis.children(of: block).compactMap {

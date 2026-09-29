@@ -191,6 +191,21 @@ enum MarkdownRenderer {
             if context.crossReferences?.markerBlockIDs.contains(block.id) == true {
                 return NSAttributedString(string: "")
             }
+            if let definitionList = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
+                let output = NSMutableAttributedString(string: "")
+                for entry in definitionList.entries {
+                    if output.length > 0 { output.append(NSAttributedString(string: "\n")) }
+                    let term = inline(entry.term, baseFont: .boldSystemFont(ofSize: 15),
+                                      references: references, footnotes: footnotes, context: context)
+                    output.append(term)
+                    for definition in entry.definitions {
+                        output.append(NSAttributedString(string: "\n    "))
+                        output.append(inline(definition, baseFont: .systemFont(ofSize: 15),
+                                             references: references, footnotes: footnotes, context: context))
+                    }
+                }
+                return output
+            }
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
                 let output = NSMutableAttributedString(attributedString:
