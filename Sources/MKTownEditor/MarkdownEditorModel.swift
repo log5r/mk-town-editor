@@ -680,6 +680,22 @@ final class MarkdownEditorModel: ObservableObject {
         return perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
+    /// Applies a peer edit without stealing focus or splitting a Unicode grapheme.
+    @discardableResult
+    func applyCollaborativeText(_ next: String, expectedSource: String) -> Bool {
+        guard let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              textView.string == expectedSource else { return false }
+        guard let change = CollaborativeTextReplacement.between(expectedSource, next) else { return true }
+        let selections = textView.selectedRanges.map(\.rangeValue).map(change.mapped)
+        let edit = MarkdownEdit(range: change.range, replacement: change.replacement,
+                                selection: selections.first ?? NSRange(location: 0, length: 0))
+        guard perform(edit, in: textView, storage: storage, focusEditor: false) else { return false }
+        textView.setSelectedRanges(selections.map(NSValue.init(range:)),
+                                   affinity: .upstream, stillSelecting: false)
+        return true
+    }
+
     @discardableResult
     func insertFootnote() -> Bool {
         guard let textView,

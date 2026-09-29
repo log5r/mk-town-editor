@@ -1,0 +1,96 @@
+import Foundation
+import XCTest
+@testable import MKTownEditor
+
+final class CollaborativeDocumentTests: XCTestCase {
+    @MainActor
+    func testPeerNameRespectsMultipeerUTF8Limit() {
+        let value = CollaborationSession.peerDisplayName(String(repeating: "あ", count: 50))
+        XCTAssertLessThanOrEqual(value.utf8.count, 63)
+        XCTAssertFalse(value.isEmpty)
+    }
+
+    func testConcurrentInsertionsConvergeAcrossDeliveryOrder() {
+        let room = UUID()
+        let host = CollaborativeDocument(text: "ab", roomID: room, siteID: "host")
+        var a = CollaborativeDocument(text: "", roomID: room, siteID: "alice")
+        var b = CollaborativeDocument(text: "", roomID: room, siteID: "bob")
+        a.merge(host)
+        b.merge(host)
+        let left = a.edit(to: "aXb")
+        let right = b.edit(to: "aYb")
+        a.apply(right)
+        b.apply(left)
+        XCTAssertEqual(a.text, b.text)
+        XCTAssertTrue(a.text.contains("X"))
+        XCTAssertTrue(a.text.contains("Y"))
+        XCTAssertTrue(a.text.hasPrefix("a"))
+        XCTAssertTrue(a.text.hasSuffix("b"))
+    }
+
+    func testOfflineMergeKeepsIndependentEditsAndDeletes() {
+        let room = UUID()
+        var host = CollaborativeDocument(text: "cat", roomID: room, siteID: "host")
+        var guest = CollaborativeDocument(text: "", roomID: room, siteID: "guest")
+        guest.merge(host)
+        _ = host.edit(to: "cats")
+        _ = guest.edit(to: "bat")
+        host.merge(guest)
+        guest.merge(host)
+        XCTAssertEqual(host.text, guest.text)
+        XCTAssertTrue(host.text.contains("b"))
+        XCTAssertTrue(host.text.contains("s"))
+        XCTAssertFalse(host.text.contains("c"))
+    }
+
+    func testDeleteBeforeInsertAndCommentRepliesConverge() throws {
+        let room = UUID()
+        var host = CollaborativeDocument(text: "hi", roomID: room, siteID: "host")
+        var guest = CollaborativeDocument(text: "", roomID: room, siteID: "guest")
+        guest.merge(host)
+        let insert = guest.edit(to: "hi!")
+        let inserted = try XCTUnwrap(insert.inserts.first)
+        host.apply(.init(deletes: [inserted.id]))
+        host.apply(insert)
+        XCTAssertEqual(host.text, "hi")
+        let added = try XCTUnwrap(host.addComment(author: "A", text: "Check", range: 0..<2))
+        guest.apply(added)
+        let id = try XCTUnwrap(host.comments.first?.id)
+        let reply = try XCTUnwrap(guest.reply(to: id, author: "B", text: "OK"))
+        let resolved = try XCTUnwrap(host.resolveComment(id))
+        host.apply(reply)
+        guest.apply(resolved)
+        XCTAssertEqual(host.comments, guest.comments)
+        XCTAssertEqual(host.comments.first?.replies.count, 1)
+        XCTAssertEqual(host.comments.first?.resolved, true)
+    }
+
+    func testUnicodeRangeAndSerialization() throws {
+        let room = UUID()
+        var document = CollaborativeDocument(text: "A👨‍👩‍👧B", roomID: room, siteID: "one")
+        XCTAssertEqual(document.characterRange(for: NSRange(location: 1, length: 8)), 1..<2)
+        XCTAssertNil(document.characterRange(for: NSRange(location: 2, length: 1)))
+        _ = document.addComment(author: "A", text: "Emoji", range: 1..<2)
+        let restored = try JSONDecoder().decode(CollaborativeDocument.self,
+                                                from: JSONEncoder().encode(document))
+        XCTAssertEqual(restored.text, document.text)
+        XCTAssertEqual(restored.comments, document.comments)
+    }
+
+    func testSequentialLocalEditsAlwaysMatchRequestedText() {
+        var document = CollaborativeDocument(text: "abc", siteID: "writer")
+        var expected = "abc"
+        for index in 0..<80 {
+            let position = index % (expected.count + 1)
+            var characters = Array(expected)
+            if index % 3 == 0, !characters.isEmpty {
+                characters.remove(at: min(position, characters.count - 1))
+            } else {
+                characters.insert(index % 2 == 0 ? "🌟" : "あ", at: position)
+            }
+            expected = String(characters)
+            _ = document.edit(to: expected)
+            XCTAssertEqual(document.text, expected, "operation \(index)")
+        }
+    }
+}
