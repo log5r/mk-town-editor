@@ -5,6 +5,7 @@ struct DocumentContext: Equatable, Sendable {
     let fileURL: URL?
     var attachmentDirectory: AttachmentDirectory = .assets
     var markdownDialect: MarkdownDialect = .extended
+    var crossReferences: MarkdownCrossReferences? = nil
 
     var directoryURL: URL? {
         guard let fileURL, fileURL.isFileURL else { return nil }

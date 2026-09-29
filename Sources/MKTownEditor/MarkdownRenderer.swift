@@ -8,17 +8,16 @@ enum MarkdownRenderer {
     )
 
     static func render(_ markdown: String,
-                       documentContext: DocumentContext = DocumentContext(fileURL: nil),
-                       includeBibliography: Bool = true) -> NSAttributedString {
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         render(MarkdownAnalysis(markdown, dialect: documentContext.markdownDialect),
-               documentContext: documentContext, includeBibliography: includeBibliography)
+               documentContext: documentContext)
     }
 
     static func render(_ analysis: MarkdownAnalysis,
-                       documentContext: DocumentContext = DocumentContext(fileURL: nil),
-                       includeBibliography: Bool = true) -> NSAttributedString {
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         var context = documentContext
         context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
         let output = NSMutableAttributedString(attributedString:
             renderSequence(analysis.rootBlocks, in: analysis, context: context))
         if !analysis.footnotes.entries.isEmpty {
@@ -35,7 +34,7 @@ enum MarkdownRenderer {
                 output.append(prefix)
             }
         }
-        if includeBibliography, analysis.dialect == .extended,
+        if analysis.dialect == .extended,
            let catalog = MarkdownCitationCatalog.load(documentURL: context.fileURL),
            catalog.hasCitation(in: analysis) {
             output.append(NSAttributedString(string: "\n\n" + String(localized: "参考文献") + "\n"))
@@ -51,6 +50,7 @@ enum MarkdownRenderer {
                            documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         var context = documentContext
         context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
         return render(block, references: analysis.references, footnotes: analysis.footnotes,
                showTaskPrefix: showTaskPrefix,
                context: context)
@@ -60,6 +60,7 @@ enum MarkdownRenderer {
                                 documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
         var context = documentContext
         context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
         return inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references,
                footnotes: analysis.footnotes,
                context: context)
@@ -69,6 +70,7 @@ enum MarkdownRenderer {
                               documentContext: DocumentContext) -> NSAttributedString {
         var context = documentContext
         context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
         return renderTree(block, in: analysis, context: context)
     }
 
@@ -147,8 +149,10 @@ enum MarkdownRenderer {
             return CodeSyntaxHighlighter.render(block.content, language: block.codeLanguage)
         case .table:
             guard let table = block.table else { return NSAttributedString(string: "") }
-            return NSAttributedString(string: ([table.header] + table.rows)
-                .map { $0.joined(separator: "\t") }.joined(separator: "\n"))
+            let content = ([table.header] + table.rows)
+                .map { $0.joined(separator: "\t") }.joined(separator: "\n")
+            let prefix = context.crossReferences?.target(forBlockID: block.id).map { "\($0.label)\n" } ?? ""
+            return NSAttributedString(string: prefix + content)
         case let .heading(level):
             let sizes: [CGFloat] = [28, 23, 20, 18, 16, 15]
             return inline(
@@ -184,16 +188,28 @@ enum MarkdownRenderer {
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
+            if context.crossReferences?.markerBlockIDs.contains(block.id) == true {
+                return NSAttributedString(string: "")
+            }
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
-                return MarkdownMathRenderer.attachment(formula, fontSize: 21)
+                let output = NSMutableAttributedString(attributedString:
+                    MarkdownMathRenderer.attachment(formula, fontSize: 21)
                     ?? NSAttributedString(string: formula.source)
+                )
+                if let target = context.crossReferences?.target(forBlockID: block.id) {
+                    output.append(NSAttributedString(string: "  \(target.label)"))
+                }
+                return output
             }
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
                                  captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
             if block.parentID != nil {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
+            }
+            if let target = context.crossReferences?.target(forBlockID: block.id) {
+                content.append(NSAttributedString(string: "\n\(target.label)"))
             }
             return content
         }
@@ -229,9 +245,11 @@ enum MarkdownRenderer {
         footnotes: MarkdownFootnoteIndex? = nil,
         context: DocumentContext
     ) -> NSMutableAttributedString {
-        let cited = context.markdownDialect == .extended && markdown.contains("[@")
-            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(markdown) ?? markdown
-            : markdown
+        let cross = context.crossReferences?.placeholders(in: markdown)
+        let linked = cross?.text ?? markdown
+        let cited = context.markdownDialect == .extended && linked.contains("[@")
+            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
+            : linked
         let layout = MarkdownImageLayout.parse(resolveReferences(
             in: MarkdownSafeHTML.previewMarkdown(cited), using: references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
@@ -347,6 +365,15 @@ enum MarkdownRenderer {
 
         MarkdownAutolink.apply(to: result)
         if let footnotes { applyFootnoteMarkers(to: result, footnotes: footnotes) }
+        for (token, target) in (cross?.targets ?? []).reversed() {
+            let range = (result.string as NSString).range(of: token)
+            guard range.location != NSNotFound,
+                  let url = URL(string: "mktown-crossref:///\(target.key)") else { continue }
+            let replacement = NSAttributedString(string: target.label, attributes: [
+                .font: baseFont, .foregroundColor: NSColor.linkColor, .link: url
+            ])
+            result.replaceCharacters(in: range, with: replacement)
+        }
         return result
     }
 

@@ -231,6 +231,7 @@ struct MarkdownAnalysis: Sendable {
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
+    let crossReferences: MarkdownCrossReferences
 
     init(_ markdown: String, dialect: MarkdownDialect = .extended) {
         self.dialect = dialect
@@ -245,10 +246,12 @@ struct MarkdownAnalysis: Sendable {
         let excluded = index.definitionRanges + [frontMatter?.sourceRange].compactMap { $0 }
         let parsed = excluded.isEmpty ? preliminary
             : Self.parse(Self.maskedRegions(in: markdown, ranges: excluded), dialect: dialect)
-        blocks = parsed.blocks.filter { block in
+        let visibleBlocks = parsed.blocks.filter { block in
             !excluded.contains { NSLocationInRange(block.sourceRange.location, $0) }
         }
+        blocks = visibleBlocks
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
+        crossReferences = MarkdownCrossReferences(blocks: dialect == .extended ? visibleBlocks : [])
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }
