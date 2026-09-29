@@ -113,6 +113,8 @@ struct MarkdownPreview: View {
                                         tableView(table, in: analysis)
                                     } else if block.kind == .blank {
                                         Text(" ").frame(height: 12)
+                                    } else if MermaidDiagram.isDiagram(block) {
+                                        MermaidDiagramView(source: block.content)
                                     } else if block.kind == .codeBlock {
                                         VStack(alignment: .leading, spacing: 4) {
                                             HStack {

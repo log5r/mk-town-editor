@@ -8084,6 +8084,56 @@
           }
         }
       }
+    },
+    "Mermaid図": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mermaid diagram"
+          }
+        }
+      }
+    },
+    "原文を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show source"
+          }
+        }
+      }
+    },
+    "図の%lld行目: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagram line %1$lld: %2$@"
+          }
+        }
+      }
+    },
+    "図の描画器が見つかりません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagram renderer is unavailable."
+          }
+        }
+      }
+    },
+    "図を表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show diagram"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
