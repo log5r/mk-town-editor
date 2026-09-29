@@ -196,6 +196,12 @@ enum MarkdownTableOperation: Equatable {
     case deleteColumn
     case alignColumn(MarkdownTable.Alignment)
     case formatTable
+    case moveRowUp
+    case moveRowDown
+    case moveColumnLeft
+    case moveColumnRight
+    case sortRowsAscending
+    case sortRowsDescending
 }
 
 enum MarkdownTableTabAction: Equatable {
@@ -324,6 +330,25 @@ enum MarkdownTableEditing {
                                 expected: table.header.count) else { return nil }
         let column = columnIndex(at: selection.location - ranges[rowIndex].location, cells: selectedCells)
         switch operation {
+        case .moveRowUp, .moveRowDown:
+            guard rowIndex >= 2 else { return nil }
+            let target = rowIndex + (operation == .moveRowUp ? -1 : 1)
+            guard target >= 2, target < ranges.count else { return nil }
+            return reorderRows(in: source, blockRange: block.sourceRange, ranges: ranges,
+                               selectedRow: rowIndex, targetRow: target,
+                               selectedColumn: column, count: table.header.count)
+        case .moveColumnLeft, .moveColumnRight:
+            let target = column + (operation == .moveColumnLeft ? -1 : 1)
+            guard target >= 0, target < table.header.count else { return nil }
+            return reorderColumns(in: source, blockRange: block.sourceRange, ranges: ranges,
+                                  selectedRow: rowIndex, selectedColumn: column,
+                                  targetColumn: target, count: table.header.count)
+        case .sortRowsAscending, .sortRowsDescending:
+            guard ranges.count > 3 else { return nil }
+            return sortRows(in: source, blockRange: block.sourceRange, ranges: ranges,
+                            selectedRow: rowIndex, selectedColumn: column,
+                            count: table.header.count,
+                            ascending: operation == .sortRowsAscending)
         case .insertRow:
             let preceding = max(rowIndex, 1)
             let position = NSMaxRange(ranges[preceding])
@@ -454,6 +479,77 @@ enum MarkdownTableEditing {
         }
     }
 
+    private static func reorderRows(in source: NSString, blockRange: NSRange,
+                                    ranges: [NSRange], selectedRow: Int, targetRow: Int,
+                                    selectedColumn: Int, count: Int) -> MarkdownEdit? {
+        let lines = ranges.map { lineContent(source.substring(with: $0)) }
+        var contents = lines.map(\.content)
+        contents.swapAt(selectedRow, targetRow)
+        return tableEdit(blockRange: blockRange, contents: contents,
+                         endings: lines.map(\.ending), selectedRow: targetRow,
+                         selectedColumn: selectedColumn, count: count)
+    }
+
+    private static func reorderColumns(in source: NSString, blockRange: NSRange,
+                                       ranges: [NSRange], selectedRow: Int,
+                                       selectedColumn: Int, targetColumn: Int,
+                                       count: Int) -> MarkdownEdit? {
+        let lines = ranges.map { lineContent(source.substring(with: $0)) }
+        var contents: [String] = []
+        for line in lines {
+            guard let cellRanges = cells(in: line.content, expected: count) else { return nil }
+            let raw = line.content as NSString
+            var values = cellRanges.map { raw.substring(with: $0).trimmingCharacters(in: .whitespaces) }
+            values.swapAt(selectedColumn, targetColumn)
+            contents.append(tablePrefix(line.content) + "| " + values.joined(separator: " | ") + " |")
+        }
+        return tableEdit(blockRange: blockRange, contents: contents,
+                         endings: lines.map(\.ending), selectedRow: selectedRow,
+                         selectedColumn: targetColumn, count: count)
+    }
+
+    private static func sortRows(in source: NSString, blockRange: NSRange,
+                                 ranges: [NSRange], selectedRow: Int,
+                                 selectedColumn: Int, count: Int,
+                                 ascending: Bool) -> MarkdownEdit? {
+        let lines = ranges.map { lineContent(source.substring(with: $0)) }
+        let dataRows = Array(2..<lines.count)
+        var keys: [Int: String] = [:]
+        for index in dataRows {
+            guard let cellRanges = cells(in: lines[index].content, expected: count) else { return nil }
+            let value = (lines[index].content as NSString).substring(with: cellRanges[selectedColumn])
+            keys[index] = value.trimmingCharacters(in: .whitespaces)
+        }
+        let sorted = dataRows.sorted { left, right in
+            let comparison = keys[left]!.localizedStandardCompare(keys[right]!)
+            if comparison == .orderedSame { return left < right }
+            return ascending ? comparison == .orderedAscending : comparison == .orderedDescending
+        }
+        let contents = lines.prefix(2).map(\.content) + sorted.map { lines[$0].content }
+        let newRow = selectedRow >= 2 ? sorted.firstIndex(of: selectedRow)!.advanced(by: 2) : selectedRow
+        return tableEdit(blockRange: blockRange, contents: contents,
+                         endings: lines.map(\.ending), selectedRow: newRow,
+                         selectedColumn: selectedColumn, count: count)
+    }
+
+    private static func tableEdit(blockRange: NSRange, contents: [String], endings: [String],
+                                  selectedRow: Int, selectedColumn: Int,
+                                  count: Int) -> MarkdownEdit? {
+        let replacement = zip(contents, endings).map(+).joined()
+        let rowStart = contents.indices.prefix(selectedRow).reduce(0) {
+            $0 + (contents[$1] as NSString).length + (endings[$1] as NSString).length
+        }
+        let rowRange = NSRange(location: rowStart,
+                               length: (contents[selectedRow] as NSString).length +
+                                   (endings[selectedRow] as NSString).length)
+        let selectedCell = cellRange(in: replacement as NSString, row: rowRange,
+                                     column: selectedColumn, count: count)
+            ?? NSRange(location: rowStart, length: 0)
+        return MarkdownEdit(range: blockRange, replacement: replacement,
+                            selection: NSRange(location: blockRange.location + selectedCell.location,
+                                               length: selectedCell.length))
+    }
+
     private static func displayWidth(_ text: String) -> Int {
         text.reduce(0) { width, character in
             guard let scalar = character.unicodeScalars.first else { return width }
@@ -471,9 +567,10 @@ enum MarkdownTableEditing {
     }
 
     private static func lineContent(_ line: String) -> (content: String, ending: String) {
-        if line.hasSuffix("\r\n") { return (String(line.dropLast(2)), "\r\n") }
-        if line.hasSuffix("\n") { return (String(line.dropLast()), "\n") }
-        if line.hasSuffix("\r") { return (String(line.dropLast()), "\r") }
+        let source = line as NSString
+        if line.hasSuffix("\r\n") { return (source.substring(to: source.length - 2), "\r\n") }
+        if line.hasSuffix("\n") { return (source.substring(to: source.length - 1), "\n") }
+        if line.hasSuffix("\r") { return (source.substring(to: source.length - 1), "\r") }
         return (line, "")
     }
 

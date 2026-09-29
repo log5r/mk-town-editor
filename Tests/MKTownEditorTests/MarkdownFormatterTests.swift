@@ -216,6 +216,16 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertEqual((down.applying(to: source) as NSString).substring(with: down.selection), "🙂")
     }
 
+    func testMoveLinesPreservesCRLFAndPreviousLineContent() {
+        let source = "前|\r\n中|\r\n後|"
+        let up = MarkdownFormatter.apply(.moveLinesUp, to: source,
+            selection: (source as NSString).range(of: "中|"))
+        XCTAssertEqual(up.applying(to: source), "中|\r\n前|\r\n後|")
+        let down = MarkdownFormatter.apply(.moveLinesDown, to: source,
+            selection: (source as NSString).range(of: "中|"))
+        XCTAssertEqual(down.applying(to: source), "前|\r\n後|\r\n中|")
+    }
+
     func testDeleteFinalLineRemovesPreviousSeparatorAndExactSelectedLines() {
         let source = "前\r\n🙂"
         let last = MarkdownFormatter.apply(.deleteLines, to: source,

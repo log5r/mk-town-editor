@@ -606,7 +606,10 @@ enum MarkdownFormatter {
     }
 
     private static func splitLineEnding(_ text: String) -> (body: String, ending: String) {
-        if text.hasSuffix("\r\n") { return (String(text.dropLast(2)), "\r\n") }
+        if text.hasSuffix("\r\n") {
+            let source = text as NSString
+            return (source.substring(to: source.length - 2), "\r\n")
+        }
         if text.hasSuffix("\n") || text.hasSuffix("\r") {
             return (String(text.dropLast()), String(text.suffix(1)))
         }
