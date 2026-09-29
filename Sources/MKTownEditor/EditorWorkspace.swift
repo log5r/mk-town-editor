@@ -1,10 +1,33 @@
 import AppKit
+import CryptoKit
 import SwiftUI
 import UniformTypeIdentifiers
+
+/// Keeps AppKit toolbar customization families separate for simultaneous document windows.
+struct EditorToolbarInstanceID: Equatable {
+    let rawValue: String
+
+    init(documentURL: URL?, uuid: UUID = UUID()) {
+        if let documentURL {
+            let path = documentURL.standardizedFileURL.path
+            let digest = SHA256.hash(data: Data(path.utf8))
+            rawValue = "mktown-editor-" + digest.prefix(12).map { String(format: "%02x", $0) }.joined()
+        } else {
+            rawValue = "mktown-editor-\(uuid.uuidString)"
+        }
+    }
+}
 
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
+
+    init(document: Binding<MarkdownDocument>, fileURL: URL?) {
+        _document = document
+        self.fileURL = fileURL
+        _toolbarInstanceID = State(initialValue: EditorToolbarInstanceID(documentURL: fileURL))
+    }
+
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @EnvironmentObject private var documentLinkNavigation: DocumentLinkNavigation
     @EnvironmentObject private var workspaceStore: WorkspaceStore
@@ -19,6 +42,7 @@ struct EditorWorkspace: View {
     @StateObject private var previewUpdates = PreviewUpdateController()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
+    @State private var toolbarInstanceID: EditorToolbarInstanceID
     @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
@@ -249,7 +273,7 @@ struct EditorWorkspace: View {
                 }
             }
         }
-        .toolbar(id: "mktown-editor") {
+        .toolbar(id: toolbarInstanceID.rawValue) {
             ToolbarItem(id: "sidebar", placement: .navigation) {
                 Button("サイドバー", systemImage: "sidebar.left") {
                     sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
