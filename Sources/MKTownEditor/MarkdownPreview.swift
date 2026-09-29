@@ -11,6 +11,7 @@ struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
+    @State private var citationRevision = 0
     @State private var inspectedImage: ImageInspectionItem?
     let markdown: String
     let documentContext: DocumentContext
@@ -39,6 +40,8 @@ struct MarkdownPreview: View {
         hasher.combine(loadsRemoteImages)
         return hasher.finalize()
     }
+
+    private var resourceRevision: Int { remoteImages.revision &+ citationRevision }
 
     var body: some View {
         Group {
@@ -162,7 +165,8 @@ struct MarkdownPreview: View {
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
                                         Text(AttributedString(MarkdownRenderer.render(note.content,
-                                            documentContext: documentContext)))
+                                            documentContext: documentContext,
+                                            includeBibliography: false)))
                                             .textSelection(.enabled)
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
@@ -175,6 +179,15 @@ struct MarkdownPreview: View {
                                         .labelStyle(.iconOnly)
                                     }
                                     .id("footnote-\(note.number)")
+                                }
+                            }
+                            if documentContext.markdownDialect == .extended,
+                               let catalog = MarkdownCitationCatalog.load(documentURL: documentContext.fileURL),
+                               catalog.hasCitation(in: analysis) {
+                                Text("参考文献").font(.headline).padding(.top, 20)
+                                ForEach(Array(catalog.entries.enumerated()), id: \.element.key) { index, entry in
+                                    Text(verbatim: "\(index + 1). \(entry.bibliographyText)")
+                                        .textSelection(.enabled)
                                 }
                             }
                         }
@@ -227,7 +240,7 @@ struct MarkdownPreview: View {
                 MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
-                                    remoteRevision: remoteImages.revision,
+                                    remoteRevision: resourceRevision,
                                     loadsExternalLinkPreviews: loadsExternalLinkPreviews,
                                     onInspectImage: { inspectedImage = ImageInspectionItem(url: $0) })
             }
@@ -245,6 +258,19 @@ struct MarkdownPreview: View {
                 }
             }
         }
+        .task(id: documentContext.fileURL) {
+            guard documentContext.fileURL != nil else { return }
+            var previous = MarkdownCitationCatalog.fingerprint(documentURL: documentContext.fileURL)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { break }
+                let current = MarkdownCitationCatalog.fingerprint(documentURL: documentContext.fileURL)
+                if current != previous {
+                    previous = current
+                    citationRevision &+= 1
+                }
+            }
+        }
         .sheet(item: $inspectedImage) { item in
             ImageInspectionView(url: item.url)
         }
@@ -253,7 +279,7 @@ struct MarkdownPreview: View {
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: documentContext,
-            zoom: zoom, remoteRevision: remoteImages.revision, theme: theme)
+            zoom: zoom, remoteRevision: resourceRevision, theme: theme)
         if case let .heading(level) = block.kind {
             Group {
                 if rendered.containsLink {
@@ -293,7 +319,7 @@ struct MarkdownPreview: View {
 
             let rendered = renderCache.render(block, in: analysis, context: documentContext,
                                               zoom: zoom, showsTaskPrefix: false,
-                                              remoteRevision: remoteImages.revision, theme: theme)
+                                              remoteRevision: resourceRevision, theme: theme)
             Group {
                 if rendered.containsLink {
                     HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
@@ -334,7 +360,7 @@ struct MarkdownPreview: View {
             ForEach(cells.indices, id: \.self) { column in
                 let rendered = renderCache.renderCell(cells[column], in: analysis,
                     context: documentContext, zoom: zoom,
-                    remoteRevision: remoteImages.revision, theme: theme)
+                    remoteRevision: resourceRevision, theme: theme)
                 Group {
                     if rendered.containsLink {
                         HoverLinkText(rendered: rendered, source: markdown, context: documentContext,

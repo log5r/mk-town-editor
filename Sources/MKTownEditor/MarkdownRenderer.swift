@@ -8,21 +8,25 @@ enum MarkdownRenderer {
     )
 
     static func render(_ markdown: String,
-                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil),
+                       includeBibliography: Bool = true) -> NSAttributedString {
         render(MarkdownAnalysis(markdown, dialect: documentContext.markdownDialect),
-               documentContext: documentContext)
+               documentContext: documentContext, includeBibliography: includeBibliography)
     }
 
     static func render(_ analysis: MarkdownAnalysis,
-                       documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
+                       documentContext: DocumentContext = DocumentContext(fileURL: nil),
+                       includeBibliography: Bool = true) -> NSAttributedString {
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
         let output = NSMutableAttributedString(attributedString:
-            renderSequence(analysis.rootBlocks, in: analysis, context: documentContext))
+            renderSequence(analysis.rootBlocks, in: analysis, context: context))
         if !analysis.footnotes.entries.isEmpty {
             output.append(NSAttributedString(string: "\n\n" + String(localized: "脚注") + "\n"))
             for note in analysis.footnotes.entries {
                 let prefix = NSMutableAttributedString(string: "\(note.number). ")
                 prefix.append(inline(note.content, baseFont: .systemFont(ofSize: 13),
-                    references: analysis.references, context: documentContext))
+                    references: analysis.references, context: context))
                 let back = NSMutableAttributedString(string: " ↩")
                 back.addAttribute(.link, value: URL(string: "mktown-footnote-back:///\(note.number)")!,
                     range: NSRange(location: 1, length: 1))
@@ -31,27 +35,41 @@ enum MarkdownRenderer {
                 output.append(prefix)
             }
         }
+        if includeBibliography, analysis.dialect == .extended,
+           let catalog = MarkdownCitationCatalog.load(documentURL: context.fileURL),
+           catalog.hasCitation(in: analysis) {
+            output.append(NSAttributedString(string: "\n\n" + String(localized: "参考文献") + "\n"))
+            for (index, entry) in catalog.entries.enumerated() {
+                output.append(NSAttributedString(string: "\(index + 1). \(entry.bibliographyText)\n"))
+            }
+        }
         return output
     }
 
     static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                            showTaskPrefix: Bool = true,
                            documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        render(block, references: analysis.references, footnotes: analysis.footnotes,
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
+        return render(block, references: analysis.references, footnotes: analysis.footnotes,
                showTaskPrefix: showTaskPrefix,
-               context: documentContext)
+               context: context)
     }
 
     static func renderTableCell(_ markdown: String, in analysis: MarkdownAnalysis,
                                 documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
-        inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references,
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
+        return inline(markdown, baseFont: .systemFont(ofSize: 14), references: analysis.references,
                footnotes: analysis.footnotes,
-               context: documentContext)
+               context: context)
     }
 
     static func renderCallout(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                               documentContext: DocumentContext) -> NSAttributedString {
-        renderTree(block, in: analysis, context: documentContext)
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
+        return renderTree(block, in: analysis, context: context)
     }
 
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
@@ -211,8 +229,11 @@ enum MarkdownRenderer {
         footnotes: MarkdownFootnoteIndex? = nil,
         context: DocumentContext
     ) -> NSMutableAttributedString {
+        let cited = context.markdownDialect == .extended && markdown.contains("[@")
+            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(markdown) ?? markdown
+            : markdown
         let layout = MarkdownImageLayout.parse(resolveReferences(
-            in: MarkdownSafeHTML.previewMarkdown(markdown), using: references))
+            in: MarkdownSafeHTML.previewMarkdown(cited), using: references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text
