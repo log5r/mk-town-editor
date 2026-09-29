@@ -38,6 +38,7 @@ struct EditorPreferencesView: View {
             Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
             Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
             Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
+            Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))
             Section("プレビュー") {
                 Picker("配色", selection: binding(\.previewTheme, default: .system)) {
                     ForEach(PreviewTheme.allCases, id: \.self) { theme in

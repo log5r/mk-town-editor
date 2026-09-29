@@ -6774,6 +6774,26 @@
           }
         }
       }
+    },
+    "外部リンクのホバー時にページ情報を取得": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fetch Page Information on External Link Hover"
+          }
+        }
+      }
+    },
+    "文書の抜粋を読み込めません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Load Document Excerpt"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

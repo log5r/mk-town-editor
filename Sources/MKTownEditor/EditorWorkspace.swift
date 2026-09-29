@@ -870,6 +870,7 @@ struct EditorWorkspace: View {
             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
             zoom: settingsStore.zoom(for: .preview),
             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
+            loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
             theme: settingsStore.app.previewTheme ?? .system,
             bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         return VStack(spacing: 0) {
@@ -1621,7 +1622,9 @@ struct EditorWorkspace: View {
                                showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
                            isEditable: !workspaceStore.isDocumentLocked(fileURL),
                            onImageDrop: dropImage, onImagePaste: pasteImage,
-                           onVisibleSourceChange: synchronizePreview(to:))
+                           onVisibleSourceChange: synchronizePreview(to:),
+                           documentContext: documentContext,
+                           loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false)
     }
 
     private func registerOpenBuffer(for url: URL) {

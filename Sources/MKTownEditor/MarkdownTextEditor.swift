@@ -18,6 +18,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var onVisibleSourceChange: ((Int) -> Void)?
+    var documentContext = DocumentContext(fileURL: nil)
+    var loadsExternalLinkPreviews = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -86,6 +88,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        textView.hoverDocumentContext = documentContext
+        textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         if textView.whitespaceOptions != whitespaceOptions ||
            textView.whitespaceTabWidth != textStyle.tabWidth {
             textView.whitespaceOptions = whitespaceOptions
@@ -119,6 +123,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
         NotificationCenter.default.removeObserver(coordinator, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         if let textView = scrollView.documentView as? NSTextView {
+            (textView as? EditorTextView)?.cancelLinkHover()
             coordinator.model.disconnect(textView, scrollView: scrollView)
         }
     }
@@ -129,6 +134,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        if textView.hoverDocumentContext != documentContext ||
+            textView.loadsExternalLinkPreviews != loadsExternalLinkPreviews {
+            textView.cancelLinkHover()
+        }
+        textView.hoverDocumentContext = documentContext
+        textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
@@ -319,9 +330,79 @@ final class EditorTextView: NSTextView {
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
     var imagePasteboard: NSPasteboard = .general
+    var hoverDocumentContext = DocumentContext(fileURL: nil)
+    var loadsExternalLinkPreviews = false
+    private let linkHover = MarkdownLinkHoverPopover()
+    private var hoverTrackingArea: NSTrackingArea?
+    private var hoverSource = ""
+    private var hoverLinks: [MarkdownHoverLink] = []
+
+    func cancelLinkHover() { linkHover.cancel() }
     var whitespaceOptions = EditorWhitespaceOptions()
     var whitespaceTabWidth = 4
     private var invisiblePlan: InvisibleCharacterPlan?
+
+    override func updateTrackingAreas() {
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+        super.updateTrackingAreas()
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseMoved, .mouseEnteredAndExited,
+                                            .activeInKeyWindow, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        let point = convert(event.locationInWindow, from: nil)
+        let source = string
+        if hoverSource != source {
+            hoverSource = source
+            hoverLinks = MarkdownLinkHover.links(in: source)
+        }
+        guard let layoutManager, let textContainer else {
+            linkHover.cancel()
+            return
+        }
+        let containerPoint = NSPoint(x: point.x - textContainerOrigin.x,
+                                     y: point.y - textContainerOrigin.y)
+        let glyph = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
+        guard glyph < layoutManager.numberOfGlyphs else {
+            linkHover.cancel()
+            return
+        }
+        let index = layoutManager.characterIndexForGlyph(at: glyph)
+        guard let link = hoverLinks.first(where: { NSLocationInRange(index, $0.sourceRange) }) else {
+            linkHover.cancel()
+            return
+        }
+        let glyphRect = layoutManager.boundingRect(
+            forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+            .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        guard glyphRect.insetBy(dx: -2, dy: -2).contains(point) else {
+            linkHover.cancel()
+            return
+        }
+        linkHover.show(link.url, relativeTo: glyphRect, of: self,
+                       context: hoverDocumentContext, source: source,
+                       loadsExternalPages: loadsExternalLinkPreviews)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        linkHover.cancel()
+        super.mouseExited(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        linkHover.cancel()
+        super.mouseDown(with: event)
+    }
+
+    override func didChangeText() {
+        linkHover.cancel()
+        super.didChangeText()
+    }
 
     func refreshInvisibles() {
         invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
