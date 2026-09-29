@@ -18,7 +18,7 @@ let package = Package(
             name: "MKTownEditor",
             dependencies: [.product(name: "SwiftMath", package: "SwiftMath")],
             path: "Sources/MKTownEditor",
-            resources: [.process("Localizable.xcstrings")]
+            resources: [.process("Localizable.xcstrings"), .copy("Resources")]
         ),
         .testTarget(
             name: "MKTownEditorTests",

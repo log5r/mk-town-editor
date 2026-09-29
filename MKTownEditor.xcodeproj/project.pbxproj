@@ -115,6 +115,9 @@
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
 		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
 		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
+		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
+		A10000000000000000000089 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* mermaid.min.js */; };
+		A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Mermaid-LICENSE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -228,6 +231,9 @@
 		A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceNamedLayoutSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000085 /* WorkspaceLayoutActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000086 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
+		A20000000000000000000087 /* MermaidDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidDiagramView.swift; sourceTree = "<group>"; };
+		A20000000000000000000088 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/mermaid.min.js; sourceTree = "<group>"; };
+		A20000000000000000000089 /* Mermaid-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/Mermaid-LICENSE.txt; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -355,6 +361,9 @@
 				A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */,
 				A20000000000000000000085 /* WorkspaceLayoutActivation.swift */,
 				A20000000000000000000086 /* MarkdownMath.swift */,
+				A20000000000000000000087 /* MermaidDiagramView.swift */,
+				A20000000000000000000088 /* mermaid.min.js */,
+				A20000000000000000000089 /* Mermaid-LICENSE.txt */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -416,7 +425,7 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000061 /* Localizable.xcstrings in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000061 /* Localizable.xcstrings in Resources */, A10000000000000000000089 /* mermaid.min.js in Resources */, A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -531,6 +540,7 @@
 				A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */,
 				A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */,
 				A10000000000000000000086 /* MarkdownMath.swift in Sources */,
+				A10000000000000000000088 /* MermaidDiagramView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
