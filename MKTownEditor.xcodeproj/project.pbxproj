@@ -141,6 +141,8 @@
 		A1000000000000000000009F /* CollaborationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009E /* CollaborationSession.swift */; };
 		A100000000000000000000A0 /* CollaborationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009F /* CollaborationSheet.swift */; };
 		A100000000000000000000A1 /* CollaborativeTextReplacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A0 /* CollaborativeTextReplacement.swift */; };
+		A100000000000000000000A2 /* AISuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A1 /* AISuggestion.swift */; };
+		A100000000000000000000A3 /* AISuggestionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A2 /* AISuggestionSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -280,6 +282,8 @@
 		A2000000000000000000009E /* CollaborationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborationSession.swift; sourceTree = "<group>"; };
 		A2000000000000000000009F /* CollaborationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborationSheet.swift; sourceTree = "<group>"; };
 		A200000000000000000000A0 /* CollaborativeTextReplacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborativeTextReplacement.swift; sourceTree = "<group>"; };
+		A200000000000000000000A1 /* AISuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestion.swift; sourceTree = "<group>"; };
+		A200000000000000000000A2 /* AISuggestionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestionSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -433,6 +437,8 @@
 				A2000000000000000000009E /* CollaborationSession.swift */,
 				A2000000000000000000009F /* CollaborationSheet.swift */,
 				A200000000000000000000A0 /* CollaborativeTextReplacement.swift */,
+				A200000000000000000000A1 /* AISuggestion.swift */,
+				A200000000000000000000A2 /* AISuggestionSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -633,6 +639,8 @@
 				A1000000000000000000009F /* CollaborationSession.swift in Sources */,
 				A100000000000000000000A0 /* CollaborationSheet.swift in Sources */,
 				A100000000000000000000A1 /* CollaborativeTextReplacement.swift in Sources */,
+				A100000000000000000000A2 /* AISuggestion.swift in Sources */,
+				A100000000000000000000A3 /* AISuggestionSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
