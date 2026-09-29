@@ -26,6 +26,7 @@ struct MarkdownPreview: View {
     var showsFrontMatter = false
     var zoom: Double = 1
     var loadsRemoteImages = false
+    var loadsExternalLinkPreviews = false
     var theme: PreviewTheme = .system
     var bodyWidth = 900
 
@@ -202,6 +203,7 @@ struct MarkdownPreview: View {
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
                                     remoteRevision: remoteImages.revision,
+                                    loadsExternalLinkPreviews: loadsExternalLinkPreviews,
                                     onInspectImage: { inspectedImage = ImageInspectionItem(url: $0) })
             }
         }
@@ -228,15 +230,27 @@ struct MarkdownPreview: View {
         let rendered = renderCache.render(block, in: analysis, context: documentContext,
             zoom: zoom, remoteRevision: remoteImages.revision, theme: theme)
         if case let .heading(level) = block.kind {
-            Text(AttributedString(rendered))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
+            Group {
+                if rendered.containsLink {
+                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                                  loadsExternalPages: loadsExternalLinkPreviews)
+                } else {
+                    Text(AttributedString(rendered)).textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
         } else {
-            Text(AttributedString(rendered))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if rendered.containsLink {
+                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                                  loadsExternalPages: loadsExternalLinkPreviews)
+                } else {
+                    Text(AttributedString(rendered)).textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -252,12 +266,18 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            Text(AttributedString(renderCache.render(block, in: analysis, context: documentContext,
-                                                    zoom: zoom, showsTaskPrefix: false,
-                                                    remoteRevision: remoteImages.revision,
-                                                    theme: theme)))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            let rendered = renderCache.render(block, in: analysis, context: documentContext,
+                                              zoom: zoom, showsTaskPrefix: false,
+                                              remoteRevision: remoteImages.revision, theme: theme)
+            Group {
+                if rendered.containsLink {
+                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                                  loadsExternalPages: loadsExternalLinkPreviews)
+                } else {
+                    Text(AttributedString(rendered)).textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -287,15 +307,22 @@ struct MarkdownPreview: View {
     ) -> some View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
-                Text(AttributedString(renderCache.renderCell(cells[column], in: analysis,
+                let rendered = renderCache.renderCell(cells[column], in: analysis,
                     context: documentContext, zoom: zoom,
-                    remoteRevision: remoteImages.revision, theme: theme)))
+                    remoteRevision: remoteImages.revision, theme: theme)
+                Group {
+                    if rendered.containsLink {
+                        HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                                      loadsExternalPages: loadsExternalLinkPreviews)
+                    } else {
+                        Text(AttributedString(rendered)).textSelection(.enabled)
+                    }
+                }
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
                     .background(rowNumber == 0 ? Color.secondary.opacity(0.08) : Color.clear)
                     .overlay(Rectangle().stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
-                    .textSelection(.enabled)
                     .accessibilityLabel(PreviewAccessibility.tableCellLabel(
                         header: table.header[column], value: cells[column], rowNumber: rowNumber))
                     .accessibilityAddTraits(rowNumber == 0 ? .isHeader : [])
@@ -317,6 +344,86 @@ private struct PreviewBlockOriginsKey: PreferenceKey {
 
     static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+private extension NSAttributedString {
+    var containsLink: Bool {
+        var found = false
+        enumerateAttribute(.link, in: NSRange(location: 0, length: length)) { value, _, stop in
+            if value != nil {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
+    }
+}
+
+private struct HoverLinkText: NSViewRepresentable {
+    @Environment(\.openURL) private var openURL
+    let rendered: NSAttributedString
+    let source: String
+    let context: DocumentContext
+    let loadsExternalPages: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverPreviewTextView {
+        let view = HoverPreviewTextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.drawsBackground = false
+        view.textContainerInset = .zero
+        view.isVerticallyResizable = true
+        view.isHorizontallyResizable = false
+        view.textContainer?.widthTracksTextView = false
+        view.delegate = context.coordinator
+        updateNSView(view, context: context)
+        return view
+    }
+
+    static func dismantleNSView(_ view: HoverPreviewTextView, coordinator: Coordinator) {
+        view.cancelHover()
+    }
+
+    func updateNSView(_ view: HoverPreviewTextView, context: Context) {
+        context.coordinator.onOpenURL = { url in openURL(url) }
+        if view.hoverDocumentContext != self.context ||
+            view.hoverSource != source ||
+            view.loadsExternalLinkPreviews != loadsExternalPages {
+            view.cancelHover()
+        }
+        view.hoverDocumentContext = self.context
+        view.hoverSource = source
+        view.loadsExternalLinkPreviews = loadsExternalPages
+        if !view.attributedString().isEqual(to: rendered) {
+            view.textStorage?.setAttributedString(rendered)
+            view.cancelHover()
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView view: HoverPreviewTextView,
+                      context: Context) -> CGSize? {
+        guard let container = view.textContainer, let manager = view.layoutManager else { return nil }
+        let width = max(1, proposal.width ?? 500)
+        container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        view.frame.size.width = width
+        manager.ensureLayout(for: container)
+        let height = manager.usedRect(for: container).height
+        return CGSize(width: width, height: max(1, height))
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var onOpenURL: ((URL) -> Void)?
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:)) else {
+                return false
+            }
+            onOpenURL?(url)
+            return true
+        }
     }
 }
 
@@ -349,9 +456,14 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     let onOpenDocument: ((URL) -> Void)?
     let zoom: Double
     let remoteRevision: Int
+    let loadsExternalLinkPreviews: Bool
     let onInspectImage: (URL) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        (scrollView.documentView as? HoverPreviewTextView)?.cancelHover()
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -359,12 +471,15 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
 
-        let textView = NSTextView()
+        let textView = HoverPreviewTextView()
         textView.delegate = context.coordinator
         context.coordinator.onOpenHeading = onOpenHeading
         context.coordinator.onOpenDocument = onOpenDocument
         context.coordinator.onInspectImage = onInspectImage
         context.coordinator.documentContext = documentContext
+        textView.hoverDocumentContext = documentContext
+        textView.hoverSource = markdown
+        textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -384,11 +499,19 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let textView = scrollView.documentView as? HoverPreviewTextView else { return }
         context.coordinator.onOpenHeading = onOpenHeading
         context.coordinator.onOpenDocument = onOpenDocument
         context.coordinator.onInspectImage = onInspectImage
         context.coordinator.documentContext = documentContext
+        if textView.hoverDocumentContext != documentContext ||
+            textView.hoverSource != markdown ||
+            textView.loadsExternalLinkPreviews != loadsExternalLinkPreviews {
+            textView.cancelHover()
+        }
+        textView.hoverDocumentContext = documentContext
+        textView.hoverSource = markdown
+        textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         update(textView, coordinator: context.coordinator)
     }
 
@@ -439,6 +562,70 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom
         coordinator.renderedRemoteRevision = remoteRevision
+    }
+}
+
+final class HoverPreviewTextView: NSTextView {
+    var hoverDocumentContext = DocumentContext(fileURL: nil)
+    var hoverSource = ""
+    var loadsExternalLinkPreviews = false
+    private let linkHover = MarkdownLinkHoverPopover()
+    private var hoverTrackingArea: NSTrackingArea?
+
+    func cancelHover() { linkHover.cancel() }
+
+    override func updateTrackingAreas() {
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+        super.updateTrackingAreas()
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseMoved, .mouseEnteredAndExited,
+                                            .activeInKeyWindow, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        let point = convert(event.locationInWindow, from: nil)
+        guard let storage = textStorage, let layoutManager, let textContainer else {
+            linkHover.cancel()
+            return
+        }
+        let containerPoint = NSPoint(x: point.x - textContainerOrigin.x,
+                                     y: point.y - textContainerOrigin.y)
+        let glyph = layoutManager.glyphIndex(for: containerPoint, in: textContainer)
+        guard glyph < layoutManager.numberOfGlyphs else {
+            linkHover.cancel()
+            return
+        }
+        let index = layoutManager.characterIndexForGlyph(at: glyph)
+        guard index < storage.length,
+              let raw = storage.attribute(.link, at: index, effectiveRange: nil),
+              let url = (raw as? URL) ?? (raw as? String).flatMap(URL.init(string:)) else {
+            linkHover.cancel()
+            return
+        }
+        let glyphRect = layoutManager.boundingRect(
+            forGlyphRange: NSRange(location: glyph, length: 1), in: textContainer)
+            .offsetBy(dx: textContainerOrigin.x, dy: textContainerOrigin.y)
+        guard glyphRect.insetBy(dx: -2, dy: -2).contains(point) else {
+            linkHover.cancel()
+            return
+        }
+        linkHover.show(url, relativeTo: glyphRect, of: self,
+                       context: hoverDocumentContext, source: hoverSource,
+                       loadsExternalPages: loadsExternalLinkPreviews)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        linkHover.cancel()
+        super.mouseExited(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        linkHover.cancel()
+        super.mouseDown(with: event)
     }
 }
 
