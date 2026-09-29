@@ -12,8 +12,10 @@ enum MarkdownHTMLExporter {
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })
+        var context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
+        context.crossReferences = analysis.crossReferences
         var body = sequence(analysis.rootBlocks, analysis: analysis,
-                            context: DocumentContext(fileURL: documentURL, markdownDialect: dialect), anchors: anchors)
+                            context: context, anchors: anchors)
         for note in analysis.footnotes.entries {
             let token = "<sup><a href=\"#fn-\(note.number)\""
             if let range = body.range(of: token) {
@@ -25,7 +27,7 @@ enum MarkdownHTMLExporter {
             for note in analysis.footnotes.entries {
                 body += "<li id=\"fn-\(note.number)\">" +
                     inline(note.content, analysis: analysis,
-                           context: DocumentContext(fileURL: documentURL, markdownDialect: dialect)) +
+                           context: context) +
                     " <a href=\"#fnref-\(note.number)\" aria-label=\"本文に戻る\">↩</a></li>"
             }
             body += "</ol></section>"
@@ -149,16 +151,22 @@ enum MarkdownHTMLExporter {
             let anchor = escape(anchors[block.id] ?? "section")
             return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context))</h\(level)>\n"
         case .paragraph:
+            if analysis.crossReferences.markerBlockIDs.contains(block.id) { return "" }
+            let target = analysis.crossReferences.target(forBlockID: block.id)
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
-                return "<div class=\"math-block\">\(MarkdownMathRenderer.htmlImage(formula, fontSize: 21) ?? escape(formula.source))</div>\n"
+                let id = target.map { " id=\"\(escape($0.key))\"" } ?? ""
+                let number = target.map { "<span class=\"number\">\(escape($0.label))</span>" } ?? ""
+                return "<div class=\"math-block\"\(id)>\(MarkdownMathRenderer.htmlImage(formula, fontSize: 21) ?? escape(formula.source))\(number)</div>\n"
             }
             let content = MarkdownRenderer.paragraphContent(block)
             let layout = MarkdownImageLayout.parse(
                 MarkdownRenderer.resolveReferences(in: content, using: analysis.references))
             let rendered = inline(content, analysis: analysis, context: context)
             if let caption = layout.standaloneCaption {
-                return "<figure>\(rendered)<figcaption>\(escape(caption))</figcaption></figure>\n"
+                let id = target.map { " id=\"\(escape($0.key))\"" } ?? ""
+                let number = target.map { "\(escape($0.label)) " } ?? ""
+                return "<figure\(id)>\(rendered)<figcaption>\(number)\(escape(caption))</figcaption></figure>\n"
             }
             return "<p>\(rendered)</p>\n"
         case .quote:
@@ -174,6 +182,7 @@ enum MarkdownHTMLExporter {
         case .horizontalRule: return "<hr>\n"
         case .table:
             guard let table = block.table else { return "" }
+            let target = analysis.crossReferences.target(forBlockID: block.id)
             func cell(_ text: String, column: Int, tag: String) -> String {
                 let alignment = switch table.alignments[column] {
                 case .leading: "left"
@@ -186,7 +195,9 @@ enum MarkdownHTMLExporter {
             let rows = table.rows.map { row in
                 "<tr>" + row.enumerated().map { cell($0.element, column: $0.offset, tag: "td") }.joined() + "</tr>\n"
             }.joined()
-            return "<table><thead><tr>\(header)</tr></thead><tbody>\(rows)</tbody></table>\n"
+            let id = target.map { " id=\"\(escape($0.key))\"" } ?? ""
+            let caption = target.map { "<caption>\(escape($0.label))</caption>" } ?? ""
+            return "<table\(id)>\(caption)<thead><tr>\(header)</tr></thead><tbody>\(rows)</tbody></table>\n"
         case .unorderedList, .orderedList:
             return ""
         }
@@ -194,9 +205,11 @@ enum MarkdownHTMLExporter {
 
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
                                context: DocumentContext) -> String {
-        let cited = context.markdownDialect == .extended && markdown.contains("[@")
-            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(markdown) ?? markdown
-            : markdown
+        let cross = context.crossReferences?.placeholders(in: markdown)
+        let linked = cross?.text ?? markdown
+        let cited = context.markdownDialect == .extended && linked.contains("[@")
+            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
+            : linked
         let layout = MarkdownImageLayout.parse(
             MarkdownRenderer.resolveReferences(
                 in: MarkdownSafeHTML.previewMarkdown(cited), using: analysis.references))
@@ -208,7 +221,16 @@ enum MarkdownHTMLExporter {
             failurePolicy: .returnPartiallyParsedIfPossible
         )
         guard let parsed = try? AttributedString(markdown: resolved, options: options) else {
-            return escape(resolved)
+            var fallback = escape(resolved)
+            for (token, formula) in math.formulas {
+                fallback = fallback.replacingOccurrences(of: token,
+                    with: MarkdownMathRenderer.htmlImage(formula) ?? escape(formula.source))
+            }
+            for (token, target) in cross?.targets ?? [] {
+                fallback = fallback.replacingOccurrences(of: token,
+                    with: "<a href=\"#\(escape(target.key))\">\(escape(target.label))</a>")
+            }
+            return fallback
         }
         let value = NSMutableAttributedString(parsed)
         MarkdownAutolink.apply(to: value)
@@ -248,6 +270,10 @@ enum MarkdownHTMLExporter {
         for (token, formula) in math.formulas {
             html = html.replacingOccurrences(of: token,
                 with: MarkdownMathRenderer.htmlImage(formula) ?? escape(formula.source))
+        }
+        for (token, target) in cross?.targets ?? [] {
+            html = html.replacingOccurrences(of: token,
+                with: "<a href=\"#\(escape(target.key))\">\(escape(target.label))</a>")
         }
         return html
     }

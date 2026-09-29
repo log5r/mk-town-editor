@@ -8334,6 +8334,36 @@
           }
         }
       }
+    },
+    "図%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Figure %lld"
+          }
+        }
+      }
+    },
+    "表%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Table %lld"
+          }
+        }
+      }
+    },
+    "式(%lld)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Equation (%lld)"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

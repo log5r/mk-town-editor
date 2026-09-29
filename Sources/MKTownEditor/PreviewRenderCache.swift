@@ -8,6 +8,7 @@ struct PreviewLayoutIndex {
     init(_ analysis: MarkdownAnalysis) {
         let byID = Dictionary(uniqueKeysWithValues: analysis.blocks.map { ($0.id, $0) })
         visibleBlocks = analysis.blocks.filter { block in
+            if analysis.crossReferences.markerBlockIDs.contains(block.id) { return false }
             if block.calloutKind != nil { return true }
             if block.kind == .quote { return false }
             var parent = block.parentID
@@ -80,6 +81,7 @@ final class PreviewRenderCache: ObservableObject {
     private var cells: [String: NSAttributedString] = [:]
     private var references: [String: ReferenceSignature]?
     private var footnotes: [FootnoteSignature]?
+    private var crossReferences: MarkdownCrossReferences?
     private var context: DocumentContext?
     private var zoom: Double?
     private var remoteRevision: Int?
@@ -91,6 +93,7 @@ final class PreviewRenderCache: ObservableObject {
                 showsTaskPrefix: Bool = true, remoteRevision: Int = 0,
                 theme: PreviewTheme = .system) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
+                crossReferences: analysis.crossReferences,
                 context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
         if let cached = blocks[signature] { return cached }
@@ -109,6 +112,7 @@ final class PreviewRenderCache: ObservableObject {
                     zoom: Double, remoteRevision: Int = 0,
                     theme: PreviewTheme = .system) -> NSAttributedString {
         prepare(references: analysis.references, footnotes: analysis.footnotes,
+                crossReferences: analysis.crossReferences,
                 context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         if let cached = cells[markdown] { return cached }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(
@@ -122,6 +126,7 @@ final class PreviewRenderCache: ObservableObject {
 
     private func prepare(references newReferences: [String: MarkdownReference],
                          footnotes newFootnotes: MarkdownFootnoteIndex,
+                         crossReferences newCrossReferences: MarkdownCrossReferences,
                          context newContext: DocumentContext, zoom newZoom: Double,
                          remoteRevision newRemoteRevision: Int, theme newTheme: PreviewTheme) {
         let signatures = newReferences.mapValues {
@@ -131,12 +136,14 @@ final class PreviewRenderCache: ObservableObject {
             FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
         }
         guard references != signatures || footnotes != noteSignatures ||
+              crossReferences != newCrossReferences ||
               context != newContext || zoom != newZoom ||
               remoteRevision != newRemoteRevision || theme != newTheme else { return }
         blocks.removeAll()
         cells.removeAll()
         references = signatures
         footnotes = noteSignatures
+        crossReferences = newCrossReferences
         context = newContext
         zoom = newZoom
         remoteRevision = newRemoteRevision

@@ -55,6 +55,7 @@ struct MarkdownPreview: View {
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
                 markdown.contains("![[") ||
+                !analysis.crossReferences.targets.isEmpty ||
                 (documentContext.markdownDialect == .extended && markdown.contains("$")) ||
                 !analysis.footnotes.entries.isEmpty ||
                 theme != .system || bodyWidth != 900 ||
@@ -109,11 +110,21 @@ struct MarkdownPreview: View {
                                     } else if block.kind == .paragraph,
                                               let formula = MarkdownMath.displayFormula(block.content),
                                               MarkdownMathRenderer.label(formula) != nil {
-                                        MarkdownMathView(formula: formula)
-                                            .frame(maxWidth: .infinity)
-                                            .accessibilityLabel(formula.latex)
+                                        HStack {
+                                            MarkdownMathView(formula: formula)
+                                                .accessibilityLabel(formula.latex)
+                                            if let target = analysis.crossReferences.target(forBlockID: block.id) {
+                                                Text(target.label).foregroundStyle(.secondary)
+                                            }
+                                        }
+                                        .frame(maxWidth: .infinity)
                                     } else if let table = block.table {
-                                        tableView(table, in: analysis)
+                                        VStack(alignment: .leading) {
+                                            if let target = analysis.crossReferences.target(forBlockID: block.id) {
+                                                Text(target.label).font(.caption).foregroundStyle(.secondary)
+                                            }
+                                            tableView(table, in: analysis)
+                                        }
                                     } else if block.kind == .blank {
                                         Text(" ").frame(height: 12)
                                     } else if MermaidDiagram.isDiagram(block) {
@@ -164,9 +175,8 @@ struct MarkdownPreview: View {
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
-                                        Text(AttributedString(MarkdownRenderer.render(note.content,
-                                            documentContext: documentContext,
-                                            includeBibliography: false)))
+                                        Text(AttributedString(MarkdownRenderer.renderTableCell(note.content,
+                                            in: analysis, documentContext: documentContext)))
                                             .textSelection(.enabled)
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
@@ -221,6 +231,13 @@ struct MarkdownPreview: View {
                         }
                         if url.scheme == "mktown-footnote" {
                             proxy.scrollTo("footnote-\(url.lastPathComponent)", anchor: .center)
+                            return .handled
+                        }
+                        if url.scheme == "mktown-crossref",
+                           let target = analysis.crossReferences.targets.first(where: {
+                               $0.key == url.lastPathComponent
+                           }) {
+                            proxy.scrollTo(target.blockID, anchor: .center)
                             return .handled
                         }
                         if let fragment = MarkdownHeadingIndex.localFragment(in: url),
