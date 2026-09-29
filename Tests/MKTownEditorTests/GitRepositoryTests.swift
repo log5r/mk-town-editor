@@ -42,7 +42,71 @@ final class GitRepositoryTests: XCTestCase {
             in: snapshot))
     }
 
-    private func git(_ arguments: [String], in folder: URL) throws {
+    func testStagesUnstagesAndCommitsOnlyReviewedIndex() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try git(["init", "--quiet"], in: folder)
+        let first = folder.appendingPathComponent("first.md")
+        let second = folder.appendingPathComponent("second.md")
+        try "old".write(to: first, atomically: true, encoding: .utf8)
+        try "old".write(to: second, atomically: true, encoding: .utf8)
+        try git(["add", "--", "first.md", "second.md"], in: folder)
+        try git(["-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                 "commit", "--quiet", "-m", "Base"], in: folder)
+        try "new".write(to: first, atomically: true, encoding: .utf8)
+        try "new".write(to: second, atomically: true, encoding: .utf8)
+        try GitRepository.stage(["first.md"], in: folder)
+        XCTAssertTrue(try GitRepository.diff(for: "first.md", in: folder, staged: true).contains("+new"))
+        XCTAssertTrue(try GitRepository.diff(for: "second.md", in: folder, staged: true).isEmpty)
+        try GitRepository.unstage(["first.md"], in: folder)
+        XCTAssertFalse(try GitRepository.statusEntries(in: folder).contains(where: \.isStaged))
+        try git(["config", "user.name", "Test"], in: folder)
+        try git(["config", "user.email", "test@example.invalid"], in: folder)
+        try GitRepository.stage(["first.md"], in: folder)
+        try GitRepository.commit(message: "Update first", in: folder)
+        let entries = try GitRepository.statusEntries(in: folder)
+        XCTAssertEqual(entries.map(\.path), ["second.md"])
+        XCTAssertFalse(entries[0].isStaged)
+        XCTAssertEqual(try GitRepository.load(for: first).history.first?.subject, "Update first")
+    }
+
+    func testConflictStatusIsSeparatedFromOrdinaryStage() {
+        let entries = GitRepository.parseStatus("UU conflict.md\0 M normal.md\0")
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertTrue(entries[0].isConflicted)
+        XCTAssertFalse(entries[0].isStaged)
+        XCTAssertFalse(entries[1].isConflicted)
+        XCTAssertFalse(entries[1].isStaged)
+    }
+
+    func testConflictRequiresSavedResolutionBeforeStaging() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try git(["init", "--quiet"], in: folder)
+        try git(["config", "user.name", "Test"], in: folder)
+        try git(["config", "user.email", "test@example.invalid"], in: folder)
+        let file = folder.appendingPathComponent("conflict.md")
+        try "base\n".write(to: file, atomically: true, encoding: .utf8)
+        try git(["add", "--", "conflict.md"], in: folder)
+        try git(["commit", "--quiet", "-m", "Base"], in: folder)
+        try git(["checkout", "--quiet", "-b", "side"], in: folder)
+        try "side\n".write(to: file, atomically: true, encoding: .utf8)
+        try git(["commit", "--quiet", "-am", "Side"], in: folder)
+        try git(["checkout", "--quiet", "-"], in: folder)
+        try "main\n".write(to: file, atomically: true, encoding: .utf8)
+        try git(["commit", "--quiet", "-am", "Main"], in: folder)
+        try git(["merge", "side"], in: folder, expectedStatus: 1)
+        XCTAssertTrue(try GitRepository.statusEntries(in: folder)[0].isConflicted)
+        XCTAssertThrowsError(try GitRepository.stage(["conflict.md"], in: folder))
+        XCTAssertThrowsError(try GitRepository.stageResolvedConflict("conflict.md", in: folder))
+        try "resolved\n".write(to: file, atomically: true, encoding: .utf8)
+        try GitRepository.stageResolvedConflict("conflict.md", in: folder)
+        XCTAssertFalse(try GitRepository.statusEntries(in: folder)[0].isConflicted)
+    }
+
+    private func git(_ arguments: [String], in folder: URL, expectedStatus: Int32 = 0) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = arguments
@@ -51,6 +115,6 @@ final class GitRepositoryTests: XCTestCase {
         process.standardError = Pipe()
         try process.run()
         process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 0, "git \(arguments) failed")
+        XCTAssertEqual(process.terminationStatus, expectedStatus, "git \(arguments) failed")
     }
 }

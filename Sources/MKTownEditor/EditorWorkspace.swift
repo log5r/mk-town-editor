@@ -90,6 +90,7 @@ struct EditorWorkspace: View {
     @State private var showingAttachmentAudit = false
     @State private var showingSnapshotHistory = false
     @State private var showingGitHistory = false
+    @State private var showingGitCommit = false
     @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
@@ -327,6 +328,12 @@ struct EditorWorkspace: View {
                 }
                 .disabled(fileURL == nil)
             }
+            ToolbarItem(id: "git-commit", placement: .primaryAction) {
+                Button("Gitのステージとコミット", systemImage: "checkmark.circle") {
+                    showingGitCommit = true
+                }
+                .disabled(fileURL == nil)
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -378,6 +385,16 @@ struct EditorWorkspace: View {
         navigationView
         .sheet(isPresented: $showingGitHistory) {
             if let fileURL { GitHistorySheet(fileURL: fileURL) }
+        }
+        .sheet(isPresented: $showingGitCommit) {
+            if let fileURL {
+                GitCommitSheet(fileURL: fileURL) { url in
+                    Task {
+                        do { try await openDocument(at: url) }
+                        catch { workspaceOpenError = error.localizedDescription }
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
