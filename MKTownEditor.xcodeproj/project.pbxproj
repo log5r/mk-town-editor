@@ -128,6 +128,8 @@
 		A10000000000000000000092 /* MarkdownMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000091 /* MarkdownMedia.swift */; };
 		A10000000000000000000093 /* MarkdownSlideDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000092 /* MarkdownSlideDeck.swift */; };
 		A10000000000000000000094 /* MarkdownSlidePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000093 /* MarkdownSlidePresentation.swift */; };
+		A10000000000000000000095 /* GitRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000094 /* GitRepository.swift */; };
+		A10000000000000000000096 /* GitHistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000095 /* GitHistorySheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -254,6 +256,8 @@
 		A20000000000000000000091 /* MarkdownMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMedia.swift; sourceTree = "<group>"; };
 		A20000000000000000000092 /* MarkdownSlideDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSlideDeck.swift; sourceTree = "<group>"; };
 		A20000000000000000000093 /* MarkdownSlidePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSlidePresentation.swift; sourceTree = "<group>"; };
+		A20000000000000000000094 /* GitRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitRepository.swift; sourceTree = "<group>"; };
+		A20000000000000000000095 /* GitHistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHistorySheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -394,6 +398,8 @@
 				A20000000000000000000091 /* MarkdownMedia.swift */,
 				A20000000000000000000092 /* MarkdownSlideDeck.swift */,
 				A20000000000000000000093 /* MarkdownSlidePresentation.swift */,
+				A20000000000000000000094 /* GitRepository.swift */,
+				A20000000000000000000095 /* GitHistorySheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -581,6 +587,8 @@
 				A10000000000000000000092 /* MarkdownMedia.swift in Sources */,
 				A10000000000000000000093 /* MarkdownSlideDeck.swift in Sources */,
 				A10000000000000000000094 /* MarkdownSlidePresentation.swift in Sources */,
+				A10000000000000000000095 /* GitRepository.swift in Sources */,
+				A10000000000000000000096 /* GitHistorySheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
