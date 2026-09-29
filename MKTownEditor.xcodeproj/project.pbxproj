@@ -137,6 +137,10 @@
 		A1000000000000000000009B /* DeclarativeExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009A /* DeclarativeExtension.swift */; };
 		A1000000000000000000009C /* Publication.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009B /* Publication.swift */; };
 		A1000000000000000000009D /* PublicationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009C /* PublicationSheet.swift */; };
+		A1000000000000000000009E /* CollaborativeDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009D /* CollaborativeDocument.swift */; };
+		A1000000000000000000009F /* CollaborationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009E /* CollaborationSession.swift */; };
+		A100000000000000000000A0 /* CollaborationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000009F /* CollaborationSheet.swift */; };
+		A100000000000000000000A1 /* CollaborativeTextReplacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A0 /* CollaborativeTextReplacement.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -272,6 +276,10 @@
 		A2000000000000000000009A /* DeclarativeExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeclarativeExtension.swift; sourceTree = "<group>"; };
 		A2000000000000000000009B /* Publication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Publication.swift; sourceTree = "<group>"; };
 		A2000000000000000000009C /* PublicationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicationSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000009D /* CollaborativeDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborativeDocument.swift; sourceTree = "<group>"; };
+		A2000000000000000000009E /* CollaborationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborationSession.swift; sourceTree = "<group>"; };
+		A2000000000000000000009F /* CollaborationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborationSheet.swift; sourceTree = "<group>"; };
+		A200000000000000000000A0 /* CollaborativeTextReplacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborativeTextReplacement.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -421,6 +429,10 @@
 				A2000000000000000000009A /* DeclarativeExtension.swift */,
 				A2000000000000000000009B /* Publication.swift */,
 				A2000000000000000000009C /* PublicationSheet.swift */,
+				A2000000000000000000009D /* CollaborativeDocument.swift */,
+				A2000000000000000000009E /* CollaborationSession.swift */,
+				A2000000000000000000009F /* CollaborationSheet.swift */,
+				A200000000000000000000A0 /* CollaborativeTextReplacement.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -617,6 +629,10 @@
 				A1000000000000000000009B /* DeclarativeExtension.swift in Sources */,
 				A1000000000000000000009C /* Publication.swift in Sources */,
 				A1000000000000000000009D /* PublicationSheet.swift in Sources */,
+				A1000000000000000000009E /* CollaborativeDocument.swift in Sources */,
+				A1000000000000000000009F /* CollaborationSession.swift in Sources */,
+				A100000000000000000000A0 /* CollaborationSheet.swift in Sources */,
+				A100000000000000000000A1 /* CollaborativeTextReplacement.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

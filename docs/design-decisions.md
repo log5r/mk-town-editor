@@ -419,3 +419,9 @@ UIの原文言語は日本語とし、`Localizable.xcstrings`に英語訳を置�
 - [WordPress投稿API](https://developer.wordpress.org/rest-api/reference/posts/)は`draft`と`publish`を分け、Markdownを既存のHTML書き出し処理で本文フラグメントへ変換してHTTPSで新規投稿する。[Application Passwords](https://developer.wordpress.org/rest-api/using-the-rest-api/authentication/)をBasic認証へ使用し、通常のログインパスワードは求めない。
 - [GitHub Contents API](https://docs.github.com/en/rest/repos/contents)は指定リポジトリ・ブランチに新規ファイルだけを作る。Jekyllの公開元ルートを前提に、下書きは`_drafts/<slug>.md`、公開記事は`_posts/<日付>-<slug>.md`へフロントマター付きで送る。GitHub Pagesの[公開元設定](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)が別のブランチ・フォルダ・ワークフローなら、その構成に合わせた設定が必要である。
 - 画面には送信URLと送信本文を確認用に表示し、文書や入力を変えたら計画を作り直す。認証情報は[macOS Keychain](https://developer.apple.com/documentation/security/ksecclassgenericpassword)へサービス・公開先・アカウント単位で保存し、通常設定には含めない。リダイレクトを拒否して認証ヘッダーの別ホストへの転送を防ぐ。ネットワーク送信自体は実アカウントなしでは試しておらず、テストはリクエスト生成・宛先検証・下書き／公開の分離を対象とする。
+
+## Z08 近くの利用者との共同編集（2026-09-29）
+
+- [Multipeer Connectivity](https://developer.apple.com/documentation/multipeerconnectivity/mcsession)の暗号化必須セッションで近くのMacを発見し、ホストが表示する6桁の参加コードで接続する。接続中の参加者を表示し、各参加者が離脱できる。AppleはこのAPIを非推奨としてNetwork Frameworkを勧めているため、長期的には接続層の移行が必要となる。
+- 本文は各文字に一意のIDと前置IDを持たせる操作型CRDTとし、削除済み文字も位置情報として保持する。別々の挿入・削除を到着順と独立に合流でき、切断中の編集は接続時の全状態交換で復帰する。コメントは文字ID範囲へ紐付け、返信の集合と解決状態を合流する。同期状態はセッション中のメモリに保持し、アプリ終了後の自動再参加は現時点では提供しない。
+- ホスト側の書類を共有内容の保存元とし、参加者側の書類は各自のローカルコピーとして保存する。既存の内容がある書類で参加する場合は置換前に確認する。受信差分はUnicodeの文字境界でTextViewへ適用し、選択を調整する。IME変換中の反映は延期する。文書は20,000文字・内部文字IDは50,000件、通信データは5MBまでとし、上限時は接続を終了してローカル編集を続けられる。実ネットワークでの複数端末試験は行っておらず、CRDTの競合・一時切断・コメント合流とTextView反映を単体テストで確認した。

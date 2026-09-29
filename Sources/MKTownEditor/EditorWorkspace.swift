@@ -93,6 +93,9 @@ struct EditorWorkspace: View {
     @State private var showingGitCommit = false
     @State private var showingCloudStatus = false
     @State private var showingPublication = false
+    @State private var showingCollaboration = false
+    @StateObject private var collaboration = CollaborationSession()
+    @State private var pendingCollaborativeText: String?
     @State private var cloudStatus: CloudFileStatus?
     @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
@@ -350,6 +353,11 @@ struct EditorWorkspace: View {
                     showingPublication = true
                 }
             }
+            ToolbarItem(id: "collaboration", placement: .primaryAction) {
+                Button("共同編集とコメント", systemImage: "person.2") {
+                    showingCollaboration = true
+                }
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -430,6 +438,11 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingPublication) {
             PublicationSheet(source: $document.text, documentURL: fileURL)
+        }
+        .sheet(isPresented: $showingCollaboration) {
+            CollaborationSheet(session: collaboration, editorModel: editorModel,
+                               source: $document.text,
+                               documentTitle: fileURL?.lastPathComponent ?? String(localized: "無題"))
         }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
@@ -1031,6 +1044,7 @@ struct EditorWorkspace: View {
         .onDisappear {
             savePosition(for: fileURL)
             detachedPreview.close()
+            collaboration.stop()
             if workspaceViewActive {
                 if let fileURL {
                     workspaceStore.unregisterOpenDocument(fileURL)
@@ -1042,9 +1056,13 @@ struct EditorWorkspace: View {
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             workspaceStore.refresh()
             refreshCloudStatus()
+            if let pendingCollaborativeText {
+                applyCollaborativeText(pendingCollaborativeText)
+            }
             savePosition(for: fileURL)
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            if oldURL != nil, oldURL != newURL { collaboration.stop() }
             refreshCloudStatus()
             detachedPreview.updateDocumentURL(newURL)
             savePosition(for: oldURL)
@@ -1082,6 +1100,7 @@ struct EditorWorkspace: View {
             receivePendingWorkspaceTask()
         }
         .onChange(of: document.text) { _, newText in
+            collaboration.localChange(newText)
             previewUpdates.sourceChanged()
             analysisStore.update(source: newText,
                                  dialect: settingsStore.markdownDialect(for: fileURL))
@@ -1090,6 +1109,9 @@ struct EditorWorkspace: View {
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
             if showingTerminology { checkTerminology() }
+        }
+        .onChange(of: collaboration.currentText) { _, sharedText in
+            applyCollaborativeText(sharedText)
         }
         .onChange(of: settingsStore.app.terminologyEntries) { _, _ in
             if showingTerminology { checkTerminology() }
@@ -1936,6 +1958,21 @@ struct EditorWorkspace: View {
     private func refreshCloudStatus() {
         let next = fileURL.flatMap { try? CloudFileStatus.read(at: $0) }
         if cloudStatus != next { cloudStatus = next }
+    }
+
+    private func applyCollaborativeText(_ sharedText: String) {
+        guard collaboration.isActive else { pendingCollaborativeText = nil; return }
+        guard document.text != sharedText else { pendingCollaborativeText = nil; return }
+        if editorModel.hasActiveEditor {
+            guard editorModel.applyCollaborativeText(sharedText,
+                expectedSource: document.text) else {
+                pendingCollaborativeText = sharedText
+                return
+            }
+        } else {
+            document.text = sharedText
+        }
+        pendingCollaborativeText = nil
     }
 
     private func saveSlidePDF(_ deck: MarkdownSlideDeck) {
