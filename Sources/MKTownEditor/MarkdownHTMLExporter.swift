@@ -13,7 +13,7 @@ enum MarkdownHTMLExporter {
             ($0.entry.id, $0.slug)
         })
         var body = sequence(analysis.rootBlocks, analysis: analysis,
-                            context: DocumentContext(fileURL: documentURL), anchors: anchors)
+                            context: DocumentContext(fileURL: documentURL, markdownDialect: dialect), anchors: anchors)
         for note in analysis.footnotes.entries {
             let token = "<sup><a href=\"#fn-\(note.number)\""
             if let range = body.range(of: token) {
@@ -25,8 +25,17 @@ enum MarkdownHTMLExporter {
             for note in analysis.footnotes.entries {
                 body += "<li id=\"fn-\(note.number)\">" +
                     inline(note.content, analysis: analysis,
-                           context: DocumentContext(fileURL: documentURL)) +
+                           context: DocumentContext(fileURL: documentURL, markdownDialect: dialect)) +
                     " <a href=\"#fnref-\(note.number)\" aria-label=\"本文に戻る\">↩</a></li>"
+            }
+            body += "</ol></section>"
+        }
+        if dialect == .extended,
+           let catalog = MarkdownCitationCatalog.load(documentURL: documentURL),
+           catalog.hasCitation(in: analysis) {
+            body += "<section class=\"bibliography\"><h2>参考文献</h2><ol>"
+            for entry in catalog.entries {
+                body += "<li>\(escape(entry.bibliographyText))</li>"
             }
             body += "</ol></section>"
         }
@@ -185,9 +194,12 @@ enum MarkdownHTMLExporter {
 
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
                                context: DocumentContext) -> String {
+        let cited = context.markdownDialect == .extended && markdown.contains("[@")
+            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(markdown) ?? markdown
+            : markdown
         let layout = MarkdownImageLayout.parse(
             MarkdownRenderer.resolveReferences(
-                in: MarkdownSafeHTML.previewMarkdown(markdown), using: analysis.references))
+                in: MarkdownSafeHTML.previewMarkdown(cited), using: analysis.references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text

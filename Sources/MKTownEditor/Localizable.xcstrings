@@ -8324,6 +8324,16 @@
           }
         }
       }
+    },
+    "参考文献": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "References"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

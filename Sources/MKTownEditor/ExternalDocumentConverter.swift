@@ -77,7 +77,10 @@ struct ExternalDocumentConverter: Sendable {
         try manager.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? manager.removeItem(at: work) }
         let input = work.appendingPathComponent("input.md")
-        try Data(markdown.utf8).write(to: input, options: .atomic)
+        let cited = dialect == .extended
+            ? MarkdownCitationCatalog.load(documentURL: documentURL)?.materialize(markdown) ?? markdown
+            : markdown
+        try Data(cited.utf8).write(to: input, options: .atomic)
         let output = destination.deletingLastPathComponent()
             .appendingPathComponent(".mktown-output-\(UUID().uuidString).\(format.rawValue)")
         defer { try? manager.removeItem(at: output) }
