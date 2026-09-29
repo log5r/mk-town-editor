@@ -35,6 +35,9 @@ struct EditorWorkspace: View {
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
+    @State private var externalLinkChecks: [MarkdownExternalLinkCheck] = []
+    @State private var isCheckingExternalLinks = false
+    @State private var externalLinkTask: Task<Void, Never>?
     @State private var showingMarkdownLint = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
@@ -488,11 +491,19 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingLinkDiagnostics) {
             LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,
-                                 source: document.text) { diagnostic in
-                showingLinkDiagnostics = false
-                if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
-                navigate(to: diagnostic.sourceRange.location)
-            }
+                                 externalChecks: externalLinkChecks,
+                                 isCheckingExternal: isCheckingExternalLinks,
+                                 source: document.text,
+                                 onCheckExternal: checkExternalLinks,
+                                 onSelect: { range in
+                                     showingLinkDiagnostics = false
+                                     if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                                     navigate(to: range.location)
+                                 })
+                .onDisappear {
+                    externalLinkTask?.cancel()
+                    isCheckingExternalLinks = false
+                }
         }
         .sheet(isPresented: $showingMarkdownLint) {
             MarkdownLintSheet(diagnostics: markdownLintDiagnostics,
@@ -1335,6 +1346,9 @@ struct EditorWorkspace: View {
 
     private func checkLinks() {
         let source = document.text
+        externalLinkTask?.cancel()
+        externalLinkChecks = []
+        isCheckingExternalLinks = false
         let cachedAnalysis = analysisStore.snapshot?.source == source
             ? analysisStore.snapshot?.analysis : nil
         let context = documentContext
@@ -1347,6 +1361,23 @@ struct EditorWorkspace: View {
             guard document.text == source else { return }
             linkDiagnostics = diagnostics
             isCheckingLinks = false
+        }
+    }
+
+    private func checkExternalLinks() {
+        let source = document.text
+        let cachedAnalysis = analysisStore.snapshot?.source == source
+            ? analysisStore.snapshot?.analysis : nil
+        let analysis = cachedAnalysis ?? MarkdownAnalysis(source)
+        let targets = MarkdownExternalLinkChecker.targets(in: source, analysis: analysis)
+        externalLinkTask?.cancel()
+        externalLinkChecks = []
+        isCheckingExternalLinks = true
+        externalLinkTask = Task {
+            let results = await MarkdownExternalLinkChecker.inspect(targets)
+            guard !Task.isCancelled, document.text == source else { return }
+            externalLinkChecks = results
+            isCheckingExternalLinks = false
         }
     }
 
@@ -1882,8 +1913,11 @@ private struct MarkdownPlainTextExportSheet: View {
 private struct LinkDiagnosticsSheet: View {
     let diagnostics: [MarkdownLinkDiagnostic]
     let isChecking: Bool
+    let externalChecks: [MarkdownExternalLinkCheck]
+    let isCheckingExternal: Bool
     let source: String
-    let onSelect: (MarkdownLinkDiagnostic) -> Void
+    let onCheckExternal: () -> Void
+    let onSelect: (NSRange) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -1891,30 +1925,61 @@ private struct LinkDiagnosticsSheet: View {
             HStack {
                 Text("リンク診断").font(.headline)
                 Spacer()
+                Button("外部URLを確認") { onCheckExternal() }
+                    .disabled(isCheckingExternal)
                 Button("閉じる") { dismiss() }
                     .keyboardShortcut(.cancelAction)
             }
-            if isChecking {
+            if isChecking || isCheckingExternal {
                 ProgressView("リンクを確認中")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if diagnostics.isEmpty {
+            } else if diagnostics.isEmpty && externalChecks.isEmpty {
                 ContentUnavailableView("リンクの問題は見つかりません", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = MarkdownLineIndex(source)
-                List(diagnostics) { diagnostic in
-                    Button {
-                        onSelect(diagnostic)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(diagnostic.title).fontWeight(.medium)
-                            Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                List {
+                    if !diagnostics.isEmpty {
+                        Section("ローカルリンク") {
+                            ForEach(diagnostics) { diagnostic in
+                                Button {
+                                    onSelect(diagnostic.sourceRange)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(diagnostic.title).fontWeight(.medium)
+                                        Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.plain)
+                    if !externalChecks.isEmpty {
+                        Section("外部URL") {
+                            ForEach(externalChecks) { check in
+                                Button {
+                                    onSelect(check.target.sourceRange)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(check.status.title).fontWeight(.medium)
+                                        Text("\(lines.line(containingUTF16Offset: check.target.sourceRange.location)) 行: \(check.target.url.absoluteString)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                        if let code = check.httpStatus {
+                                            Text("HTTP \(code)")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -1,5 +1,110 @@
 import Foundation
 
+struct MarkdownExternalLinkTarget: Equatable, Sendable, Identifiable {
+    let url: URL
+    let sourceRange: NSRange
+    var id: Int { sourceRange.location }
+}
+
+struct MarkdownExternalLinkCheck: Equatable, Sendable, Identifiable {
+    enum Status: Equatable, Sendable {
+        case reachable, restricted, missing, temporaryFailure, unverified
+
+        var title: String {
+            switch self {
+            case .reachable: String(localized: "到達できます")
+            case .restricted: String(localized: "認証またはアクセス許可が必要です")
+            case .missing: String(localized: "ページが見つかりません")
+            case .temporaryFailure: String(localized: "一時的に確認できません")
+            case .unverified: String(localized: "到達状態を判定できません")
+            }
+        }
+    }
+
+    let target: MarkdownExternalLinkTarget
+    let status: Status
+    let httpStatus: Int?
+    var id: Int { target.id }
+}
+
+enum MarkdownExternalLinkChecker {
+    static func targets(in source: String, analysis: MarkdownAnalysis) -> [MarkdownExternalLinkTarget] {
+        let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
+            MarkdownInlineSyntax.codeSpanRanges(in: source)
+        func isExcluded(_ range: NSRange) -> Bool {
+            excluded.contains { NSLocationInRange(range.location, $0) }
+        }
+        let inline = MarkdownLinkSyntax.inlineLinks(in: source).compactMap { link -> MarkdownExternalLinkTarget? in
+            guard !isExcluded(link.range),
+                  let url = externalURL(link.destination) else { return nil }
+            return MarkdownExternalLinkTarget(url: url, sourceRange: link.range)
+        }
+        let references = analysis.references.values.compactMap { reference -> MarkdownExternalLinkTarget? in
+            guard let url = externalURL(reference.destination) else { return nil }
+            return MarkdownExternalLinkTarget(url: url, sourceRange: reference.sourceRange)
+        }
+        return (inline + references).sorted { $0.sourceRange.location < $1.sourceRange.location }
+    }
+
+    private static func externalURL(_ destination: String) -> URL? {
+        guard let url = URL(string: destination),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              url.host != nil else { return nil }
+        return url
+    }
+
+    static func status(for httpStatus: Int) -> MarkdownExternalLinkCheck.Status {
+        switch httpStatus {
+        case 200..<400: .reachable
+        case 401, 403, 407: .restricted
+        case 404, 410: .missing
+        case 408, 429, 500..<600: .temporaryFailure
+        default: .unverified
+        }
+    }
+
+    static func inspect(_ targets: [MarkdownExternalLinkTarget],
+                        fetch: @escaping @Sendable (URL) async throws -> Int = requestStatus)
+        async -> [MarkdownExternalLinkCheck] {
+        var results: [MarkdownExternalLinkCheck] = []
+        var cache: [URL: (MarkdownExternalLinkCheck.Status, Int?)] = [:]
+        for target in targets {
+            if Task.isCancelled { break }
+            let outcome: (MarkdownExternalLinkCheck.Status, Int?)
+            if let cached = cache[target.url] {
+                outcome = cached
+            } else {
+                do {
+                    let code = try await fetch(target.url)
+                    outcome = (status(for: code), code)
+                } catch is CancellationError {
+                    break
+                } catch let error as URLError where error.code == .timedOut ||
+                    error.code == .cannotConnectToHost || error.code == .networkConnectionLost ||
+                    error.code == .notConnectedToInternet {
+                    outcome = (.temporaryFailure, nil)
+                } catch {
+                    outcome = (.unverified, nil)
+                }
+                cache[target.url] = outcome
+            }
+            results.append(MarkdownExternalLinkCheck(target: target, status: outcome.0,
+                                                      httpStatus: outcome.1))
+        }
+        return results
+    }
+
+    private static func requestStatus(_ url: URL) async throws -> Int {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 8
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let (_, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return http.statusCode
+    }
+}
+
 struct MarkdownLinkDiagnostic: Equatable, Identifiable, Sendable {
     enum Kind: Equatable, Sendable {
         case missingFile, missingImage, missingHeading, missingReference, unreadableTarget
