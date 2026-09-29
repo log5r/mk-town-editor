@@ -92,6 +92,7 @@ struct EditorWorkspace: View {
     @State private var showingGitHistory = false
     @State private var showingGitCommit = false
     @State private var showingCloudStatus = false
+    @State private var showingPublication = false
     @State private var cloudStatus: CloudFileStatus?
     @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
@@ -344,6 +345,11 @@ struct EditorWorkspace: View {
                 }
                 .disabled(fileURL == nil)
             }
+            ToolbarItem(id: "publication", placement: .primaryAction) {
+                Button("ブログ・静的サイトへ公開", systemImage: "square.and.arrow.up") {
+                    showingPublication = true
+                }
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -421,6 +427,9 @@ struct EditorWorkspace: View {
                     return true
                 }
             }
+        }
+        .sheet(isPresented: $showingPublication) {
+            PublicationSheet(source: $document.text, documentURL: fileURL)
         }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
