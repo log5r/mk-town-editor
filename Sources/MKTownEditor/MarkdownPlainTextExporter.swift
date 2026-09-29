@@ -71,7 +71,8 @@ enum MarkdownPlainTextExporter {
                                options: MarkdownPlainTextOptions) -> String {
         let references = replaceFootnoteReferences(in: markdown, include: options.footnotes)
         let resolved = MarkdownRenderer.resolveReferences(
-            in: MarkdownInlineExtensions.plainText(in: references), using: analysis.references)
+            in: MarkdownEmoji.replace(in: MarkdownInlineExtensions.plainText(in: references)),
+            using: analysis.references)
         let parsing = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible

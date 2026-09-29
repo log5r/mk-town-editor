@@ -124,6 +124,7 @@
 		A1000000000000000000008E /* MarkdownCrossReferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008D /* MarkdownCrossReferences.swift */; };
 		A1000000000000000000008F /* MarkdownDefinitionList.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008E /* MarkdownDefinitionList.swift */; };
 		A10000000000000000000090 /* MarkdownInlineExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008F /* MarkdownInlineExtensions.swift */; };
+		A10000000000000000000091 /* MarkdownEmoji.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000090 /* MarkdownEmoji.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -246,6 +247,7 @@
 		A2000000000000000000008D /* MarkdownCrossReferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCrossReferences.swift; sourceTree = "<group>"; };
 		A2000000000000000000008E /* MarkdownDefinitionList.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDefinitionList.swift; sourceTree = "<group>"; };
 		A2000000000000000000008F /* MarkdownInlineExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownInlineExtensions.swift; sourceTree = "<group>"; };
+		A20000000000000000000090 /* MarkdownEmoji.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEmoji.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -382,6 +384,7 @@
 				A2000000000000000000008D /* MarkdownCrossReferences.swift */,
 				A2000000000000000000008E /* MarkdownDefinitionList.swift */,
 				A2000000000000000000008F /* MarkdownInlineExtensions.swift */,
+				A20000000000000000000090 /* MarkdownEmoji.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -565,6 +568,7 @@
 				A1000000000000000000008E /* MarkdownCrossReferences.swift in Sources */,
 				A1000000000000000000008F /* MarkdownDefinitionList.swift in Sources */,
 				A10000000000000000000090 /* MarkdownInlineExtensions.swift in Sources */,
+				A10000000000000000000091 /* MarkdownEmoji.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
