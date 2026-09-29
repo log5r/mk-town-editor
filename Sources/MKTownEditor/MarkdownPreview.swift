@@ -21,6 +21,9 @@ struct MarkdownPreview: View {
     var searchRange: NSRange?
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
+    var workspaceDocumentURLs: [URL] = []
+    var loadWorkspaceOpenBuffers: (() throws -> [URL: Data])?
+    var onOpenEmbeddedDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
     var showsFrontMatter = false
@@ -48,6 +51,7 @@ struct MarkdownPreview: View {
             if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
+                markdown.contains("![[") ||
                 !analysis.footnotes.entries.isEmpty ||
                 theme != .system || bodyWidth != 900 ||
                 (showsFrontMatter && analysis.frontMatter != nil) {
@@ -89,6 +93,14 @@ struct MarkdownPreview: View {
                                         .background(Color.accentColor.opacity(0.08))
                                         .cornerRadius(8)
                                         .accessibilityLabel("\(callout.title)。\(block.content)")
+                                    } else if block.kind == .paragraph,
+                                              let reference = WorkspaceDocumentEmbed.reference(in: block.content),
+                                              let documentURL = documentContext.fileURL {
+                                        WorkspaceEmbeddedDocumentView(reference: reference,
+                                            documentURL: documentURL,
+                                            documents: workspaceDocumentURLs,
+                                            loadOpenBuffers: loadWorkspaceOpenBuffers,
+                                            onOpen: onOpenEmbeddedDocument)
                                     } else if let table = block.table {
                                         tableView(table, in: analysis)
                                     } else if block.kind == .blank {
@@ -715,14 +727,15 @@ final class DetachedPreviewWindowManager: NSObject, ObservableObject, NSWindowDe
     var isOpen: Bool { window?.isVisible == true }
 
     func show(document: Binding<MarkdownDocument>, documentURL: URL?,
-              settingsStore: EditorSettingsStore, updates: PreviewUpdateController) {
+              settingsStore: EditorSettingsStore, workspaceStore: WorkspaceStore,
+              updates: PreviewUpdateController) {
         self.documentURL = documentURL
         if let window, window.isVisible {
             window.makeKeyAndOrderFront(nil)
             return
         }
         let content = DetachedPreviewContent(document: document, manager: self,
-            settingsStore: settingsStore, updates: updates)
+            settingsStore: settingsStore, workspaceStore: workspaceStore, updates: updates)
         let controller = NSHostingController(rootView: content)
         let window = NSWindow(contentViewController: controller)
         window.title = title
@@ -758,6 +771,7 @@ private struct DetachedPreviewContent: View {
     @Binding var document: MarkdownDocument
     @ObservedObject var manager: DetachedPreviewWindowManager
     @ObservedObject var settingsStore: EditorSettingsStore
+    @ObservedObject var workspaceStore: WorkspaceStore
     @ObservedObject var updates: PreviewUpdateController
 
     var body: some View {
@@ -770,6 +784,13 @@ private struct DetachedPreviewContent: View {
                                 markdownDialect: dialect),
                             snapshot: updates.state.isPaused ? updates.snapshot : nil,
                             usesSharedAnalysis: updates.state.isPaused,
+                            workspaceDocumentURLs: workspaceStore.rootURL.map { root in
+                                WorkspaceQuickOpen.search(nodes: workspaceStore.nodes,
+                                    root: root, query: "", limit: Int.max).map(\.url)
+                            } ?? [],
+                            loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
+                                { try workspaceStore.openBufferSnapshots(under: root) }
+                            },
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),
                             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,

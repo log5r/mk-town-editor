@@ -300,7 +300,8 @@ struct EditorWorkspace: View {
             ToolbarItem(id: "detached-preview", placement: .primaryAction) {
                 Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
                     detachedPreview.show(document: $document, documentURL: fileURL,
-                                         settingsStore: settingsStore, updates: previewUpdates)
+                                         settingsStore: settingsStore,
+                                         workspaceStore: workspaceStore, updates: previewUpdates)
                 }
                 .help("現在の書類のプレビューを別ウインドウで表示")
             }
@@ -986,6 +987,20 @@ struct EditorWorkspace: View {
             navigationTarget: isCurrent ? previewNavigationTarget : nil,
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
+            workspaceDocumentURLs: displayedSource.contains("![[")
+                ? workspaceStore.rootURL.map { root in
+                    WorkspaceQuickOpen.search(nodes: workspaceStore.nodes, root: root,
+                        query: "", limit: Int.max).map(\.url)
+                } ?? [] : [],
+            loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
+                { try workspaceStore.openBufferSnapshots(under: root) }
+            },
+            onOpenEmbeddedDocument: { url in
+                Task {
+                    do { try await openDocument(at: url) }
+                    catch { workspaceOpenError = error.localizedDescription }
+                }
+            },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
             zoom: settingsStore.zoom(for: .preview),

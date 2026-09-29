@@ -7424,6 +7424,76 @@
           }
         }
       }
+    },
+    "元の書類を開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Source Document"
+          }
+        }
+      }
+    },
+    "埋め込みに循環参照があります: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Circular embed reference: %@"
+          }
+        }
+      }
+    },
+    "埋め込みの展開深度を超えました": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Embed nesting limit reached"
+          }
+        }
+      }
+    },
+    "埋め込みを読み込み中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading embedded document"
+          }
+        }
+      }
+    },
+    "埋め込み先が見つかりません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Embedded document not found: %@"
+          }
+        }
+      }
+    },
+    "埋め込み先の見出しが見つかりません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Embedded section not found: %@"
+          }
+        }
+      }
+    },
+    "埋め込み先を読み込めません: %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read embedded document: %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
