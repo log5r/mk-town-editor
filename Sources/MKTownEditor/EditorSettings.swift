@@ -188,6 +188,8 @@ struct AppEditorSettings: Codable, Equatable {
     var showsMinimap: Bool?
     var usesInlineLivePresentation: Bool?
     var usesTypewriterMode: Bool?
+    var terminologyEntries: [TerminologyEntry]?
+    var terminologyOptions: TerminologyOptions?
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
     var previewTheme: PreviewTheme?

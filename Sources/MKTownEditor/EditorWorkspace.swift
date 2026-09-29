@@ -41,6 +41,11 @@ struct EditorWorkspace: View {
     @State private var showingMarkdownLint = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
+    @State private var showingTerminology = false
+    @State private var isCheckingTerminology = false
+    @State private var terminologyIssues: [TerminologyIssue] = []
+    @State private var terminologySource = ""
+    @State private var terminologyTask: Task<[TerminologyIssue], Never>?
     @State private var showingAutoFormat = false
     @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
@@ -255,9 +260,13 @@ struct EditorWorkspace: View {
                         showingMarkdownLint = true
                         checkMarkdownLint()
                     }
+                    Button("用語の表記を確認") {
+                        showingTerminology = true
+                        checkTerminology()
+                    }
                     Button("自動整形…") { showingAutoFormat = true }
                 }
-                .help("Markdown診断と自動整形")
+                .help("Markdown診断・用語確認・自動整形")
             }
 
             ToolbarItem(id: "display-mode", placement: .principal) {
@@ -523,6 +532,25 @@ struct EditorWorkspace: View {
                                   navigate(to: diagnostic.sourceRange.location)
                               })
         }
+        .sheet(isPresented: $showingTerminology) {
+            TerminologySheet(issues: terminologyIssues, isChecking: isCheckingTerminology,
+                             source: terminologySource, canReplace: editorModel.canExecuteCommand,
+                             hasEntries: !(settingsStore.app.terminologyEntries ?? []).isEmpty,
+                             onSelect: { issue in
+                                 showingTerminology = false
+                                 if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                                 navigate(to: issue.range.location)
+                             }, onReplace: { issue in
+                                 guard document.text == terminologySource,
+                                       let edit = issue.replacement(in: terminologySource) else { return false }
+                                 return editorModel.applyRegexEdit(edit, expectedSource: terminologySource)
+                             })
+                .onDisappear {
+                    terminologyTask?.cancel()
+                    terminologyTask = nil
+                    isCheckingTerminology = false
+                }
+        }
         .sheet(isPresented: $showingAutoFormat) {
             MarkdownAutoFormatSheet(source: document.text,
                                     selectedRange: editorModel.selectedRange) { plan in
@@ -740,6 +768,7 @@ struct EditorWorkspace: View {
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
+            if showingTerminology { checkTerminology() }
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
                 settingsStore.moveDocumentState(from: oldURL, to: newURL)
@@ -765,6 +794,13 @@ struct EditorWorkspace: View {
             synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
+            if showingTerminology { checkTerminology() }
+        }
+        .onChange(of: settingsStore.app.terminologyEntries) { _, _ in
+            if showingTerminology { checkTerminology() }
+        }
+        .onChange(of: settingsStore.app.terminologyOptions) { _, _ in
+            if showingTerminology { checkTerminology() }
         }
         .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
         .onChange(of: settingsStore.markdownDialect(for: fileURL)) { _, dialect in
@@ -1398,6 +1434,33 @@ struct EditorWorkspace: View {
                   (settingsStore.app.disabledLintRules ?? []) == disabled else { return }
             markdownLintDiagnostics = diagnostics
             isCheckingMarkdownLint = false
+        }
+    }
+
+    private func checkTerminology() {
+        terminologyTask?.cancel()
+        let source = document.text
+        let entries = settingsStore.app.terminologyEntries ?? []
+        let options = settingsStore.app.terminologyOptions ?? TerminologyOptions()
+        let cachedAnalysis = analysisStore.snapshot?.source == source
+            ? analysisStore.snapshot?.analysis : nil
+        isCheckingTerminology = true
+        let worker = Task.detached(priority: .userInitiated) {
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return [TerminologyIssue]() }
+            return TerminologyDictionary.inspect(source, entries: entries, options: options,
+                analysis: cachedAnalysis)
+        }
+        terminologyTask = worker
+        Task {
+            let issues = await worker.value
+            guard !worker.isCancelled, showingTerminology, document.text == source,
+                  (settingsStore.app.terminologyEntries ?? []) == entries,
+                  (settingsStore.app.terminologyOptions ?? TerminologyOptions()) == options else { return }
+            terminologyIssues = issues
+            terminologySource = source
+            isCheckingTerminology = false
+            terminologyTask = nil
         }
     }
 
@@ -2050,6 +2113,63 @@ private struct MarkdownLintSheet: View {
         }
         .frame(minWidth: 560, minHeight: 350)
         .padding(20)
+    }
+}
+
+private struct TerminologySheet: View {
+    let issues: [TerminologyIssue]
+    let isChecking: Bool
+    let source: String
+    let canReplace: Bool
+    let hasEntries: Bool
+    let onSelect: (TerminologyIssue) -> Void
+    let onReplace: (TerminologyIssue) -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var replaceFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("用語の表記を確認").font(.headline)
+                Spacer()
+                Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            if isChecking {
+                ProgressView("用語を確認中")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if issues.isEmpty {
+                ContentUnavailableView(hasEntries ? "表記の問題は見つかりません" : "用語辞書に項目がありません",
+                                       systemImage: hasEntries ? "checkmark.circle" : "text.book.closed")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                let lines = MarkdownLineIndex(source)
+                List(issues) { issue in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("\(issue.prohibited) → \(issue.preferred)")
+                                .fontWeight(.medium)
+                            Text("\(lines.line(containingUTF16Offset: issue.range.location)) 行")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("移動") { onSelect(issue) }
+                        Button("置換") {
+                            if !onReplace(issue) { replaceFailed = true }
+                        }
+                        .disabled(!canReplace)
+                        .help(canReplace ? "推奨表記に置き換える" : "編集表示で置換できます")
+                    }
+                }
+            }
+        }
+        .frame(minWidth: 560, minHeight: 350)
+        .padding(20)
+        .alert("置換できませんでした", isPresented: $replaceFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("本文が変更されたか編集中のため、置換できませんでした。")
+        }
     }
 }
 

@@ -6854,6 +6854,226 @@
           }
         }
       }
+    },
+    "%@ → %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ → %@"
+          }
+        }
+      }
+    },
+    "Markdown診断・用語確認・自動整形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown diagnostics, terminology, and formatting"
+          }
+        }
+      }
+    },
+    "→": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "→"
+          }
+        }
+      }
+    },
+    "コード内を除外": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude code"
+          }
+        }
+      }
+    },
+    "上の項目を優先して照合します。空欄の項目は照合しません。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entries higher in the list take priority. Empty entries are ignored."
+          }
+        }
+      }
+    },
+    "優先順を上げる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raise priority"
+          }
+        }
+      }
+    },
+    "優先順を下げる": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower priority"
+          }
+        }
+      }
+    },
+    "引用内を除外": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclude quotations"
+          }
+        }
+      }
+    },
+    "推奨表記": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preferred term"
+          }
+        }
+      }
+    },
+    "推奨表記に置き換える": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace with preferred term"
+          }
+        }
+      }
+    },
+    "本文が変更されたか編集中のため、置換できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The text changed or is being edited, so the term could not be replaced."
+          }
+        }
+      }
+    },
+    "用語の表記を確認": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check Terminology"
+          }
+        }
+      }
+    },
+    "用語を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete term"
+          }
+        }
+      }
+    },
+    "用語を確認中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking terminology"
+          }
+        }
+      }
+    },
+    "用語を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add term"
+          }
+        }
+      }
+    },
+    "用語辞書": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminology Dictionary"
+          }
+        }
+      }
+    },
+    "用語辞書に項目がありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The terminology dictionary is empty"
+          }
+        }
+      }
+    },
+    "編集表示で置換できます": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to the editor to replace this term"
+          }
+        }
+      }
+    },
+    "置換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace"
+          }
+        }
+      }
+    },
+    "置換できませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Replace Term"
+          }
+        }
+      }
+    },
+    "表記の問題は見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No terminology issues found"
+          }
+        }
+      }
+    },
+    "避ける表記": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avoided term"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
