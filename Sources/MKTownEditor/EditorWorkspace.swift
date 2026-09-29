@@ -15,6 +15,7 @@ struct EditorWorkspace: View {
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @StateObject private var detachedPreview = DetachedPreviewWindowManager()
+    @StateObject private var slideWindow = MarkdownSlideWindowManager()
     @StateObject private var previewUpdates = PreviewUpdateController()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
@@ -312,6 +313,12 @@ struct EditorWorkspace: View {
                                          workspaceStore: workspaceStore, updates: previewUpdates)
                 }
                 .help("現在の書類のプレビューを別ウインドウで表示")
+            }
+            ToolbarItem(id: "slides", placement: .primaryAction) {
+                Button("スライド表示", systemImage: "play.rectangle") {
+                    showSlidePresentation()
+                }
+                .help("区切り線をスライド境界として全画面表示")
             }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
@@ -1852,6 +1859,29 @@ struct EditorWorkspace: View {
     private func exportPDF() {
         guard !isExportingPDF else { return }
         exportFormat = .pdf
+    }
+
+    private func showSlidePresentation() {
+        let deck = MarkdownSlideDeck(document.text, dialect: documentContext.markdownDialect)
+        slideWindow.show(deck: deck, context: documentContext) {
+            saveSlidePDF(deck)
+        }
+    }
+
+    private func saveSlidePDF(_ deck: MarkdownSlideDeck) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "slides") + "-slides.pdf"
+        panel.begin { response in
+            guard response == .OK, let destination = panel.url else { return }
+            do {
+                try MarkdownSlidePDFExporter.export(deck, documentURL: fileURL, to: destination,
+                    dialect: documentContext.markdownDialect)
+            } catch {
+                pdfExportError = error.localizedDescription
+            }
+        }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {

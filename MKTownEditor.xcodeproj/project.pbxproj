@@ -126,6 +126,8 @@
 		A10000000000000000000090 /* MarkdownInlineExtensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008F /* MarkdownInlineExtensions.swift */; };
 		A10000000000000000000091 /* MarkdownEmoji.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000090 /* MarkdownEmoji.swift */; };
 		A10000000000000000000092 /* MarkdownMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000091 /* MarkdownMedia.swift */; };
+		A10000000000000000000093 /* MarkdownSlideDeck.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000092 /* MarkdownSlideDeck.swift */; };
+		A10000000000000000000094 /* MarkdownSlidePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000093 /* MarkdownSlidePresentation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -250,6 +252,8 @@
 		A2000000000000000000008F /* MarkdownInlineExtensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownInlineExtensions.swift; sourceTree = "<group>"; };
 		A20000000000000000000090 /* MarkdownEmoji.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEmoji.swift; sourceTree = "<group>"; };
 		A20000000000000000000091 /* MarkdownMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMedia.swift; sourceTree = "<group>"; };
+		A20000000000000000000092 /* MarkdownSlideDeck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSlideDeck.swift; sourceTree = "<group>"; };
+		A20000000000000000000093 /* MarkdownSlidePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSlidePresentation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -388,6 +392,8 @@
 				A2000000000000000000008F /* MarkdownInlineExtensions.swift */,
 				A20000000000000000000090 /* MarkdownEmoji.swift */,
 				A20000000000000000000091 /* MarkdownMedia.swift */,
+				A20000000000000000000092 /* MarkdownSlideDeck.swift */,
+				A20000000000000000000093 /* MarkdownSlidePresentation.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -573,6 +579,8 @@
 				A10000000000000000000090 /* MarkdownInlineExtensions.swift in Sources */,
 				A10000000000000000000091 /* MarkdownEmoji.swift in Sources */,
 				A10000000000000000000092 /* MarkdownMedia.swift in Sources */,
+				A10000000000000000000093 /* MarkdownSlideDeck.swift in Sources */,
+				A10000000000000000000094 /* MarkdownSlidePresentation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
