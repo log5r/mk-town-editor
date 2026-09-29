@@ -69,6 +69,9 @@ enum MarkdownHTMLExporter {
         table { border-collapse: collapse; display: block; overflow-x: auto; }
         th, td { border: 1px solid #8888; padding: 5px 10px; }
         blockquote { border-left: 3px solid #8888; margin-left: 0; padding-left: 16px; }
+        dl { margin: 1em 0; }
+        dt { font-weight: 600; margin-top: 0.6em; }
+        dd { margin-left: 1.5em; }
         .callout { border-left: 3px solid currentColor; background: color-mix(in srgb, currentColor 6%, transparent);
                    padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
         .cover { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
@@ -152,6 +155,15 @@ enum MarkdownHTMLExporter {
             return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context))</h\(level)>\n"
         case .paragraph:
             if analysis.crossReferences.markerBlockIDs.contains(block.id) { return "" }
+            if let definitions = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
+                let entries = definitions.entries.map { entry in
+                    "<dt>\(inline(entry.term, analysis: analysis, context: context))</dt>" +
+                        entry.definitions.map {
+                            "<dd>\(inline($0, analysis: analysis, context: context))</dd>"
+                        }.joined()
+                }.joined()
+                return "<dl>\(entries)</dl>\n"
+            }
             let target = analysis.crossReferences.target(forBlockID: block.id)
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
