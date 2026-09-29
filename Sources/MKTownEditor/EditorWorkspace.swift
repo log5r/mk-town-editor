@@ -94,6 +94,7 @@ struct EditorWorkspace: View {
     @State private var showingCloudStatus = false
     @State private var showingPublication = false
     @State private var showingCollaboration = false
+    @State private var showingAISuggestion = false
     @StateObject private var collaboration = CollaborationSession()
     @State private var pendingCollaborativeText: String?
     @State private var cloudStatus: CloudFileStatus?
@@ -358,6 +359,12 @@ struct EditorWorkspace: View {
                     showingCollaboration = true
                 }
             }
+            ToolbarItem(id: "ai-suggestion", placement: .primaryAction) {
+                Button("選択範囲をAIで推敲・翻訳", systemImage: "text.badge.checkmark") {
+                    showingAISuggestion = true
+                }
+                .disabled(!editorModel.hasActiveEditor || editorModel.selectedRange.length == 0)
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -443,6 +450,9 @@ struct EditorWorkspace: View {
             CollaborationSheet(session: collaboration, editorModel: editorModel,
                                source: $document.text,
                                documentTitle: fileURL?.lastPathComponent ?? String(localized: "無題"))
+        }
+        .sheet(isPresented: $showingAISuggestion) {
+            AISuggestionSheet(editorModel: editorModel, source: $document.text)
         }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
