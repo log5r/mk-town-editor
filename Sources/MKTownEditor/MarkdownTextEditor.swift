@@ -182,6 +182,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         textView.setSelectedRanges(restored.map(NSValue.init(range:)), affinity: .upstream,
                                    stillSelecting: false)
+        Task { @MainActor [weak scrollView, weak model] in
+            guard let scrollView, let model else { return }
+            model.scrollDidChange(scrollView.contentView.bounds.origin, in: scrollView)
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -271,7 +275,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         @MainActor @objc func clipViewBoundsDidChange(_ notification: Notification) {
             lineNumberRuler?.needsDisplay = true
             guard let scrollView, !isRestoringSession else { return }
-            model.scrollDidChange(scrollView.contentView.bounds.origin)
+            model.scrollDidChange(scrollView.contentView.bounds.origin, in: scrollView)
             if let editor = textView as? EditorTextView,
                let location = editor.firstVisibleSourceLocation(in: scrollView) {
                 onVisibleSourceChange?(location)
