@@ -1,9 +1,138 @@
 import AppKit
+import Combine
 import XCTest
 @testable import MKTownEditor
 
 @MainActor
 final class MarkdownEditorModelTests: XCTestCase {
+    func testViewUpdateDefersAndCoalescesPublicationWithoutDelayingSessionState() async {
+        let model = MarkdownEditorModel()
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "abcdef"
+        let published = expectation(description: "One deferred publication")
+        published.assertForOverFulfill = true
+        var updates = 0
+        let observation = model.objectWillChange.sink {
+            updates += 1
+            published.fulfill()
+        }
+        model.beginViewUpdate()
+        model.connect(view)
+        model.beginViewUpdate()
+        model.selectionDidChange(NSRange(location: 3, length: 0))
+        model.endViewUpdate()
+        XCTAssertTrue(model.hasActiveEditor)
+        XCTAssertEqual(model.selectedRange.location, 3)
+        XCTAssertTrue(model.textView === view)
+        XCTAssertEqual(updates, 0)
+        model.endViewUpdate()
+        XCTAssertEqual(updates, 0)
+        await fulfillment(of: [published], timeout: 2)
+        XCTAssertEqual(updates, 1)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testDeferredPublicationPreservesReplacementEditorAndLatestNavigation() async {
+        let model = MarkdownEditorModel()
+        let old = NSTextView()
+        old.string = "abcdef"
+        let replacement = NSTextView()
+        replacement.string = "xy"
+        var updates = 0
+        let published = expectation(description: "Latest state published")
+        let observation = model.objectWillChange.sink {
+            updates += 1
+            published.fulfill()
+        }
+        model.beginViewUpdate()
+        model.connect(old)
+        old.setSelectedRange(NSRange(location: 5, length: 0))
+        model.disconnect(old)
+        model.connect(replacement)
+        model.disconnect(old)
+        model.endViewUpdate()
+        XCTAssertEqual(model.selectedRange.location, 2)
+        model.navigate(to: 1)
+        XCTAssertEqual(updates, 0)
+        await fulfillment(of: [published], timeout: 2)
+        XCTAssertTrue(model.textView === replacement)
+        XCTAssertTrue(model.hasActiveEditor)
+        XCTAssertEqual(model.selectedRanges, [NSRange(location: 1, length: 0)])
+        XCTAssertEqual(updates, 1)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testUnchangedSelectionAndConnectionDoNotPublish() {
+        let model = MarkdownEditorModel()
+        let view = NSTextView()
+        model.connect(view)
+        var updates = 0
+        let observation = model.objectWillChange.sink { updates += 1 }
+        model.selectionDidChange(model.selectedRanges)
+        model.connect(view)
+        XCTAssertEqual(updates, 0)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testScrollCallbackAndViewportPublicationAreDeferred() async {
+        let model = MarkdownEditorModel()
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 2000))
+        view.string = String(repeating: "line\n", count: 100)
+        scroll.documentView = view
+        model.connect(view)
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string), model: model)
+        coordinator.textView = view
+        coordinator.scrollView = scroll
+        let callback = expectation(description: "Deferred preview navigation")
+        let published = expectation(description: "Deferred viewport")
+        var callbacks = 0
+        var updates = 0
+        coordinator.onVisibleSourceChange = { _ in
+            callbacks += 1
+            callback.fulfill()
+        }
+        let observation = model.objectWillChange.sink {
+            updates += 1
+            published.fulfill()
+        }
+        let notification = Notification(name: NSView.boundsDidChangeNotification,
+                                        object: scroll.contentView)
+        coordinator.clipViewBoundsDidChange(notification)
+        coordinator.clipViewBoundsDidChange(notification)
+        XCTAssertEqual(updates, 0)
+        XCTAssertEqual(callbacks, 0)
+        await fulfillment(of: [callback, published], timeout: 2)
+        XCTAssertEqual(updates, 1)
+        XCTAssertEqual(callbacks, 1)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testDismantledEditorCannotDeliverPendingScrollCallback() async {
+        let model = MarkdownEditorModel()
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 2000))
+        view.string = "text"
+        scroll.documentView = view
+        model.connect(view)
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string), model: model)
+        coordinator.textView = view
+        coordinator.scrollView = scroll
+        let callback = expectation(description: "No retired editor callback")
+        callback.isInverted = true
+        coordinator.onVisibleSourceChange = { _ in callback.fulfill() }
+        coordinator.clipViewBoundsDidChange(Notification(name: NSView.boundsDidChangeNotification,
+                                                         object: scroll.contentView))
+        var updates = 0
+        let observation = model.objectWillChange.sink { updates += 1 }
+        MarkdownTextEditor.dismantleNSView(scroll, coordinator: coordinator)
+        XCTAssertEqual(updates, 0)
+        XCTAssertFalse(model.hasActiveEditor)
+        await fulfillment(of: [callback], timeout: 0.1)
+        XCTAssertEqual(updates, 1)
+        withExtendedLifetime(observation) {}
+    }
+
     func testSelectionExpandsThroughLinkParagraphAndSectionThenShrinks() {
         let source = "# Guide\n\nSee [site](https://example.com).\n\n# Next"
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))

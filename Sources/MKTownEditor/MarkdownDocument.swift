@@ -2,7 +2,12 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MarkdownDocument: FileDocument {
+    #if SWIFT_PACKAGE
+    // A SwiftPM executable has no application Info.plist declaring imported types.
+    static let markdownType = UTType(filenameExtension: "md", conformingTo: .plainText) ?? .plainText
+    #else
     static let markdownType = UTType(importedAs: "net.daringfireball.markdown", conformingTo: .plainText)
+    #endif
     static let readableContentTypes: [UTType] = [markdownType, .plainText]
     static let writableContentTypes: [UTType] = [markdownType]
 

@@ -28,6 +28,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
+        model.beginViewUpdate()
+        defer { model.endViewUpdate() }
         let scrollView = EditorScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = !layoutOptions.wrapsLines
@@ -129,6 +131,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         scrollView.onWindowAttached = { [weak textView, weak model, weak coordinator = context.coordinator, weak scrollView] in
             guard let textView, let model, let coordinator, let scrollView else { return }
+            guard model.textView === textView else { return }
+            model.beginViewUpdate()
+            defer { model.endViewUpdate() }
             coordinator.isRestoringSession = true
             model.restoreScroll(in: scrollView)
             coordinator.isRestoringSession = false
@@ -138,10 +143,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.model.beginViewUpdate()
+        defer { coordinator.model.endViewUpdate() }
         NotificationCenter.default.removeObserver(coordinator, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         NotificationCenter.default.removeObserver(coordinator, name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
         NotificationCenter.default.removeObserver(coordinator, name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
         coordinator.cancelTypewriterFollow()
+        coordinator.cancelVisibleSourceChange()
         if let textView = scrollView.documentView as? NSTextView {
             (textView as? EditorTextView)?.cancelLinkHover()
             coordinator.model.disconnect(textView, scrollView: scrollView)
@@ -149,6 +157,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        model.beginViewUpdate()
+        defer { model.endViewUpdate() }
         guard let textView = scrollView.documentView as? EditorTextView else { return }
         textView.isEditable = isEditable
         textView.imageImportMode = imageImportMode
@@ -206,7 +216,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.setSelectedRanges(restored.map(NSValue.init(range:)), affinity: .upstream,
                                    stillSelecting: false)
         Task { @MainActor [weak scrollView, weak model] in
-            guard let scrollView, let model else { return }
+            guard let scrollView, let model,
+                  model.textView === scrollView.documentView else { return }
             model.scrollDidChange(scrollView.contentView.bounds.origin, in: scrollView)
         }
     }
@@ -226,6 +237,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var lastManualScroll = Date.distantPast
         private var isUserScrolling = false
         private var typewriterFollowTask: Task<Void, Never>?
+        private var visibleSourceChangeTask: Task<Void, Never>?
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
@@ -338,7 +350,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
-            guard let textView else { return }
+            guard let textView, model.textView === textView else { return }
+            model.beginViewUpdate()
+            defer { model.endViewUpdate() }
             (textView as? EditorTextView)?.unfold(containing: textView.selectedRange())
             model.selectionDidChange(textView.selectedRanges.map(\.rangeValue))
             applyProofing()
@@ -370,12 +384,28 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         @MainActor @objc func clipViewBoundsDidChange(_ notification: Notification) {
             lineNumberRuler?.needsDisplay = true
-            guard let scrollView, !isRestoringSession else { return }
+            guard let scrollView, !isRestoringSession,
+                  model.textView === textView else { return }
+            model.beginViewUpdate()
+            defer { model.endViewUpdate() }
             model.scrollDidChange(scrollView.contentView.bounds.origin, in: scrollView)
-            if let editor = textView as? EditorTextView,
-               let location = editor.firstVisibleSourceLocation(in: scrollView) {
-                onVisibleSourceChange?(location)
+            // Bounds notifications can arrive during SwiftUI layout. The callback
+            // also updates SwiftUI state, so deliver only the latest position later.
+            guard visibleSourceChangeTask == nil else { return }
+            visibleSourceChangeTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.visibleSourceChangeTask = nil
+                guard !Task.isCancelled, let scrollView = self.scrollView,
+                      let editor = self.textView as? EditorTextView,
+                      self.model.textView === editor,
+                      let location = editor.firstVisibleSourceLocation(in: scrollView) else { return }
+                self.onVisibleSourceChange?(location)
             }
+        }
+
+        @MainActor func cancelVisibleSourceChange() {
+            visibleSourceChangeTask?.cancel()
+            visibleSourceChangeTask = nil
         }
     }
 }

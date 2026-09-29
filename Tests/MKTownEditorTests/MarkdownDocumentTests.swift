@@ -3,6 +3,23 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownDocumentTests: XCTestCase {
+    func testApplicationDeclaresMarkdownImportedType() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: root.appendingPathComponent("Support/Info.plist"))
+        let plist = try XCTUnwrap(try PropertyListSerialization.propertyList(
+            from: data, format: nil) as? [String: Any])
+        let declarations = try XCTUnwrap(plist["UTImportedTypeDeclarations"] as? [[String: Any]])
+        let markdown = try XCTUnwrap(declarations.first {
+            $0["UTTypeIdentifier"] as? String == "net.daringfireball.markdown"
+        })
+        XCTAssertTrue((markdown["UTTypeConformsTo"] as? [String] ?? []).contains("public.plain-text"))
+        let tags = try XCTUnwrap(markdown["UTTypeTagSpecification"] as? [String: Any])
+        XCTAssertTrue((tags["public.filename-extension"] as? [String] ?? []).contains("md"))
+        XCTAssertTrue(MarkdownDocument.markdownType.conforms(to: .plainText))
+        XCTAssertEqual(MarkdownDocument.writableContentTypes, [MarkdownDocument.markdownType])
+    }
+
     func testUTF8RoundTrip() throws {
         let original = MarkdownDocument(text: "# 見出し\n\n本文")
         let restored = try MarkdownDocument.decode(original.encodedData())
