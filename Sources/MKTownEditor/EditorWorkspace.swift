@@ -78,6 +78,7 @@ struct EditorWorkspace: View {
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
     @State private var showingWorkspaceTasks = false
+    @State private var showingLinkGraph = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
@@ -655,6 +656,23 @@ struct EditorWorkspace: View {
                     })
             }
         }
+        .sheet(isPresented: $showingLinkGraph) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceLinkGraphSheet(root: root, focusURL: fileURL,
+                    nodes: workspaceStore.nodes,
+                    isTruncated: workspaceStore.isTruncated,
+                    loadOpenBuffers: {
+                        try workspaceStore.openBufferSnapshots(under: root)
+                    }, onOpen: { url in
+                        guard url.resolvingSymlinksInPath().standardizedFileURL !=
+                            fileURL?.resolvingSymlinksInPath().standardizedFileURL else { return }
+                        Task {
+                            do { try await openDocument(at: url) }
+                            catch { workspaceOpenError = error.localizedDescription }
+                        }
+                    })
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -1184,6 +1202,8 @@ struct EditorWorkspace: View {
             Section("参照元") {
                 Button("バックリンクを表示…") { showingBacklinks = true }
                     .disabled(fileURL == nil || workspaceStore.rootURL == nil)
+                Button("文書リンクのグラフを表示…") { showingLinkGraph = true }
+                    .disabled(workspaceStore.rootURL == nil)
             }
             Section("Wikiリンク") {
                 Button("Wikiリンクを挿入・編集…") {

@@ -105,6 +105,8 @@
 		A1000000000000000000007B /* WorkspaceDailyNoteSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007B /* WorkspaceDailyNoteSheet.swift */; };
 		A1000000000000000000007C /* WorkspaceTaskIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007C /* WorkspaceTaskIndex.swift */; };
 		A1000000000000000000007D /* WorkspaceTaskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007D /* WorkspaceTaskSheet.swift */; };
+		A1000000000000000000007E /* WorkspaceLinkGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007E /* WorkspaceLinkGraph.swift */; };
+		A1000000000000000000007F /* WorkspaceLinkGraphSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000007F /* WorkspaceLinkGraphSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -209,6 +211,8 @@
 		A2000000000000000000007B /* WorkspaceDailyNoteSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDailyNoteSheet.swift; sourceTree = "<group>"; };
 		A2000000000000000000007C /* WorkspaceTaskIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTaskIndex.swift; sourceTree = "<group>"; };
 		A2000000000000000000007D /* WorkspaceTaskSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTaskSheet.swift; sourceTree = "<group>"; };
+		A2000000000000000000007E /* WorkspaceLinkGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLinkGraph.swift; sourceTree = "<group>"; };
+		A2000000000000000000007F /* WorkspaceLinkGraphSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLinkGraphSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -327,6 +331,8 @@
 				A2000000000000000000007B /* WorkspaceDailyNoteSheet.swift */,
 				A2000000000000000000007C /* WorkspaceTaskIndex.swift */,
 				A2000000000000000000007D /* WorkspaceTaskSheet.swift */,
+				A2000000000000000000007E /* WorkspaceLinkGraph.swift */,
+				A2000000000000000000007F /* WorkspaceLinkGraphSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -492,6 +498,8 @@
 				A1000000000000000000007B /* WorkspaceDailyNoteSheet.swift in Sources */,
 				A1000000000000000000007C /* WorkspaceTaskIndex.swift in Sources */,
 				A1000000000000000000007D /* WorkspaceTaskSheet.swift in Sources */,
+				A1000000000000000000007E /* WorkspaceLinkGraph.swift in Sources */,
+				A1000000000000000000007F /* WorkspaceLinkGraphSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
