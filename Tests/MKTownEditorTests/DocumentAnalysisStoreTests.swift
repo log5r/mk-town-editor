@@ -3,6 +3,55 @@ import XCTest
 
 @MainActor
 final class DocumentAnalysisStoreTests: XCTestCase {
+    func testPreviewKeepsCompletedSourceDuringTypingAndUpdatesWhenAnalysisFinishes() async throws {
+        let store = DocumentAnalysisStore()
+        store.update(source: "# Before")
+        for _ in 0..<100 where store.snapshot?.source != "# Before" {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(store.snapshot?.source, "# Before")
+
+        for source in ["# After", "# After typing", ""] {
+            let previousSource = store.snapshot?.source
+            store.update(source: source)
+            // No main-actor suspension: publication cannot have happened yet.
+            let pending = PreviewPresentation(snapshot: store.snapshot,
+                requestedSource: source, currentSource: source, dialect: .extended)
+            XCTAssertNotNil(pending.snapshot, "Typing must not return to the loading indicator")
+            XCTAssertEqual(pending.source, previousSource)
+            XCTAssertEqual(pending.snapshot?.source, pending.source)
+            XCTAssertFalse(pending.isCurrent, "Stale source offsets must not be interactive")
+
+            for _ in 0..<100 where store.snapshot?.source != source {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            let completed = PreviewPresentation(snapshot: store.snapshot,
+                requestedSource: source, currentSource: source, dialect: .extended)
+            XCTAssertEqual(completed.source, source)
+            XCTAssertTrue(completed.isCurrent)
+        }
+    }
+
+    func testPreviewRequiresInitialAnalysisAndMatchingDialect() {
+        let initial = PreviewPresentation(snapshot: nil, requestedSource: "new",
+            currentSource: "new", dialect: .extended)
+        XCTAssertNil(initial.snapshot)
+        XCTAssertFalse(initial.isCurrent)
+
+        let changedDialect = PreviewPresentation(snapshot: DocumentSnapshot(source: "new"),
+            requestedSource: "new", currentSource: "new", dialect: .basic)
+        XCTAssertNil(changedDialect.snapshot)
+        XCTAssertFalse(changedDialect.isCurrent)
+    }
+
+    func testPausedPreviewUsesSnapshotSourceUntilRefreshCompletes() {
+        let presentation = PreviewPresentation(snapshot: DocumentSnapshot(source: "frozen"),
+            requestedSource: "refresh requested", currentSource: "live", dialect: .extended)
+        XCTAssertEqual(presentation.source, "frozen")
+        XCTAssertEqual(presentation.snapshot?.source, presentation.source)
+        XCTAssertFalse(presentation.isCurrent)
+    }
+
     func testSameSourceReanalyzesWhenDialectChanges() async throws {
         let store = DocumentAnalysisStore()
         let source = "| A |\n| --- |\n| B |"

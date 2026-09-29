@@ -4,6 +4,20 @@ import XCTest
 
 @MainActor
 final class EditorTextStyleTests: XCTestCase {
+    func testInitiallyEmptyEditorCoversViewportForMouseInput() {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let textView = EditorTextView()
+        textView.isVerticallyResizable = true
+        scrollView.documentView = textView
+        EditorTextStyle().apply(to: textView)
+        EditorLayoutOptions().apply(to: textView, in: scrollView)
+        scrollView.layoutSubtreeIfNeeded()
+
+        XCTAssertGreaterThanOrEqual(textView.frame.height, scrollView.contentSize.height)
+        let point = NSPoint(x: 100, y: 150)
+        XCTAssertTrue(scrollView.hitTest(point) === textView)
+    }
+
     func testApplyingStyleUpdatesLayoutWithoutChangingSourceOrUndo() {
         let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
         textView.allowsUndo = true

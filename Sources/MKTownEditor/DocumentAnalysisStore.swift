@@ -19,6 +19,21 @@ struct DocumentSnapshot: Sendable {
     }
 }
 
+/// Keep the last completed preview visible while the next source is being analyzed.
+/// Source-based actions must only use a snapshot that matches the live document.
+struct PreviewPresentation {
+    let snapshot: DocumentSnapshot?
+    let source: String
+    let isCurrent: Bool
+
+    init(snapshot: DocumentSnapshot?, requestedSource: String,
+         currentSource: String, dialect: MarkdownDialect) {
+        self.snapshot = snapshot?.dialect == dialect ? snapshot : nil
+        source = self.snapshot?.source ?? requestedSource
+        isCurrent = self.snapshot != nil && source == currentSource
+    }
+}
+
 @MainActor
 final class DocumentAnalysisStore: ObservableObject {
     @Published private(set) var snapshot: DocumentSnapshot?

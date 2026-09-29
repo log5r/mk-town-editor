@@ -1239,23 +1239,26 @@ struct EditorWorkspace: View {
     }
 
     private func previewPane(synchronizesScroll: Bool) -> some View {
-        let displayedSource = previewUpdates.state.displayedSource ?? document.text
-        let isCurrent = displayedSource == document.text
         let selectedSnapshot = previewUpdates.state.isPaused
-            ? previewUpdates.snapshot : analysisStore.snapshot
-        let matchingSnapshot = selectedSnapshot?.source == displayedSource &&
-            selectedSnapshot?.dialect == documentContext.markdownDialect ? selectedSnapshot : nil
+            ? previewUpdates.snapshot ?? analysisStore.snapshot : analysisStore.snapshot
+        let presentation = PreviewPresentation(snapshot: selectedSnapshot,
+            requestedSource: previewUpdates.state.displayedSource ?? document.text,
+            currentSource: document.text, dialect: documentContext.markdownDialect)
+        let displayedSource = presentation.source
+        let isCurrent = presentation.isCurrent
         let taskAction: ((Int) -> Void)? = isCurrent ? previewTaskAction : nil
         let headingAction: ((String) -> Void)? = isCurrent
             ? { fragment in navigateToHeading(fragment) } : nil
-        let scrollAction: ((Int) -> Void)? = synchronizesScroll && isCurrent
-            ? { blockID in synchronizeEditor(to: blockID) } : nil
-        let revealAction: ((NSRange) -> Void)? = isCurrent
-            ? { range in revealSource(range) } : nil
+        // Keep the structured scroll view mounted even while source actions are stale.
+        let scrollAction: ((Int) -> Void)? = synchronizesScroll
+            ? { blockID in if isCurrent { synchronizeEditor(to: blockID) } } : nil
+        let revealAction: ((NSRange) -> Void)? = { range in
+            if isCurrent { revealSource(range) }
+        }
         let preview = MarkdownPreview(
             markdown: displayedSource, documentContext: documentContext,
-            onToggleTask: taskAction, snapshot: matchingSnapshot, usesSharedAnalysis: true,
-            navigationTarget: isCurrent ? previewNavigationTarget : nil,
+            onToggleTask: taskAction, snapshot: presentation.snapshot, usesSharedAnalysis: true,
+            navigationTarget: previewUpdates.state.isPaused && !isCurrent ? nil : previewNavigationTarget,
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
             workspaceDocumentURLs: displayedSource.contains("![[")
