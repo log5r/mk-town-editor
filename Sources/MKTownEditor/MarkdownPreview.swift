@@ -543,6 +543,8 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
+        // Match the source editor: this pane must not paint into the titlebar.
+        scrollView.clipsToBounds = true
 
         let textView = HoverPreviewTextView()
         textView.delegate = context.coordinator
