@@ -16,11 +16,26 @@ struct GitSnapshot: Sendable {
     let history: [GitRevision]
 }
 
+struct GitStatusEntry: Equatable, Sendable, Identifiable {
+    let path: String
+    let indexStatus: Character
+    let worktreeStatus: Character
+    var id: String { path }
+    var isConflicted: Bool {
+        indexStatus == "U" || worktreeStatus == "U" ||
+            (indexStatus == "A" && worktreeStatus == "A") ||
+            (indexStatus == "D" && worktreeStatus == "D")
+    }
+    var isStaged: Bool { indexStatus != " " && indexStatus != "?" && !isConflicted }
+}
+
 enum GitRepositoryError: LocalizedError {
     case invalidDocument
     case commandFailed(String)
     case timedOut
     case tooLarge
+    case invalidSelection
+    case unresolvedConflict
 
     var errorDescription: String? {
         switch self {
@@ -28,6 +43,8 @@ enum GitRepositoryError: LocalizedError {
         case let .commandFailed(message): message
         case .timedOut: String(localized: "Gitの読み取りが時間切れになりました。")
         case .tooLarge: String(localized: "Gitの読み取り結果が大きすぎます。")
+        case .invalidSelection: String(localized: "変更ファイルの選択を確認してください。")
+        case .unresolvedConflict: String(localized: "競合記号を解消し、保存してからステージしてください。")
         }
     }
 }
@@ -65,6 +82,88 @@ enum GitRepository {
               snapshot.history.contains(revision) else { throw GitRepositoryError.invalidDocument }
         return try run(in: snapshot.rootURL,
                        arguments: ["show", "--no-ext-diff", "\(revision.hash):\(snapshot.relativePath)"])
+    }
+
+    static func statusEntries(in root: URL) throws -> [GitStatusEntry] {
+        let output = try run(in: root,
+            arguments: ["status", "--porcelain=v1", "-z", "--untracked-files=normal"])
+        return parseStatus(output)
+    }
+
+    static func parseStatus(_ output: String) -> [GitStatusEntry] {
+        let records = output.split(separator: "\0", omittingEmptySubsequences: true)
+        var entries: [GitStatusEntry] = []
+        var index = 0
+        while index < records.count {
+            let record = String(records[index])
+            guard record.utf8.count >= 4 else { index += 1; continue }
+            let flags = Array(record.prefix(2))
+            let path = String(record.dropFirst(3))
+            entries.append(GitStatusEntry(path: path, indexStatus: flags[0], worktreeStatus: flags[1]))
+            index += 1
+            if flags.contains("R") || flags.contains("C") { index += 1 }
+        }
+        return entries
+    }
+
+    static func diff(for path: String, in root: URL, staged: Bool) throws -> String {
+        try validate([path], in: root)
+        let arguments = staged
+            ? ["diff", "--cached", "--no-ext-diff", "--", path]
+            : ["diff", "--no-ext-diff", "--", path]
+        return try run(in: root, arguments: arguments)
+    }
+
+    static func stage(_ paths: [String], in root: URL) throws {
+        try validate(paths, in: root)
+        let conflicts = Set(try statusEntries(in: root).filter(\.isConflicted).map(\.path))
+        guard paths.allSatisfy({ !conflicts.contains($0) }) else {
+            throw GitRepositoryError.unresolvedConflict
+        }
+        _ = try run(in: root, arguments: ["add", "--"] + paths)
+    }
+
+    static func unstage(_ paths: [String], in root: URL) throws {
+        try validate(paths, in: root)
+        let hasHead = (try? run(in: root, arguments: ["rev-parse", "--verify", "HEAD"])) != nil
+        let arguments = hasHead ? ["reset", "-q", "HEAD", "--"] + paths
+            : ["rm", "--cached", "--"] + paths
+        _ = try run(in: root, arguments: arguments)
+    }
+
+    static func stageResolvedConflict(_ path: String, in root: URL) throws {
+        try validate([path], in: root)
+        guard try statusEntries(in: root).contains(where: {
+            $0.path == path && $0.isConflicted
+        }) else { throw GitRepositoryError.invalidSelection }
+        let url = root.appendingPathComponent(path).standardizedFileURL
+        guard let data = try? Data(contentsOf: url),
+              let source = String(data: data, encoding: .utf8),
+              !source.components(separatedBy: .newlines).contains(where: {
+                  $0.hasPrefix("<<<<<<< ") || $0.hasPrefix("=======") || $0.hasPrefix(">>>>>>> ")
+              }) else { throw GitRepositoryError.unresolvedConflict }
+        _ = try run(in: root, arguments: ["add", "--", path])
+    }
+
+    static func commit(message: String, in root: URL) throws {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let entries = try statusEntries(in: root)
+        guard !trimmed.isEmpty, trimmed.count <= 2_000,
+              entries.contains(where: \.isStaged),
+              !entries.contains(where: \.isConflicted) else {
+            throw GitRepositoryError.invalidSelection
+        }
+        _ = try run(in: root, arguments: ["-c", "core.hooksPath=/dev/null",
+                                             "commit", "-m", trimmed])
+    }
+
+    private static func validate(_ paths: [String], in root: URL) throws {
+        guard !paths.isEmpty else { throw GitRepositoryError.invalidSelection }
+        let available = Set(try statusEntries(in: root).map(\.path))
+        guard paths.allSatisfy({ available.contains($0) && !$0.isEmpty &&
+            !$0.hasPrefix("/") && !$0.components(separatedBy: "/").contains("..") }) else {
+            throw GitRepositoryError.invalidSelection
+        }
     }
 
     private static func run(in folder: URL, arguments: [String]) throws -> String {
