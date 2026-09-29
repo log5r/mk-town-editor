@@ -75,7 +75,9 @@ final class LocalImagePreviewTests: XCTestCase {
         let manager = DetachedPreviewWindowManager()
         let settings = EditorSettingsStore(defaults: defaults)
         manager.show(document: .constant(MarkdownDocument(text: "# Preview")),
-            documentURL: nil, settingsStore: settings, updates: PreviewUpdateController())
+            documentURL: nil, settingsStore: settings,
+            workspaceStore: WorkspaceStore(defaults: defaults),
+            updates: PreviewUpdateController())
         XCTAssertTrue(manager.isOpen)
         let saved = URL(fileURLWithPath: "/tmp/preview.md")
         manager.updateDocumentURL(saved)

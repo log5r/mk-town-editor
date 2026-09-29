@@ -297,6 +297,16 @@ enum WorkspaceFileOperations {
             edits.append(WorkspaceLinkChange(range: wiki.targetRange,
                 before: original.substring(with: wiki.targetRange), after: rewritten))
         }
+        for embed in WorkspaceDocumentEmbed.links(in: text) {
+            guard let target = WorkspaceWikiLinks.resolve(embed.target, from: documentURL,
+                documents: documents) else { continue }
+            let movedTarget = mapped(target, from: source, to: destination)
+            let rewritten = WorkspaceWikiLinks.target(for: movedTarget,
+                from: newDocumentURL, documents: movedDocuments)
+            guard rewritten != embed.target else { continue }
+            edits.append(WorkspaceLinkChange(range: embed.targetRange,
+                before: original.substring(with: embed.targetRange), after: rewritten))
+        }
         let result = NSMutableString(string: text)
         for edit in edits.sorted(by: { $0.range.location > $1.range.location }) {
             result.replaceCharacters(in: edit.range, with: edit.after)
