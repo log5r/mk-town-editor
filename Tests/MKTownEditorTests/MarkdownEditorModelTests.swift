@@ -324,6 +324,28 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(newView.selectedRange(), NSRange(location: 1, length: 2))
     }
 
+    func testViewModeTransitionIgnoresSelectionResetDuringRemoval() {
+        let model = MarkdownEditorModel()
+        let source = "alpha beta alpha"
+        let oldView = NSTextView()
+        oldView.string = source
+        model.connect(oldView)
+        let selection = NSRange(location: 6, length: 4)
+        oldView.setSelectedRange(selection)
+        model.selectionDidChange(selection)
+
+        model.prepareForViewTransition()
+        oldView.setSelectedRange(NSRange(location: 0, length: 0))
+        model.selectionDidChange(oldView.selectedRange())
+        model.disconnect(oldView)
+
+        let replacement = NSTextView()
+        replacement.string = source
+        model.connect(replacement)
+        XCTAssertEqual(model.selectedRange, selection)
+        XCTAssertEqual(replacement.selectedRange(), selection)
+    }
+
     func testReconnectClampsSelectionAfterExternalTextChange() {
         let view = NSTextView()
         view.string = "long text"

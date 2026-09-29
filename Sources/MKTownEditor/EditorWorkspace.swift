@@ -162,6 +162,8 @@ struct EditorWorkspace: View {
         Binding(
             get: { fileURL.map(settingsStore.mode(for:)) ?? unsavedMode },
             set: { newMode in
+                let currentMode = fileURL.map(settingsStore.mode(for:)) ?? unsavedMode
+                if currentMode != newMode { editorModel.prepareForViewTransition() }
                 if let fileURL {
                     settingsStore.setMode(newMode, for: fileURL)
                 } else {
