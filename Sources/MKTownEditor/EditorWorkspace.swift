@@ -275,13 +275,8 @@ struct EditorWorkspace: View {
                 }
             }
         }
+        // NavigationSplitView supplies the standard sidebar toggle.
         .toolbar(id: toolbarInstanceID.rawValue) {
-            ToolbarItem(id: "sidebar", placement: .navigation) {
-                Button("サイドバー", systemImage: "sidebar.left") {
-                    sidebarVisibility = sidebarVisibility == .detailOnly ? .all : .detailOnly
-                }
-                .help("サイドバーを表示または隠す")
-            }
             ForEach(EditorCommand.toolbar, id: \.self) { command in
                 ToolbarItem(id: "command-\(command.toolbarIdentifier)", placement: .primaryAction,
                             showsByDefault: EditorCommand.defaultToolbar.contains(command)) {

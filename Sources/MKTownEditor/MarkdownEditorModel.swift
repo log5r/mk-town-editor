@@ -8,10 +8,58 @@ struct EditorViewport: Equatable {
 
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
-    @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
-    @Published private(set) var selectedRanges = [NSRange(location: 0, length: 0)]
-    @Published private(set) var hasActiveEditor = false
-    @Published private(set) var viewport = EditorViewport(topFraction: 0, visibleFraction: 1)
+    private struct EditorState: Equatable {
+        var selectedRange = NSRange(location: 0, length: 0)
+        var selectedRanges = [NSRange(location: 0, length: 0)]
+        var hasActiveEditor = false
+        var viewport = EditorViewport(topFraction: 0, visibleFraction: 1)
+    }
+
+    @Published private var editorState = EditorState()
+    private var pendingEditorState: EditorState?
+    private var publicationTask: Task<Void, Never>?
+    private var viewUpdateDepth = 0
+
+    private(set) var selectedRange: NSRange {
+        get { (pendingEditorState ?? editorState).selectedRange }
+        set { updateEditorState { $0.selectedRange = newValue } }
+    }
+    private(set) var selectedRanges: [NSRange] {
+        get { (pendingEditorState ?? editorState).selectedRanges }
+        set { updateEditorState { $0.selectedRanges = newValue } }
+    }
+    private(set) var hasActiveEditor: Bool {
+        get { (pendingEditorState ?? editorState).hasActiveEditor }
+        set { updateEditorState { $0.hasActiveEditor = newValue } }
+    }
+    private(set) var viewport: EditorViewport {
+        get { (pendingEditorState ?? editorState).viewport }
+        set { updateEditorState { $0.viewport = newValue } }
+    }
+
+    // AppKit session state stays synchronous; SwiftUI observes it after its update ends.
+    func beginViewUpdate() { viewUpdateDepth += 1 }
+    func endViewUpdate() { viewUpdateDepth -= 1 }
+
+    private func updateEditorState(_ update: (inout EditorState) -> Void) {
+        var next = pendingEditorState ?? editorState
+        update(&next)
+        guard next != (pendingEditorState ?? editorState) else { return }
+        if viewUpdateDepth > 0 || publicationTask != nil {
+            pendingEditorState = next
+            guard publicationTask == nil else { return }
+            publicationTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                let next = self.pendingEditorState
+                self.pendingEditorState = nil
+                self.publicationTask = nil
+                if let next, next != self.editorState { self.editorState = next }
+            }
+        } else if next != editorState {
+            editorState = next
+        }
+    }
+
     @Published var linkDraft: MarkdownLinkDraft?
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
