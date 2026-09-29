@@ -626,13 +626,15 @@ final class EditorSettingsStore: ObservableObject {
         for documentURL: URL,
         _ keyPath: KeyPath<FolderEditorSettings, Value?>
     ) -> Value? {
-        var folder = documentURL.standardizedFileURL.deletingLastPathComponent()
-        while true {
-            if let setting = values.folders[Self.key(for: folder)]?[keyPath: keyPath] { return setting }
-            let parent = folder.deletingLastPathComponent()
-            if parent.path == folder.path { return nil }
-            folder = parent
+        var folderPath = (documentURL.standardizedFileURL.path as NSString).deletingLastPathComponent
+        while !folderPath.isEmpty {
+            if let setting = values.folders[folderPath]?[keyPath: keyPath] { return setting }
+            if folderPath == "/" { break }
+            let parent = (folderPath as NSString).deletingLastPathComponent
+            guard parent != folderPath else { break }
+            folderPath = parent
         }
+        return nil
     }
 
     private static func key(for url: URL) -> String { url.standardizedFileURL.path }
