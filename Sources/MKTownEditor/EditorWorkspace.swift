@@ -89,6 +89,7 @@ struct EditorWorkspace: View {
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
     @State private var showingSnapshotHistory = false
+    @State private var showingGitHistory = false
     @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
@@ -320,6 +321,12 @@ struct EditorWorkspace: View {
                 }
                 .help("区切り線をスライド境界として全画面表示")
             }
+            ToolbarItem(id: "git-history", placement: .primaryAction) {
+                Button("Gitの差分と履歴", systemImage: "clock.arrow.circlepath") {
+                    showingGitHistory = true
+                }
+                .disabled(fileURL == nil)
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -369,6 +376,9 @@ struct EditorWorkspace: View {
 
     private var sheetView: some View {
         navigationView
+        .sheet(isPresented: $showingGitHistory) {
+            if let fileURL { GitHistorySheet(fileURL: fileURL) }
+        }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
             GoToLineSheet(lineCount: index.lineCount,
