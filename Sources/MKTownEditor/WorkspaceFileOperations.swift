@@ -171,7 +171,8 @@ enum WorkspaceFileOperations {
             let newURL = mapped(document, from: source, to: destination)
             let (updated, links) = rewriteLinks(opened.text, documentURL: document,
                                                 newDocumentURL: newURL,
-                                                source: source, destination: destination)
+                                                source: source, destination: destination,
+                                                documents: documents)
             if !links.isEmpty || document != newURL {
                 var updatedDocument = opened
                 updatedDocument.text = updated
@@ -246,7 +247,8 @@ enum WorkspaceFileOperations {
     }
 
     private static func rewriteLinks(_ text: String, documentURL: URL, newDocumentURL: URL,
-                                     source: URL, destination: URL) -> (String, [WorkspaceLinkChange]) {
+                                     source: URL, destination: URL,
+                                     documents: [URL]) -> (String, [WorkspaceLinkChange]) {
         let analysis = MarkdownAnalysis(text)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
             MarkdownInlineSyntax.codeSpanRanges(in: text)
@@ -283,6 +285,17 @@ enum WorkspaceFileOperations {
                                                          length: localRange.length)),
                 after: MarkdownLinkSyntax.escapeDestination(newDestination)
             ))
+        }
+        let movedDocuments = documents.map { mapped($0, from: source, to: destination) }
+        for wiki in WorkspaceWikiLinks.links(in: text) {
+            guard let target = WorkspaceWikiLinks.resolve(wiki.target, from: documentURL,
+                documents: documents) else { continue }
+            let movedTarget = mapped(target, from: source, to: destination)
+            let rewritten = WorkspaceWikiLinks.target(for: movedTarget,
+                from: newDocumentURL, documents: movedDocuments)
+            guard rewritten != wiki.target else { continue }
+            edits.append(WorkspaceLinkChange(range: wiki.targetRange,
+                before: original.substring(with: wiki.targetRange), after: rewritten))
         }
         let result = NSMutableString(string: text)
         for edit in edits.sorted(by: { $0.range.location > $1.range.location }) {

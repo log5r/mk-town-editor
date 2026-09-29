@@ -7354,6 +7354,76 @@
           }
         }
       }
+    },
+    "Wikiリンク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiki Links"
+          }
+        }
+      }
+    },
+    "Wikiリンクを変更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change Wiki Link"
+          }
+        }
+      }
+    },
+    "Wikiリンクを挿入・編集…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert or Edit Wiki Link…"
+          }
+        }
+      }
+    },
+    "リンク先を開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Linked Document"
+          }
+        }
+      }
+    },
+    "文書名が同じ場合は相対パスで指定します。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use a relative path when documents have the same name."
+          }
+        }
+      }
+    },
+    "文書名またはパス": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document Name or Path"
+          }
+        }
+      }
+    },
+    "標準Markdownに変換": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert to Standard Markdown"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

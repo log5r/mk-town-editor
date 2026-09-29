@@ -23,7 +23,9 @@ struct WorkspaceBacklinkIndex: Sendable {
         let prefix = canonicalRoot.path.hasSuffix("/") ? canonicalRoot.path : canonicalRoot.path + "/"
         var backlinks: [WorkspaceBacklink] = []
         var skipped = 0
-        for node in documents(in: nodes) {
+        let workspaceDocuments = documents(in: nodes)
+        let documentURLs = workspaceDocuments.map(\.url)
+        for node in workspaceDocuments {
             try Task.checkCancellation()
             let sourceURL = node.url.resolvingSymlinksInPath().standardizedFileURL
             guard sourceURL.path.hasPrefix(prefix) else { continue }
@@ -66,6 +68,19 @@ struct WorkspaceBacklinkIndex: Sendable {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 backlinks.append(WorkspaceBacklink(sourceURL: sourceURL,
                     relativePath: relativePath, sourceRange: item.sourceRange,
+                    line: line, excerpt: String(excerpt.prefix(240))))
+            }
+            for wiki in WorkspaceWikiLinks.links(in: source) {
+                guard WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
+                    documents: documentURLs) == target else { continue }
+                let line = lines.line(containingUTF16Offset: wiki.range.location)
+                let start = lines.starts[line - 1]
+                let end = line < lines.lineCount ? lines.starts[line] - 1 : text.length
+                let excerpt = text.substring(with: NSRange(location: start,
+                    length: max(0, end - start)))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                backlinks.append(WorkspaceBacklink(sourceURL: sourceURL,
+                    relativePath: relativePath, sourceRange: wiki.range,
                     line: line, excerpt: String(excerpt.prefix(240))))
             }
         }
