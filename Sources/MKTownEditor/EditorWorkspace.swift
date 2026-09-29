@@ -76,6 +76,7 @@ struct EditorWorkspace: View {
     @State private var sidebarTab: SidebarTab = .outline
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
+    @State private var showingDailyNote = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
@@ -601,6 +602,17 @@ struct EditorWorkspace: View {
                             catch { workspaceOpenError = error.localizedDescription }
                         }
                     })
+            }
+        }
+        .sheet(isPresented: $showingDailyNote) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceDailyNoteSheet(root: root) { url in
+                    workspaceStore.refresh(force: true)
+                    Task {
+                        do { try await openDocument(at: url) }
+                        catch { workspaceOpenError = error.localizedDescription }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingFrontMatterProperties) {
@@ -1241,6 +1253,12 @@ struct EditorWorkspace: View {
                 .labelStyle(.iconOnly)
                 .disabled(workspaceStore.rootURL == nil)
                 .help("ファイル名で書類を探す")
+                Button("日付ノートを開く…", systemImage: "calendar") {
+                    showingDailyNote = true
+                }
+                .labelStyle(.iconOnly)
+                .disabled(workspaceStore.rootURL == nil)
+                .help("日付ノートを開く")
                 if let root = workspaceStore.rootURL {
                     Button("フォルダの編集設定", systemImage: "gearshape") {
                         showingFolderSettings = true

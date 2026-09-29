@@ -113,6 +113,26 @@ final class WorkspaceFileOperationsTests: XCTestCase {
                                                                   root: root, folder: false))
     }
 
+    func testCreateAndMoveRejectSymlinkedDestinationOutsideWorkspace() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let outside = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: outside)
+        }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let alias = root.appendingPathComponent("alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: outside)
+        XCTAssertThrowsError(try WorkspaceFileOperations.create(name: "new.md", in: alias,
+            root: root, folder: false))
+        let source = root.appendingPathComponent("source.md")
+        try "content".write(to: source, atomically: true, encoding: .utf8)
+        XCTAssertThrowsError(try WorkspaceFileOperations.planMove(source: source,
+            destination: alias.appendingPathComponent("source.md"), root: root))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: outside.appendingPathComponent("new.md").path))
+    }
+
     func testTrashMovesFileOutOfWorkspace() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
