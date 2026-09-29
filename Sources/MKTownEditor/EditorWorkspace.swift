@@ -77,6 +77,7 @@ struct EditorWorkspace: View {
     @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
+    @State private var showingWorkspaceTasks = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
@@ -615,6 +616,45 @@ struct EditorWorkspace: View {
                 }
             }
         }
+        .sheet(isPresented: $showingWorkspaceTasks) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceTaskSheet(root: root, nodes: workspaceStore.nodes,
+                    isTruncated: workspaceStore.isTruncated,
+                    loadOpenBuffers: {
+                        try workspaceStore.openBufferSnapshots(under: root)
+                    }, onToggle: { task in
+                        if task.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
+                            fileURL?.resolvingSymlinksInPath().standardizedFileURL {
+                            applyWorkspaceTask(task)
+                        } else {
+                            documentLinkNavigation.requestTaskToggle(task)
+                            Task {
+                                do { try await openDocument(at: task.sourceURL) }
+                                catch {
+                                    documentLinkNavigation.cancelTaskToggle(for: task.sourceURL)
+                                    workspaceOpenError = error.localizedDescription
+                                }
+                            }
+                        }
+                    }, onOpen: { task in
+                        if task.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
+                            fileURL?.resolvingSymlinksInPath().standardizedFileURL {
+                            if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                            navigate(to: task.sourceLocation)
+                        } else {
+                            documentLinkNavigation.requestPosition(in: task.sourceURL,
+                                range: NSRange(location: task.sourceLocation, length: 0))
+                            Task {
+                                do { try await openDocument(at: task.sourceURL) }
+                                catch {
+                                    documentLinkNavigation.cancelPosition(for: task.sourceURL)
+                                    workspaceOpenError = error.localizedDescription
+                                }
+                            }
+                        }
+                    })
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -832,6 +872,7 @@ struct EditorWorkspace: View {
             }
             legacyMode = nil
             receivePendingExternalLine()
+            receivePendingWorkspaceTask()
         }
         .onDisappear {
             savePosition(for: fileURL)
@@ -882,6 +923,7 @@ struct EditorWorkspace: View {
             }
             restorePosition(for: newURL)
             receivePendingExternalLine()
+            receivePendingWorkspaceTask()
         }
         .onChange(of: document.text) { _, newText in
             previewUpdates.sourceChanged()
@@ -909,6 +951,7 @@ struct EditorWorkspace: View {
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receivePendingDocumentLink()
+            receivePendingWorkspaceTask()
             if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
         }
         .onChange(of: documentLinkNavigation.pending) { _, _ in
@@ -919,6 +962,9 @@ struct EditorWorkspace: View {
         }
         .onChange(of: documentLinkNavigation.pendingLines) { _, _ in
             receivePendingExternalLine()
+        }
+        .onChange(of: documentLinkNavigation.pendingTaskToggle) { _, _ in
+            receivePendingWorkspaceTask()
         }
         .onDisappear {
             analysisStore.cancel()
@@ -1259,6 +1305,12 @@ struct EditorWorkspace: View {
                 .labelStyle(.iconOnly)
                 .disabled(workspaceStore.rootURL == nil)
                 .help("日付ノートを開く")
+                Button("未完了のタスクを表示…", systemImage: "checklist") {
+                    showingWorkspaceTasks = true
+                }
+                .labelStyle(.iconOnly)
+                .disabled(workspaceStore.rootURL == nil)
+                .help("未完了のタスクを表示")
                 if let root = workspaceStore.rootURL {
                     Button("フォルダの編集設定", systemImage: "gearshape") {
                         showingFolderSettings = true
@@ -1510,6 +1562,32 @@ struct EditorWorkspace: View {
         mode.wrappedValue = .editor
         let location = MarkdownLineIndex(document.text).destination(for: line).utf16Location
         navigate(to: location)
+    }
+
+    private func receivePendingWorkspaceTask() {
+        guard analysisStore.snapshot?.source == document.text,
+              let fileURL,
+              let task = documentLinkNavigation.takeTaskToggle(for: fileURL) else { return }
+        applyWorkspaceTask(task)
+    }
+
+    private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
+        guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
+              !workspaceStore.isDocumentLocked(fileURL) else {
+            workspaceOpenError = String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")
+            return
+        }
+        if editorModel.hasActiveEditor {
+            guard editorModel.applyRegexEdit(edit, expectedSource: document.text) else {
+                workspaceOpenError = String(localized: "タスクを変更できませんでした。")
+                return
+            }
+            editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
+        } else {
+            previewTaskUndoTarget.replaceText(edit.applying(to: document.text),
+                in: $document.text, undoManager: undoManager,
+                actionName: String(localized: "タスクを完了"))
+        }
     }
 
     private func checkLinks() {

@@ -7584,6 +7584,96 @@
           }
         }
       }
+    },
+    "タスクの位置または内容が変わりました。一覧を更新してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The task changed location or content. Refresh the list."
+          }
+        }
+      }
+    },
+    "タスクを変更できませんでした。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not update the task."
+          }
+        }
+      }
+    },
+    "タスクを完了": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Complete Task"
+          }
+        }
+      }
+    },
+    "タスクを検索中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching tasks"
+          }
+        }
+      }
+    },
+    "タスクを読み込めませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load tasks"
+          }
+        }
+      }
+    },
+    "未完了のタスク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incomplete Tasks"
+          }
+        }
+      }
+    },
+    "未完了のタスクはありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No incomplete tasks"
+          }
+        }
+      }
+    },
+    "未完了のタスクを表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Incomplete Tasks"
+          }
+        }
+      }
+    },
+    "未完了のタスクを表示…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Incomplete Tasks…"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
