@@ -282,6 +282,62 @@ final class MarkdownTableEditingTests: XCTestCase {
         XCTAssertNil(MarkdownTableEditing.edit(in: "| A |\n| --- |\n| x |", selection: NSRange(location: 2, length: 0),
                                                operation: .sortRowsAscending))
     }
+
+    func testGridDraftAndEditKeepSurroundingTextAndMarkdownCells() throws {
+        let source = "before\r\n\r\n| A | B |\r\n| --- | :---: |\r\n| [x](a.md) | a\\|b |\r\n\r\nafter"
+        let selection = NSRange(location: (source as NSString).range(of: "a\\|b").location, length: 0)
+        let draft = try XCTUnwrap(MarkdownTableEditing.gridDraft(in: source, selection: selection))
+        XCTAssertEqual(draft.header, ["A", "B"])
+        XCTAssertEqual(draft.rows, [["[x](a.md)", "a\\|b"]])
+        XCTAssertEqual(draft.alignments, [.leading, .center])
+        let edit = try XCTUnwrap(MarkdownTableEditing.gridEdit(
+            in: source, draft: draft, header: ["A", "B"],
+            rows: [["[x](a.md)", "a|b"], ["日本語", "next\nline"]],
+            alignments: [.trailing, .center]))
+        let result = edit.applying(to: source)
+        XCTAssertTrue(result.hasPrefix("before\r\n\r\n"))
+        XCTAssertTrue(result.hasSuffix("\r\n\r\nafter"))
+        let table = try XCTUnwrap(MarkdownAnalysis(result).rootBlocks.first(where: { $0.kind == .table })?.table)
+        XCTAssertEqual(table.rows, [["[x](a.md)", "a\\|b"], ["日本語", "next<br>line"]])
+        XCTAssertEqual(table.alignments, [.trailing, .center])
+    }
+
+    func testGridRejectsStaleSourceAndInvalidShape() throws {
+        let source = "| A |\n| --- |\n| x |"
+        let draft = try XCTUnwrap(MarkdownTableEditing.gridDraft(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "x").location, length: 0)))
+        XCTAssertNil(MarkdownTableEditing.gridEdit(in: source, draft: draft,
+                                                   header: draft.header, rows: draft.rows,
+                                                   alignments: draft.alignments))
+        XCTAssertNil(MarkdownTableEditing.gridEdit(in: source + " ", draft: draft,
+                                                   header: ["A"], rows: [["x"]],
+                                                   alignments: [.leading]))
+        XCTAssertNil(MarkdownTableEditing.gridEdit(in: source, draft: draft,
+                                                   header: ["A", "B"], rows: [["x"]],
+                                                   alignments: [.leading, .leading]))
+        XCTAssertNil(MarkdownTableEditing.gridEdit(in: source, draft: draft,
+                                                   header: [], rows: [], alignments: []))
+        XCTAssertNil(MarkdownTableEditing.gridDraft(in: "plain", selection: NSRange(location: 0, length: 0)))
+    }
+
+    func testGridCanChangeColumnCountInQuotedTableWithoutFinalNewline() throws {
+        let source = "> | A | B |\n> | --- | ---: |\n> | x | a\\|b |"
+        let draft = try XCTUnwrap(MarkdownTableEditing.gridDraft(in: source,
+            selection: NSRange(location: (source as NSString).range(of: "x").location, length: 0)))
+        let added = try XCTUnwrap(MarkdownTableEditing.gridEdit(in: source, draft: draft,
+            header: ["A", "B", "C"], rows: [["x", "a\\|b", "new"]],
+            alignments: [.leading, .trailing, .center]))
+        let result = added.applying(to: source)
+        XCTAssertTrue(result.hasPrefix("> | A | B | C |\n> | --- | ---: | :---: |\n"))
+        XCTAssertFalse(result.hasSuffix("\n"))
+        let table = try XCTUnwrap(MarkdownAnalysis(result).blocks.first(where: { $0.kind == .table })?.table)
+        XCTAssertEqual(table.rows, [["x", "a\\|b", "new"]])
+        let nextDraft = try XCTUnwrap(MarkdownTableEditing.gridDraft(in: result, selection: added.selection))
+        let removed = try XCTUnwrap(MarkdownTableEditing.gridEdit(in: result, draft: nextDraft,
+            header: ["A"], rows: [["x"]], alignments: [.leading]))
+        XCTAssertEqual(MarkdownAnalysis(removed.applying(to: result))
+            .blocks.first(where: { $0.kind == .table })?.table?.header, ["A"])
+    }
 }
 
 @MainActor
@@ -376,6 +432,40 @@ final class MarkdownTableInsertionEditorTests: XCTestCase {
         XCTAssertTrue(model.editTable(.sortRowsAscending))
         XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows, [["a"], ["b"]])
         view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+    }
+
+    func testGridEditIsOneUndoableEdit() {
+        let source = "| A |\n| --- |\n| x |\n"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: (source as NSString).range(of: "x").location, length: 0))
+        model.presentTableGrid()
+        XCTAssertNotNil(model.tableGridDraft)
+        XCTAssertTrue(model.commitTableGrid(header: ["New"], rows: [["y"]], alignments: [.center]))
+        XCTAssertEqual(MarkdownAnalysis(view.string).rootBlocks.first?.table?.rows, [["y"]])
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+    }
+
+    func testUnchangedGridClosesWithoutEditing() {
+        let source = "| A |\n| --- |\n| x |"
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = source
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: (source as NSString).range(of: "x").location, length: 0))
+        model.presentTableGrid()
+        let draft = model.tableGridDraft!
+        XCTAssertTrue(model.commitTableGrid(header: draft.header, rows: draft.rows,
+                                            alignments: draft.alignments))
+        XCTAssertNil(model.tableGridDraft)
         XCTAssertEqual(view.string, source)
     }
 }

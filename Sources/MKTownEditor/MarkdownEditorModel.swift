@@ -9,6 +9,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var linkDraft: MarkdownLinkDraft?
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
+    @Published var tableGridDraft: MarkdownTableGridDraft?
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     weak var textView: NSTextView?
@@ -462,6 +463,36 @@ final class MarkdownEditorModel: ObservableObject {
                                                      rows: rows, columns: columns),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         tableDraft = nil
+        return true
+    }
+
+    var canPresentTableGrid: Bool {
+        guard canExecuteCommand, let textView else { return false }
+        return MarkdownTableEditing.gridDraft(in: textView.string,
+                                               selection: textView.selectedRange()) != nil
+    }
+
+    func presentTableGrid() {
+        guard canExecuteCommand, let textView else { return }
+        tableGridDraft = MarkdownTableEditing.gridDraft(in: textView.string,
+                                                        selection: textView.selectedRange())
+    }
+
+    func commitTableGrid(header: [String], rows: [[String]],
+                         alignments: [MarkdownTable.Alignment]) -> Bool {
+        if let draft = tableGridDraft, let textView,
+           textView.string == draft.originalText,
+           header == draft.header, rows == draft.rows, alignments == draft.alignments {
+            tableGridDraft = nil
+            return true
+        }
+        guard let draft = tableGridDraft, let textView, let storage = textView.textStorage,
+              textView.isEditable, !textView.hasMarkedText(),
+              let edit = MarkdownTableEditing.gridEdit(in: textView.string, draft: draft,
+                                                       header: header, rows: rows,
+                                                       alignments: alignments),
+              perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
+        tableGridDraft = nil
         return true
     }
 
