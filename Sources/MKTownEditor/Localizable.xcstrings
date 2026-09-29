@@ -7494,6 +7494,96 @@
           }
         }
       }
+    },
+    "# %@\n\n## 今日のメモ\n\n## 振り返り\n": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "# %@\n\n## Today’s Notes\n\n## Reflection\n"
+          }
+        }
+      }
+    },
+    "# %@ 会議メモ\n\n## 議題\n\n## 決定事項\n\n## 次のアクション\n": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "# %@ Meeting Notes\n\n## Agenda\n\n## Decisions\n\n## Next Actions\n"
+          }
+        }
+      }
+    },
+    "同じ日付の書類がある場合は、その書類を開きます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If a note for this date exists, it will be opened."
+          }
+        }
+      }
+    },
+    "日付": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Date"
+          }
+        }
+      }
+    },
+    "日付ノート": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily Note"
+          }
+        }
+      }
+    },
+    "日付ノートを開く": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Daily Note"
+          }
+        }
+      }
+    },
+    "日付ノートを開く…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Daily Note…"
+          }
+        }
+      }
+    },
+    "日記": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Journal"
+          }
+        }
+      }
+    },
+    "空白": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blank"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

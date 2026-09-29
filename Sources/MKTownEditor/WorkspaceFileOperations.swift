@@ -133,7 +133,9 @@ enum WorkspaceFileOperations {
     static func planMove(source: URL, destination: URL, root: URL,
                          openDocuments: [URL: Data] = [:]) throws -> WorkspaceMovePlan {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
-        let destination = destination.resolvingSymlinksInPath().standardizedFileURL
+        let destination = destination.deletingLastPathComponent()
+            .resolvingSymlinksInPath().standardizedFileURL
+            .appendingPathComponent(destination.lastPathComponent)
         let root = root.resolvingSymlinksInPath().standardizedFileURL
         guard isInside(source, root: root), isInside(destination, root: root),
               !isInside(destination, root: source) else {
@@ -197,6 +199,11 @@ enum WorkspaceFileOperations {
         guard !trimmed.isEmpty, trimmed != ".", trimmed != "..",
               !trimmed.contains("/"), !trimmed.contains(":"), !trimmed.hasPrefix(".") else {
             throw WorkspaceFileOperationError.invalidName
+        }
+        let directory = directory.resolvingSymlinksInPath().standardizedFileURL
+        guard isInside(directory, root: root),
+              (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+            throw WorkspaceFileOperationError.outsideWorkspace
         }
         let filename = !folder && URL(fileURLWithPath: trimmed).pathExtension.isEmpty
             ? trimmed + ".md" : trimmed
