@@ -40,6 +40,7 @@ struct EditorWorkspace: View {
     @State private var externalLinkTask: Task<Void, Never>?
     @State private var showingMarkdownLint = false
     @State private var showingWorkspaceTags = false
+    @State private var showingBacklinks = false
     @State private var showingFrontMatterProperties = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
@@ -549,6 +550,32 @@ struct EditorWorkspace: View {
                                    })
             }
         }
+        .sheet(isPresented: $showingBacklinks) {
+            if let root = workspaceStore.rootURL, let target = fileURL {
+                WorkspaceBacklinksSheet(root: root, targetURL: target,
+                    nodes: workspaceStore.nodes, isTruncated: workspaceStore.isTruncated,
+                    loadOpenBuffers: {
+                        try workspaceStore.openBufferSnapshots(under: root)
+                    }, onOpen: { backlink in
+                        showingBacklinks = false
+                        if backlink.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
+                            target.resolvingSymlinksInPath().standardizedFileURL {
+                            if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                            navigate(to: backlink.sourceRange.location)
+                        } else {
+                            documentLinkNavigation.requestPosition(in: backlink.sourceURL,
+                                range: backlink.sourceRange)
+                            Task {
+                                do { try await openDocument(at: backlink.sourceURL) }
+                                catch {
+                                    documentLinkNavigation.cancelPosition(for: backlink.sourceURL)
+                                    workspaceOpenError = error.localizedDescription
+                                }
+                            }
+                        }
+                    })
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -1054,6 +1081,10 @@ struct EditorWorkspace: View {
         return List {
             Section("文書プロパティ") {
                 Button("プロパティを編集…") { showingFrontMatterProperties = true }
+            }
+            Section("参照元") {
+                Button("バックリンクを表示…") { showingBacklinks = true }
+                    .disabled(fileURL == nil || workspaceStore.rootURL == nil)
             }
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
                 let matching = items.filter { $0.kind == kind }

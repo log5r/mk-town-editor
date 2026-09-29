@@ -7284,6 +7284,76 @@
           }
         }
       }
+    },
+    "%@、%lld行、%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, line %lld, %@"
+          }
+        }
+      }
+    },
+    "バックリンク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Backlinks"
+          }
+        }
+      }
+    },
+    "バックリンクを表示…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Backlinks…"
+          }
+        }
+      }
+    },
+    "バックリンクを読み込めませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could Not Load Backlinks"
+          }
+        }
+      }
+    },
+    "参照元": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "References"
+          }
+        }
+      }
+    },
+    "参照元は見つかりません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No references found"
+          }
+        }
+      }
+    },
+    "参照元を調査中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finding references"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
