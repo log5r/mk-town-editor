@@ -70,7 +70,8 @@ enum MarkdownPlainTextExporter {
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
                                options: MarkdownPlainTextOptions) -> String {
         let references = replaceFootnoteReferences(in: markdown, include: options.footnotes)
-        let resolved = MarkdownRenderer.resolveReferences(in: references, using: analysis.references)
+        let resolved = MarkdownRenderer.resolveReferences(
+            in: MarkdownInlineExtensions.plainText(in: references), using: analysis.references)
         let parsing = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible

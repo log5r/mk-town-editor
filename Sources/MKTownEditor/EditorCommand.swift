@@ -4,6 +4,9 @@ enum EditorCommand: Hashable {
     case bold
     case italic
     case strikethrough
+    case highlight
+    case superscript
+    case subscriptText
     case inlineCode
     case link
     case convertLinkForm
@@ -67,7 +70,8 @@ enum EditorCommand: Hashable {
         }
     }
     static let palette: [Self] = [
-        .bold, .italic, .strikethrough, .inlineCode, .removeFormatting,
+        .bold, .italic, .strikethrough, .highlight, .superscript, .subscriptText,
+        .inlineCode, .removeFormatting,
         .link, .convertLinkForm, .footnote, .image, .table, .snippet,
         .heading(level: 0), .heading(level: 1), .heading(level: 2),
         .heading(level: 3), .heading(level: 4), .heading(level: 5), .heading(level: 6),
@@ -78,13 +82,16 @@ enum EditorCommand: Hashable {
         .deleteLines, .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
-    static let context: [Self] = [.bold, .italic, .strikethrough, .inlineCode, .removeFormatting, .selectNextOccurrence, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    static let context: [Self] = [.bold, .italic, .strikethrough, .highlight, .superscript, .subscriptText, .inlineCode, .removeFormatting, .selectNextOccurrence, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
         case .bold: String(localized: "太字")
         case .italic: String(localized: "斜体")
         case .strikethrough: String(localized: "取り消し線")
+        case .highlight: String(localized: "ハイライト")
+        case .superscript: String(localized: "上付き")
+        case .subscriptText: String(localized: "下付き")
         case .inlineCode: String(localized: "インラインコード")
         case .link: String(localized: "リンク")
         case .convertLinkForm: String(localized: "参照形式／インライン形式を変換")
@@ -126,6 +133,9 @@ enum EditorCommand: Hashable {
         case .bold: "bold"
         case .italic: "italic"
         case .strikethrough: "strikethrough"
+        case .highlight: "highlighter"
+        case .superscript: "textformat.superscript"
+        case .subscriptText: "textformat.subscript"
         case .inlineCode: "chevron.left.forwardslash.chevron.right"
         case .link: "link"
         case .convertLinkForm: "arrow.left.arrow.right"
@@ -167,6 +177,7 @@ enum EditorCommand: Hashable {
         case .bold: ("b", .command)
         case .italic: ("i", .command)
         case .strikethrough: ("x", [.command, .shift])
+        case .highlight, .superscript, .subscriptText: nil
         case .inlineCode: ("`", .command)
         case .link: ("k", .command)
         case .convertLinkForm: nil
@@ -259,6 +270,9 @@ enum EditorCommand: Hashable {
         case .bold: model.apply(.bold)
         case .italic: model.apply(.italic)
         case .strikethrough: model.apply(.strikethrough)
+        case .highlight: model.apply(.highlight)
+        case .superscript: model.apply(.superscript)
+        case .subscriptText: model.apply(.subscriptText)
         case .inlineCode: model.apply(.inlineCode)
         case .link: model.presentLinkEditor()
         case .convertLinkForm: model.convertLinkForm()

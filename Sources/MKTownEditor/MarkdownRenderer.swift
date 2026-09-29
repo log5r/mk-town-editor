@@ -265,8 +265,10 @@ enum MarkdownRenderer {
         let cited = context.markdownDialect == .extended && linked.contains("[@")
             ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
             : linked
+        let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
+            ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
         let layout = MarkdownImageLayout.parse(resolveReferences(
-            in: MarkdownSafeHTML.previewMarkdown(cited), using: references))
+            in: MarkdownSafeHTML.previewMarkdown(extensions.text), using: references))
         let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
             ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
         let resolved = math.text
@@ -387,6 +389,27 @@ enum MarkdownRenderer {
             let replacement = NSAttributedString(string: target.label, attributes: [
                 .font: baseFont, .foregroundColor: NSColor.linkColor, .link: url
             ])
+            result.replaceCharacters(in: range, with: replacement)
+        }
+        for (token, item) in extensions.items.reversed() {
+            let range = (result.string as NSString).range(of: token)
+            guard range.location != NSNotFound else { continue }
+            let inherited = result.attributes(at: range.location, effectiveRange: nil)
+            let replacement = NSMutableAttributedString(string: item.content,
+                attributes: inherited)
+            let contentRange = NSRange(location: 0, length: replacement.length)
+            let inheritedFont = inherited[.font] as? NSFont ?? baseFont
+            switch item.kind {
+            case .mark:
+                replacement.addAttribute(.backgroundColor,
+                    value: NSColor.systemYellow.withAlphaComponent(0.35), range: contentRange)
+            case .sup:
+                replacement.addAttributes([.font: NSFont.systemFont(ofSize: inheritedFont.pointSize * 0.75),
+                                           .baselineOffset: inheritedFont.pointSize * 0.3], range: contentRange)
+            case .sub:
+                replacement.addAttributes([.font: NSFont.systemFont(ofSize: inheritedFont.pointSize * 0.75),
+                                           .baselineOffset: -inheritedFont.pointSize * 0.2], range: contentRange)
+            }
             result.replaceCharacters(in: range, with: replacement)
         }
         return result
