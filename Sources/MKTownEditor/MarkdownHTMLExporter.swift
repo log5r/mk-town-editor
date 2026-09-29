@@ -155,6 +155,13 @@ enum MarkdownHTMLExporter {
             return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context))</h\(level)>\n"
         case .paragraph:
             if analysis.crossReferences.markerBlockIDs.contains(block.id) { return "" }
+            if let media = MarkdownMedia(block, dialect: context.markdownDialect) {
+                let label = escape(media.label)
+                if let url = media.localURL(in: context) {
+                    return "<p><a href=\"\(escape(url.absoluteString))\">\(label)</a></p>\n"
+                }
+                return "<p>\(label)（再生不可）</p>\n"
+            }
             if let definitions = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
                 let entries = definitions.entries.map { entry in
                     "<dt>\(inline(entry.term, analysis: analysis, context: context))</dt>" +

@@ -191,6 +191,16 @@ enum MarkdownRenderer {
             if context.crossReferences?.markerBlockIDs.contains(block.id) == true {
                 return NSAttributedString(string: "")
             }
+            if let media = MarkdownMedia(block, dialect: context.markdownDialect) {
+                let label = media.localURL(in: context) == nil
+                    ? "\(media.label)（再生不可）" : media.label
+                let result = NSMutableAttributedString(string: label)
+                if let url = media.localURL(in: context) {
+                    result.addAttribute(.link, value: url,
+                        range: NSRange(location: 0, length: result.length))
+                }
+                return result
+            }
             if let definitionList = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
                 let output = NSMutableAttributedString(string: "")
                 for entry in definitionList.entries {

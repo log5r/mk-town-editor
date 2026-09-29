@@ -55,6 +55,9 @@ struct MarkdownPreview: View {
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
                 markdown.contains("![[") ||
+                analysis.blocks.contains(where: {
+                    MarkdownMedia($0, dialect: analysis.dialect) != nil
+                }) ||
                 !analysis.crossReferences.targets.isEmpty ||
                 (documentContext.markdownDialect == .extended && markdown.contains("$")) ||
                 !analysis.footnotes.entries.isEmpty ||
@@ -107,6 +110,8 @@ struct MarkdownPreview: View {
                                             documents: workspaceDocumentURLs,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument)
+                                    } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
+                                        MarkdownMediaPreview(media: media, documentContext: documentContext)
                                     } else if block.kind == .paragraph,
                                               let formula = MarkdownMath.displayFormula(block.content),
                                               MarkdownMathRenderer.label(formula) != nil {
