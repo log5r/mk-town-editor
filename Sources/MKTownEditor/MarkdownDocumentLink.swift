@@ -32,6 +32,26 @@ final class DocumentLinkNavigation: ObservableObject {
     @Published private(set) var pending: Pending?
     @Published private(set) var pendingPosition: PendingPosition?
     @Published private(set) var pendingLines: [URL: Int] = [:]
+    @Published private(set) var pendingTaskToggle: WorkspaceTaskItem?
+
+    func requestTaskToggle(_ task: WorkspaceTaskItem) {
+        pendingTaskToggle = task
+    }
+
+    func takeTaskToggle(for fileURL: URL) -> WorkspaceTaskItem? {
+        guard pendingTaskToggle?.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
+            fileURL.resolvingSymlinksInPath().standardizedFileURL else { return nil }
+        let task = pendingTaskToggle
+        pendingTaskToggle = nil
+        return task
+    }
+
+    func cancelTaskToggle(for fileURL: URL) {
+        if pendingTaskToggle?.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
+            fileURL.resolvingSymlinksInPath().standardizedFileURL {
+            pendingTaskToggle = nil
+        }
+    }
 
     func requestLine(in fileURL: URL, line: Int) {
         guard line > 0 else { return }
