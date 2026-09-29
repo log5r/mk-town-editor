@@ -41,6 +41,8 @@ struct EditorWorkspace: View {
     @State private var showingMarkdownLint = false
     @State private var showingWorkspaceTags = false
     @State private var showingBacklinks = false
+    @State private var showingWikiLinks = false
+    @State private var wikiSelection = NSRange(location: 0, length: 0)
     @State private var showingFrontMatterProperties = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
@@ -576,6 +578,30 @@ struct EditorWorkspace: View {
                     })
             }
         }
+        .sheet(isPresented: $showingWikiLinks) {
+            if let root = workspaceStore.rootURL, let fileURL {
+                WorkspaceWikiLinkSheet(root: root, nodes: workspaceStore.nodes,
+                    documentURL: fileURL, source: document.text,
+                    selection: wikiSelection, onApply: { edit, expectedSource in
+                        guard document.text == expectedSource,
+                              !workspaceStore.isDocumentLocked(fileURL) else { return false }
+                        if editorModel.hasActiveEditor {
+                            return editorModel.applyRegexEdit(edit, expectedSource: expectedSource)
+                        }
+                        previewTaskUndoTarget.replaceText(edit.applying(to: expectedSource),
+                            in: $document.text, undoManager: undoManager,
+                            actionName: String(localized: "Wikiリンクを変更"))
+                        return true
+                    }, onOpen: { url in
+                        if url.resolvingSymlinksInPath().standardizedFileURL ==
+                            fileURL.resolvingSymlinksInPath().standardizedFileURL { return }
+                        Task {
+                            do { try await openDocument(at: url) }
+                            catch { workspaceOpenError = error.localizedDescription }
+                        }
+                    })
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -1085,6 +1111,14 @@ struct EditorWorkspace: View {
             Section("参照元") {
                 Button("バックリンクを表示…") { showingBacklinks = true }
                     .disabled(fileURL == nil || workspaceStore.rootURL == nil)
+            }
+            Section("Wikiリンク") {
+                Button("Wikiリンクを挿入・編集…") {
+                    wikiSelection = editorModel.selectedRange
+                    showingWikiLinks = true
+                }
+                .disabled(fileURL == nil || workspaceStore.rootURL == nil ||
+                    workspaceStore.isDocumentLocked(fileURL))
             }
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
                 let matching = items.filter { $0.kind == kind }
