@@ -131,6 +131,8 @@
 		A10000000000000000000095 /* GitRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000094 /* GitRepository.swift */; };
 		A10000000000000000000096 /* GitHistorySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000095 /* GitHistorySheet.swift */; };
 		A10000000000000000000097 /* GitCommitSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000096 /* GitCommitSheet.swift */; };
+		A10000000000000000000098 /* CloudFileStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000097 /* CloudFileStatus.swift */; };
+		A10000000000000000000099 /* CloudFileStatusSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000098 /* CloudFileStatusSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -260,6 +262,8 @@
 		A20000000000000000000094 /* GitRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitRepository.swift; sourceTree = "<group>"; };
 		A20000000000000000000095 /* GitHistorySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHistorySheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000096 /* GitCommitSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitCommitSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000097 /* CloudFileStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFileStatus.swift; sourceTree = "<group>"; };
+		A20000000000000000000098 /* CloudFileStatusSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudFileStatusSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -403,6 +407,8 @@
 				A20000000000000000000094 /* GitRepository.swift */,
 				A20000000000000000000095 /* GitHistorySheet.swift */,
 				A20000000000000000000096 /* GitCommitSheet.swift */,
+				A20000000000000000000097 /* CloudFileStatus.swift */,
+				A20000000000000000000098 /* CloudFileStatusSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -593,6 +599,8 @@
 				A10000000000000000000095 /* GitRepository.swift in Sources */,
 				A10000000000000000000096 /* GitHistorySheet.swift in Sources */,
 				A10000000000000000000097 /* GitCommitSheet.swift in Sources */,
+				A10000000000000000000098 /* CloudFileStatus.swift in Sources */,
+				A10000000000000000000099 /* CloudFileStatusSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
