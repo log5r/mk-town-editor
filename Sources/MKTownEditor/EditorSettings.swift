@@ -186,6 +186,7 @@ struct AppEditorSettings: Codable, Equatable {
     var loadsRemoteImages: Bool?
     var loadsExternalLinkPreviews: Bool?
     var showsMinimap: Bool?
+    var usesInlineLivePresentation: Bool?
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
     var previewTheme: PreviewTheme?

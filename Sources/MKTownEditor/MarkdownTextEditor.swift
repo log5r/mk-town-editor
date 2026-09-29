@@ -20,6 +20,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var onVisibleSourceChange: ((Int) -> Void)?
     var documentContext = DocumentContext(fileURL: nil)
     var loadsExternalLinkPreviews = false
+    var usesInlineLivePresentation = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -99,6 +100,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.registerForDraggedTypes([.fileURL])
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
+        context.coordinator.usesInlineLivePresentation = usesInlineLivePresentation
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
@@ -109,6 +111,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView, let model else { return }
             model.editorDidGainFocus(textView)
             coordinator?.applyProofingLanguage()
+            coordinator?.refreshSyntax()
+        }
+        textView.onBlurred = { [weak coordinator = context.coordinator] in
+            Task { @MainActor [weak coordinator] in coordinator?.refreshSyntax() }
         }
         scrollView.onWindowAttached = { [weak textView, weak model, weak coordinator = context.coordinator, weak scrollView] in
             guard let textView, let model, let coordinator, let scrollView else { return }
@@ -142,6 +148,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
+        context.coordinator.usesInlineLivePresentation = usesInlineLivePresentation
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
@@ -198,6 +205,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         var appliedLayoutOptions: EditorLayoutOptions?
         var sharedSnapshot: DocumentSnapshot?
         var usesSharedAnalysis = false
+        var usesInlineLivePresentation = false
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
@@ -205,6 +213,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
         private var highlightedWithSharedAnalysis: Bool?
+        private var highlightedWithLivePresentation: Bool?
+        private var inlineLiveDisplay: MarkdownInlineLiveDisplay?
         var isRestoringSession = false
 
         init(text: Binding<String>, model: MarkdownEditorModel) {
@@ -229,17 +239,32 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView, !textView.hasMarkedText() else { return }
             let source = textView.string
             let snapshotSource = sharedSnapshot?.source
-            guard highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
-                    highlightedWithSharedAnalysis != usesSharedAnalysis else { return }
-            if usesSharedAnalysis {
+            let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
+                highlightedWithSharedAnalysis != usesSharedAnalysis ||
+                highlightedWithLivePresentation != usesInlineLivePresentation
+            if needsBase {
                 let spans = snapshotSource == source ? sharedSnapshot?.syntaxSpans : nil
-                MarkdownSyntaxHighlighter.apply(to: textView, spans: spans ?? [])
-            } else {
-                MarkdownSyntaxHighlighter.apply(to: textView)
+                let displaySpans = usesSharedAnalysis ? spans : MarkdownSyntaxHighlighter.spans(in: source)
+                MarkdownSyntaxHighlighter.apply(to: textView, spans: displaySpans ?? [])
+                if usesInlineLivePresentation,
+                   let displaySpans {
+                    inlineLiveDisplay = MarkdownInlineLiveDisplay(textView: textView,
+                        ranges: MarkdownInlineLivePresentation.markerRanges(in: source,
+                            spans: displaySpans,
+                            analysis: snapshotSource == source ? sharedSnapshot?.analysis : nil))
+                } else {
+                    inlineLiveDisplay = nil
+                }
+                highlightedSource = source
+                highlightedSnapshotSource = snapshotSource
+                highlightedWithSharedAnalysis = usesSharedAnalysis
+                highlightedWithLivePresentation = usesInlineLivePresentation
             }
-            highlightedSource = source
-            highlightedSnapshotSource = snapshotSource
-            highlightedWithSharedAnalysis = usesSharedAnalysis
+            let selections = textView.window?.firstResponder === textView
+                ? textView.selectedRanges.map(\.rangeValue) : []
+            inlineLiveDisplay?.update(in: textView,
+                activeLines: MarkdownInlineLivePresentation.activeLines(in: source, selections: selections),
+                force: needsBase)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -247,6 +272,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             (textView as? EditorTextView)?.unfold(containing: textView.selectedRange())
             model.selectionDidChange(textView.selectedRanges.map(\.rangeValue))
             applyProofing()
+            refreshSyntax()
         }
 
         @MainActor func applyProofingLanguage() {
@@ -329,6 +355,7 @@ private final class EditorScrollView: NSScrollView {
 
 final class EditorTextView: NSTextView {
     var onFocused: (() -> Void)?
+    var onBlurred: (() -> Void)?
     weak var commandModel: MarkdownEditorModel?
     var imageImportMode: ImageImportMode = .managedCopy
     var onImageDrop: ((URL, Int) -> Void)?
@@ -471,6 +498,12 @@ final class EditorTextView: NSTextView {
         let didBecome = super.becomeFirstResponder()
         if didBecome { onFocused?() }
         return didBecome
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let didResign = super.resignFirstResponder()
+        if didResign { onBlurred?() }
+        return didResign
     }
 
     override func insertNewline(_ sender: Any?) {

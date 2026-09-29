@@ -1625,7 +1625,8 @@ struct EditorWorkspace: View {
                                onImageDrop: dropImage, onImagePaste: pasteImage,
                                onVisibleSourceChange: synchronizePreview(to:),
                                documentContext: documentContext,
-                               loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false)
+                               loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
+                               usesInlineLivePresentation: settingsStore.app.usesInlineLivePresentation ?? false)
             if settingsStore.app.showsMinimap ?? false {
                 Divider()
                 MarkdownMinimapView(source: document.text, viewport: editorModel.viewport) { location in
