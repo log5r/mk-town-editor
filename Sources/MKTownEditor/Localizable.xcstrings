@@ -7674,6 +7674,116 @@
           }
         }
       }
+    },
+    "%lld書類・%lldリンク": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld documents · %lld links"
+          }
+        }
+      }
+    },
+    "グラフを読み込めませんでした": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load graph"
+          }
+        }
+      }
+    },
+    "ファイル一覧が上限に達しました。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file index reached its limit."
+          }
+        }
+      }
+    },
+    "全体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Documents"
+          }
+        }
+      }
+    },
+    "文書リンクのグラフ": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Document Link Graph"
+          }
+        }
+      }
+    },
+    "文書リンクのグラフを表示…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Document Link Graph…"
+          }
+        }
+      }
+    },
+    "文書リンクを調査中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexing document links"
+          }
+        }
+      }
+    },
+    "現在の書類の近傍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nearby Documents"
+          }
+        }
+      }
+    },
+    "表示できる書類がありません": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No documents to display"
+          }
+        }
+      }
+    },
+    "表示は150書類までです。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing up to 150 documents."
+          }
+        }
+      }
+    },
+    "表示範囲": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Range"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
