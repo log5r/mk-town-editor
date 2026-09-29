@@ -91,6 +91,8 @@
 		A10000000000000000000067 /* MarkdownInlineLivePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */; };
 		A10000000000000000000068 /* TypewriterScrolling.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000068 /* TypewriterScrolling.swift */; };
 		A10000000000000000000069 /* TerminologyDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000069 /* TerminologyDictionary.swift */; };
+		A10000000000000000000070 /* WorkspaceTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000070 /* WorkspaceTags.swift */; };
+		A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000071 /* WorkspaceTagsSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -181,6 +183,8 @@
 		A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownInlineLivePresentation.swift; sourceTree = "<group>"; };
 		A20000000000000000000068 /* TypewriterScrolling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypewriterScrolling.swift; sourceTree = "<group>"; };
 		A20000000000000000000069 /* TerminologyDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminologyDictionary.swift; sourceTree = "<group>"; };
+		A20000000000000000000070 /* WorkspaceTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTags.swift; sourceTree = "<group>"; };
+		A20000000000000000000071 /* WorkspaceTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTagsSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -285,6 +289,8 @@
 				A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */,
 				A20000000000000000000068 /* TypewriterScrolling.swift */,
 				A20000000000000000000069 /* TerminologyDictionary.swift */,
+				A20000000000000000000070 /* WorkspaceTags.swift */,
+				A20000000000000000000071 /* WorkspaceTagsSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -436,6 +442,8 @@
 				A10000000000000000000067 /* MarkdownInlineLivePresentation.swift in Sources */,
 				A10000000000000000000068 /* TypewriterScrolling.swift in Sources */,
 				A10000000000000000000069 /* TerminologyDictionary.swift in Sources */,
+				A10000000000000000000070 /* WorkspaceTags.swift in Sources */,
+				A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

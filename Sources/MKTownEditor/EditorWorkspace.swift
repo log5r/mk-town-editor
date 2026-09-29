@@ -39,6 +39,7 @@ struct EditorWorkspace: View {
     @State private var isCheckingExternalLinks = false
     @State private var externalLinkTask: Task<Void, Never>?
     @State private var showingMarkdownLint = false
+    @State private var showingWorkspaceTags = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
     @State private var showingTerminology = false
@@ -531,6 +532,21 @@ struct EditorWorkspace: View {
                                   if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
                                   navigate(to: diagnostic.sourceRange.location)
                               })
+        }
+        .sheet(isPresented: $showingWorkspaceTags) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceTagsSheet(root: root, nodes: workspaceStore.nodes,
+                                   isTruncated: workspaceStore.isTruncated,
+                                   loadOpenBuffers: {
+                                       try workspaceStore.openBufferSnapshots(under: root)
+                                   }, onOpen: { url in
+                                       showingWorkspaceTags = false
+                                       Task {
+                                           do { try await openDocument(at: url) }
+                                           catch { workspaceOpenError = error.localizedDescription }
+                                       }
+                                   })
+            }
         }
         .sheet(isPresented: $showingTerminology) {
             TerminologySheet(issues: terminologyIssues, isChecking: isCheckingTerminology,
@@ -1173,6 +1189,7 @@ struct EditorWorkspace: View {
                             }
                         }
                         Divider()
+                        Button("タグ一覧…") { showingWorkspaceTags = true }
                         Button("添付ファイルを確認…") { showingAttachmentAudit = true }
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease")
