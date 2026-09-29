@@ -40,6 +40,7 @@ struct EditorWorkspace: View {
     @State private var externalLinkTask: Task<Void, Never>?
     @State private var showingMarkdownLint = false
     @State private var showingWorkspaceTags = false
+    @State private var showingFrontMatterProperties = false
     @State private var isCheckingMarkdownLint = false
     @State private var markdownLintDiagnostics: [MarkdownLintDiagnostic] = []
     @State private var showingTerminology = false
@@ -548,6 +549,20 @@ struct EditorWorkspace: View {
                                    })
             }
         }
+        .sheet(isPresented: $showingFrontMatterProperties) {
+            FrontMatterPropertiesSheet(source: document.text,
+                canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
+                    guard document.text == expectedSource,
+                          !workspaceStore.isDocumentLocked(fileURL) else { return false }
+                    if editorModel.hasActiveEditor {
+                        return editorModel.applyRegexEdit(edit, expectedSource: expectedSource)
+                    }
+                    previewTaskUndoTarget.replaceText(edit.applying(to: expectedSource),
+                        in: $document.text, undoManager: undoManager,
+                        actionName: String(localized: "文書プロパティを変更"))
+                    return true
+                }
+        }
         .sheet(isPresented: $showingTerminology) {
             TerminologySheet(issues: terminologyIssues, isChecking: isCheckingTerminology,
                              source: terminologySource, canReplace: editorModel.canExecuteCommand,
@@ -1037,6 +1052,9 @@ struct EditorWorkspace: View {
                 : nil
         } ?? []
         return List {
+            Section("文書プロパティ") {
+                Button("プロパティを編集…") { showingFrontMatterProperties = true }
+            }
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in
                 let matching = items.filter { $0.kind == kind }
                 Section("\(kind.title)（\(matching.count)）") {
@@ -1060,8 +1078,6 @@ struct EditorWorkspace: View {
         .overlay {
             if !isReady {
                 ProgressView("項目を解析中…")
-            } else if items.isEmpty {
-                ContentUnavailableView("項目がありません", systemImage: "list.bullet.rectangle")
             }
         }
     }
