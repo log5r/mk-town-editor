@@ -259,6 +259,10 @@ struct WorkspaceFileOperationSheet: View {
                 case let .rename(source), let .move(source):
                     if let movePlan { workspaceStore.remapPins(from: source, to: movePlan.destinationURL) }
                     if let movePlan { settingsStore.moveBookmarks(under: source, to: movePlan.destinationURL) }
+                    if let movePlan {
+                        WorkspaceNamedLayoutStore().remapDocuments(from: source,
+                            to: movePlan.destinationURL, root: root)
+                    }
                 case let .trash(source): workspaceStore.removePins(under: source)
                 case .createDocument, .createFolder: break
                 }

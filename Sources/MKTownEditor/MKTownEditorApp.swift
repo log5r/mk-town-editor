@@ -6,6 +6,7 @@ struct MKTownEditorApp: App {
     @StateObject private var settingsStore = EditorSettingsStore()
     @StateObject private var documentLinkNavigation = DocumentLinkNavigation.shared
     @StateObject private var workspaceStore = WorkspaceStore()
+    @StateObject private var layoutActivation = WorkspaceLayoutActivation()
 
     var body: some Scene {
         DocumentGroup(newDocument: MarkdownDocument()) { file in
@@ -13,6 +14,7 @@ struct MKTownEditorApp: App {
                 .environmentObject(settingsStore)
                 .environmentObject(documentLinkNavigation)
                 .environmentObject(workspaceStore)
+                .environmentObject(layoutActivation)
         }
         .commands {
             MarkdownCommands(settingsStore: settingsStore, workspaceStore: workspaceStore)

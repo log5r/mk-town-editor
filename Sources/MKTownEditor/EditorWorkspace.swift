@@ -8,6 +8,7 @@ struct EditorWorkspace: View {
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @EnvironmentObject private var documentLinkNavigation: DocumentLinkNavigation
     @EnvironmentObject private var workspaceStore: WorkspaceStore
+    @EnvironmentObject private var layoutActivation: WorkspaceLayoutActivation
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
@@ -82,6 +83,7 @@ struct EditorWorkspace: View {
     @State private var showingNoteSplit = false
     @State private var splitHeadingLocation: Int?
     @State private var showingNoteMerge = false
+    @State private var showingNamedLayouts = false
     @State private var showingWorkspaceSearch = false
     @State private var showingWorkspaceReplace = false
     @State private var showingAttachmentAudit = false
@@ -724,6 +726,19 @@ struct EditorWorkspace: View {
                     })
             }
         }
+        .sheet(isPresented: $showingNamedLayouts) {
+            if let root = workspaceStore.rootURL {
+                WorkspaceNamedLayoutSheet(root: root,
+                    current: WorkspaceNamedLayout.capture(name: "", root: root,
+                        openDocuments: workspaceStore.openDocumentURLs,
+                        activeDocument: fileURL, mode: mode.wrappedValue,
+                        sidebarTab: sidebarTab.rawValue,
+                        sidebarVisible: (focusMode.savedSidebarVisibility ?? sidebarVisibility) != .detailOnly,
+                        splitRatio: splitRatio, splitOrientation: splitOrientation,
+                        previewFirst: previewFirst),
+                    onApply: applyNamedLayout)
+            }
+        }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
                 canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
@@ -1035,6 +1050,10 @@ struct EditorWorkspace: View {
         .onChange(of: documentLinkNavigation.pendingTaskToggle) { _, _ in
             receivePendingWorkspaceTask()
         }
+        .onChange(of: layoutActivation.event?.id) { _, _ in
+            guard let fileURL, let layout = layoutActivation.layout(for: fileURL) else { return }
+            applyNamedLayoutState(layout)
+        }
         .onDisappear {
             analysisStore.cancel()
         }
@@ -1192,6 +1211,39 @@ struct EditorWorkspace: View {
                                    previewFirst: previewFirst)
     }
 
+    private func applyNamedLayout(_ layout: WorkspaceNamedLayout) {
+        guard let root = workspaceStore.rootURL else { return }
+        let resolved = layout.resolveDocuments(root: root)
+        for url in resolved.urls {
+            settingsStore.applyWorkspaceLayout(layout, to: url)
+        }
+        layoutActivation.activate(layout, documents: resolved.urls)
+        applyNamedLayoutState(layout)
+        Task {
+            var failed = resolved.missing
+            for url in resolved.urls {
+                do { try await openDocument(at: url) }
+                catch { failed.append(url.lastPathComponent) }
+            }
+            if !failed.isEmpty {
+                workspaceOpenError = String(localized: "開けなかった書類: \(failed.joined(separator: ", "))")
+            }
+        }
+    }
+
+    private func applyNamedLayoutState(_ layout: WorkspaceNamedLayout) {
+        if focusMode.isActive {
+            sidebarVisibility = focusMode.toggle(sidebarVisibility: sidebarVisibility)
+        }
+        mode.wrappedValue = layout.mode
+        sidebarTab = SidebarTab(rawValue: layout.sidebarTab) ?? .outline
+        sidebarVisibility = layout.sidebarVisible ? .all : .detailOnly
+        splitRatio = min(0.8, max(0.2, layout.splitRatio))
+        splitOrientation = layout.splitOrientation
+        previewFirst = layout.previewFirst
+        savePosition(for: fileURL)
+    }
+
     private func toggleFocusMode() {
         sidebarVisibility = focusMode.toggle(sidebarVisibility: sidebarVisibility)
         savePosition(for: fileURL)
@@ -1275,6 +1327,10 @@ struct EditorWorkspace: View {
                     MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
                         in: outlineEntries) == nil)
                 Button("書類を結合…") { showingNoteMerge = true }
+                    .disabled(workspaceStore.rootURL == nil)
+            }
+            Section("作業レイアウト") {
+                Button("名前付きレイアウト…") { showingNamedLayouts = true }
                     .disabled(workspaceStore.rootURL == nil)
             }
             ForEach(MarkdownContentKind.allCases, id: \.self) { kind in

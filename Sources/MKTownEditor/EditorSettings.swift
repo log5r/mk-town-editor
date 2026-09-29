@@ -429,6 +429,19 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    func applyWorkspaceLayout(_ layout: WorkspaceNamedLayout, to documentURL: URL) {
+        let key = Self.key(for: documentURL)
+        var state = values.documents[key] ?? DocumentDisplayState(mode: layout.mode)
+        state.mode = layout.mode
+        state.sidebarTab = layout.sidebarTab
+        state.sidebarVisible = layout.sidebarVisible
+        state.splitRatio = min(0.8, max(0.2, layout.splitRatio))
+        state.splitOrientation = layout.splitOrientation
+        state.previewFirst = layout.previewFirst
+        values.documents[key] = state
+        save()
+    }
+
     func displayState(for documentURL: URL) -> DocumentDisplayState? {
         values.documents[Self.key(for: documentURL)]
     }
