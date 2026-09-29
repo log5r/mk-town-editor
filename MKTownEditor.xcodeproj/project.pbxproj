@@ -93,6 +93,8 @@
 		A10000000000000000000069 /* TerminologyDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000069 /* TerminologyDictionary.swift */; };
 		A10000000000000000000070 /* WorkspaceTags.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000070 /* WorkspaceTags.swift */; };
 		A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000071 /* WorkspaceTagsSheet.swift */; };
+		A10000000000000000000072 /* FrontMatterProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000072 /* FrontMatterProperties.swift */; };
+		A10000000000000000000073 /* FrontMatterPropertiesSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -185,6 +187,8 @@
 		A20000000000000000000069 /* TerminologyDictionary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminologyDictionary.swift; sourceTree = "<group>"; };
 		A20000000000000000000070 /* WorkspaceTags.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTags.swift; sourceTree = "<group>"; };
 		A20000000000000000000071 /* WorkspaceTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceTagsSheet.swift; sourceTree = "<group>"; };
+		A20000000000000000000072 /* FrontMatterProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontMatterProperties.swift; sourceTree = "<group>"; };
+		A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrontMatterPropertiesSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -291,6 +295,8 @@
 				A20000000000000000000069 /* TerminologyDictionary.swift */,
 				A20000000000000000000070 /* WorkspaceTags.swift */,
 				A20000000000000000000071 /* WorkspaceTagsSheet.swift */,
+				A20000000000000000000072 /* FrontMatterProperties.swift */,
+				A20000000000000000000073 /* FrontMatterPropertiesSheet.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -444,6 +450,8 @@
 				A10000000000000000000069 /* TerminologyDictionary.swift in Sources */,
 				A10000000000000000000070 /* WorkspaceTags.swift in Sources */,
 				A10000000000000000000071 /* WorkspaceTagsSheet.swift in Sources */,
+				A10000000000000000000072 /* FrontMatterProperties.swift in Sources */,
+				A10000000000000000000073 /* FrontMatterPropertiesSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
