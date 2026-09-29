@@ -59,6 +59,19 @@
 	<true/>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict><key>default</key><string>選択テキストをMarkdown書類に保存</string></dict>
+			<key>NSMessage</key>
+			<string>saveSelectionAsMarkdown</string>
+			<key>NSPortName</key>
+			<string>MKTownEditor</string>
+			<key>NSSendTypes</key>
+			<array><string>NSStringPboardType</string></array>
+		</dict>
+	</array>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
