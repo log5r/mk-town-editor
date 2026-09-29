@@ -91,6 +91,8 @@ struct EditorWorkspace: View {
     @State private var showingSnapshotHistory = false
     @State private var showingGitHistory = false
     @State private var showingGitCommit = false
+    @State private var showingCloudStatus = false
+    @State private var cloudStatus: CloudFileStatus?
     @State private var showingFolderSettings = false
     @State private var showingPreviewSearch = false
     @State private var previewSearchQuery = ""
@@ -334,6 +336,14 @@ struct EditorWorkspace: View {
                 }
                 .disabled(fileURL == nil)
             }
+            ToolbarItem(id: "cloud-status", placement: .primaryAction) {
+                Button(cloudStatus?.hasUnresolvedConflicts == true ? "競合版あり" : "同期状態と競合版",
+                       systemImage: cloudStatus?.hasUnresolvedConflicts == true
+                           ? "exclamationmark.triangle" : "icloud") {
+                    showingCloudStatus = true
+                }
+                .disabled(fileURL == nil)
+            }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
@@ -393,6 +403,22 @@ struct EditorWorkspace: View {
                         do { try await openDocument(at: url) }
                         catch { workspaceOpenError = error.localizedDescription }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showingCloudStatus) {
+            if let fileURL {
+                CloudFileStatusSheet(fileURL: fileURL, source: $document.text) { selected, expected in
+                    guard document.text == expected else { return false }
+                    if editorModel.hasActiveEditor {
+                        let range = NSRange(location: 0, length: (expected as NSString).length)
+                        return editorModel.applyRegexEdit(MarkdownEdit(range: range,
+                            replacement: selected, selection: NSRange(location: 0, length: 0)),
+                            expectedSource: expected)
+                    }
+                    previewTaskUndoTarget.replaceText(selected, in: $document.text,
+                        undoManager: undoManager, actionName: String(localized: "競合版を採用"))
+                    return true
                 }
             }
         }
@@ -983,6 +1009,7 @@ struct EditorWorkspace: View {
             receivePendingDocumentLink()
             receivePendingSearchPosition()
             workspaceStore.refresh()
+            refreshCloudStatus()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
             } else {
@@ -1005,9 +1032,11 @@ struct EditorWorkspace: View {
         }
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             workspaceStore.refresh()
+            refreshCloudStatus()
             savePosition(for: fileURL)
         }
         .onChange(of: fileURL) { oldURL, newURL in
+            refreshCloudStatus()
             detachedPreview.updateDocumentURL(newURL)
             savePosition(for: oldURL)
             if workspaceViewActive {
@@ -1893,6 +1922,11 @@ struct EditorWorkspace: View {
         slideWindow.show(deck: deck, context: documentContext) {
             saveSlidePDF(deck)
         }
+    }
+
+    private func refreshCloudStatus() {
+        let next = fileURL.flatMap { try? CloudFileStatus.read(at: $0) }
+        if cloudStatus != next { cloudStatus = next }
     }
 
     private func saveSlidePDF(_ deck: MarkdownSlideDeck) {
