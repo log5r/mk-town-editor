@@ -6522,6 +6522,168 @@
           }
         }
       }
+    },
+    "グリッドで編集…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit in Grid…"
+          }
+        }
+      }
+    },
+    "セル": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell"
+          }
+        }
+      }
+    },
+    "セルにはMarkdownを入力できます。パイプと改行は確定時に変換されます。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can enter Markdown in cells. Pipes and line breaks are converted when applied."
+          }
+        }
+      }
+    },
+    "列 %lld の見出し": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Header for column %lld"
+          }
+        }
+      }
+    },
+    "列 %lld を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete column %lld"
+          }
+        }
+      }
+    },
+    "列を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Column"
+          }
+        }
+      }
+    },
+    "列名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Column Name"
+          }
+        }
+      }
+    },
+    "列数: %lld・データ行数: %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "列数: %1$lld・データ行数: %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Columns: %lld · Data rows: %lld"
+          }
+        }
+      }
+    },
+    "行 %lld を削除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete row %lld"
+          }
+        }
+      }
+    },
+    "行 %lld 列 %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "new",
+            "value": "行 %1$lld 列 %2$lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Row %lld, column %lld"
+          }
+        }
+      }
+    },
+    "行を追加": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Row"
+          }
+        }
+      }
+    },
+    "表に適用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply to Table"
+          }
+        }
+      }
+    },
+    "表をグリッドで編集": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Table in Grid"
+          }
+        }
+      }
+    },
+    "表を保存できません。本文と編集状態を確認してください。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the table. Check the document and editing state."
+          }
+        }
+      }
+    },
+    "配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alignment"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

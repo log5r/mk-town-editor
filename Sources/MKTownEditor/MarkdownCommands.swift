@@ -414,6 +414,9 @@ struct MarkdownCommands: Commands {
             Button("TSV・CSVから表へ変換…") { editorModel?.convertClipboardTable() }
                 .disabled(editorModel?.canExecuteCommand != true)
             Menu("表を編集") {
+                Button("グリッドで編集…") { editorModel?.presentTableGrid() }
+                    .disabled(editorModel?.canPresentTableGrid != true)
+                Divider()
                 Button("下に行を追加") { editorModel?.editTable(.insertRow) }
                     .disabled(editorModel?.canEditTable(.insertRow) != true)
                 Button("行を削除") { editorModel?.editTable(.deleteRow) }

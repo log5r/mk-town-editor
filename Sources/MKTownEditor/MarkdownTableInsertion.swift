@@ -6,6 +6,18 @@ struct MarkdownTableDraft: Identifiable {
     let originalText: String
 }
 
+struct MarkdownTableGridDraft: Identifiable {
+    let id = UUID()
+    let originalText: String
+    let range: NSRange
+    let prefix: String
+    let newline: String
+    let endsWithNewline: Bool
+    let header: [String]
+    let rows: [[String]]
+    let alignments: [MarkdownTable.Alignment]
+}
+
 struct MarkdownTableConversion {
     let edit: MarkdownEdit
     let hasMultilineCells: Bool
@@ -210,6 +222,73 @@ enum MarkdownTableTabAction: Equatable {
 }
 
 enum MarkdownTableEditing {
+    static func gridDraft(in text: String, selection: NSRange) -> MarkdownTableGridDraft? {
+        let source = text as NSString
+        guard selection.location >= 0, selection.location < source.length,
+              let block = MarkdownAnalysis(text).blocks.first(where: {
+                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
+              }), let table = block.table else { return nil }
+        let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
+        let delimiterRange = source.lineRange(for: NSRange(location: NSMaxRange(headerRange), length: 0))
+        let ranges = [headerRange, delimiterRange] + table.rowRanges
+        let lines = ranges.map { lineContent(source.substring(with: $0)) }
+        let values = lines.enumerated().map { index, line -> [String]? in
+            guard let ranges = cells(in: line.content, expected: table.header.count) else { return nil }
+            let source = line.content as NSString
+            return ranges.map { source.substring(with: $0).trimmingCharacters(in: .whitespaces) }
+        }
+        guard values.allSatisfy({ $0 != nil }) else { return nil }
+        return MarkdownTableGridDraft(originalText: text, range: block.sourceRange,
+                                      prefix: tablePrefix(lines[0].content),
+                                      newline: lines.first(where: { !$0.ending.isEmpty })?.ending ?? preferredNewline(in: text),
+                                      endsWithNewline: !(lines.last?.ending.isEmpty ?? true),
+                                      header: values[0]!, rows: Array(values.dropFirst(2)).compactMap { $0 },
+                                      alignments: table.alignments)
+    }
+
+    static func gridEdit(in text: String, draft: MarkdownTableGridDraft,
+                         header: [String], rows: [[String]],
+                         alignments: [MarkdownTable.Alignment]) -> MarkdownEdit? {
+        guard text == draft.originalText, (1...12).contains(header.count),
+              rows.count <= 100, rows.allSatisfy({ $0.count == header.count }),
+              alignments.count == header.count else { return nil }
+        guard header != draft.header || rows != draft.rows ||
+                alignments != draft.alignments else { return nil }
+        let delimiter = alignments.map { alignment in
+            switch alignment {
+            case .leading: "---"
+            case .center: ":---:"
+            case .trailing: "---:"
+            }
+        }
+        let lines = [header, delimiter] + rows
+        let replacement = lines.map { cells in
+            draft.prefix + "| " + cells.map(escapeGridCell).joined(separator: " | ") + " |"
+        }.joined(separator: draft.newline) + (draft.endsWithNewline ? draft.newline : "")
+        guard replacement != (text as NSString).substring(with: draft.range) else { return nil }
+        let firstCell = escapeGridCell(header[0])
+        return MarkdownEdit(range: draft.range, replacement: replacement,
+                            selection: NSRange(location: draft.range.location +
+                                               (draft.prefix as NSString).length + 2,
+                                               length: (firstCell as NSString).length))
+    }
+
+    private static func escapeGridCell(_ value: String) -> String {
+        let source = value.replacingOccurrences(of: "\r\n", with: "\n")
+        var result = ""
+        var backslashes = 0
+        for character in source {
+            if character == "|" && backslashes % 2 == 0 { result += "\\" }
+            if character == "\n" || character == "\r" {
+                result += "<br>"
+            } else {
+                result.append(character)
+            }
+            backslashes = character == "\\" ? backslashes + 1 : 0
+        }
+        return result
+    }
+
     static func tabAction(in text: String, selection: NSRange,
                           backwards: Bool, addsRowAtEnd: Bool) -> MarkdownTableTabAction? {
         let source = text as NSString

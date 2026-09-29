@@ -626,6 +626,11 @@ struct EditorWorkspace: View {
                 editorModel.commitTable(rows: rows, columns: columns)
             }
         }
+        .sheet(item: $editorModel.tableGridDraft) { draft in
+            TableGridSheet(draft: draft) { header, rows, alignments in
+                editorModel.commitTableGrid(header: header, rows: rows, alignments: alignments)
+            }
+        }
         .sheet(isPresented: $editorModel.showingSnippetPicker) {
             SnippetPickerView(snippets: editorModel.snippets) { snippet in
                 editorModel.insertSnippet(snippet)
