@@ -402,3 +402,8 @@ UIの原文言語は日本語とし、`Localizable.xcstrings`に英語訳を置�
 - `DocumentGroup`の保存とファイルプロバイダを正本にし、URLのリソース値からiCloudのダウンロード状態・競合の有無・ディスク更新日時を表示する。未ダウンロードのファイルは利用者の操作でダウンロードを開始する。
 - [`NSFileVersion`](https://developer.apple.com/documentation/foundation/nsfileversion/unresolvedconflictversionsofitem(at:))の未解消版を協調読込で開き、編集中の本文と並べて比較する。選択版の採用は通常のUndo可能な編集とし、ディスクへの保存を確認するまでは競合版を解消扱いにしない。解消確定時には未解消版だけを取り除く。
 - ローカルファイルと欠落ファイルのユニットテストを用意した。iCloudや第三者ファイルプロバイダが実際に生成する競合版の操作は、実アカウントと実ファイルでの確認が必要であり、ローカルのテストでは再現できない。
+
+## Z05 macOSサービスとショートカット（2026-09-29）
+
+- [macOS HIG](https://developer.apple.com/design/human-interface-guidelines/app-shortcuts)ではmacOSのApp Shortcutsフレーズは対象外だが、App Intentsのアクションはショートカットアプリから利用できる。このため、テキストをフォルダに保存するアクションと、保存済みMarkdownを既存レンダラーでHTMLへ書き出すアクションを定義した。自動化入力は明示的なテキスト・ファイル・保存先パスとし、開いている未保存書類を暗黙に取得しない。
+- [Services](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/providing.html)には選択文字列を渡すサービスを登録した。保存パネルで保存先を確定し、生成した書類を標準書類管理で開く。共通の書込処理は排他的なファイル作成により既存ファイルを上書きせず、単体テストでUnicode・同名ファイル・不正な名前・HTML出力を検証する。

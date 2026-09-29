@@ -41,6 +41,12 @@ struct ExternalDocumentOpenRequest: Equatable {
 
 @MainActor
 final class ExternalDocumentOpenAppDelegate: NSObject, NSApplicationDelegate {
+    private let selectionService = MarkdownSelectionService()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.servicesProvider = selectionService
+    }
+
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
             guard let request = ExternalDocumentOpenRequest(url: url) else { continue }
