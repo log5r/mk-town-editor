@@ -6815,6 +6815,16 @@
         }
       }
     },
+    "編集中以外のMarkdown記号を控えめに表示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dim Markdown Markers Outside the Editing Line"
+          }
+        }
+      }
+    },
     "位置 %lld%%": {
       "localizations": {
         "en": {

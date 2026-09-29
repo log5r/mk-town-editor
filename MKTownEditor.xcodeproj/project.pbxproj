@@ -88,6 +88,7 @@
 		A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* MarkdownMultiSelection.swift */; };
 		A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000065 /* MarkdownLinkHover.swift */; };
 		A10000000000000000000066 /* MarkdownMinimap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000066 /* MarkdownMinimap.swift */; };
+		A10000000000000000000067 /* MarkdownInlineLivePresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -175,6 +176,7 @@
 		A20000000000000000000064 /* MarkdownMultiSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMultiSelection.swift; sourceTree = "<group>"; };
 		A20000000000000000000065 /* MarkdownLinkHover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkHover.swift; sourceTree = "<group>"; };
 		A20000000000000000000066 /* MarkdownMinimap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMinimap.swift; sourceTree = "<group>"; };
+		A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownInlineLivePresentation.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -276,6 +278,7 @@
 				A20000000000000000000064 /* MarkdownMultiSelection.swift */,
 				A20000000000000000000065 /* MarkdownLinkHover.swift */,
 				A20000000000000000000066 /* MarkdownMinimap.swift */,
+				A20000000000000000000067 /* MarkdownInlineLivePresentation.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -424,6 +427,7 @@
 				A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */,
 				A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */,
 				A10000000000000000000066 /* MarkdownMinimap.swift in Sources */,
+				A10000000000000000000067 /* MarkdownInlineLivePresentation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

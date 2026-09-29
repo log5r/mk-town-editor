@@ -76,6 +76,16 @@ final class EditorSettingsTests: XCTestCase {
         store.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.loadsRemoteImages, true)
     }
+
+    func testInlineLivePresentationPreferenceDefaultsOffAndPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.usesInlineLivePresentation)
+        var settings = store.app
+        settings.usesInlineLivePresentation = true
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.usesInlineLivePresentation, true)
+    }
     func testPreviewThemeAndWidthPersist() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
