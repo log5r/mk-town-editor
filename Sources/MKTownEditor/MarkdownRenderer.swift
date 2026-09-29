@@ -166,6 +166,11 @@ enum MarkdownRenderer {
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
+            if context.markdownDialect == .extended,
+               let formula = MarkdownMath.displayFormula(block.content) {
+                return MarkdownMathRenderer.attachment(formula, fontSize: 21)
+                    ?? NSAttributedString(string: formula.source)
+            }
             let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
                                  captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
@@ -208,7 +213,9 @@ enum MarkdownRenderer {
     ) -> NSMutableAttributedString {
         let layout = MarkdownImageLayout.parse(resolveReferences(
             in: MarkdownSafeHTML.previewMarkdown(markdown), using: references))
-        let resolved = layout.markdown
+        let math: (text: String, formulas: [(String, MarkdownMath.Formula)]) = context.markdownDialect == .extended
+            ? MarkdownMath.placeholders(in: layout.markdown) : (layout.markdown, [])
+        let resolved = math.text
         let options = AttributedString.MarkdownParsingOptions(
             interpretedSyntax: .inlineOnlyPreservingWhitespace,
             failurePolicy: .returnPartiallyParsedIfPossible
@@ -216,6 +223,13 @@ enum MarkdownRenderer {
         let parsed = (try? AttributedString(markdown: resolved, options: options))
             .map(NSAttributedString.init) ?? NSAttributedString(string: resolved)
         let result = NSMutableAttributedString(attributedString: parsed)
+        for (token, formula) in math.formulas.reversed() {
+            let range = (result.string as NSString).range(of: token)
+            guard range.location != NSNotFound else { continue }
+            result.replaceCharacters(in: range, with:
+                MarkdownMathRenderer.attachment(formula, fontSize: baseFont.pointSize)
+                    ?? NSAttributedString(string: formula.source))
+        }
         let fullRange = NSRange(location: 0, length: result.length)
         result.addAttributes(baseAttributes(font: baseFont, color: color, paragraphSpacing: paragraphSpacing), range: fullRange)
 

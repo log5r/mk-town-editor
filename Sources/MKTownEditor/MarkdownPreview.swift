@@ -52,6 +52,7 @@ struct MarkdownPreview: View {
                 analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
                 onVisibleBlockChange != nil || onRevealSource != nil ||
                 markdown.contains("![[") ||
+                (documentContext.markdownDialect == .extended && markdown.contains("$")) ||
                 !analysis.footnotes.entries.isEmpty ||
                 theme != .system || bodyWidth != 900 ||
                 (showsFrontMatter && analysis.frontMatter != nil) {
@@ -93,7 +94,8 @@ struct MarkdownPreview: View {
                                         .background(Color.accentColor.opacity(0.08))
                                         .cornerRadius(8)
                                         .accessibilityLabel("\(callout.title)。\(block.content)")
-                                    } else if block.kind == .paragraph,
+                                    } else if documentContext.markdownDialect == .extended,
+                                              block.kind == .paragraph,
                                               let reference = WorkspaceDocumentEmbed.reference(in: block.content),
                                               let documentURL = documentContext.fileURL {
                                         WorkspaceEmbeddedDocumentView(reference: reference,
@@ -101,6 +103,12 @@ struct MarkdownPreview: View {
                                             documents: workspaceDocumentURLs,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument)
+                                    } else if block.kind == .paragraph,
+                                              let formula = MarkdownMath.displayFormula(block.content),
+                                              MarkdownMathRenderer.label(formula) != nil {
+                                        MarkdownMathView(formula: formula)
+                                            .frame(maxWidth: .infinity)
+                                            .accessibilityLabel(formula.latex)
                                     } else if let table = block.table {
                                         tableView(table, in: analysis)
                                     } else if block.kind == .blank {

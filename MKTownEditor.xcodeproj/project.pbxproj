@@ -113,6 +113,8 @@
 		A10000000000000000000083 /* WorkspaceNamedLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000083 /* WorkspaceNamedLayout.swift */; };
 		A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */; };
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
+		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
+		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -225,10 +227,11 @@
 		A20000000000000000000083 /* WorkspaceNamedLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceNamedLayout.swift; sourceTree = "<group>"; };
 		A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceNamedLayoutSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000085 /* WorkspaceLayoutActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutActivation.swift; sourceTree = "<group>"; };
+		A20000000000000000000086 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000087 /* SwiftMath in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -351,6 +354,7 @@
 				A20000000000000000000083 /* WorkspaceNamedLayout.swift */,
 				A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */,
 				A20000000000000000000085 /* WorkspaceLayoutActivation.swift */,
+				A20000000000000000000086 /* MarkdownMath.swift */,
 			);
 			path = Sources/MKTownEditor;
 			sourceTree = "<group>";
@@ -381,6 +385,7 @@
 			buildRules = ();
 			dependencies = ();
 			name = MKTownEditor;
+			packageProductDependencies = (C10000000000000000000001 /* SwiftMath */,);
 			productName = MKTownEditor;
 			productReference = A2000000000000000000000D /* MKTownEditor.app */;
 			productType = "com.apple.product-type.application";
@@ -403,6 +408,7 @@
 			knownRegions = (ja, en, Base);
 			mainGroup = A40000000000000000000001;
 			productRefGroup = A40000000000000000000004 /* Products */;
+			packageReferences = (C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (A50000000000000000000001 /* MKTownEditor */,);
@@ -524,6 +530,7 @@
 				A10000000000000000000083 /* WorkspaceNamedLayout.swift in Sources */,
 				A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */,
 				A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */,
+				A10000000000000000000086 /* MarkdownMath.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -567,6 +574,22 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mgriebling/SwiftMath.git";
+			requirement = { kind = exactVersion; version = 1.7.3; };
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C10000000000000000000001 /* SwiftMath */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */;
+			productName = SwiftMath;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
