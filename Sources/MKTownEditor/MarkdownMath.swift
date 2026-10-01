@@ -4,7 +4,7 @@ import SwiftMath
 import SwiftUI
 
 /// Math follows the extended Markdown dialect: `$...$` stays on one line and
-/// `$$` fences must occupy their own lines. Escaped dollars and code spans are literal.
+/// `$$...$$` forms a display block, on one or more lines. Escaped dollars and code spans are literal.
 enum MarkdownMath {
     struct Formula: Equatable {
         let source: String
@@ -33,14 +33,24 @@ enum MarkdownMath {
     }
 
     static func displayFormula(_ text: String) -> Formula? {
-        let lines = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .newlines)
-        guard lines.count >= 3, lines.first?.trimmingCharacters(in: .whitespaces) == "$$",
-              lines.last?.trimmingCharacters(in: .whitespaces) == "$$" else { return nil }
-        let latex = lines.dropFirst().dropLast().joined(separator: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("$$"), trimmed.hasSuffix("$$"), trimmed.count > 4 else { return nil }
+        let chars = Array(trimmed)
+        // Only the first unescaped closing delimiter can terminate this block.
+        guard let closing = (2..<(chars.count - 1)).first(where: {
+            chars[$0] == "$" && chars[$0 + 1] == "$" && !escaped(at: $0, in: chars)
+        }), closing == chars.count - 2 else { return nil }
+        let latex = String(chars[2..<closing]).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !latex.isEmpty else { return nil }
         return Formula(source: text, latex: latex, display: true)
+    }
+
+    static func containsDisplayDelimiter(_ text: String) -> Bool {
+        let chars = Array(text)
+        guard chars.count >= 2 else { return false }
+        return (0..<(chars.count - 1)).contains {
+            chars[$0] == "$" && chars[$0 + 1] == "$" && !escaped(at: $0, in: chars)
+        }
     }
 
     static func segments(_ text: String) -> [Segment] {
@@ -64,7 +74,7 @@ enum MarkdownMath {
                index + 1 < chars.count, chars[index + 1] != "$",
                !chars[index + 1].isWhitespace {
                 var end = index + 1
-                while end < chars.count, chars[end] != "\n" {
+                while end < chars.count, !chars[end].isNewline {
                     if chars[end] == "`" { break }
                     if chars[end] == "$", !escaped(at: end, in: chars) {
                         guard end > index + 1, !chars[end - 1].isWhitespace,
@@ -72,13 +82,10 @@ enum MarkdownMath {
                             break
                         }
                         let latex = String(chars[(index + 1)..<end])
-                        if !latex.allSatisfy(\.isNumber) {
-                            if !plain.isEmpty { parts.append(.text(plain)); plain = "" }
-                            parts.append(.formula(Formula(source: String(chars[index...end]), latex: latex,
-                                                          display: false)))
-                            index = end + 1
-                            break
-                        }
+                        if !plain.isEmpty { parts.append(.text(plain)); plain = "" }
+                        parts.append(.formula(Formula(source: String(chars[index...end]), latex: latex,
+                                                      display: false)))
+                        index = end + 1
                         break
                     }
                     end += 1
