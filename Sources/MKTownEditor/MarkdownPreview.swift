@@ -112,7 +112,8 @@ struct MarkdownPreview: View {
                                             onOpen: onOpenEmbeddedDocument)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
                                         MarkdownMediaPreview(media: media, documentContext: documentContext)
-                                    } else if block.kind == .paragraph,
+                                    } else if documentContext.markdownDialect == .extended,
+                                              block.kind == .paragraph,
                                               let formula = MarkdownMath.displayFormula(block.content),
                                               MarkdownMathRenderer.label(formula) != nil {
                                         HStack {

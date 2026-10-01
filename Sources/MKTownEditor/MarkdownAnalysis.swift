@@ -433,6 +433,24 @@ struct MarkdownAnalysis: Sendable {
                 continue
             }
 
+            if dialect == .extended, let end = displayMathEnd(in: lines, from: index) {
+                let parent = listAncestors.last
+                let isContinuation = parent.map { indentationWidth(line.text) > $0.indent } ?? false
+                result.append(MarkdownBlock(
+                    id: nextID, parentID: isContinuation ? parent?.id : parentID, kind: .paragraph,
+                    content: lines[index...end].map(\.text).joined(separator: "\n"),
+                    sourceRange: NSRange(location: line.range.location,
+                        length: NSMaxRange(lines[end].range) - line.range.location),
+                    codeLanguage: nil, codeFenceMarker: nil, codeFenceLength: nil,
+                    table: nil, lineBreaks: [], sourceIndent: nil,
+                    nestingDepth: isContinuation ? (parent!.depth + 1) : 0
+                ))
+                if !isContinuation { listAncestors.removeAll() }
+                nextID += 1
+                index = end + 1
+                continue
+            }
+
             if dialect == .extended, index + 1 < lines.count, indentationWidth(line.text) < 4,
                 parseHeading(line.text) == nil, parseList(line.text) == nil,
                 !isThematicBreak(line.text),
@@ -444,7 +462,8 @@ struct MarkdownAnalysis: Sendable {
                 var rowRanges: [NSRange] = []
                 while index < lines.count {
                     let row = lines[index]
-                    if row.text.trimmingCharacters(in: .whitespaces).isEmpty ||
+                    if displayMathEnd(in: lines, from: index) != nil ||
+                        row.text.trimmingCharacters(in: .whitespaces).isEmpty ||
                         openingFence(row.text) != nil || parseQuote(row.text) != nil ||
                         parseHeading(row.text) != nil || isThematicBreak(row.text) ||
                         parseList(row.text) != nil { break }
@@ -501,6 +520,7 @@ struct MarkdownAnalysis: Sendable {
                 var parts = [list.content]
                 var next = index + 1
                 while next < lines.count && isParagraphContinuation(lines[next].text) &&
+                    !(dialect == .extended && displayMathEnd(in: lines, from: next) != nil) &&
                     indentationWidth(lines[next].text) > list.indent &&
                     indentationWidth(lines[next].text) < list.contentIndent + 4 &&
                     !(dialect == .extended && next + 1 < lines.count &&
@@ -530,6 +550,7 @@ struct MarkdownAnalysis: Sendable {
                 var parts = [isListContinuation ? withoutLeadingIndent(line.text) : line.text]
                 var next = index + 1
                 while next < lines.count &&
+                    !(dialect == .extended && displayMathEnd(in: lines, from: next) != nil) &&
                     (isParagraphContinuation(lines[next].text) ||
                      (!isListContinuation && indentationWidth(lines[next].text) >= 4 &&
                       !lines[next].text.trimmingCharacters(in: .whitespaces).isEmpty)) &&
@@ -564,6 +585,20 @@ struct MarkdownAnalysis: Sendable {
             index += advance
         }
         return result
+    }
+
+    /// Keep TeX (including blank lines and Markdown-looking commands) in one block.
+    private static func displayMathEnd(in lines: [SourceLine], from start: Int) -> Int? {
+        let first = lines[start].text.trimmingCharacters(in: .whitespaces)
+        guard indentationWidth(lines[start].text) < 4, first.hasPrefix("$$") else { return nil }
+        if MarkdownMath.containsDisplayDelimiter(String(first.dropFirst(2))) {
+            return MarkdownMath.displayFormula(first) == nil ? nil : start
+        }
+        for end in (start + 1)..<lines.count where MarkdownMath.containsDisplayDelimiter(lines[end].text) {
+            let content = lines[start...end].map(\.text).joined(separator: "\n")
+            return MarkdownMath.displayFormula(content) == nil ? nil : end
+        }
+        return nil
     }
 
     private static func sourceLines(_ text: String) -> [SourceLine] {
