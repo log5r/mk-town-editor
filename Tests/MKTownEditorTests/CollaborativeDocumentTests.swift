@@ -93,4 +93,63 @@ final class CollaborativeDocumentTests: XCTestCase {
             XCTAssertEqual(document.text, expected, "operation \(index)")
         }
     }
+
+    func testCachedOrderMatchesFullTraversalThroughLocalAndRemoteEdits() throws {
+        let room = UUID()
+        var host = CollaborativeDocument(text: "base 文書🙂", roomID: room, siteID: "host")
+        var guest = CollaborativeDocument(text: "", roomID: room, siteID: "guest")
+        guest.merge(host)
+        var generator = SystemRandomNumberGenerator()
+        let pieces = ["a", "あ", "🙂", "e\u{301}", "\n", ""]
+        for step in 0..<300 {
+            func mutate(_ text: String) -> String {
+                var characters = Array(text)
+                let location = Int.random(in: 0...characters.count, using: &generator)
+                let length = Int.random(in: 0...min(3, characters.count - location), using: &generator)
+                characters.replaceSubrange(location..<(location + length),
+                                           with: Array(pieces.randomElement(using: &generator)!))
+                return String(characters)
+            }
+            let fromHost = host.edit(to: mutate(host.text))
+            let fromGuest = guest.edit(to: mutate(guest.text))
+            for document in [host, guest] {
+                XCTAssertEqual(document.visibleAtoms, document.orderedVisibleAtoms(), "step \(step)")
+                XCTAssertEqual(document.text, document.orderedVisibleAtoms().map(\.character).joined())
+            }
+            if step.isMultiple(of: 3) {
+                host.apply(fromGuest)
+                guest.apply(fromHost)
+            } else {
+                host.merge(guest)
+                guest.merge(host)
+            }
+            XCTAssertEqual(host.visibleAtoms, host.orderedVisibleAtoms())
+            XCTAssertEqual(guest.visibleAtoms, guest.orderedVisibleAtoms())
+            XCTAssertEqual(host.text, guest.text, "step \(step)")
+        }
+        let restored = try JSONDecoder().decode(CollaborativeDocument.self, from: JSONEncoder().encode(host))
+        XCTAssertEqual(restored, host)
+        XCTAssertEqual(restored.text, host.text)
+        var edited = restored
+        _ = edited.edit(to: restored.text + "!")
+        XCTAssertEqual(edited.text, host.text + "!")
+    }
+
+    func testTypingInLargeDocumentDoesNotTraverseWholeTreePerKeystroke() {
+        var document = CollaborativeDocument(text: String(repeating: "本文の段落です。\n", count: 2_000),
+                                             siteID: "local")
+        var text = document.text
+        let start = Date()
+        for index in 0..<500 {
+            let insertion = text.index(text.startIndex, offsetBy: 9_000 + index)
+            text.insert("字", at: insertion)
+            let delta = document.edit(to: text)
+            XCTAssertEqual(delta.inserts.count, 1)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+        XCTAssertEqual(document.text, text)
+        XCTAssertEqual(document.visibleAtoms, document.orderedVisibleAtoms())
+        XCTAssertTrue(document.edit(to: text).isEmpty)
+    }
 }
+

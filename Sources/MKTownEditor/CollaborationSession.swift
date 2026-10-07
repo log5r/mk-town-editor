@@ -219,13 +219,14 @@ final class CollaborationSession: NSObject, ObservableObject {
             document.apply(delta)
             if isHost { relay = packet }
         }
-        guard document.atomCount <= 50_000, document.text.count <= 20_000 else {
+        let text = document.text
+        guard document.atomCount <= 50_000, text.count <= 20_000 else {
             stop()
             error = String(localized: "受信した文書が共同編集の上限を超えています。")
             return
         }
         self.document = document
-        currentText = document.text
+        currentText = text
         comments = document.comments
         if let relay {
             send(relay, to: session?.connectedPeers.filter { $0 != peer })
