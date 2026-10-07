@@ -100,6 +100,31 @@ final class MarkdownCitationsTests: XCTestCase {
         XCTAssertEqual(cache.parseCount, before + 2)
     }
 
+    func testSameSizeReplacementWithPreservedDateIsReloaded() throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bib = directory.appendingPathComponent("references.bib")
+        let first = "@book{aaaa, title={First}}"
+        let second = "@book{bbbb, title={Other}}"
+        XCTAssertEqual(first.utf8.count, second.utf8.count)
+        try first.write(to: bib, atomically: true, encoding: .utf8)
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: bib.path)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["aaaa"])
+
+        // 復元ツールのように、同じ大きさの別内容へ置き換えて更新日時を戻す。
+        try second.write(to: bib, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: bib.path)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["bbbb"])
+
+        // その場で上書きした場合も同様に読み直す。
+        let handle = try FileHandle(forWritingTo: bib)
+        try handle.write(contentsOf: Data(first.utf8))
+        try handle.close()
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: bib.path)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["aaaa"])
+    }
+
     func testRenderingResolvesTheCatalogOnceAndPrefersTheProvidedCatalog() throws {
         let (directory, document) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }

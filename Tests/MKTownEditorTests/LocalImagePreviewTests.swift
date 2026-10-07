@@ -445,6 +445,29 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertFalse(cache.contains(old))
     }
 
+    func testImageReplacedWithSameSizeAndDateIsDecodedAgain() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("photo.png")
+        try png.write(to: url)
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let cache = LocalImageCache()
+        XCTAssertNotNil(cache.image(at: url))
+        let before = try XCTUnwrap(LocalImageCache.key(for: url))
+
+        // 同じ大きさのファイルに置き換え、更新日時を戻す。
+        try png.write(to: url, options: .atomic)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+        let after = try XCTUnwrap(LocalImageCache.key(for: url))
+        XCTAssertEqual(before.size, after.size)
+        XCTAssertEqual(before.modified, after.modified)
+        XCTAssertNotEqual(before, after, "Replaced content must not reuse the previous decode")
+        XCTAssertNotNil(cache.image(at: url))
+        XCTAssertEqual(cache.decodeCount, 2)
+    }
+
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
         let limiter = ImageDecodeLimiter(limit: 4)
         await withTaskGroup(of: Void.self) { group in

@@ -148,6 +148,15 @@ final class LocalImageCache: @unchecked Sendable {
         let path: String
         let modified: Date?
         let size: Int?
+        /// 内容の世代識別子。大きさと更新日時を保ったまま内容が置き換わった場合も別の版にする。
+        let generation: Data?
+
+        init(path: String, modified: Date?, size: Int?, generation: Data? = nil) {
+            self.path = path
+            self.modified = modified
+            self.size = size
+            self.generation = generation
+        }
     }
 
     private struct Entry {
@@ -182,10 +191,12 @@ final class LocalImageCache: @unchecked Sendable {
         var fileURL = fileURL
         fileURL.removeAllCachedResourceValues()
         guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey,
-                                                                 .contentModificationDateKey, .fileSizeKey]),
+                                                                 .contentModificationDateKey, .fileSizeKey,
+                                                                 .generationIdentifierKey]),
               values.isRegularFile == true else { return nil }
         return Key(path: fileURL.standardizedFileURL.path, modified: values.contentModificationDate,
-                   size: values.fileSize)
+                   size: values.fileSize,
+                   generation: (values.generationIdentifier as? NSData).map { Data(referencing: $0) })
     }
 
     /// キャッシュ済みなら `.some`（デコードできなかった画像は `.some(nil)`）、未読込なら `nil` を返す。

@@ -149,12 +149,17 @@ struct MarkdownCitationCatalog: Equatable, Sendable {
         return documentURL.deletingLastPathComponent().appendingPathComponent("references.bib")
     }
 
+    /// 参考文献ファイルの版を表す値。大きさ・更新日時に加え、ファイルの識別子と内容の世代識別子を含める。
+    /// 復元や同期で、大きさと更新日時を保ったまま内容だけが置き換わった場合も別の版として扱う。
     static func fingerprint(documentURL: URL?) -> String? {
         guard let url = bibliographyURL(documentURL: documentURL),
-              let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else {
+              let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey,
+                                                             .fileIdentifierKey, .generationIdentifierKey]) else {
             return nil
         }
-        return "\(values.fileSize ?? -1):\(values.contentModificationDate?.timeIntervalSince1970 ?? 0)"
+        let generation = (values.generationIdentifier as? NSData).map { Data(referencing: $0).base64EncodedString() }
+        return "\(values.fileSize ?? -1):\(values.contentModificationDate?.timeIntervalSince1970 ?? 0)" +
+            ":\(values.fileIdentifier.map(String.init) ?? "-"):\(generation ?? "-")"
     }
 
     /// 同じ大きさ・更新日時の参考文献は、解析済みの結果を共有キャッシュから返す。
