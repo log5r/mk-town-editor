@@ -704,7 +704,7 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingWikiLinks) {
             if let root = workspaceStore.rootURL, let fileURL {
-                WorkspaceWikiLinkSheet(root: root, nodes: workspaceStore.nodes,
+                WorkspaceWikiLinkSheet(index: workspaceStore.quickOpenIndex,
                     documentURL: fileURL, source: document.text,
                     selection: wikiSelection, onApply: { edit, expectedSource in
                         guard document.text == expectedSource,
@@ -798,9 +798,7 @@ struct EditorWorkspace: View {
                let headingLocation = splitHeadingLocation {
                 WorkspaceNoteSplitSheet(root: root, sourceURL: fileURL,
                     source: document.text, headingLocation: headingLocation,
-                    workspaceDocuments: WorkspaceQuickOpen.search(
-                        nodes: workspaceStore.nodes, root: root,
-                        query: "", limit: Int.max).map(\.url),
+                    workspaceDocuments: workspaceStore.quickOpenIndex.rankedDocumentURLs,
                     onCreate: { plan, destination, expectedSource in
                         guard document.text == expectedSource,
                               !workspaceStore.isDocumentLocked(fileURL) else {
@@ -829,7 +827,7 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingNoteMerge) {
             if let root = workspaceStore.rootURL {
-                WorkspaceNoteMergeSheet(root: root, nodes: workspaceStore.nodes,
+                WorkspaceNoteMergeSheet(root: root, index: workspaceStore.quickOpenIndex,
                     loadOpenBuffers: {
                         try workspaceStore.openBufferSnapshots(under: root)
                     }, onOpen: { url in
@@ -2572,6 +2570,7 @@ private struct LinkDiagnosticsSheet: View {
     let onCheckExternal: () -> Void
     let onSelect: (NSRange) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2590,7 +2589,7 @@ private struct LinkDiagnosticsSheet: View {
                 ContentUnavailableView("リンクの問題は見つかりません", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let lines = MarkdownLineIndex(source)
+                let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
                 List {
                     if !diagnostics.isEmpty {
                         Section("ローカルリンク") {
@@ -2649,6 +2648,7 @@ private struct MarkdownLintSheet: View {
     let onToggleRule: (MarkdownLintRule, Bool) -> Void
     let onSelect: (MarkdownLintDiagnostic) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2673,7 +2673,7 @@ private struct MarkdownLintSheet: View {
                 ContentUnavailableView("有効な規則で問題は見つかりません", systemImage: "checkmark.circle")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let lines = MarkdownLineIndex(source)
+                let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
                 List(diagnostics) { diagnostic in
                     Button { onSelect(diagnostic) } label: {
                         VStack(alignment: .leading, spacing: 3) {
@@ -2703,6 +2703,7 @@ private struct TerminologySheet: View {
     let onReplace: (TerminologyIssue) -> Bool
     @Environment(\.dismiss) private var dismiss
     @State private var replaceFailed = false
+    @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2719,7 +2720,7 @@ private struct TerminologySheet: View {
                                        systemImage: hasEntries ? "checkmark.circle" : "text.book.closed")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                let lines = MarkdownLineIndex(source)
+                let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
                 List(issues) { issue in
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
@@ -2757,12 +2758,19 @@ private struct MarkdownAutoFormatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectionOnly = false
     @State private var applyFailed = false
+    @State private var planCache = DerivedValueCache<PlanKey, MarkdownAutoFormatPlan?>()
 
-    private var plan: MarkdownAutoFormatPlan? {
-        MarkdownAutoFormat.plan(source, selection: selectionOnly ? selectedRange : nil)
+    private struct PlanKey: Equatable {
+        let source: String
+        let selection: NSRange?
     }
 
     var body: some View {
+        // 整形計画は本文と対象範囲が変わった時だけ作り直す。
+        let plan = planCache.value(for: PlanKey(source: source,
+                                                selection: selectionOnly ? selectedRange : nil)) {
+            MarkdownAutoFormat.plan($0.source, selection: $0.selection)
+        }
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Markdownの自動整形").font(.headline)

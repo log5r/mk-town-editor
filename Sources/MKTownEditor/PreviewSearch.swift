@@ -1,6 +1,6 @@
 import Foundation
 
-struct PreviewSearchMatch: Identifiable, Equatable {
+struct PreviewSearchMatch: Identifiable, Equatable, Sendable {
     let range: NSRange
     let line: Int
     let excerpt: String

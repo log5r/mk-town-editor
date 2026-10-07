@@ -77,6 +77,8 @@ struct MarkdownFrontMatter: Equatable, Sendable {
     let sourceRange: NSRange
 
     init?(source: String) {
+        // 先頭行が区切り線でなければ、行の索引を作らずに終える。
+        guard source.hasPrefix("---") else { return nil }
         let text = source as NSString
         let starts = MarkdownLineIndex(source).starts
         guard starts.count >= 2 else { return nil }

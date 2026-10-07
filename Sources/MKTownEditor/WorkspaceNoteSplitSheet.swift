@@ -9,9 +9,16 @@ struct WorkspaceNoteSplitSheet: View {
     let onCreate: (WorkspaceSectionSplit, URL, String) throws -> URL
     let onOpen: (URL) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var fileName: String
-    @State private var folderPath: String
+    @State private var fileName = ""
+    @State private var folderPath = ""
+    @State private var didSuggestDestination = false
     @State private var errorMessage: String?
+    @State private var planCache = DerivedValueCache<PlanKey, WorkspaceSectionSplit?>()
+
+    private struct PlanKey: Equatable {
+        let source: String
+        let destinationURL: URL
+    }
 
     init(root: URL, sourceURL: URL, source: String, headingLocation: Int,
          workspaceDocuments: [URL],
@@ -24,6 +31,13 @@ struct WorkspaceNoteSplitSheet: View {
         self.workspaceDocuments = workspaceDocuments
         self.onCreate = onCreate
         self.onOpen = onOpen
+    }
+
+    /// 既定の保存先は表示時に一度だけ求める。init は親の再描画ごとに呼ばれるため、
+    /// 解析やパスの解決をそこで行わない。
+    private func suggestDestination() {
+        guard !didSuggestDestination else { return }
+        didSuggestDestination = true
         let title = MarkdownOutline.entries(in: MarkdownAnalysis(source)).first {
             $0.sourceRange.location == headingLocation
         }?.title ?? String(localized: "セクション")
@@ -32,10 +46,10 @@ struct WorkspaceNoteSplitSheet: View {
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        _fileName = State(initialValue: String((safe.isEmpty ? "section" : safe).prefix(80)) + ".md")
+        fileName = String((safe.isEmpty ? "section" : safe).prefix(80)) + ".md"
         let directory = sourceURL.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
         let root = root.resolvingSymlinksInPath().standardizedFileURL
-        _folderPath = State(initialValue: WorkspaceWikiLinks.relativePath(from: root, to: directory))
+        folderPath = WorkspaceWikiLinks.relativePath(from: root, to: directory)
     }
 
     private var destinationURL: URL {
@@ -46,13 +60,19 @@ struct WorkspaceNoteSplitSheet: View {
             .appendingPathComponent(name)
     }
 
-    private var plan: WorkspaceSectionSplit? {
-        WorkspaceNoteOperations.split(source, headingLocation: headingLocation,
-            sourceURL: sourceURL, destinationURL: destinationURL,
-            workspaceDocuments: workspaceDocuments)
+    /// 分割計画は本文と保存先が変わった時だけ作り直す。
+    private func plan(destinationURL: URL) -> WorkspaceSectionSplit? {
+        guard didSuggestDestination, !fileName.isEmpty else { return nil }
+        return planCache.value(for: PlanKey(source: source, destinationURL: destinationURL)) { key in
+            WorkspaceNoteOperations.split(key.source, headingLocation: headingLocation,
+                sourceURL: sourceURL, destinationURL: key.destinationURL,
+                workspaceDocuments: workspaceDocuments)
+        }
     }
 
     var body: some View {
+        let destinationURL = destinationURL
+        let plan = plan(destinationURL: destinationURL)
         VStack(alignment: .leading, spacing: 12) {
             Text("セクションを別書類に分割").font(.headline)
             TextField("ファイル名", text: $fileName)
@@ -78,16 +98,17 @@ struct WorkspaceNoteSplitSheet: View {
             HStack {
                 Spacer()
                 Button("キャンセル") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("分割") { create() }
+                Button("分割") { create(plan, destinationURL: destinationURL) }
                     .keyboardShortcut(.defaultAction)
                     .disabled(plan == nil || fileName.isEmpty)
             }
         }
         .frame(width: 560)
         .padding(20)
+        .onAppear(perform: suggestDestination)
     }
 
-    private func create() {
+    private func create(_ plan: WorkspaceSectionSplit?, destinationURL: URL) {
         guard let plan else { return }
         do {
             let url = try onCreate(plan, destinationURL, source)
