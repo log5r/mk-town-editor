@@ -106,6 +106,7 @@ struct MermaidDiagramView: View {
                 try Task.checkCancellation()
                 image = result
             } catch is CancellationError {
+                return
             } catch let error as MermaidRenderError {
                 guard !Task.isCancelled else { return }
                 renderError = error.message
@@ -129,8 +130,11 @@ struct MermaidRenderError: Error {
 final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     static let shared = MermaidRenderService()
     private var webView: WKWebView?
+    private var navigation: WKNavigation?
+    private let script: String?
     private var ready = false
     private struct Request {
+        let id: UUID
         let source: String
         let continuation: CheckedContinuation<NSImage, Error>
     }
@@ -142,7 +146,13 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
     private(set) var webViewCreationCount = 0
     private(set) var renderCount = 0
 
-    override init() {
+    var pendingRequestCount: Int { pending.count }
+    var activeRequestCount: Int { active.count }
+
+    override convenience init() { self.init(script: MermaidDiagram.bundledScript) }
+
+    init(script: String?) {
+        self.script = script
         super.init()
         cache.totalCostLimit = 32_000_000
     }
@@ -154,9 +164,18 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         }
         if let image = cache.object(forKey: source as NSString) { return image }
         try startIfNeeded()
-        let image = try await withCheckedThrowingContinuation { continuation in
-            pending.append(Request(source: source, continuation: continuation))
-            pump()
+        let id = UUID()
+        let image: NSImage = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<NSImage, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                pending.append(Request(id: id, source: source, continuation: continuation))
+                pump()
+            }
+        } onCancel: { [weak self] in
+            Task { @MainActor in self?.cancelRequest(id) }
         }
         try Task.checkCancellation()
         return image
@@ -164,19 +183,26 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
 
     private func startIfNeeded() throws {
         guard webView == nil else { return }
-        guard let script = MermaidDiagram.bundledScript else {
+        guard let script else {
             throw MermaidRenderError(message: String(localized: "図の描画器が見つかりません。"), line: nil)
         }
         let controller = WKUserContentController()
         controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        controller.add(self, name: "diagram")
+        controller.add(WeakMermaidMessageHandler(self), name: "diagram")
         let configuration = WKWebViewConfiguration()
         configuration.userContentController = controller
         let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 3_000), configuration: configuration)
         view.navigationDelegate = self
         webView = view
         webViewCreationCount += 1
-        view.loadHTMLString(MermaidDiagram.hostHTML(script: ""), baseURL: nil)
+        reloadRenderer()
+    }
+
+    private func reloadRenderer() {
+        guard let webView else { return }
+        ready = false
+        timeout?.cancel()
+        navigation = webView.loadHTMLString(MermaidDiagram.hostHTML(script: ""), baseURL: nil)
         timeout = Task { [weak self] in
             do { try await Task.sleep(for: .seconds(10)) } catch { return }
             guard self?.ready == false else { return }
@@ -184,13 +210,36 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         }
     }
 
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { timeout?.cancel(); ready = true; pump() }
+    private func cancelRequest(_ id: UUID) {
+        let cancelled = pending.filter { $0.id == id } + active.filter { $0.id == id }
+        let wasActive = active.contains { $0.id == id }
+        pending.removeAll { $0.id == id }
+        active.removeAll { $0.id == id }
+        cancelled.forEach { $0.continuation.resume(throwing: CancellationError()) }
+        if wasActive, active.isEmpty, let source = cancelled.first?.source {
+            // Requests arriving after rendering started still share its result.
+            active = pending.filter { $0.source == source }
+            pending.removeAll { $0.source == source }
+            guard active.isEmpty else { return }
+            // Invalidate late JavaScript/snapshot callbacks and discard the abandoned
+            // JS context. Reload the existing view, keeping its script and image cache.
+            requestID += 1
+            reloadRenderer()
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard webView === self.webView, navigation === self.navigation else { return }
+        timeout?.cancel(); ready = true; pump()
+    }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        guard webView === self.webView, navigation === self.navigation else { return }
         failAll(error)
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        guard webView === self.webView, navigation === self.navigation else { return }
         failAll(error)
     }
 
@@ -200,7 +249,7 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         timeout?.cancel()
         requests.forEach { $0.continuation.resume(throwing: error) }
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "diagram")
-        webView = nil; ready = false
+        webView = nil; navigation = nil; ready = false
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
@@ -262,5 +311,14 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         }
         requests.forEach { $0.continuation.resume(with: result) }
         pump()
+    }
+}
+
+@MainActor
+private final class WeakMermaidMessageHandler: NSObject, WKScriptMessageHandler {
+    private weak var renderer: MermaidRenderService?
+    init(_ renderer: MermaidRenderService) { self.renderer = renderer }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        renderer?.userContentController(userContentController, didReceive: message)
     }
 }
