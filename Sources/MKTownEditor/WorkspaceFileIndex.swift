@@ -46,7 +46,7 @@ enum WorkspaceFileIndex {
         "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp",
         "heic", "tif", "tiff", "bmp", "pdf"
     ]
-    private static let maximumEntries = 50_000
+    static let maximumEntries = 50_000
     private static let maximumDepth = 16
 
     static func scan(root: URL, maximumEntries: Int = maximumEntries) -> WorkspaceScanResult {

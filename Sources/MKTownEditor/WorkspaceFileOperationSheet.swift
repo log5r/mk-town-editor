@@ -137,7 +137,7 @@ struct WorkspaceFileOperationSheet: View {
                 } else {
                     Button(actionIsTrash ? "ゴミ箱へ移動" : "適用") { apply() }
                         .keyboardShortcut(.defaultAction)
-                        .disabled(isWorking || inputIsEmpty)
+                        .disabled(isWorking || inputIsEmpty || plan?.isTruncated == true)
                 }
             }
         }

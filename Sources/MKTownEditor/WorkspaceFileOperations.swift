@@ -165,12 +165,15 @@ struct WorkspaceMovePlan: Sendable {
     var skippedDocuments: [URL] = []
     var isTruncated = false
     var readMetadata: WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read
+    var scanMaximumEntries = WorkspaceFileIndex.maximumEntries
 
     var changedLinks: Int { changes.reduce(0) { $0 + $1.linkCount } }
 
     func validateCurrentState() throws {
         let manager = FileManager.default
-        let currentIndex = WorkspaceFileIndex.scan(root: rootURL)
+        guard !isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
+        let currentIndex = WorkspaceFileIndex.scan(root: rootURL, maximumEntries: scanMaximumEntries)
+        guard !currentIndex.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let currentDocuments = Set(WorkspaceFileOperations.markdownFiles(in: currentIndex.nodes)
             .map { $0.resolvingSymlinksInPath().standardizedFileURL.path })
         let plannedDocuments = Set((inspectedDocuments.map(\.url) + skippedDocuments).map {
@@ -265,7 +268,8 @@ struct WorkspaceMovePlan: Sendable {
 enum WorkspaceFileOperations {
     static func planMove(source: URL, destination: URL, root: URL,
                          openDocuments: [URL: Data] = [:],
-                         cache: WorkspaceLinkAnalysisCache = .shared) throws -> WorkspaceMovePlan {
+                         cache: WorkspaceLinkAnalysisCache = .shared,
+                         scanMaximumEntries: Int = WorkspaceFileIndex.maximumEntries) throws -> WorkspaceMovePlan {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let destination = destination.deletingLastPathComponent()
             .resolvingSymlinksInPath().standardizedFileURL
@@ -281,7 +285,8 @@ enum WorkspaceFileOperations {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw WorkspaceFileOperationError.destinationExists
         }
-        let index = WorkspaceFileIndex.scan(root: root)
+        let index = WorkspaceFileIndex.scan(root: root, maximumEntries: scanMaximumEntries)
+        guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let documents = markdownFiles(in: index.nodes)
         let documentIndex = WorkspaceDocumentIndex(documents: documents)
         let movedIndex = WorkspaceDocumentIndex(documents: documents.map { mapped($0, from: source, to: destination) })
@@ -334,7 +339,7 @@ enum WorkspaceFileOperations {
                                  inspectedDocuments: inspectedDocuments,
                                  inspectedOpenDocuments: inspectedOpenDocuments,
                                  skippedDocuments: skippedDocuments, isTruncated: index.isTruncated,
-                                 readMetadata: cache.readMetadata)
+                                 readMetadata: cache.readMetadata, scanMaximumEntries: scanMaximumEntries)
     }
 
     static func create(name: String, in directory: URL, root: URL, folder: Bool,
