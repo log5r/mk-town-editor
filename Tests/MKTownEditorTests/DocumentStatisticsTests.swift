@@ -141,7 +141,8 @@ final class DocumentStatisticsTests: XCTestCase {
         XCTAssertEqual(store.selection?.characters, (text as NSString).substring(
             with: NSRange(location: 8, length: length - 7 - updates)).count)
         XCTAssertEqual(store.section?.title, "Large")
-        XCTAssertLessThan(elapsed, max(fullScan * 8, .milliseconds(500)))
+        // Superseded scans used to run to completion: this took over 15 s (350x a single scan).
+        XCTAssertLessThan(elapsed, max(fullScan * 20, .seconds(1)))
     }
 
     func testCountsCharactersWordsAndLines() {

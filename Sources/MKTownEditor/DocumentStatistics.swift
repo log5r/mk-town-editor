@@ -89,34 +89,34 @@ struct DocumentStatistics: Equatable, Sendable {
     static let empty = DocumentStatistics(text: "")
 
     init(text: String) {
-        // The scan only throws while observing cancellation.
-        self = try! DocumentStatistics.scan(text, observingCancellation: false)
+        self = DocumentStatistics.scan(text) {}
     }
 
     /// Scans `text` on the current task and throws `CancellationError` once the task is cancelled,
     /// so superseded background scans stop early instead of traversing the whole text.
     static func scanObservingCancellation(_ text: String) throws -> DocumentStatistics {
-        try scan(text, observingCancellation: true)
+        try scan(text) { try Task.checkCancellation() }
     }
 
     /// Characters scanned between cancellation checks.
     static let cancellationCheckInterval = 4096
 
-    private static func scan(_ text: String, observingCancellation: Bool) throws -> DocumentStatistics {
+    /// Single-pass scan that calls `checkCancellation` before the first character and after every
+    /// `cancellationCheckInterval` characters. A non-throwing closure makes the scan non-throwing.
+    private static func scan<Failure>(_ text: String,
+                                      checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics {
         var characters = 0
         var nonWhitespace = 0
         var words = 0
         var lines = text.isEmpty ? 0 : 1
         var inWord = false
         var untilCheck = cancellationCheckInterval
-        if observingCancellation { try Task.checkCancellation() }
+        try checkCancellation()
         for character in text {
-            if observingCancellation {
-                untilCheck -= 1
-                if untilCheck == 0 {
-                    try Task.checkCancellation()
-                    untilCheck = cancellationCheckInterval
-                }
+            untilCheck -= 1
+            if untilCheck == 0 {
+                try checkCancellation()
+                untilCheck = cancellationCheckInterval
             }
             characters += 1
             let whitespace = character.isWhitespace || character.isNewline
@@ -134,32 +134,32 @@ struct DocumentStatistics: Equatable, Sendable {
     }
 
     static func selection(in text: String, range: NSRange) -> DocumentStatistics? {
-        try! selection(in: text, range: range, observingCancellation: false)
+        selection(in: text, range: range) {}
     }
 
     static func selection(in text: String, ranges: [NSRange]) -> DocumentStatistics? {
-        try! selection(in: text, ranges: ranges, observingCancellation: false)
+        selection(in: text, ranges: ranges) {}
     }
 
     /// Selection statistics that stop at the next cancellation check of the current task.
     static func selectionObservingCancellation(in text: String, ranges: [NSRange]) throws -> DocumentStatistics? {
-        try selection(in: text, ranges: ranges, observingCancellation: true)
+        try selection(in: text, ranges: ranges) { try Task.checkCancellation() }
     }
 
-    private static func selection(in text: String, range: NSRange,
-                                  observingCancellation: Bool) throws -> DocumentStatistics? {
+    private static func selection<Failure>(in text: String, range: NSRange,
+                                           checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
         let source = text as NSString
         guard range.length > 0, range.location >= 0, range.location <= source.length,
               range.length <= source.length - range.location else { return nil }
-        if observingCancellation { try Task.checkCancellation() }
-        return try scan(source.substring(with: range), observingCancellation: observingCancellation)
+        try checkCancellation()
+        return try scan(source.substring(with: range), checkCancellation: checkCancellation)
     }
 
-    private static func selection(in text: String, ranges: [NSRange],
-                                  observingCancellation: Bool) throws -> DocumentStatistics? {
+    private static func selection<Failure>(in text: String, ranges: [NSRange],
+                                           checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
         var parts: [DocumentStatistics] = []
         for range in ranges {
-            if let part = try selection(in: text, range: range, observingCancellation: observingCancellation) {
+            if let part = try selection(in: text, range: range, checkCancellation: checkCancellation) {
                 parts.append(part)
             }
         }
