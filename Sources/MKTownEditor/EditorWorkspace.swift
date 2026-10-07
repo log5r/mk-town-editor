@@ -1144,7 +1144,7 @@ struct EditorWorkspace: View {
             receivePendingWorkspaceTask()
         }
         .onChange(of: document.text) { _, newText in
-            workspaceStore.openBufferDidChange()
+            if let fileURL { workspaceStore.openBufferDidChange(for: fileURL) }
             collaboration.localChange(newText)
             previewUpdates.sourceChanged()
             analysisStore.update(source: newText,
@@ -1284,11 +1284,11 @@ struct EditorWorkspace: View {
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
             workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
-            workspaceContentRevision: workspaceStore.openBufferRevision,
+            workspaceContentRevisions: workspaceStore.openBufferRevisions,
             workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
             workspaceIndex: workspaceStore.documentIndex,
             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
-                { try workspaceStore.openBufferSnapshots(under: root) }
+                { requested in try workspaceStore.openBufferSnapshots(under: root, including: requested) }
             },
             onOpenEmbeddedDocument: { url in
                 Task {

@@ -28,10 +28,10 @@ struct MarkdownPreview: View {
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var workspaceDocumentURLs: [URL] = []
-    var workspaceContentRevision = 0
+    var workspaceContentRevisions: [URL: Int] = [:]
     var workspaceDiskRevision: Int?
     var workspaceIndex: WorkspaceDocumentIndex?
-    var loadWorkspaceOpenBuffers: (() throws -> [URL: Data])?
+    var loadWorkspaceOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
     var onOpenEmbeddedDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
@@ -120,7 +120,7 @@ struct MarkdownPreview: View {
                                         WorkspaceEmbeddedDocumentView(reference: reference,
                                             documentURL: documentURL,
                                             documents: workspaceDocumentURLs,
-                                            contentRevision: workspaceContentRevision,
+                                            contentRevisions: workspaceContentRevisions,
                                             diskRevision: workspaceDiskRevision,
                                             documentIndex: workspaceIndex,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
@@ -868,11 +868,11 @@ private struct DetachedPreviewContent: View {
                             snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
                             workspaceDocumentURLs: workspaceStore.documentURLs,
-                            workspaceContentRevision: workspaceStore.openBufferRevision,
+                            workspaceContentRevisions: workspaceStore.openBufferRevisions,
                             workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
                             workspaceIndex: workspaceStore.documentIndex,
                             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
-                                { try workspaceStore.openBufferSnapshots(under: root) }
+                                { requested in try workspaceStore.openBufferSnapshots(under: root, including: requested) }
                             },
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),

@@ -3,6 +3,84 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceDocumentEmbedTests: XCTestCase {
+    @MainActor
+    func testLoaderDiscoversUnsavedNestedDependenciesWithoutEncodingUnrelatedBuffers() async throws {
+        let root = URL(fileURLWithPath: "/private/tmp/embed-dependencies-\(UUID().uuidString)")
+        let host = root.appendingPathComponent("host.md")
+        let parent = root.appendingPathComponent("parent.md")
+        let child = root.appendingPathComponent("child.md")
+        let other = root.appendingPathComponent("other.md")
+        let documents = [host, parent, child, other]
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        var encodes: [URL: Int] = [:]
+        var parentText = "Parent\n![[child]]"
+        for url in [parent, child, other] {
+            store.registerOpenBuffer(id: UUID(), url: url, encodedData: {
+                encodes[url, default: 0] += 1
+                return Data((url == parent ? parentText : url.lastPathComponent).utf8)
+            }, updateText: { _ in })
+        }
+        let reference = WorkspaceEmbedReference(target: "parent", section: nil)
+        let loaded = try await WorkspaceEmbedLoader.load(reference, from: host, documents: documents,
+            loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
+        XCTAssertEqual(loaded.dependencies, [parent, child])
+        XCTAssertTrue(loaded.expansion.text.contains("child.md"))
+        XCTAssertTrue(loaded.expansion.issues.isEmpty)
+        XCTAssertEqual(encodes[parent], 1)
+        XCTAssertEqual(encodes[child], 1)
+        XCTAssertNil(encodes[other])
+        parentText = "Parent\n![[other]]"
+        store.openBufferDidChange(for: parent)
+        let changed = try await WorkspaceEmbedLoader.load(reference, from: host, documents: documents,
+            index: loaded.index, dependencies: loaded.dependencies, cache: loaded.cache,
+            previous: loaded.expansion, previousTarget: loaded.target,
+            loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
+        XCTAssertEqual(changed.dependencies, [parent, other])
+        XCTAssertTrue(changed.expansion.text.contains("other.md"))
+        XCTAssertFalse(changed.expansion.text.contains("child.md"))
+    }
+
+    @MainActor
+    func testLoaderTracksUnreadableDependencyAndRevertsToDiskAfterBufferCloses() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            .resolvingSymlinksInPath().standardizedFileURL
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let host = root.appendingPathComponent("host.md"), target = root.appendingPathComponent("note.md")
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        let id = UUID(), reference = WorkspaceEmbedReference(target: "note", section: nil)
+        let missing = try await WorkspaceEmbedLoader.load(reference, from: host, documents: [host, target],
+            loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
+        XCTAssertEqual(missing.dependencies, [target])
+        XCTAssertFalse(missing.expansion.issues.isEmpty)
+        try Data("disk".utf8).write(to: target)
+        store.registerOpenBuffer(id: id, url: target, encodedData: { Data("unsaved".utf8) }, updateText: { _ in })
+        let open = try await WorkspaceEmbedLoader.load(reference, from: host, documents: [host, target],
+            dependencies: missing.dependencies, loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
+        XCTAssertEqual(open.expansion.text, "unsaved")
+        store.unregisterOpenBuffer(id: id, url: target)
+        let closed = try await WorkspaceEmbedLoader.load(reference, from: host, documents: [host, target],
+            dependencies: open.dependencies, cache: open.cache,
+            loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
+        XCTAssertEqual(closed.expansion.text, "disk")
+    }
+
+    @MainActor
+    func testCancelledDependencyLoadDoesNotEncodeBuffers() async throws {
+        let document = URL(fileURLWithPath: "/private/tmp/cancelled-embed.md")
+        var encodes = 0
+        let task = Task {
+            try await WorkspaceEmbedLoader.load(WorkspaceEmbedReference(target: "cancelled-embed", section: nil),
+                from: URL(fileURLWithPath: "/private/tmp/host.md"), documents: [document],
+                index: WorkspaceDocumentIndex(documents: [document]), dependencies: [document],
+                loadOpenBuffers: { _ in encodes += 1; return [document: Data("body".utf8)] })
+        }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Expected cancellation") }
+        catch is CancellationError { }
+        XCTAssertEqual(encodes, 0)
+    }
+
     func testEmbedCacheAvoidsRepeatedReadsAndReflectsDiskAndOpenChanges() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".md")
         defer { try? FileManager.default.removeItem(at: url) }

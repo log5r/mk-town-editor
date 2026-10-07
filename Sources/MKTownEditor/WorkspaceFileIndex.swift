@@ -132,9 +132,13 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var documentURLs: [URL] = []
     @Published private(set) var documentIndex = WorkspaceDocumentIndex(documents: [])
     @Published private(set) var fileSystemRevision = 0
-    @Published private(set) var openBufferRevision = 0
+    @Published private(set) var openBufferRevisions: [URL: Int] = [:]
 
-    func openBufferDidChange() { openBufferRevision &+= 1 }
+    func openBufferDidChange(for url: URL) {
+        // Registration resolves aliases once; typing must not perform filesystem I/O.
+        guard let key = openBufferKeys[url.standardizedFileURL] else { return }
+        openBufferRevisions[key, default: 0] &+= 1
+    }
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var viewSettings = WorkspaceViewSettings() {
@@ -154,6 +158,7 @@ final class WorkspaceStore: ObservableObject {
     private var lastRefresh = Date.distantPast
     private var openDocuments: [URL: Int] = [:]
     private var openBuffers: [URL: [UUID: WorkspaceOpenBuffer]] = [:]
+    private var openBufferKeys: [URL: URL] = [:]
     private var documentLocks: [UUID: Set<String>] = [:]
 
     var openDocumentURLs: [URL] { Array(openDocuments.keys) }
@@ -161,22 +166,27 @@ final class WorkspaceStore: ObservableObject {
     func registerOpenBuffer(id: UUID, url: URL, encodedData: @escaping () -> Data,
                             updateText: @escaping (String) -> Void) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
-        openBufferDidChange()
+        openBufferKeys[url.standardizedFileURL] = key
         openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(encodedData: encodedData,
                                                                   updateText: updateText)
+        openBufferDidChange(for: url)
     }
 
     func unregisterOpenBuffer(id: UUID, url: URL) {
-        let key = url.resolvingSymlinksInPath().standardizedFileURL
-        openBuffers[key]?.removeValue(forKey: id)
-        openBufferDidChange()
-        if openBuffers[key]?.isEmpty == true { openBuffers.removeValue(forKey: key) }
+        let key = openBufferKeys[url.standardizedFileURL] ?? url.resolvingSymlinksInPath().standardizedFileURL
+        guard openBuffers[key]?.removeValue(forKey: id) != nil else { return }
+        openBufferDidChange(for: url)
+        if openBuffers[key]?.isEmpty == true {
+            openBuffers.removeValue(forKey: key)
+            openBufferKeys = openBufferKeys.filter { $0.value != key }
+        }
     }
 
-    func openBufferSnapshots(under root: URL? = nil) throws -> [URL: Data] {
+    func openBufferSnapshots(under root: URL? = nil, including requested: Set<URL>? = nil) throws -> [URL: Data] {
         var result: [URL: Data] = [:]
         let rootPath = root?.resolvingSymlinksInPath().standardizedFileURL.path
         for (url, buffers) in openBuffers {
+            guard requested?.contains(url) != false else { continue }
             if let rootPath {
                 let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
                 guard url.path.hasPrefix(prefix) else { continue }
