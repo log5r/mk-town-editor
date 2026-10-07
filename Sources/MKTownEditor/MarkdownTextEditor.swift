@@ -250,10 +250,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var visibleSourceChangeTask: Task<Void, Never>?
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
+        private var proofingDialect: MarkdownDialect?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
+        private var highlightedDialect: MarkdownDialect?
         private var highlightedWithSharedAnalysis: Bool?
         private var highlightedWithLivePresentation: Bool?
         private var inlineLiveDisplay: MarkdownInlineLiveDisplay?
@@ -332,29 +334,36 @@ struct MarkdownTextEditor: NSViewRepresentable {
         @MainActor func refreshSyntax() {
             guard let textView, !textView.hasMarkedText() else { return }
             let source = textView.editorSource
-            let snapshotSource = sharedSnapshot?.source
+            let dialect = model.markdownDialect
+            let snapshot = sharedSnapshot.flatMap {
+                $0.matches(source: source, dialect: dialect) ? $0 : nil
+            }
+            let snapshotSource = snapshot?.source
             // TextKit adjusts existing temporary colors as the text changes. Keep them
             // until matching analysis arrives instead of clearing them on every keystroke.
             // Inline marker ranges also belong to the old source and must not be reapplied.
-            if usesSharedAnalysis && snapshotSource != source { return }
+            if usesSharedAnalysis && snapshot == nil { return }
             let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
+                highlightedDialect != dialect ||
                 highlightedWithSharedAnalysis != usesSharedAnalysis ||
                 highlightedWithLivePresentation != usesInlineLivePresentation
             if needsBase {
-                let spans = snapshotSource == source ? sharedSnapshot?.syntaxSpans : nil
-                let displaySpans = usesSharedAnalysis ? spans : MarkdownSyntaxHighlighter.spans(in: source)
+                let analysis = snapshot?.analysis ?? MarkdownAnalysis(source, dialect: dialect)
+                let displaySpans = usesSharedAnalysis ? snapshot?.syntaxSpans
+                    : MarkdownSyntaxHighlighter.spans(in: source, analysis: analysis)
                 MarkdownSyntaxHighlighter.apply(to: textView, spans: displaySpans ?? [])
                 if usesInlineLivePresentation,
                    let displaySpans {
                     inlineLiveDisplay = MarkdownInlineLiveDisplay(textView: textView,
                         ranges: MarkdownInlineLivePresentation.markerRanges(in: source,
                             spans: displaySpans,
-                            analysis: snapshotSource == source ? sharedSnapshot?.analysis : nil))
+                            analysis: analysis))
                 } else {
                     inlineLiveDisplay = nil
                 }
                 highlightedSource = source
                 highlightedSnapshotSource = snapshotSource
+                highlightedDialect = dialect
                 highlightedWithSharedAnalysis = usesSharedAnalysis
                 highlightedWithLivePresentation = usesInlineLivePresentation
             }
@@ -387,21 +396,26 @@ struct MarkdownTextEditor: NSViewRepresentable {
         @MainActor func applyProofing() {
             guard let textView else { return }
             let source = textView.editorSource
+            let dialect = model.markdownDialect
+            let needsRanges = proofingSource != source || proofingDialect != dialect
             if usesSharedAnalysis {
-                if let snapshot = sharedSnapshot, snapshot.source == source {
-                    if proofingSource != source {
+                if let snapshot = sharedSnapshot, snapshot.matches(source: source, dialect: dialect) {
+                    if needsRanges {
                         proofingSource = source
+                        proofingDialect = snapshot.dialect
                         protectedProofingRanges = snapshot.proofingRanges
                     }
                 }
-            } else if proofingSource != source {
+            } else if needsRanges {
                 proofingSource = source
-                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: source)
+                proofingDialect = dialect
+                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: source,
+                    analysis: MarkdownAnalysis(source, dialect: dialect))
             }
             let location = textView.selectedRange().location
             // Stale offsets cannot protect a newly inserted code/URL range. Until
-            // matching background analysis arrives, suppress automatic correction.
-            let protected = (usesSharedAnalysis && proofingSource != source) ||
+            // analysis for both the source and dialect arrives, suppress correction.
+            let protected = (usesSharedAnalysis && (proofingSource != source || proofingDialect != dialect)) ||
                 MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
             textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
             textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
