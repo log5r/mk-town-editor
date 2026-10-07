@@ -204,11 +204,21 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertNotNil(cache.image(at: first))
         XCTAssertEqual(cache.decodeCount, 2, "A changed file must be decoded again")
 
-        let small = LocalImageCache(costLimit: 4)
+        let small = LocalImageCache(costLimit: 4, protectionInterval: 0)
         XCTAssertNotNil(small.image(at: first))
         XCTAssertNotNil(small.image(at: second))
         let key = try XCTUnwrap(LocalImageCache.key(for: first))
         XCTAssertFalse(small.contains(key), "The least recently used image is evicted")
+
+        // 直近に使った画像は通常の上限では追い出さず、絶対上限を超えた時だけ追い出す。
+        let protected = LocalImageCache(costLimit: 4, hardLimit: 1_000)
+        XCTAssertNotNil(protected.image(at: first))
+        XCTAssertNotNil(protected.image(at: second))
+        XCTAssertTrue(protected.contains(key))
+        let bounded = LocalImageCache(costLimit: 4, hardLimit: 4)
+        XCTAssertNotNil(bounded.image(at: first))
+        XCTAssertNotNil(bounded.image(at: second))
+        XCTAssertFalse(bounded.contains(key))
     }
 
     func testPreviewDecodesLocalImagesInBackgroundAndRendersAfterRevision() async throws {
@@ -243,13 +253,13 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(store.cache.decodeCount, decodes + 1)
     }
 
-    func testEvictedPreviewImagesAreReloadedSynchronouslyInsteadOfLooping() async throws {
+    func testImagesBeyondTheLimitStayCachedWhileInUseWithoutMainThreadDecoding() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
+        let urls = (0..<12).map { root.appendingPathComponent("photo\($0).png") }
         for url in urls { try png.write(to: url) }
-        // 1枚分しか保持できない上限で、表示中の画像が互いを追い出す状況を作る。
+        // 1枚分の上限で、1回の描画が上限を超える画像を使う状況を作る。
         let store = LocalImageStore(cache: LocalImageCache(costLimit: 4))
         for url in urls { guard case .loading = store.lookup(url) else { return XCTFail("expected loading") } }
         let deadline = Date().addingTimeInterval(5)
@@ -257,19 +267,44 @@ final class LocalImagePreviewTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(20))
         let revision = store.revision
         let decodes = store.cache.decodeCount
+        XCTAssertEqual(decodes, urls.count)
         for _ in 0..<3 {
             for url in urls {
-                guard case .image = store.lookup(url) else { return XCTFail("evicted image must render") }
+                guard case .image = store.lookup(url) else { return XCTFail("images in use must stay cached") }
             }
         }
-        XCTAssertFalse(store.hasPendingDecodes)
         try await Task.sleep(for: .milliseconds(20))
-        XCTAssertEqual(store.revision, revision, "Re-reading evicted images must not trigger another render pass")
-        XCTAssertGreaterThan(store.cache.decodeCount, decodes)
+        XCTAssertEqual(store.cache.decodeCount, decodes, "No image is decoded again on the render path")
+        XCTAssertEqual(store.revision, revision)
+        let maximumRunning = await ImageDecodeLimiter.local.maximumRunning
+        XCTAssertLessThanOrEqual(maximumRunning, 4, "Local decodes are bounded")
+    }
+
+    func testImagesEvictedBeyondTheHardLimitReloadInBackgroundWithoutRepublishing() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
+        for url in urls { try png.write(to: url) }
+        let store = LocalImageStore(cache: LocalImageCache(costLimit: 4, hardLimit: 4))
+        for url in urls { _ = store.lookup(url) }
+        let deadline = Date().addingTimeInterval(5)
+        while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(20))
+        let revision = store.revision
+        let evicted = try XCTUnwrap(urls.first { url in
+            !store.cache.contains(LocalImageCache.key(for: url)!)
+        })
+        guard case .loading = store.lookup(evicted) else {
+            return XCTFail("An evicted image is reloaded in the background, not on the main actor")
+        }
+        while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(store.revision, revision, "Reloading an evicted image must not start another render pass")
     }
 
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
-        let limiter = RemoteImageDecodeLimiter(limit: 4)
+        let limiter = ImageDecodeLimiter(limit: 4)
         await withTaskGroup(of: Void.self) { group in
             for _ in 0..<20 {
                 group.addTask {

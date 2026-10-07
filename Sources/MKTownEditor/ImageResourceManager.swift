@@ -89,7 +89,7 @@ final class RemoteImageStore: ObservableObject {
             // デコードはメインアクターの外で、同時実行数を制限して行う。プレビューを閉じるなどで
             // 読み込みが取り消されたら、待機中・実行前のデコードも取り消す。
             let worker = Task.detached(priority: .utility) { () -> CGImage? in
-                let limiter = RemoteImageDecodeLimiter.shared
+                let limiter = ImageDecodeLimiter.remote
                 await limiter.acquire()
                 guard !Task.isCancelled else {
                     await limiter.release()
@@ -131,6 +131,10 @@ final class RemoteImageStore: ObservableObject {
 ///
 /// 描画のたびにディスクから再デコードしないためのキャッシュ。表示を確実に保つため、
 /// 破棄はメモリ圧ではなく総コストの上限を超えたときに古い順で行う。
+///
+/// 直近に使った画像は通常の上限では追い出さない。1回の描画で使う画像が上限を超える文書で、
+/// 使ったばかりの画像を互いに追い出し、読み直しと再描画を繰り返すことを防ぐ。
+/// 直近の画像も含めて絶対上限を超えた時だけ、古い順に追い出す。
 final class LocalImageCache: @unchecked Sendable {
     static let shared = LocalImageCache()
 
@@ -144,19 +148,27 @@ final class LocalImageCache: @unchecked Sendable {
         let image: NSImage?
         let cost: Int
         var lastUse: UInt64
+        var lastUseDate: Date
     }
 
     private let lock = NSLock()
     private let costLimit: Int
+    private let hardLimit: Int
+    private let protectionInterval: TimeInterval
+    private let now: @Sendable () -> Date
     private var entries: [Key: Entry] = [:]
     private var totalCost = 0
     private var clock: UInt64 = 0
-    /// 上限超過で追い出した画像。表示中の画像を追い出し合う繰り返しを防ぐため、次は同期的に読む。
+    /// 絶対上限で追い出した画像。読み直しても再描画を通知せず、繰り返しを防ぐ。
     private var evicted: Set<Key> = []
     private(set) var decodeCount = 0
 
-    init(costLimit: Int = 64_000_000) {
+    init(costLimit: Int = 64_000_000, hardLimit: Int = 512_000_000,
+         protectionInterval: TimeInterval = 5, now: @escaping @Sendable () -> Date = { Date() }) {
         self.costLimit = costLimit
+        self.hardLimit = max(costLimit, hardLimit)
+        self.protectionInterval = protectionInterval
+        self.now = now
     }
 
     static func key(for fileURL: URL) -> Key? {
@@ -178,6 +190,7 @@ final class LocalImageCache: @unchecked Sendable {
         guard var entry = entries[key] else { return nil }
         clock += 1
         entry.lastUse = clock
+        entry.lastUseDate = now()
         entries[key] = entry
         return .some(entry.image)
     }
@@ -206,10 +219,15 @@ final class LocalImageCache: @unchecked Sendable {
             entries[staleKey] = nil
             totalCost -= stale.cost
         }
-        entries[key] = Entry(image: image, cost: cost, lastUse: clock)
+        let date = now()
+        entries[key] = Entry(image: image, cost: cost, lastUse: clock, lastUseDate: date)
         totalCost += cost
-        while totalCost > costLimit, entries.count > 1,
-              let oldest = entries.filter({ $0.key != key }).min(by: { $0.value.lastUse < $1.value.lastUse }) {
+        let protectedSince = date.addingTimeInterval(-protectionInterval)
+        while totalCost > costLimit, entries.count > 1 {
+            let candidates = entries.filter { $0.key != key }
+            let unprotected = candidates.filter { $0.value.lastUseDate < protectedSince }
+            let pool = !unprotected.isEmpty ? unprotected : (totalCost > hardLimit ? candidates : [:])
+            guard let oldest = pool.min(by: { $0.value.lastUse < $1.value.lastUse }) else { break }
             entries[oldest.key] = nil
             totalCost -= oldest.value.cost
             if evicted.count >= 1_024 { evicted.removeAll() }
@@ -262,16 +280,17 @@ final class LocalImageStore: ObservableObject {
         if let cached = cache.cachedImage(for: key) {
             return cached.map(Lookup.image) ?? .unavailable
         }
-        // 上限で追い出された画像を背景で読み直すと、完了通知の再描画が別の画像を追い出し、
-        // 読み込みが終わらなくなる。一度読んだ画像はその場で読み直す。
-        if cache.wasEvicted(key) {
-            return cache.decode(key: key, fileURL: fileURL).map(Lookup.image) ?? .unavailable
-        }
+        // 絶対上限で追い出された画像も背景で読み直すが、その完了では再描画を通知しない。
+        // 通知すると再描画が別の画像を追い出し、読み込みが終わらなくなる。
+        let publishes = !cache.wasEvicted(key)
         if inFlight.insert(key).inserted {
             let cache = cache
             Task.detached(priority: .userInitiated) { [weak self] in
+                let limiter = ImageDecodeLimiter.local
+                await limiter.acquire()
                 cache.decode(key: key, fileURL: fileURL)
-                await self?.finish(key)
+                await limiter.release()
+                await self?.finish(key, publishes: publishes)
             }
         }
         return .loading
@@ -279,9 +298,9 @@ final class LocalImageStore: ObservableObject {
 
     var hasPendingDecodes: Bool { !inFlight.isEmpty }
 
-    private func finish(_ key: LocalImageCache.Key) {
+    private func finish(_ key: LocalImageCache.Key, publishes: Bool) {
         inFlight.remove(key)
-        guard !publishScheduled, cache.contains(key) else { return }
+        guard publishes, !publishScheduled, cache.contains(key) else { return }
         // 同時に終わったデコードをまとめ、プレビューの再描画を1回にする。
         publishScheduled = true
         Task { @MainActor [weak self] in
@@ -293,10 +312,11 @@ final class LocalImageStore: ObservableObject {
     }
 }
 
-/// 外部画像のデコードを同時に実行する数の上限。多数の画像を一度に読み込んでも、
+/// 画像のデコードを同時に実行する数の上限。多数の画像を一度に読み込んでも、
 /// デコード中の画像データとCPUの使用を抑える。
-actor RemoteImageDecodeLimiter {
-    static let shared = RemoteImageDecodeLimiter(limit: 4)
+actor ImageDecodeLimiter {
+    static let remote = ImageDecodeLimiter(limit: 4)
+    static let local = ImageDecodeLimiter(limit: 4)
 
     private var available: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
