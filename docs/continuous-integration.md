@@ -14,6 +14,14 @@
 
 `xcode-27` runnerはGitHubで公開プレビュー扱いである。アプリのビルド環境に合わせて採用し、プレビューのrunnerであることをREADMEにも記載する。テストの省略やコンパイルエラーの無視は行わない。
 
+## PDFテストと言語設定
+
+Xcode 27の英語設定のrunnerでは全811テストが実行されたが、日本語PDFの本文抽出を検証する2件で5つのアサーションが失敗した。ローカルの日本語環境では同じテストが成功した。runnerの`AppleLanguages`を`ja, en`、`AppleLocale`を`ja_JP`に設定した後は、既存のPDFテストも含めて成功した。CIは専用のrunner内でこの設定を行い、利用者のローカル設定は変更しない。
+
+この比較からPDF生成・抽出に言語設定が影響すると判断した。フォント選択やPDFKit内部での具体的な差は未特定である。該当の回帰検証は`MarkdownExportPresetTests.testPDFCoverStartsBodyOnFollowingPage`と`MarkdownPDFExporterTests.testPDFExportPaginatesLongDocumentAndIncludesTable`が行う。失敗時は生成PDFの抽出文字列もActionsのログに表示する。
+
+GitHubの検証結果は全811テスト、失敗0件、スキップ1件（任意のGraphviz実行テスト）。スクリプトテスト10件とReleaseビルドも成功した。ローカルでは全811テストがスキップなしで成功した。
+
 ## 失敗時の挙動
 
 スクリプトは`set -euo pipefail`で最初の失敗を返す。Actionsの`run`にも`bash`を明示することで、ログ保存の`tee`が成功してもテストやビルドの失敗を失わない。テストが失敗した場合はReleaseビルドを実行しない。
