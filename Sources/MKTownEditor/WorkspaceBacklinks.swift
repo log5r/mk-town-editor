@@ -25,6 +25,7 @@ struct WorkspaceBacklinkIndex: Sendable {
         var skipped = 0
         let workspaceDocuments = documents(in: nodes)
         let documentURLs = workspaceDocuments.map(\.url)
+        let documentIndex = WorkspaceDocumentIndex(documents: documentURLs)
         for node in workspaceDocuments {
             try Task.checkCancellation()
             let sourceURL = node.url.resolvingSymlinksInPath().standardizedFileURL
@@ -72,7 +73,7 @@ struct WorkspaceBacklinkIndex: Sendable {
             }
             for wiki in WorkspaceWikiLinks.links(in: source) {
                 guard WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
-                    documents: documentURLs) == target else { continue }
+                    index: documentIndex) == target else { continue }
                 let line = lines.line(containingUTF16Offset: wiki.range.location)
                 let start = lines.starts[line - 1]
                 let end = line < lines.lineCount ? lines.starts[line] - 1 : text.length

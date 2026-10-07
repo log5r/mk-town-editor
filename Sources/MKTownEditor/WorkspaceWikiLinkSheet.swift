@@ -11,6 +11,7 @@ struct WorkspaceWikiLinkSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
     @State private var query = ""
+    @State private var documentIndex = WorkspaceDocumentIndex(documents: [])
 
     private var existing: WorkspaceWikiLink? {
         WorkspaceWikiLinks.link(at: selection, in: source)
@@ -23,7 +24,7 @@ struct WorkspaceWikiLinkSheet: View {
 
     private var resolved: URL? {
         existing.flatMap { WorkspaceWikiLinks.resolve($0.target,
-            from: documentURL, documents: documents) }
+            from: documentURL, index: documentIndex) }
     }
 
     private var matches: [WorkspaceQuickOpenResult] {
@@ -69,6 +70,10 @@ struct WorkspaceWikiLinkSheet: View {
         }
         .frame(width: 540)
         .padding(20)
+        .task {
+            let urls = documents
+            documentIndex = await Task.detached(priority: .utility) { WorkspaceDocumentIndex(documents: urls) }.value
+        }
         .onAppear {
             query = existing?.target ?? ""
             searchFocused = true
@@ -77,7 +82,7 @@ struct WorkspaceWikiLinkSheet: View {
 
     private func insert(_ url: URL) {
         let target = WorkspaceWikiLinks.target(for: url, from: documentURL,
-            documents: documents)
+            index: documentIndex)
         guard let edit = WorkspaceWikiLinks.insertion(in: source,
             selection: selection, target: target), onApply(edit, source) else { return }
         dismiss()

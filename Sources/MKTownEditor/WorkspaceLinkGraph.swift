@@ -30,6 +30,7 @@ struct WorkspaceLinkGraph: Sendable {
         let documents = flatten(nodes).map { $0.resolvingSymlinksInPath().standardizedFileURL }
             .filter { $0.path.hasPrefix(prefix) }
         let allowed = Set(documents)
+        let documentIndex = WorkspaceDocumentIndex(documents: documents)
         var edges = Set<WorkspaceGraphEdge>()
         var skipped = 0
         for sourceURL in documents {
@@ -71,11 +72,11 @@ struct WorkspaceLinkGraph: Sendable {
             }
             for wiki in WorkspaceWikiLinks.links(in: text) {
                 add(WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
-                    documents: documents))
+                    index: documentIndex))
             }
             for embed in WorkspaceDocumentEmbed.links(in: text) {
                 add(WorkspaceWikiLinks.resolve(embed.target, from: sourceURL,
-                    documents: documents))
+                    index: documentIndex))
             }
         }
         return Self(nodes: documents.sorted { $0.path < $1.path },
