@@ -83,7 +83,7 @@ enum FrontMatterProperties {
     private static func lines(in source: String) -> [Row] {
         guard let frontMatter = MarkdownFrontMatter(source: source) else { return [] }
         let text = source as NSString
-        let starts = MarkdownLineIndex(source).starts
+        let starts = MarkdownLineIndex(source, through: NSMaxRange(frontMatter.sourceRange)).starts
         var rows: [Row] = []
         for index in 1..<starts.count {
             let start = starts[index]
@@ -165,7 +165,7 @@ enum FrontMatterProperties {
     private static func closingLineStart(in source: String,
                                          frontMatter: MarkdownFrontMatter) -> Int? {
         let text = source as NSString
-        let starts = MarkdownLineIndex(source).starts
+        let starts = MarkdownLineIndex(source, through: NSMaxRange(frontMatter.sourceRange)).starts
         for index in 1..<starts.count {
             let start = starts[index]
             guard start < NSMaxRange(frontMatter.sourceRange) else { break }

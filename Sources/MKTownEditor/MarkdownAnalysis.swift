@@ -77,29 +77,50 @@ struct MarkdownFrontMatter: Equatable, Sendable {
     let sourceRange: NSRange
 
     init?(source: String) {
+        // 先頭行が区切り線でなければ、行の索引を作らずに終える。
+        guard source.hasPrefix("---") else { return nil }
         let text = source as NSString
-        let starts = MarkdownLineIndex(source).starts
-        guard starts.count >= 2 else { return nil }
-        func line(_ index: Int) -> String {
-            let start = starts[index]
-            let end = index + 1 < starts.count ? starts[index + 1] : text.length
-            return text.substring(with: NSRange(location: start, length: end - start))
+        // 行頭を順に求め、閉じ区切りが見つかった時点で走査を止める。本文の長さに依存しない。
+        func nextLineStart(after start: Int) -> Int? {
+            var offset = start
+            while offset < text.length {
+                let unit = text.character(at: offset)
+                if unit == 13, offset + 1 < text.length, text.character(at: offset + 1) == 10 { return offset + 2 }
+                if unit == 10 || unit == 13 { return offset + 1 }
+                offset += 1
+            }
+            return nil
+        }
+        func line(from start: Int, to end: Int) -> String {
+            text.substring(with: NSRange(location: start, length: end - start))
                 .trimmingCharacters(in: .newlines)
         }
-        guard line(0) == "---" else { return nil }
-        guard let closing = (1..<starts.count).first(where: {
-            line($0) == "---" || line($0) == "..."
-        }) else { return nil }
-        let end = closing + 1 < starts.count ? starts[closing + 1] : text.length
-        sourceRange = NSRange(location: 0, length: end)
+        guard let firstContent = nextLineStart(after: 0),
+              line(from: 0, to: firstContent) == "---" else { return nil }
+        var start = firstContent
+        var closing: (start: Int, end: Int)?
+        while closing == nil {
+            let next = nextLineStart(after: start)
+            let end = next ?? text.length
+            let value = line(from: start, to: end)
+            if value == "---" || value == "..." { closing = (start, end); break }
+            guard let next else { break }
+            start = next
+        }
+        guard let closing else { return nil }
+        sourceRange = NSRange(location: 0, length: closing.end)
         raw = text.substring(with: sourceRange)
-        let firstContent = starts[1]
         content = text.substring(with: NSRange(location: firstContent,
-            length: starts[closing] - firstContent))
+            length: closing.start - firstContent))
     }
 }
 
 struct MarkdownFootnoteIndex: Sendable {
+    /// 脚注参照 `[^id]` の照合式。解析・描画・HTML書き出しで共有する。
+    static let referenceExpression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+    private static let definitionExpression = try! NSRegularExpression(
+        pattern: #"^[ ]{0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$"#)
+
     let entries: [MarkdownFootnote]
     let definitionRanges: [NSRange]
 
@@ -111,7 +132,7 @@ struct MarkdownFootnoteIndex: Sendable {
         }
         let text = source as NSString
         let starts = MarkdownLineIndex(source).starts
-        let pattern = try! NSRegularExpression(pattern: #"^[ ]{0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$"#)
+        let pattern = Self.definitionExpression
         var definitions: [String: (content: String, range: NSRange)] = [:]
         var definitionRanges: [NSRange] = []
         var lineIndex = 0
@@ -149,7 +170,7 @@ struct MarkdownFootnoteIndex: Sendable {
             lineIndex = next
         }
         self.definitionRanges = definitionRanges
-        let referencePattern = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let referencePattern = Self.referenceExpression
         let inlineCode = MarkdownInlineSyntax.codeSpanRanges(in: source)
         var ordered: [MarkdownFootnote] = []
         var seen = Set<String>()
@@ -174,6 +195,12 @@ struct MarkdownFootnoteIndex: Sendable {
 }
 
 struct MarkdownBlock: Equatable, Sendable {
+    /// 表の見出しと本文のセル。表ブロックの `content` は空なので、セル内のインライン記法はここから調べる。
+    var inlineCells: [String] {
+        guard let table else { return [] }
+        return table.header + table.rows.flatMap { $0 }
+    }
+
     enum Kind: Hashable, Sendable {
         case paragraph
         case heading(level: Int)
@@ -225,12 +252,20 @@ struct MarkdownBlock: Equatable, Sendable {
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
 struct MarkdownAnalysis: Sendable {
+    /// 解析結果ごとに一意な識別子。同じ解析結果に由来する値かを比較なしで判定するために使う。
+    final class Identity: Sendable, Equatable {
+        static func == (lhs: Identity, rhs: Identity) -> Bool { lhs === rhs }
+    }
+
+    let identity = Identity()
     let dialect: MarkdownDialect
     let blocks: [MarkdownBlock]
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
     let crossReferences: MarkdownCrossReferences
+    /// コードブロック以外のブロックまたは脚注に引用記法 `[@` が含まれるか。
+    let containsCitationSyntax: Bool
 
     init(_ markdown: String, dialect: MarkdownDialect = .extended) {
         self.dialect = dialect
@@ -250,6 +285,12 @@ struct MarkdownAnalysis: Sendable {
         blocks = visibleBlocks
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
         crossReferences = MarkdownCrossReferences(blocks: dialect == .extended ? visibleBlocks : [])
+        containsCitationSyntax = dialect == .extended && (
+            visibleBlocks.contains { block in
+                block.kind != .codeBlock && (block.content.contains("[@") ||
+                    block.inlineCells.contains { $0.contains("[@") })
+            } ||
+            index.entries.contains { $0.content.contains("[@") })
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }

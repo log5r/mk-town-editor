@@ -9,6 +9,8 @@ struct WorkspaceGraphViewData: Sendable {
     let nodes: [URL]
     let edges: [WorkspaceGraphEdge]
     let isLimited: Bool
+    /// 表示する書類数の上限。上限に達した旨の表示にも使う。
+    let limit: Int
 }
 
 struct WorkspaceLinkGraph: Sendable {
@@ -86,7 +88,10 @@ struct WorkspaceLinkGraph: Sendable {
             }, skippedDocuments: skipped, isTruncated: isTruncated)
     }
 
-    func view(around focus: URL?, showsAll: Bool, limit: Int = 150) -> WorkspaceGraphViewData {
+    static let defaultDisplayLimit = 150
+
+    func view(around focus: URL?, showsAll: Bool,
+              limit: Int = WorkspaceLinkGraph.defaultDisplayLimit) -> WorkspaceGraphViewData {
         let maximum = max(1, limit)
         let selected: [URL]
         if showsAll || focus == nil {
@@ -98,8 +103,9 @@ struct WorkspaceLinkGraph: Sendable {
                 if edge.target == focus { return edge.source }
                 return nil
             })
+            let known = Set(nodes)
             selected = ([focus] + neighbors.sorted { $0.path < $1.path })
-                .filter { nodes.contains($0) }
+                .filter { known.contains($0) }
                 .prefix(maximum).map { $0 }
         }
         let selectedSet = Set(selected)
@@ -109,6 +115,6 @@ struct WorkspaceLinkGraph: Sendable {
                 edges.contains { edge in
                     (edge.source == focus || edge.target == focus) &&
                         (!selectedSet.contains(edge.source) || !selectedSet.contains(edge.target))
-                })
+                }, limit: maximum)
     }
 }

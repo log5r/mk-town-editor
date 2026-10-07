@@ -7,9 +7,11 @@ enum MermaidDiagram {
         block.kind == .codeBlock && block.codeLanguage?.lowercased() == "mermaid"
     }
 
+    private static let errorLineExpression = try! NSRegularExpression(pattern: #"(?i)\bline\s+(\d+)\b"#)
+
     static func errorLine(_ message: String, explicitLine: Int?) -> Int? {
         if let explicitLine, explicitLine > 0 { return explicitLine }
-        let pattern = try! NSRegularExpression(pattern: #"(?i)\bline\s+(\d+)\b"#)
+        let pattern = errorLineExpression
         let source = message as NSString
         guard let match = pattern.firstMatch(in: message, range: NSRange(location: 0, length: source.length)),
               let line = Int(source.substring(with: match.range(at: 1))), line > 0 else { return nil }

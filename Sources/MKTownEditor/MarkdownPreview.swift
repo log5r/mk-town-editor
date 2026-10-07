@@ -2,9 +2,31 @@ import AppKit
 import QuickLookUI
 import SwiftUI
 
+/// プレビューの移動先。解析ごとに変わるブロック番号ではなく原文の位置で保持し、
+/// 表示中の解析結果に照らして移動先のブロックを決める。
 struct PreviewNavigationTarget: Equatable {
-    let blockID: Int
+    let sourceLocation: Int
     let sequence: Int
+    /// 移動を要求した時点の原文。表示中の解析がこの原文のものになるまで、移動は確定しない。
+    var source: String? = nil
+
+    /// 表示中の原文で移動先を解決できたか。解析待ちの古い表示で解決した移動は、
+    /// 一致する解析結果が届いた時にもう一度適用する。
+    func isSettled(byDisplayedSource displayedSource: String) -> Bool {
+        source == nil || source == displayedSource
+    }
+
+    /// 要求後に初めて表示が新しい解析に変わった時は、原文が一致しなくても確定する。
+    /// 要求した原文の解析が続く編集で取り消された場合に、古い移動を繰り返さないため。
+    func settles(afterAnalysisChange: Bool, displayedSource: String) -> Bool {
+        afterAnalysisChange || isSettled(byDisplayedSource: displayedSource)
+    }
+
+    func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String],
+                        index: PreviewScrollIndex? = nil) -> String? {
+        PreviewScrollSync.block(containingOrBefore: sourceLocation, in: analysis, index: index)
+            .flatMap { presentationIDs[$0.id] }
+    }
 }
 
 private struct PreviewBlockRow: Identifiable {
@@ -16,8 +38,11 @@ struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
-    @State private var citationRevision = 0
+    @ObservedObject private var localImages = LocalImageStore.shared
+    @State private var citationCatalog = MarkdownCitationCatalog.empty
     @State private var inspectedImage: ImageInspectionItem?
+    /// 要求した原文に一致する表示で適用し終えた移動の番号。
+    @State private var settledNavigationSequence: Int?
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
@@ -42,14 +67,41 @@ struct MarkdownPreview: View {
     var theme: PreviewTheme = .system
     var bodyWidth = 900
 
-    private var remoteImageTaskID: Int {
-        var hasher = Hasher()
-        hasher.combine(markdown)
-        hasher.combine(loadsRemoteImages)
-        return hasher.finalize()
+    /// 外部画像の読み込み条件。スナップショットがあれば背景で抽出済みのURL集合を使い、
+    /// 入力でURLが変わらない限りタスクを再起動しない。
+    private struct RemoteImageWork: Equatable {
+        let isEnabled: Bool
+        let urls: Set<URL>?
+        let sourceHash: Int
     }
 
-    private var resourceRevision: Int { remoteImages.revision &+ citationRevision }
+    private var remoteImageWork: RemoteImageWork {
+        guard loadsRemoteImages else { return RemoteImageWork(isEnabled: false, urls: [], sourceHash: 0) }
+        if let snapshot, snapshot.source == markdown {
+            return RemoteImageWork(isEnabled: true, urls: snapshot.remoteImageURLs, sourceHash: 0)
+        }
+        return RemoteImageWork(isEnabled: true, urls: nil, sourceHash: markdown.hashValue)
+    }
+
+    private var resourceRevision: Int { remoteImages.revision &+ localImages.revision }
+
+    /// 描画に渡す文脈。参考文献は背景で読み込んだものを使い、描画中にディスクを読まない。
+    private var renderContext: DocumentContext {
+        var context = documentContext
+        context.citationCatalog = citationCatalog
+        return context
+    }
+
+    private struct CitationWatch: Equatable {
+        let fileURL: URL?
+        let isActive: Bool
+    }
+
+    private var citationWatch: CitationWatch {
+        let isActive = documentContext.markdownDialect == .extended && documentContext.fileURL != nil &&
+            (snapshot?.analysis.containsCitationSyntax ?? markdown.contains("[@"))
+        return CitationWatch(fileURL: documentContext.fileURL, isActive: isActive)
+    }
 
     var body: some View {
         Group {
@@ -59,19 +111,13 @@ struct MarkdownPreview: View {
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown,
                 dialect: documentContext.markdownDialect)
-            if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
-                analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
-                onVisibleBlockChange != nil || onRevealSource != nil ||
-                markdown.contains("![[") ||
-                analysis.blocks.contains(where: {
-                    MarkdownMedia($0, dialect: analysis.dialect) != nil
-                }) ||
-                !analysis.crossReferences.targets.isEmpty ||
-                (documentContext.markdownDialect == .extended && markdown.contains("$")) ||
-                !analysis.footnotes.entries.isEmpty ||
+            let matchingSnapshot = snapshot.flatMap { $0.analysis.identity === analysis.identity ? $0 : nil }
+            if onVisibleBlockChange != nil || onRevealSource != nil ||
                 theme != .system || bodyWidth != 900 ||
-                (showsFrontMatter && analysis.frontMatter != nil) {
-                let layout = PreviewLayoutIndex(analysis)
+                (showsFrontMatter && analysis.frontMatter != nil) ||
+                (matchingSnapshot?.needsStructuredPreview
+                    ?? PreviewStructure.needsStructuredLayout(analysis, source: markdown)) {
+                let layout = matchingSnapshot?.previewLayout ?? PreviewLayoutIndex(analysis)
                 let presentationIDs = snapshot?.blockPresentationIDs ?? PreviewBlockIdentity.identifiers(in: analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
@@ -104,8 +150,10 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            Text(AttributedString(MarkdownRenderer.renderCallout(block,
-                                                in: analysis, documentContext: documentContext)))
+                                            Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+                                                MarkdownRenderer.renderCallout(block, in: analysis,
+                                                                               documentContext: renderContext)
+                                            }))
                                                 .textSelection(.enabled)
                                         }
                                         .padding(12)
@@ -130,7 +178,7 @@ struct MarkdownPreview: View {
                                     } else if documentContext.markdownDialect == .extended,
                                               block.kind == .paragraph,
                                               let formula = MarkdownMath.displayFormula(block.content),
-                                              MarkdownMathRenderer.label(formula) != nil {
+                                              renderCache.canRenderDisplayFormula(formula) {
                                         HStack {
                                             MarkdownMathView(formula: formula)
                                                 .accessibilityLabel(formula.latex)
@@ -196,8 +244,10 @@ struct MarkdownPreview: View {
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
-                                        Text(AttributedString(MarkdownRenderer.renderTableCell(note.content,
-                                            in: analysis, documentContext: documentContext)))
+                                        Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+                                            MarkdownRenderer.renderTableCell(note.content, in: analysis,
+                                                                             documentContext: renderContext)
+                                        }))
                                             .textSelection(.enabled)
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
@@ -213,10 +263,9 @@ struct MarkdownPreview: View {
                                 }
                             }
                             if documentContext.markdownDialect == .extended,
-                               let catalog = MarkdownCitationCatalog.load(documentURL: documentContext.fileURL),
-                               catalog.hasCitation(in: analysis) {
+                               citationCatalog.hasCitation(in: analysis) {
                                 Text("参考文献").font(.headline).padding(.top, 20)
-                                ForEach(Array(catalog.entries.enumerated()), id: \.element.key) { index, entry in
+                                ForEach(Array(citationCatalog.entries.enumerated()), id: \.element.key) { index, entry in
                                     Text(verbatim: "\(index + 1). \(entry.bibliographyText)")
                                         .textSelection(.enabled)
                                 }
@@ -230,10 +279,17 @@ struct MarkdownPreview: View {
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
-                        if let navigationTarget, let id = presentationIDs[navigationTarget.blockID] { proxy.scrollTo(id, anchor: .top) }
+                        applyNavigation(navigationTarget, force: true, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
                     }
                     .onChange(of: navigationTarget) { _, target in
-                        if let target, let id = presentationIDs[target.blockID] { proxy.scrollTo(id, anchor: .top) }
+                        applyNavigation(target, force: true, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
+                    }
+                    .onChange(of: analysis.identity) { _, _ in
+                        // 編集直後の移動は古い表示で解決している。要求した原文の解析が届いたら一度だけ合わせ直す。
+                        applyNavigation(navigationTarget, force: false, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
                     }
                     .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
                         if let blockID = PreviewScrollSync.topBlockID(from: origins) {
@@ -275,7 +331,8 @@ struct MarkdownPreview: View {
                     })
                 }
             } else {
-                MarkdownTextPreview(markdown: markdown, documentContext: documentContext,
+                MarkdownTextPreview(markdown: markdown, documentContext: renderContext,
+                                    imageRequester: renderCache.imageRequester,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
                                     remoteRevision: resourceRevision,
@@ -286,37 +343,86 @@ struct MarkdownPreview: View {
         }
         .environment(\.colorScheme, theme.colorScheme ?? colorScheme)
         .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
-        .task(id: remoteImageTaskID) {
-            remoteImages.setEnabled(loadsRemoteImages)
-            guard loadsRemoteImages else { return }
-            let urls = RemoteImageStore.referencedURLs(in: markdown)
+        .task(id: remoteImageWork) {
+            let work = remoteImageWork
+            remoteImages.setEnabled(work.isEnabled)
+            guard work.isEnabled else { return }
+            var urls = work.urls
+            if urls == nil {
+                // スナップショットのない表示では本文を解析し直すため、入力が落ち着くまで待ち、
+                // 次の編集で取り消された走査は背景の処理ごと止める。
+                do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+                let source = markdown
+                let worker = Task.detached(priority: .utility) {
+                    RemoteImageStore.referencedURLs(in: source)
+                }
+                urls = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+            }
+            guard let urls, !Task.isCancelled else { return }
             await withTaskGroup(of: Void.self) { group in
                 for url in urls {
                     group.addTask { await remoteImages.load(url) }
                 }
             }
         }
-        .task(id: documentContext.fileURL) {
-            guard documentContext.fileURL != nil else { return }
-            var previous = MarkdownCitationCatalog.fingerprint(documentURL: documentContext.fileURL)
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3))
-                guard !Task.isCancelled else { break }
-                let current = MarkdownCitationCatalog.fingerprint(documentURL: documentContext.fileURL)
-                if current != previous {
-                    previous = current
-                    citationRevision &+= 1
-                }
+        .task(id: citationWatch) {
+            let watch = citationWatch
+            guard watch.isActive else {
+                if citationCatalog != .empty { citationCatalog = .empty }
+                return
             }
+            // 監視を読み込みより先に始め、読み込み中の保存も変更として受け取る。
+            let changes = MarkdownCitationFileMonitor.changes(documentURL: watch.fileURL)
+            await reloadCitations(documentURL: watch.fileURL)
+            for await _ in changes {
+                await reloadCitations(documentURL: watch.fileURL)
+            }
+        }
+        .onDisappear {
+            // 閉じたプレビューだけが待っていたローカル画像のデコードは取り消す。
+            LocalImageStore.shared.cancelRequests(from: renderCache.imageRequester)
+        }
+        .onChange(of: localImagePaths) { _, paths in
+            // 編集や書類の切り替えで参照されなくなった画像の、待機中のデコードを取り下げる。
+            guard let paths else { return }
+            LocalImageStore.shared.reconcileRequests(from: renderCache.imageRequester, keepingPaths: paths)
         }
         .sheet(item: $inspectedImage) { item in
             ImageInspectionView(url: item.url)
         }
     }
 
+    private var displayedSource: String { snapshot?.source ?? markdown }
+
+    /// 表示中の本文が参照するローカル画像。スナップショットがない時は求めず、取り下げも行わない。
+    private var localImagePaths: Set<String>? {
+        guard let snapshot else { return nil }
+        return LocalImageStore.localImagePaths(destinations: snapshot.imageDestinations, context: documentContext)
+    }
+
+    private func applyNavigation(_ target: PreviewNavigationTarget?, force: Bool, proxy: ScrollViewProxy,
+                                 analysis: MarkdownAnalysis, presentationIDs: [Int: String],
+                                 index: PreviewScrollIndex?) {
+        guard let target, force || settledNavigationSequence != target.sequence else { return }
+        if let id = target.presentationID(in: analysis, presentationIDs: presentationIDs, index: index) {
+            proxy.scrollTo(id, anchor: .top)
+        }
+        if target.settles(afterAnalysisChange: !force, displayedSource: displayedSource) {
+            settledNavigationSequence = target.sequence
+        }
+    }
+
+    private func reloadCitations(documentURL: URL?) async {
+        let catalog = await Task.detached(priority: .utility) {
+            MarkdownCitationCatalog.load(documentURL: documentURL) ?? .empty
+        }.value
+        guard !Task.isCancelled, catalog != citationCatalog else { return }
+        citationCatalog = catalog
+    }
+
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let rendered = renderCache.render(block, in: analysis, context: documentContext,
+        let rendered = renderCache.render(block, in: analysis, context: renderContext,
             zoom: zoom, remoteRevision: resourceRevision, theme: theme)
         if case let .heading(level) = block.kind {
             Group {
@@ -355,7 +461,7 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            let rendered = renderCache.render(block, in: analysis, context: documentContext,
+            let rendered = renderCache.render(block, in: analysis, context: renderContext,
                                               zoom: zoom, showsTaskPrefix: false,
                                               remoteRevision: resourceRevision, theme: theme)
             Group {
@@ -397,7 +503,7 @@ struct MarkdownPreview: View {
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
                 let rendered = renderCache.renderCell(cells[column], in: analysis,
-                    context: documentContext, zoom: zoom,
+                    context: renderContext, zoom: zoom,
                     remoteRevision: resourceRevision, theme: theme)
                 Group {
                     if rendered.containsLink {
@@ -540,6 +646,7 @@ enum PreviewAccessibility {
 private struct MarkdownTextPreview: NSViewRepresentable {
     let markdown: String
     let documentContext: DocumentContext
+    let imageRequester: LocalImageRequester
     let analysis: MarkdownAnalysis?
     let onOpenHeading: ((String) -> Void)?
     let onOpenDocument: ((URL) -> Void)?
@@ -646,8 +753,10 @@ private struct MarkdownTextPreview: NSViewRepresentable {
                 coordinator.renderedContext != documentContext ||
                 coordinator.renderedZoom != zoom ||
                 coordinator.renderedRemoteRevision != remoteRevision else { return }
-        let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
-            ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
+        let rendered = MarkdownRenderer.$localImageRequester.withValue(imageRequester) {
+            analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
+                ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
+        }
         textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext

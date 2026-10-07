@@ -3,6 +3,8 @@ import Foundation
 struct WorkspaceAttachmentEntry: Identifiable, Sendable {
     let url: URL
     let sources: [URL]
+    /// 確認時にファイルが存在したか。表示のたびにファイルシステムを調べないために保持する。
+    var exists = true
 
     var id: URL { url }
 }
@@ -51,10 +53,8 @@ enum WorkspaceAttachmentAudit {
                 masked.replaceCharacters(in: range,
                     with: String(repeating: " ", count: range.length))
             }
-            let maskedSource = masked as String
-            let resolved = await MainActor.run {
-                MarkdownRenderer.resolveReferences(in: maskedSource, using: analysis.references)
-            }
+            let resolved = MarkdownRenderer.resolveReferences(in: masked as String,
+                                                              using: analysis.references)
             let context = DocumentContext(fileURL: document)
             for link in MarkdownLinkSyntax.inlineLinks(in: resolved) {
                 guard let url = context.resolveLocalResource(link.destination),
@@ -66,12 +66,13 @@ enum WorkspaceAttachmentAudit {
                 references[target, default: []].insert(key)
             }
         }
-        func entries(_ urls: [URL]) -> [WorkspaceAttachmentEntry] {
+        func entries(_ urls: [URL], exist: Bool = true) -> [WorkspaceAttachmentEntry] {
             urls.map { WorkspaceAttachmentEntry(url: $0,
-                sources: Array(references[$0] ?? []).sorted { $0.path < $1.path }) }
+                sources: Array(references[$0] ?? []).sorted { $0.path < $1.path }, exists: exist) }
                 .sorted { $0.url.path.localizedStandardCompare($1.url.path) == .orderedAscending }
         }
-        let missing = entries(references.keys.filter { !FileManager.default.fileExists(atPath: $0.path) })
+        let missing = entries(references.keys.filter { !FileManager.default.fileExists(atPath: $0.path) },
+                              exist: false)
         let assetKeys = Set(assets.map { $0.resolvingSymlinksInPath().standardizedFileURL })
         let unused = skipped.isEmpty && !index.isTruncated ? entries(assetKeys.filter { references[$0] == nil }) : []
         let used = entries(assetKeys.filter { references[$0] != nil })

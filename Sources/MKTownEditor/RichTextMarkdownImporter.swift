@@ -39,6 +39,13 @@ enum RichTextImportError: LocalizedError {
 }
 
 enum RichTextMarkdownImporter {
+    private static let charsetExpression = try! NSRegularExpression(
+        pattern: #"(?i)charset\s*=\s*["']?([a-z0-9_-]+)"#)
+    private static let imageTagExpression = try! NSRegularExpression(pattern: #"(?is)<img\b[^>]*>"#)
+    private static let altAttributeExpression = try! NSRegularExpression(
+        pattern: #"(?i)\balt\s*=\s*["']([^"']*)["']"#)
+    private static let headingTagExpression = try! NSRegularExpression(pattern: #"(?i)<h([1-6])\b[^>]*>"#)
+
     @MainActor
     static func convert(_ data: Data, format: RichTextImportFormat) throws -> RichTextImportResult {
         let prepared = try prepare(data, format: format)
@@ -124,7 +131,7 @@ enum RichTextMarkdownImporter {
             return html
         }
         let prefix = String(decoding: data.prefix(4096), as: UTF8.self)
-        let pattern = try! NSRegularExpression(pattern: #"(?i)charset\s*=\s*["']?([a-z0-9_-]+)"#)
+        let pattern = charsetExpression
         let match = pattern.firstMatch(in: prefix,
             range: NSRange(location: 0, length: (prefix as NSString).length))
         let charset = match.map { (prefix as NSString).substring(with: $0.range(at: 1)).lowercased() }
@@ -239,12 +246,12 @@ enum RichTextMarkdownImporter {
             result = result.replacingOccurrences(of: pattern, with: "",
                                                  options: .regularExpression)
         }
-        let imagePattern = try! NSRegularExpression(pattern: #"(?is)<img\b[^>]*>"#)
+        let imagePattern = imageTagExpression
         let matches = imagePattern.matches(in: result,
             range: NSRange(location: 0, length: (result as NSString).length))
         for match in matches.reversed() {
             let tag = (result as NSString).substring(with: match.range)
-            let altPattern = try! NSRegularExpression(pattern: #"(?i)\balt\s*=\s*["']([^"']*)["']"#)
+            let altPattern = altAttributeExpression
             let altMatch = altPattern.firstMatch(in: tag,
                 range: NSRange(location: 0, length: (tag as NSString).length))
             let alt = altMatch.map { (tag as NSString).substring(with: $0.range(at: 1)) } ?? "画像"
@@ -254,7 +261,7 @@ enum RichTextMarkdownImporter {
             result = (result as NSString).replacingCharacters(in: match.range,
                 with: "<span>[画像: \(safe)]</span>")
         }
-        let headings = try! NSRegularExpression(pattern: #"(?i)<h([1-6])\b[^>]*>"#)
+        let headings = headingTagExpression
         let headingMatches = headings.matches(in: result,
             range: NSRange(location: 0, length: (result as NSString).length))
         for match in headingMatches.reversed() {

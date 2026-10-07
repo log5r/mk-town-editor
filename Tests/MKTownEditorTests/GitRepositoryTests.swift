@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
@@ -116,5 +117,63 @@ final class GitRepositoryTests: XCTestCase {
         try process.run()
         process.waitUntilExit()
         XCTAssertEqual(process.terminationStatus, expectedStatus, "git \(arguments) failed")
+    }
+
+    func testDiffPresentationColorsChangedLinesWithoutPerLineViews() {
+        let diff = "diff --git a/a.md b/a.md\n--- a/a.md\n+++ b/a.md\n@@ -1,2 +1,2 @@\n-古い行\n+新しい行🙂\n 文脈\n"
+        let presentation = GitDiffPresentation(diff)
+        let text = presentation.text as NSString
+        XCTAssertEqual(presentation.text, diff)
+        XCTAssertEqual(presentation.totalLines, 7)
+        XCTAssertFalse(presentation.isTruncated)
+        XCTAssertEqual(presentation.deletions.map(text.substring(with:)), ["-古い行"])
+        XCTAssertEqual(presentation.additions.map(text.substring(with:)), ["+新しい行🙂"])
+        let plain = GitDiffPresentation("- list item\n+ plus", highlightsChanges: false)
+        XCTAssertTrue(plain.additions.isEmpty && plain.deletions.isEmpty)
+        XCTAssertEqual(GitDiffPresentation("").totalLines, 0)
+    }
+
+    func testLargeDiffIsTruncatedUntilFullDisplayIsRequested() {
+        let diff = (0..<60_000).map { $0.isMultiple(of: 2) ? "+added \($0)" : "-removed \($0)" }
+            .joined(separator: "\n")
+        let start = Date()
+        let truncated = GitDiffPresentation(diff)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+        XCTAssertTrue(truncated.isTruncated)
+        XCTAssertEqual(truncated.totalLines, 60_000)
+        XCTAssertEqual(truncated.shownLines, GitDiffPresentation.defaultLineLimit)
+        XCTAssertEqual(truncated.additions.count + truncated.deletions.count, GitDiffPresentation.defaultLineLimit)
+        XCTAssertTrue(truncated.text.hasSuffix("-removed \(GitDiffPresentation.defaultLineLimit - 1)\n"))
+        let full = GitDiffPresentation(diff, lineLimit: nil)
+        XCTAssertFalse(full.isTruncated)
+        XCTAssertEqual(full.text, diff)
+        XCTAssertEqual(full.additions.count, 30_000)
+    }
+}
+
+
+@MainActor
+final class GitDiffViewTests: XCTestCase {
+    func testLargeDiffLaysOutWithoutBuildingRowViews() throws {
+        let diff = (0..<60_000).map { "+line \($0) " + String(repeating: "x", count: 40) }.joined(separator: "\n")
+        let host = NSHostingView(rootView: GitDiffView(diff: diff, placeholder: "")
+            .frame(width: 600, height: 400))
+        host.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        let start = Date()
+        host.layoutSubtreeIfNeeded()
+        host.display()
+        XCTAssertLessThan(Date().timeIntervalSince(start), 3)
+        let textView = try XCTUnwrap(Self.textView(in: host))
+        XCTAssertEqual(textView.string.split(separator: "\n").count, GitDiffPresentation.defaultLineLimit)
+        XCTAssertEqual(textView.textStorage?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+                       .systemGreen)
+    }
+
+    private static func textView(in view: NSView) -> NSTextView? {
+        if let textView = view as? NSTextView { return textView }
+        for subview in view.subviews {
+            if let found = textView(in: subview) { return found }
+        }
+        return nil
     }
 }

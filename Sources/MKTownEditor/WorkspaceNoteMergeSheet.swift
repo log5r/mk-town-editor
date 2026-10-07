@@ -2,7 +2,7 @@ import SwiftUI
 
 struct WorkspaceNoteMergeSheet: View {
     let root: URL
-    let nodes: [WorkspaceNode]
+    let index: WorkspaceQuickOpenIndex
     let loadOpenBuffers: () throws -> [URL: Data]
     let onOpen: (URL) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -14,13 +14,9 @@ struct WorkspaceNoteMergeSheet: View {
     @State private var errorMessage: String?
     @State private var worker: Task<URL, Error>?
 
+    /// 結合の実行時だけ必要になる、シンボリックリンクを解決した書類一覧。
     private var documents: [URL] {
-        WorkspaceQuickOpen.search(nodes: nodes, root: root,
-            query: "", limit: Int.max).map { $0.url.resolvingSymlinksInPath().standardizedFileURL }
-    }
-
-    private var matches: [WorkspaceQuickOpenResult] {
-        WorkspaceQuickOpen.search(nodes: nodes, root: root, query: query, limit: 200)
+        index.rankedDocumentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL }
     }
 
     private var destinationURL: URL {
@@ -32,6 +28,7 @@ struct WorkspaceNoteMergeSheet: View {
     }
 
     var body: some View {
+        let matches = index.search(query, limit: 200)
         VStack(alignment: .leading, spacing: 12) {
             Text("書類を結合").font(.headline)
             Text("元の書類を残し、新しい書類に内容をまとめます。")

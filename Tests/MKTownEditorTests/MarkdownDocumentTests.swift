@@ -78,4 +78,46 @@ final class MarkdownDocumentTests: XCTestCase {
         document.text += "\nE"
         XCTAssertEqual(document.encodedData(), Data("A\r\nB\r\nC\r\nD\r\nE".utf8))
     }
+
+    func testSinglePassNewlineScanMatchesReferenceForEveryCombination() throws {
+        let pieces = ["a", "日本", "🙂", "e\u{301}", "\r\n", "\r", "\n", ""]
+        var generator = SystemRandomNumberGenerator()
+        for _ in 0..<400 {
+            let text = (0..<Int.random(in: 0...12, using: &generator))
+                .map { _ in pieces.randomElement(using: &generator)! }.joined()
+            for bom in [false, true] {
+                let data = (bom ? Data([0xEF, 0xBB, 0xBF]) : Data()) + Data(text.utf8)
+                let (value, format) = try MarkdownTextFormat.read(data)
+                let expected = text.replacingOccurrences(of: "\r\n", with: "\n")
+                    .replacingOccurrences(of: "\r", with: "\n")
+                XCTAssertEqual(value, expected)
+                XCTAssertTrue(value.isContiguousUTF8)
+                XCTAssertEqual(format.newline, Self.referenceNewline(text), text.debugDescription)
+                XCTAssertEqual(format.encode(value), data, text.debugDescription)
+                var changed = format
+                changed.newline = .crlf
+                XCTAssertEqual(changed.encode(value),
+                               (bom ? Data([0xEF, 0xBB, 0xBF]) : Data())
+                                + Data(expected.replacingOccurrences(of: "\n", with: "\r\n").utf8))
+            }
+        }
+    }
+
+    func testMixedNewlineOrderIsDroppedWhenLineCountChanges() throws {
+        let (value, format) = try MarkdownTextFormat.read(Data("A\rB\nC".utf8))
+        XCTAssertEqual(format.encode(value), Data("A\rB\nC".utf8))
+        XCTAssertEqual(format.encode(value + "\nD"), Data("A\rB\rC\rD".utf8))
+        XCTAssertEqual(format.encode("A\r\nB\rC"), Data("A\rB\nC".utf8))
+    }
+
+    private static func referenceNewline(_ value: String) -> MarkdownTextFormat.Newline {
+        // Characterで数えると、CRLFを除いた後に隣接したCRとLFが1つの書記素になるため、スカラーで数える。
+        let crlfCount = value.components(separatedBy: "\r\n").count - 1
+        let withoutCRLF = value.replacingOccurrences(of: "\r\n", with: "").unicodeScalars
+        let crCount = withoutCRLF.filter { $0 == "\r" }.count
+        let lfCount = withoutCRLF.filter { $0 == "\n" }.count
+        if crlfCount > 0 && crlfCount >= crCount && crlfCount >= lfCount { return .crlf }
+        if crCount > 0 && crCount >= lfCount { return .cr }
+        return .lf
+    }
 }

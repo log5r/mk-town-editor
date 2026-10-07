@@ -79,4 +79,33 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
             }
         }
     }
+
+    func testRowsSplitLinesOnceAndMatchHunkExcerpts() {
+        let saved = (0..<200).map { "line \($0)" }.joined(separator: "\n")
+        var lines = saved.components(separatedBy: "\n")
+        lines[10] = "changed 10"
+        lines.insert("inserted", at: 120)
+        lines.remove(at: 190)
+        let current = lines.joined(separator: "\n")
+        let rows = WorkspaceSnapshotDiff.rows(snapshot: saved, current: current)
+        XCTAssertEqual(rows.map(\.hunk), WorkspaceSnapshotDiff.hunks(snapshot: saved, current: current))
+        let first = rows[0]
+        XCTAssertEqual(first.currentExcerpt, "changed 10")
+        XCTAssertEqual(first.snapshotExcerpt, "line 10")
+        XCTAssertTrue(rows.contains { $0.snapshotExcerpt == "（なし）" && $0.currentExcerpt == "inserted" })
+    }
+
+    func testCancelledComparisonStopsWithoutBuildingRows() async {
+        let saved = (0..<50_000).map { "line \($0)" }.joined(separator: "\n")
+        let current = (0..<50_000).map { $0.isMultiple(of: 7) ? "changed \($0)" : "line \($0)" }
+            .joined(separator: "\n")
+        let worker = Task.detached { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return WorkspaceSnapshotDiff.rows(snapshot: saved, current: current).count
+        }
+        worker.cancel()
+        let count = await worker.value
+        XCTAssertEqual(count, 0)
+        XCTAssertFalse(WorkspaceSnapshotDiff.rows(snapshot: "a\nb", current: "a\nc").isEmpty)
+    }
 }

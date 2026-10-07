@@ -8,12 +8,9 @@ struct WorkspaceQuickOpenSheet: View {
 
     let onOpen: (URL) -> Void
 
-    private var matches: [WorkspaceQuickOpenResult] {
-        guard let root = workspaceStore.rootURL else { return [] }
-        return WorkspaceQuickOpen.search(nodes: workspaceStore.nodes, root: root, query: query)
-    }
-
     var body: some View {
+        // 正規化済みの索引をストアで共有し、検索結果は body ごとに一度だけ求める。
+        let matches = workspaceStore.quickOpenIndex.search(query)
         VStack(spacing: 12) {
             TextField("ファイル名またはパス", text: $query)
                 .textFieldStyle(.roundedBorder)

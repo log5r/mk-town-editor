@@ -55,7 +55,7 @@ struct WorkspaceAttachmentAuditSheet: View {
                 Text(relativePath(entry.url)).fontWeight(.medium)
                     .textSelection(.enabled)
                 Spacer()
-                if FileManager.default.fileExists(atPath: entry.url.path) {
+                if entry.exists {
                     Button("Finderで表示") {
                         NSWorkspace.shared.activateFileViewerSelecting([entry.url])
                     }

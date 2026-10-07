@@ -489,6 +489,114 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(store.zoom(for: .preview), 2)
     }
 
+    func testSavingPositionDoesNotNotifyObserversButModeChangesDo() {
+        let store = EditorSettingsStore(defaults: isolatedDefaults(), prunesMissingDocuments: false)
+        let url = URL(fileURLWithPath: "/tmp/work/observed.md")
+        var changes = 0
+        let observation = store.objectWillChange.sink { changes += 1 }
+        for location in 0..<5 {
+            store.savePosition(for: url, selection: NSRange(location: location, length: 0), scrollX: 0,
+                               scrollY: Double(location), splitRatio: 0.5, sidebarTab: "outline",
+                               sidebarVisible: true)
+        }
+        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(store.displayState(for: url)?.scrollY, 4)
+        store.setMode(.preview, for: url)
+        XCTAssertEqual(changes, 1)
+        var app = store.app
+        app.fontSize = 15
+        store.setAppSettings(app)
+        XCTAssertEqual(changes, 2)
+        withExtendedLifetime(observation) {}
+    }
+
+    func testDocumentStatesAreStoredSeparatelyAndBoundedByRecency() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let limit = EditorSettingsStore.documentStateLimit
+        let urls = (0..<(limit + 25)).map { URL(fileURLWithPath: "/tmp/work/doc\($0).md") }
+        for url in urls { store.setMode(.split, for: url) }
+        store.setMode(.preview, for: urls[0])
+        XCTAssertEqual(store.documentStateCount, limit)
+        XCTAssertTrue(store.hasDocumentState(for: urls[0]), "Recently used state is kept")
+        XCTAssertFalse(store.hasDocumentState(for: urls[1]), "Oldest state is removed")
+        XCTAssertTrue(store.hasDocumentState(for: urls.last!))
+
+        store.setImageImportMode(.relativeReference)
+        let settingsData = try XCTUnwrap(defaults.data(forKey: "MKTownEditor.editorSettings.v1"))
+        let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: settingsData) as? [String: Any])
+        XCTAssertEqual((settings["documents"] as? [String: Any])?.count, 0,
+                       "Document states are not encoded with shared settings")
+        let restored = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(restored.documentStateCount, limit)
+        XCTAssertEqual(restored.mode(for: urls[0]), .preview)
+    }
+
+    func testLegacyCombinedStorageIsMigratedAndUnchangedSettingsAreNotRewritten() throws {
+        let defaults = isolatedDefaults()
+        let legacy = """
+        {"app":{"defaultMode":"split","fontSize":14,"lineSpacing":2,"wrapsLines":true},
+         "folders":{},"documents":{"/tmp/work/legacy.md":{"mode":"preview","scrollY":50}}}
+        """
+        defaults.set(Data(legacy.utf8), forKey: "MKTownEditor.editorSettings.v1")
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let url = URL(fileURLWithPath: "/tmp/work/legacy.md")
+        XCTAssertEqual(store.mode(for: url), .preview)
+        XCTAssertEqual(store.app.fontSize, 14)
+        XCTAssertNotNil(defaults.data(forKey: "MKTownEditor.documentDisplayStates.v1"))
+        let restored = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(restored.displayState(for: url)?.scrollY, 50)
+
+        let writes = restored.settingsWriteCount
+        restored.setAppSettings(restored.app)
+        restored.setAppSettings(restored.app)
+        XCTAssertEqual(restored.settingsWriteCount, writes)
+        let documentWrites = restored.documentWriteCount
+        restored.savePosition(for: url, selection: NSRange(location: 0, length: 0), scrollX: 0, scrollY: 50,
+                              splitRatio: 0.5, sidebarTab: "outline", sidebarVisible: true)
+        restored.savePosition(for: url, selection: NSRange(location: 0, length: 0), scrollX: 0, scrollY: 50,
+                              splitRatio: 0.5, sidebarTab: "outline", sidebarVisible: true)
+        XCTAssertEqual(restored.documentWriteCount, documentWrites + 1)
+        XCTAssertEqual(restored.settingsWriteCount, writes, "Position saves do not rewrite shared settings")
+    }
+
+    func testMigratedStatesWithoutRecencyAreNotTrimmedArbitrarily() throws {
+        let defaults = isolatedDefaults()
+        let legacyDocuments = (0..<250).map { "\"/tmp/work/legacy\($0).md\":{\"mode\":\"preview\"}" }
+            .joined(separator: ",")
+        let legacy = "{\"app\":{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3," +
+            "\"wrapsLines\":true},\"folders\":{},\"documents\":{\(legacyDocuments)}}"
+        defaults.set(Data(legacy.utf8), forKey: "MKTownEditor.editorSettings.v1")
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(store.documentStateCount, 250, "Legacy states have no recency to choose by")
+        let limit = EditorSettingsStore.documentStateLimit
+        for index in 0..<(limit + 10) {
+            store.setMode(.split, for: URL(fileURLWithPath: "/tmp/work/new\(index).md"))
+        }
+        XCTAssertEqual(store.documentStateCount, 250 + limit)
+        XCTAssertFalse(store.hasDocumentState(for: URL(fileURLWithPath: "/tmp/work/new0.md")))
+        XCTAssertTrue(store.hasDocumentState(for: URL(fileURLWithPath: "/tmp/work/legacy0.md")))
+        store.setMode(.editor, for: URL(fileURLWithPath: "/tmp/work/legacy0.md"))
+        XCTAssertEqual(store.mode(for: URL(fileURLWithPath: "/tmp/work/legacy0.md")), .editor)
+        XCTAssertEqual(store.documentStateCount, 249 + limit, "A rewritten legacy state joins the bounded set")
+    }
+
+    func testMissingDocumentsArePrunedButUnreachableFoldersAreKept() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let existing = root.appendingPathComponent("kept.md")
+        try Data("x".utf8).write(to: existing)
+        let removed = root.appendingPathComponent("removed.md")
+        let unmounted = URL(fileURLWithPath: "/Volumes/MKTownMissingVolume-\(UUID().uuidString)/note.md")
+        let store = EditorSettingsStore(defaults: isolatedDefaults(), prunesMissingDocuments: false)
+        for url in [existing, removed, unmounted] { store.setMode(.preview, for: url) }
+        await store.pruneMissingDocuments()
+        XCTAssertTrue(store.hasDocumentState(for: existing))
+        XCTAssertFalse(store.hasDocumentState(for: removed))
+        XCTAssertTrue(store.hasDocumentState(for: unmounted))
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "MKTownEditorTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

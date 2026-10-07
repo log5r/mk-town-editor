@@ -136,10 +136,13 @@ final class MarkdownEditorModelTests: XCTestCase {
             callbacks += 1
             callback.fulfill()
         }
-        let observation = model.objectWillChange.sink {
+        var modelUpdates = 0
+        let observation = model.viewportState.objectWillChange.sink {
             updates += 1
             published.fulfill()
         }
+        let modelObservation = model.objectWillChange.sink { modelUpdates += 1 }
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 300))
         let notification = Notification(name: NSView.boundsDidChangeNotification,
                                         object: scroll.contentView)
         coordinator.clipViewBoundsDidChange(notification)
@@ -149,7 +152,9 @@ final class MarkdownEditorModelTests: XCTestCase {
         await fulfillment(of: [callback, published], timeout: 2)
         XCTAssertEqual(updates, 1)
         XCTAssertEqual(callbacks, 1)
-        withExtendedLifetime(observation) {}
+        XCTAssertEqual(modelUpdates, 0, "Scrolling must not invalidate views observing the editor model")
+        XCTAssertGreaterThan(model.viewportState.viewport.topFraction, 0)
+        withExtendedLifetime((observation, modelObservation)) {}
     }
 
     func testDismantledEditorCannotDeliverPendingScrollCallback() async {

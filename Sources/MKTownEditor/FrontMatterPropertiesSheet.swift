@@ -9,12 +9,10 @@ struct FrontMatterPropertiesSheet: View {
     @State private var newKey = ""
     @State private var newValue = ""
     @State private var applyFailed = false
-
-    private var properties: [FrontMatterProperty] {
-        FrontMatterProperties.items(in: source)
-    }
+    @State private var propertyCache = DerivedValueCache<String, [FrontMatterProperty]>()
 
     var body: some View {
+        let properties = propertyCache.value(for: source) { FrontMatterProperties.items(in: $0) }
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("文書プロパティ").font(.headline)

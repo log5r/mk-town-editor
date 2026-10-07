@@ -74,13 +74,15 @@ struct CollaborationSheet: View {
                 Text("コメント").font(.headline)
                 HStack {
                     TextField("選択した本文へのコメント", text: $commentText)
-                    Button("追加") {
-                        session.addComment(author: displayName, text: commentText,
-                                           utf16Range: editorModel.selectedRange)
-                        commentText = ""
+                    EditorSelectionReader(selection: editorModel.selectionState) { selection in
+                        Button("追加") {
+                            session.addComment(author: displayName, text: commentText,
+                                               utf16Range: editorModel.selectedRange)
+                            commentText = ""
+                        }
+                        .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                                  selection.length == 0)
                     }
-                    .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              editorModel.selectedRange.length == 0)
                 }
                 Text("編集画面で範囲を選んでからコメントを追加してください。")
                     .font(.caption).foregroundStyle(.secondary)

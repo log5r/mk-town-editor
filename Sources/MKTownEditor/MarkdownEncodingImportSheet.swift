@@ -7,16 +7,17 @@ struct MarkdownEncodingImportSheet: View {
     @State private var sourceEncoding: MarkdownTextEncoding = .utf8
     @State private var destinationEncoding: MarkdownTextEncoding = .utf8
     @State private var errorMessage: String?
+    @State private var decodedCache = DerivedValueCache<MarkdownTextEncoding, String?>()
 
     let sourceURL: URL
     let sourceData: Data
     let onSaved: (URL) -> Void
 
-    private var decodedText: String? {
-        try? MarkdownEncodingConverter.decode(sourceData, as: sourceEncoding)
-    }
-
     var body: some View {
+        // 全体のデコードと往復検証は、読み込みの文字コードを変えた時だけ行う。
+        let decodedText = decodedCache.value(for: sourceEncoding) { encoding in
+            try? MarkdownEncodingConverter.decode(sourceData, as: encoding)
+        }
         VStack(alignment: .leading, spacing: 14) {
             Text("文字コードを指定して取り込む").font(.headline)
             Text(sourceURL.lastPathComponent).foregroundStyle(.secondary)

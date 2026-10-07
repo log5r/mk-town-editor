@@ -13,6 +13,8 @@ struct RegexSearchSheet: View {
     @State private var limitsToSelection = false
     @State private var scope: RegexSelectionScope?
     @State private var matches: [NSRange] = []
+    /// 各一致の行番号。行の索引は検索と同じ背景処理で作り、body では作らない。
+    @State private var lineNumbers: [Int] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
 
@@ -25,6 +27,7 @@ struct RegexSearchSheet: View {
 
     private struct SearchResult: Sendable {
         let matches: [NSRange]
+        var lineNumbers: [Int] = []
         let message: String?
     }
 
@@ -62,12 +65,11 @@ struct RegexSearchSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            let lines = MarkdownLineIndex(source)
             List(Array(matches.enumerated()), id: \.offset) { item in
                 Button {
                     onSelect(item.element)
                 } label: {
-                    Text("\(lines.line(containingUTF16Offset: item.element.location)) 行: \(matchText(item.element))")
+                    Text("\(lineNumbers.indices.contains(item.offset) ? lineNumbers[item.offset] : 0) 行: \(matchText(item.element))")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
@@ -94,25 +96,34 @@ struct RegexSearchSheet: View {
                         scope: activeScope)) {
             guard !pattern.isEmpty else {
                 matches = []
+                lineNumbers = []
                 errorMessage = nil
                 isSearching = false
                 return
             }
             isSearching = true
             matches = []
+            lineNumbers = []
             let query = Query(source: source, pattern: pattern, caseSensitive: caseSensitive,
                               scope: activeScope)
-            let result = await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 do {
-                    return SearchResult(matches: try RegexSearch.matches(in: query.source,
+                    let found = try RegexSearch.matches(in: query.source,
                         pattern: query.pattern, caseSensitive: query.caseSensitive,
-                        scope: query.scope), message: nil)
+                        scope: query.scope)
+                    let lines = found.isEmpty ? nil : MarkdownLineIndex(query.source)
+                    return SearchResult(matches: found,
+                                        lineNumbers: found.map { lines?.line(containingUTF16Offset: $0.location) ?? 0 },
+                                        message: nil)
                 } catch {
                     return SearchResult(matches: [], message: error.localizedDescription)
                 }
-            }.value
+            }
+            // パターンや本文が変わるとこのタスクが取り消されるため、背景の検索にも伝える。
+            let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
             guard !Task.isCancelled else { return }
             matches = result.matches
+            lineNumbers = result.lineNumbers
             errorMessage = result.message
             isSearching = false
         }

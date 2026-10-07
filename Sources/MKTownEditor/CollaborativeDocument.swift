@@ -50,6 +50,16 @@ struct CollaborativeDocument: Codable, Equatable {
     private(set) var comments: [Comment]
     private var deletedBeforeArrival: Set<AtomID>
 
+    // 以下は `atoms` から導かれるキャッシュで、送受信・比較の対象に含めない。
+    // 入力ごとに全体を辿り直さないよう、変更時に更新する。
+    private var indexByID: [AtomID: Int] = [:]
+    private var visibleCache: [Atom]?
+    private var textCache: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case roomID, siteID, clock, atoms, comments, deletedBeforeArrival
+    }
+
     var atomCount: Int { atoms.count }
 
     init(text: String, roomID: UUID = UUID(), siteID: String = UUID().uuidString) {
@@ -66,9 +76,41 @@ struct CollaborativeDocument: Codable, Equatable {
             atoms.append(Atom(id: id, after: previous, character: String(character)))
             previous = id
         }
+        rebuildCaches()
     }
 
-    var visibleAtoms: [Atom] {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        roomID = try container.decode(UUID.self, forKey: .roomID)
+        siteID = try container.decode(String.self, forKey: .siteID)
+        clock = try container.decode(Int.self, forKey: .clock)
+        atoms = try container.decode([Atom].self, forKey: .atoms)
+        comments = try container.decode([Comment].self, forKey: .comments)
+        deletedBeforeArrival = try container.decode(Set<AtomID>.self, forKey: .deletedBeforeArrival)
+        rebuildCaches()
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.roomID == rhs.roomID && lhs.siteID == rhs.siteID && lhs.clock == rhs.clock &&
+            lhs.atoms == rhs.atoms && lhs.comments == rhs.comments &&
+            lhs.deletedBeforeArrival == rhs.deletedBeforeArrival
+    }
+
+    /// 表示中の文字を文書順に並べたもの。変更時に更新したキャッシュを返す。
+    var visibleAtoms: [Atom] { visibleCache ?? orderedVisibleAtoms() }
+
+    var text: String { textCache ?? visibleAtoms.map(\.character).joined() }
+
+    private mutating func rebuildCaches() {
+        indexByID = Dictionary(atoms.enumerated().map { ($0.element.id, $0.offset) },
+                               uniquingKeysWith: { first, _ in first })
+        let visible = orderedVisibleAtoms()
+        visibleCache = visible
+        textCache = visible.map(\.character).joined()
+    }
+
+    /// 木を辿って表示順を求める。リモートの変更を適用した後だけ使う。
+    func orderedVisibleAtoms() -> [Atom] {
         var children: [AtomID?: [Atom]] = [:]
         for atom in atoms { children[atom.after, default: []].append(atom) }
         var stack = (children[nil] ?? []).sorted { $0.id < $1.id }
@@ -80,29 +122,36 @@ struct CollaborativeDocument: Codable, Equatable {
         return result
     }
 
-    var text: String { visibleAtoms.map(\.character).joined() }
-
     mutating func edit(to next: String) -> Delta {
+        if textCache == next { return Delta() }
         let previous = visibleAtoms
-        let oldCharacters = previous.map(\.character)
-        let newCharacters = Array(next).map(String.init)
+        let newCharacters = Array(next)
+        let common = min(previous.count, newCharacters.count)
         var prefix = 0
-        while prefix < min(oldCharacters.count, newCharacters.count),
-              oldCharacters[prefix] == newCharacters[prefix] { prefix += 1 }
+        while prefix < common, previous[prefix].character == String(newCharacters[prefix]) { prefix += 1 }
         var suffix = 0
-        while suffix < min(oldCharacters.count, newCharacters.count) - prefix,
-              oldCharacters[oldCharacters.count - suffix - 1] ==
-                newCharacters[newCharacters.count - suffix - 1] { suffix += 1 }
-        let removed = Array(previous[prefix..<(previous.count - suffix)])
+        while suffix < common - prefix,
+              previous[previous.count - suffix - 1].character ==
+                String(newCharacters[newCharacters.count - suffix - 1]) { suffix += 1 }
+        let removed = previous[prefix..<(previous.count - suffix)]
         var delta = Delta(deletes: removed.map(\.id))
         var predecessor = prefix == 0 ? nil : previous[prefix - 1].id
         for character in newCharacters[prefix..<(newCharacters.count - suffix)] {
             clock += 1
             let id = AtomID(clock: clock, site: siteID)
-            delta.inserts.append(Atom(id: id, after: predecessor, character: character))
+            delta.inserts.append(Atom(id: id, after: predecessor, character: String(character)))
             predecessor = id
         }
-        apply(delta)
+        applyAtoms(delta)
+        // ローカルの挿入は既知のどの文字より大きい時計を持つため、直前の文字の直後に並ぶ。
+        // 表示順は木を辿り直さず、置き換えた区間だけを差し替えて求める。
+        var visible = Array(previous[..<prefix])
+        visible.reserveCapacity(previous.count - removed.count + delta.inserts.count)
+        visible += delta.inserts
+        visible += previous[(previous.count - suffix)...]
+        visibleCache = visible
+        // 正準等価でも異なる表記の文字は既存の文字の表記を保つため、本文は文字から組み立てる。
+        textCache = visible.map(\.character).joined()
         return delta
     }
 
@@ -142,19 +191,44 @@ struct CollaborativeDocument: Codable, Equatable {
     }
 
     mutating func apply(_ delta: Delta) {
-        var indices = Dictionary(uniqueKeysWithValues: atoms.enumerated().map { ($0.element.id, $0.offset) })
-        for atom in delta.inserts where indices[atom.id] == nil {
+        let changed = applyAtoms(delta)
+        for incoming in delta.comments { mergeComment(incoming) }
+        guard changed else { return }
+        // 受信した変更は兄弟の順序に影響し得るため、表示順を一度だけ求め直す。
+        let visible = orderedVisibleAtoms()
+        visibleCache = visible
+        textCache = visible.map(\.character).joined()
+    }
+
+    /// 文字の追加・削除を反映する。表示順のキャッシュは呼び出し元が更新する。
+    @discardableResult
+    private mutating func applyAtoms(_ delta: Delta) -> Bool {
+        if indexByID.count != atoms.count { indexByID = Dictionary(atoms.enumerated().map {
+            ($0.element.id, $0.offset) }, uniquingKeysWith: { first, _ in first }) }
+        var changed = false
+        for atom in delta.inserts where indexByID[atom.id] == nil {
             var item = atom
             item.deleted = item.deleted || deletedBeforeArrival.contains(item.id)
-            indices[item.id] = atoms.count
+            indexByID[item.id] = atoms.count
             atoms.append(item)
             clock = max(clock, item.id.clock)
+            changed = true
         }
         for id in delta.deletes {
-            if let index = indices[id] { atoms[index].deleted = true }
-            else { deletedBeforeArrival.insert(id) }
+            if let index = indexByID[id] {
+                if !atoms[index].deleted {
+                    atoms[index].deleted = true
+                    changed = true
+                }
+            } else {
+                deletedBeforeArrival.insert(id)
+            }
         }
-        for incoming in delta.comments { mergeComment(incoming) }
+        if changed {
+            visibleCache = nil
+            textCache = nil
+        }
+        return changed
     }
 
     mutating func merge(_ other: Self) {

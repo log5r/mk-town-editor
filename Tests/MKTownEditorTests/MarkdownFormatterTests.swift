@@ -686,4 +686,37 @@ final class MarkdownFormatterTests: XCTestCase {
             selection: NSRange(location: 0, length: 0)))
         XCTAssertEqual(empty.applying(to: ""), "[^fn1]\n\n[^fn1]: ")
     }
+
+    func testRemoveFormattingStripsNestedAndAdjacentEmphasis() {
+        let source = "**太字 *斜体* と `code`** ~~消~~ __下__ _x_ \\*そのまま*"
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertEqual(edit.applying(to: source), "太字 斜体 と code 消 下 x \\*そのまま*")
+    }
+
+    func testRemoveFormattingStripsManySpansWithoutQuadraticRescans() {
+        let source = String(repeating: "**強調** と *斜体* と `code` ", count: 3_000)
+        let start = Date()
+        let edit = MarkdownFormatter.apply(.removeFormatting, to: source,
+            selection: NSRange(location: 0, length: (source as NSString).length))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 3)
+        XCTAssertEqual(edit.applying(to: source), String(repeating: "強調 と 斜体 と code ", count: 3_000))
+    }
+
+    func testRuntimeBuiltPatternsAreCompiledOnce() {
+        let cache = RegularExpressionCache.shared
+        let first = cache.expression("<mark>([^<>\\r\\n]*)</mark>")
+        XCTAssertNotNil(first)
+        XCTAssertTrue(first === cache.expression("<mark>([^<>\\r\\n]*)</mark>"))
+        XCTAssertNil(cache.expression("(unclosed"))
+        XCTAssertNil(cache.expression("(unclosed"))
+        let source = "<mark>a</mark> **b**"
+        _ = MarkdownFormatter.apply(.highlight, to: source, selection: NSRange(location: 6, length: 0))
+        let count = cache.count
+        for _ in 0..<20 {
+            _ = MarkdownFormatter.apply(.highlight, to: source, selection: NSRange(location: 6, length: 0))
+            _ = MarkdownFormatter.apply(.bold, to: source, selection: NSRange(location: 17, length: 0))
+        }
+        XCTAssertLessThanOrEqual(cache.count, count + 2)
+    }
 }

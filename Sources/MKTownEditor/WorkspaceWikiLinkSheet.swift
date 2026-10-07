@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct WorkspaceWikiLinkSheet: View {
-    let root: URL
-    let nodes: [WorkspaceNode]
+    let index: WorkspaceQuickOpenIndex
     let documentURL: URL
     let source: String
     let selection: NSRange
@@ -13,26 +12,25 @@ struct WorkspaceWikiLinkSheet: View {
     @State private var query = ""
     @State private var documentIndex = WorkspaceDocumentIndex(documents: [])
     @State private var indexedDocuments: [URL] = []
+    @State private var existingCache = DerivedValueCache<ExistingLinkKey, WorkspaceWikiLink?>()
+
+    private struct ExistingLinkKey: Equatable {
+        let source: String
+        let selection: NSRange
+    }
 
     private var existing: WorkspaceWikiLink? {
-        WorkspaceWikiLinks.link(at: selection, in: source)
+        existingCache.value(for: ExistingLinkKey(source: source, selection: selection)) {
+            WorkspaceWikiLinks.link(at: $0.selection, in: $0.source)
+        }
     }
 
-    private var documents: [URL] {
-        WorkspaceQuickOpen.search(nodes: nodes, root: root, query: "", limit: Int.max)
-            .map(\.url)
-    }
-
-    private var resolved: URL? {
-        existing.flatMap { WorkspaceWikiLinks.resolve($0.target,
-            from: documentURL, index: documentIndex) }
-    }
-
-    private var matches: [WorkspaceQuickOpenResult] {
-        WorkspaceQuickOpen.search(nodes: nodes, root: root, query: query)
-    }
+    private var documents: [URL] { index.rankedDocumentURLs }
 
     var body: some View {
+        let matches = index.search(query)
+        let resolved = existing.flatMap { WorkspaceWikiLinks.resolve($0.target,
+            from: documentURL, index: documentIndex) }
         VStack(alignment: .leading, spacing: 12) {
             Text("Wikiリンク").font(.headline)
             Text("文書名が同じ場合は相対パスで指定します。")

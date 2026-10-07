@@ -38,5 +38,7 @@ final class WorkspaceLinkGraphTests: XCTestCase {
         let all = graph.view(around: urls[0], showsAll: true, limit: 3)
         XCTAssertEqual(all.nodes.count, 3)
         XCTAssertTrue(all.isLimited)
+        XCTAssertEqual(all.limit, 3, "The displayed limit follows the requested limit")
+        XCTAssertEqual(graph.view(around: nil, showsAll: true).limit, WorkspaceLinkGraph.defaultDisplayLimit)
     }
 }

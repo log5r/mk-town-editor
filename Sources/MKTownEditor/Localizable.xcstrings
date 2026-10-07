@@ -8940,16 +8940,6 @@
         }
       }
     },
-    "表示は150書類までです。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Showing up to 150 documents."
-          }
-        }
-      }
-    },
     "表示は先頭30,000文字までです。適用時は全文を取り込みます。" : {
       "localizations" : {
         "en" : {
@@ -10159,6 +10149,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The inspection results are incomplete. Narrow the scope and try again."
+          }
+        }
+      }
+    },
+    "履歴から版を選択" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a revision from the history"
+          }
+        }
+      }
+    },
+    "差分なし（未追跡ファイルはステージ後に表示）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No differences (untracked files appear after staging)"
+          }
+        }
+      }
+    },
+    "差分なし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No differences"
+          }
+        }
+      }
+    },
+    "空のファイル" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty file"
+          }
+        }
+      }
+    },
+    "差分全体を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Entire Diff"
+          }
+        }
+      }
+    },
+    "先頭の%lld行を表示しています（全%lld行）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing the first %1$lld lines (%2$lld lines total)"
+          }
+        }
+      }
+    },
+    "表示は%lld書類までです。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing up to %lld documents."
           }
         }
       }

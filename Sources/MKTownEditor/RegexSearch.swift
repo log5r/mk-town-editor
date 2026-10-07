@@ -31,7 +31,13 @@ enum RegexSearch {
                         caseSensitive: Bool = false, scope: NSRange? = nil) throws -> [NSRange] {
         let regex = try compile(pattern, caseSensitive: caseSensitive)
         let range = try validScope(scope, in: source)
-        return regex.matches(in: source, range: range).map(\.range)
+        var found: [NSRange] = []
+        // 一致がなくても途中で呼ばれるようにし、パターンが変わって取り消された検索を止める。
+        regex.enumerateMatches(in: source, options: .reportProgress, range: range) { match, _, stop in
+            if let match { found.append(match.range) }
+            if Task.isCancelled { stop.pointee = true }
+        }
+        return found
     }
 
     static func replacementEdit(in source: String, pattern: String, template: String,

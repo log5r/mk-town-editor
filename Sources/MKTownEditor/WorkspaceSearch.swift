@@ -36,6 +36,13 @@ enum WorkspaceSearchScope: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    func includes(_ range: NSRange, in index: WorkspaceSearchScopeIndex) -> Bool {
+        guard self != .all else { return true }
+        if index.code.contains(range) { return self == .code }
+        if index.headings.contains(range) { return self == .headings }
+        return self == .body && index.body.contains(range)
+    }
+
     func includes(_ range: NSRange, in analysis: MarkdownAnalysis) -> Bool {
         guard self != .all else { return true }
         let covering = analysis.blocks.filter {
@@ -53,6 +60,59 @@ enum WorkspaceSearchScope: String, CaseIterable, Identifiable, Sendable {
             default: false
             }
         })
+    }
+}
+
+/// 構造スコープの判定用に、種類ごとのブロック範囲を位置順に並べたもの。
+/// 一致ごとに全ブロックを走査せず、二分探索で包含を判定する。
+struct WorkspaceSearchScopeIndex {
+    struct Intervals {
+        private var ranges: [NSRange] = []
+
+        init(_ ranges: [NSRange]) {
+            // ブロックは入れ子か互いに素なので、重なる範囲は外側の範囲にまとめられる。
+            for range in ranges.sorted(by: { ($0.location, -$0.length) < ($1.location, -$1.length) }) {
+                if let last = self.ranges.last, range.location < NSMaxRange(last) {
+                    if NSMaxRange(range) > NSMaxRange(last) {
+                        self.ranges[self.ranges.count - 1] = NSUnionRange(last, range)
+                    }
+                } else {
+                    self.ranges.append(range)
+                }
+            }
+        }
+
+        func contains(_ range: NSRange) -> Bool {
+            var low = 0
+            var high = ranges.count
+            while low < high {
+                let middle = (low + high) / 2
+                if ranges[middle].location <= range.location { low = middle + 1 } else { high = middle }
+            }
+            guard low > 0 else { return false }
+            return NSMaxRange(range) <= NSMaxRange(ranges[low - 1])
+        }
+    }
+
+    let code: Intervals
+    let headings: Intervals
+    let body: Intervals
+
+    init(_ analysis: MarkdownAnalysis) {
+        var code: [NSRange] = []
+        var headings: [NSRange] = []
+        var body: [NSRange] = []
+        for block in analysis.blocks {
+            switch block.kind {
+            case .codeBlock: code.append(block.sourceRange)
+            case .heading: headings.append(block.sourceRange)
+            case .paragraph, .quote, .unorderedList, .orderedList, .table: body.append(block.sourceRange)
+            default: break
+            }
+        }
+        self.code = Intervals(code)
+        self.headings = Intervals(headings)
+        self.body = Intervals(body)
     }
 }
 
@@ -90,7 +150,7 @@ enum WorkspaceSearch {
             }
             let source = text as NSString
             let lineIndex = MarkdownLineIndex(text)
-            let analysis = options.scope == .all ? nil : MarkdownAnalysis(text)
+            let scopeIndex = options.scope == .all ? nil : WorkspaceSearchScopeIndex(MarkdownAnalysis(text))
             let searchOptions: NSString.CompareOptions = options.caseSensitive ? [] : [.caseInsensitive]
             var start = 0
             while start <= source.length - (options.query as NSString).length {
@@ -99,7 +159,7 @@ enum WorkspaceSearch {
                                          range: NSRange(location: start, length: source.length - start))
                 if found.location == NSNotFound { break }
                 start = found.location + max(found.length, 1)
-                if let analysis, !options.scope.includes(found, in: analysis) { continue }
+                if let scopeIndex, !options.scope.includes(found, in: scopeIndex) { continue }
                 let line = lineIndex.line(containingUTF16Offset: found.location)
                 let lineStart = lineIndex.starts[line - 1]
                 let lineEnd = line < lineIndex.lineCount ? lineIndex.starts[line] - 1 : source.length

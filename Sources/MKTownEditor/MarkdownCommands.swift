@@ -4,6 +4,10 @@ private struct MarkdownEditorModelKey: FocusedValueKey {
     typealias Value = MarkdownEditorModel
 }
 
+private struct EditorSelectedRangesKey: FocusedValueKey {
+    typealias Value = [NSRange]
+}
+
 struct FocusModeActions {
     let isActive: Bool
     let toggle: () -> Void
@@ -130,6 +134,12 @@ extension FocusedValues {
         get { self[MarkdownEditorModelKey.self] }
         set { self[MarkdownEditorModelKey.self] = newValue }
     }
+    /// エディタの選択範囲。選択範囲を監視する子ビューが更新し、選択に依存するメニューの
+    /// 有効状態をワークスペース全体の再評価なしで更新する。
+    var editorSelectedRanges: [NSRange]? {
+        get { self[EditorSelectedRangesKey.self] }
+        set { self[EditorSelectedRangesKey.self] = newValue }
+    }
 
     var goToLineAction: (() -> Void)? {
         get { self[GoToLineActionKey.self] }
@@ -220,6 +230,9 @@ extension FocusedValues {
 struct MarkdownCommands: Commands {
     @FocusedValue(\.focusModeActions) private var focusModeActions
     @FocusedValue(\.markdownEditorModel) private var editorModel
+    @FocusedValue(\.editorSelectedRanges) private var editorSelectedRanges
+
+    private var editorHasTextSelection: Bool { (editorSelectedRanges?.first?.length ?? 0) > 0 }
     @FocusedValue(\.goToLineAction) private var goToLineAction
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
     @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
@@ -255,7 +268,7 @@ struct MarkdownCommands: Commands {
         CommandGroup(after: .pasteboard) {
             Button("HTML・RTFとしてコピー") { copyRichAction?() }
                 .disabled(copyRichAction == nil || editorModel?.hasActiveEditor != true ||
-                          editorModel?.selectedRange.length == 0)
+                          !editorHasTextSelection)
         }
         CommandMenu("移動") {
             Button("戻る") { navigationHistoryActions?.goBack() }
@@ -393,7 +406,7 @@ struct MarkdownCommands: Commands {
                 .disabled(editorModel?.canExecuteCommand != true)
             Button("選択範囲をすべて置換") { editorModel?.replaceAllInSelection() }
                 .disabled(editorModel?.canExecuteCommand != true ||
-                          editorModel?.selectedRange.length == 0)
+                          !editorHasTextSelection)
             Divider()
             Button("正規表現検索・置換…") { regexSearchAction?() }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
