@@ -339,6 +339,26 @@ final class EditorSettingsTests: XCTestCase {
             in: ranges))
     }
 
+    func testOpeningSessionCapturesTextBeforeAnalysisCompletes() async throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        let analysis = DocumentAnalysisStore()
+        let url = URL(fileURLWithPath: "/tmp/work/initial.md")
+        let text = "既存の本文👨‍👩‍👧‍👦é"
+        analysis.update(source: text)
+        XCTAssertNil(analysis.snapshot)
+        store.ensureWritingSession(for: url, initialText: text)
+        XCTAssertEqual(store.displayState(for: url)?.sessionBaselineCharacters, text.count)
+        for _ in 0..<500 where analysis.snapshot == nil { try await Task.sleep(for: .milliseconds(2)) }
+        XCTAssertNotNil(analysis.snapshot)
+        XCTAssertEqual(try XCTUnwrap(analysis.snapshot).statistics.characters -
+            store.displayState(for: url)!.sessionBaselineCharacters!, 0)
+        store.ensureWritingSession(for: url, initialText: text + "追記")
+        let reopened = EditorSettingsStore(defaults: defaults)
+        reopened.ensureWritingSession(for: url, initialText: text + "追記")
+        XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCharacters, text.count)
+    }
+
     func testWritingGoalAndSessionBaselinePersistAndFollowRename() {
         let defaults = isolatedDefaults()
         let oldURL = URL(fileURLWithPath: "/tmp/work/draft.md")

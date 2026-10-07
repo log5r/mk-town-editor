@@ -1056,9 +1056,9 @@ struct EditorWorkspace: View {
                                  dialect: settingsStore.markdownDialect(for: fileURL))
             if let fileURL {
                 settingsStore.ensureWritingSession(for: fileURL,
-                    initialCharacters: statistics.characters)
+                    initialText: document.text)
             } else if unsavedSessionBaseline == nil {
-                unsavedSessionBaseline = statistics.characters
+                unsavedSessionBaseline = document.text.count
             }
             receivePendingDocumentLink()
             receivePendingSearchPosition()
@@ -1133,7 +1133,7 @@ struct EditorWorkspace: View {
                     settingsStore.setMode(unsavedMode, for: newURL)
                 }
                 settingsStore.ensureWritingSession(for: newURL,
-                    initialCharacters: unsavedSessionBaseline ?? statistics.characters)
+                    initialCharacters: unsavedSessionBaseline ?? document.text.count)
             case let (oldURL?, nil):
                 unsavedMode = settingsStore.mode(for: oldURL)
             case (nil, nil):
@@ -2470,7 +2470,7 @@ struct EditorWorkspace: View {
                 Text("セッションの増減: \(change >= 0 ? "+" : "")\(change) 文字")
                 Button("セッションをここから開始") {
                     settingsStore.resetWritingSession(for: fileURL,
-                        currentCharacters: statistics.characters)
+                        currentCharacters: document.text.count)
                 }
                 .font(.caption)
             } else {
