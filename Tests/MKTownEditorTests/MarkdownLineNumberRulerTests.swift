@@ -4,6 +4,43 @@ import XCTest
 
 @MainActor
 final class MarkdownLineNumberRulerTests: XCTestCase {
+    func testIncrementalIndexMatchesRebuildForEveryEditBoundary() {
+        for text in ["", "a\r\nb\nc\r", "🙂a\r\n\r\nz", "a\nb"] {
+            let source = text as NSString
+            for location in 0...source.length {
+                for count in 0...(source.length - location) {
+                    for replacement in ["", "x", "\r", "\n", "🙂\r\n"] {
+                        // NSString offsets may split surrogate pairs; use valid Swift ranges.
+                        let range = NSRange(location: location, length: count)
+                        guard Range(range, in: text) != nil else { continue }
+                        let result = source.replacingCharacters(in: range, with: replacement)
+                        var index = MarkdownLineNumberIndex(text)
+                        index.update(in: result as NSString,
+                            editedRange: NSRange(location: location, length: replacement.utf16.count),
+                            changeInLength: replacement.utf16.count - count)
+                        XCTAssertEqual(index.starts, MarkdownLineNumberIndex(result).starts,
+                            "source=\(text.debugDescription) range=\(range) replacement=\(replacement.debugDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testScrollingLabelsReuseIndexWithoutReadingEditorSource() {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+        view.string = "one\ntwo\n"
+        let scroll = NSScrollView()
+        scroll.documentView = view
+        let ruler = MarkdownLineNumberRulerView(scrollView: scroll, editor: view)
+        view.textStorage?.replaceCharacters(in: NSRange(location: 1, length: 0), with: "\n")
+        let reads = view.sourceReadCount
+        for _ in 0..<10 {
+            _ = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds, cachedIndex: ruler.index)
+        }
+        XCTAssertEqual(view.sourceReadCount, reads)
+        XCTAssertEqual(ruler.index.starts, MarkdownLineNumberIndex(view.string).starts)
+    }
+
     func testLineStartsCountCRLFAndTrailingEmptyLineInUTF16() {
         let index = MarkdownLineNumberIndex("😀\r\nsecond\n")
 

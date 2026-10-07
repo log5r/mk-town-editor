@@ -611,8 +611,10 @@ final class EditorTextView: NSTextView {
             ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth)) : nil
         needsDisplay = true
     }
-    private(set) var foldedPlans: [MarkdownFoldPlan] = []
-    var foldedHeaderLocations: Set<Int> { Set(foldedPlans.map(\.headerLocation)) }
+    private(set) var foldedPlans: [MarkdownFoldPlan] = [] {
+        didSet { foldedHeaderLocations = Set(foldedPlans.map(\.headerLocation)) }
+    }
+    private(set) var foldedHeaderLocations: Set<Int> = []
     private var selectionBeforeImageDrag: NSRange?
     private var imageDropLocation: Int? {
         didSet { needsDisplay = true }
