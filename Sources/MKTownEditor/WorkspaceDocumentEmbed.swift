@@ -61,8 +61,13 @@ enum WorkspaceDocumentEmbed {
 
     static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,
                        documents: [URL], load: (URL) -> String?) -> WorkspaceEmbedExpansion {
-        expand(reference, from: documentURL, index: WorkspaceDocumentIndex(documents: documents), load: load,
-            ancestors: [documentURL.resolvingSymlinksInPath().standardizedFileURL], depth: 0)
+        expand(reference, from: documentURL, index: WorkspaceDocumentIndex(documents: documents), load: load)
+    }
+
+    static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,
+                       index: WorkspaceDocumentIndex, load: (URL) -> String?) -> WorkspaceEmbedExpansion {
+        expand(reference, from: documentURL, index: index, load: load,
+            ancestors: [index.canonicalURL(documentURL)], depth: 0)
     }
 
     private static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,

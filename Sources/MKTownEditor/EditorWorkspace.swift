@@ -1274,6 +1274,8 @@ struct EditorWorkspace: View {
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
             workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
             workspaceContentRevision: workspaceStore.openBufferRevision,
+            workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
+            workspaceIndex: workspaceStore.documentIndex,
             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
                 { try workspaceStore.openBufferSnapshots(under: root) }
             },

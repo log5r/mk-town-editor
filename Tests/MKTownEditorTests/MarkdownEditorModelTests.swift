@@ -5,6 +5,14 @@ import XCTest
 
 @MainActor
 final class MarkdownEditorModelTests: XCTestCase {
+    func testPendingAnalysisRecognizesCurrentFencedAndIndentedCodeLines() {
+        for source in ["```swift", "    code", "\tcode", "1. ```swift", "> ~~~swift"] {
+            XCTAssertTrue(MarkdownEditingContext.isInCode(at: source.utf16.count, source: source,
+                analysis: nil, allowsAnalysis: false), source)
+        }
+        XCTAssertFalse(MarkdownEditingContext.isInCode(at: 4, source: "text", analysis: nil, allowsAnalysis: false))
+    }
+
     func testSharedAnalysisDrivesRepeatedTableValidationAndRejectsStaleDialect() {
         let view = EditorTextView()
         view.string = "| A |\n| --- |\n| B |"

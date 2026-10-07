@@ -31,6 +31,19 @@ final class DocumentStatisticsTests: XCTestCase {
         XCTAssertEqual(snapshot.wordCounts[.english], WordCountMode.english.count(in: snapshot.source))
     }
 
+    @MainActor
+    func testSectionStatisticsRefreshWhenDialectChangesWithSameSourceAndSelection() async throws {
+        let store = DocumentStatusStore()
+        let text = "---\n# Metadata\n---\nbody"
+        let selections = [NSRange(location: text.utf16.count - 1, length: 0)]
+        store.update(snapshot: DocumentSnapshot(source: text, dialect: .basic), selections: selections)
+        for _ in 0..<100 where store.section == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNotNil(store.section)
+        store.update(snapshot: DocumentSnapshot(source: text, dialect: .extended), selections: selections)
+        for _ in 0..<100 where store.section != nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertNil(store.section)
+    }
+
     func testCountsCharactersWordsAndLines() {
         let statistics = DocumentStatistics(text: "Hello Markdown\nこんにちは 世界")
 

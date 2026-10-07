@@ -29,6 +29,8 @@ struct MarkdownPreview: View {
     var onOpenDocument: ((URL) -> Void)?
     var workspaceDocumentURLs: [URL] = []
     var workspaceContentRevision = 0
+    var workspaceDiskRevision: Int?
+    var workspaceIndex: WorkspaceDocumentIndex?
     var loadWorkspaceOpenBuffers: (() throws -> [URL: Data])?
     var onOpenEmbeddedDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
@@ -118,6 +120,8 @@ struct MarkdownPreview: View {
                                             documentURL: documentURL,
                                             documents: workspaceDocumentURLs,
                                             contentRevision: workspaceContentRevision,
+                                            diskRevision: workspaceDiskRevision,
+                                            documentIndex: workspaceIndex,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
@@ -864,6 +868,8 @@ private struct DetachedPreviewContent: View {
                             usesSharedAnalysis: updates.state.isPaused,
                             workspaceDocumentURLs: workspaceStore.documentURLs,
                             workspaceContentRevision: workspaceStore.openBufferRevision,
+                            workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
+                            workspaceIndex: workspaceStore.documentIndex,
                             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
                                 { try workspaceStore.openBufferSnapshots(under: root) }
                             },

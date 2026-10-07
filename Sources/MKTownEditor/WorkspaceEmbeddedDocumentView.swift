@@ -5,8 +5,13 @@ struct WorkspaceEmbeddedDocumentView: View {
     let documentURL: URL
     let documents: [URL]
     var contentRevision = 0
+    var diskRevision: Int?
+    var documentIndex: WorkspaceDocumentIndex?
     let loadOpenBuffers: (() throws -> [URL: Data])?
     let onOpen: ((URL) -> Void)?
+    @State private var targetURL: URL?
+    @State private var cachedIndex: WorkspaceDocumentIndex?
+    @State private var indexedDocuments: [URL] = []
     @State private var expansion: WorkspaceEmbedExpansion?
     @State private var refreshID = 0
     @State private var rendered = AttributedString()
@@ -19,10 +24,6 @@ struct WorkspaceEmbeddedDocumentView: View {
         let documents: [URL]
         let contentRevision: Int
         let diskRevision: Int
-    }
-
-    private var targetURL: URL? {
-        WorkspaceWikiLinks.resolve(reference.target, from: documentURL, documents: documents)
     }
 
     var body: some View {
@@ -58,8 +59,11 @@ struct WorkspaceEmbeddedDocumentView: View {
         .padding(12)
         .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
         .task(id: RefreshKey(reference: reference, document: documentURL, documents: documents,
-                            contentRevision: contentRevision, diskRevision: refreshID)) { await refresh() }
-        .task {
+                            contentRevision: contentRevision, diskRevision: (diskRevision ?? 0) &+ refreshID)) { await refresh() }
+        .task(id: RefreshKey(reference: reference, document: documentURL, documents: documents,
+                             contentRevision: diskRevision == nil ? 0 : 1, diskRevision: 0)) {
+            directoryMonitor?.stop(); directoryMonitor = nil
+            guard diskRevision == nil else { return }
             var components = documentURL.deletingLastPathComponent().pathComponents
             for url in documents {
                 components = Array(zip(components, url.deletingLastPathComponent().pathComponents)
@@ -77,23 +81,28 @@ struct WorkspaceEmbeddedDocumentView: View {
         let documentURL = documentURL
         let documents = documents
         let previous = expansion
+        let previousTarget = targetURL
         let cache = fileCache
+        let index = documentIndex ?? (indexedDocuments == documents ? cachedIndex : nil)
         let worker = Task.detached(priority: .utility) {
             var cache = cache
+            let index = index ?? WorkspaceDocumentIndex(documents: documents)
+            let target = WorkspaceWikiLinks.resolve(reference.target, from: documentURL, index: index)
             let result = WorkspaceDocumentEmbed.expand(reference, from: documentURL,
-                documents: documents) { url in
+                index: index) { url in
                     if Task.isCancelled { return nil }
                     return cache.load(url, openBuffers: buffers)
                 }
-            let analysis = previous?.text != result.text ? MarkdownAnalysis(result.text) : nil
-            return (result, analysis, cache)
+            let analysis = previous?.text != result.text || previousTarget != target ? MarkdownAnalysis(result.text) : nil
+            return (result, analysis, cache, index, target)
         }
-        let (result, analysis, cacheResult) = await withTaskCancellationHandler {
+        let (result, analysis, cacheResult, indexResult, target) = await withTaskCancellationHandler {
             await worker.value
         } onCancel: { worker.cancel() }
         guard !Task.isCancelled else { return }
         fileCache = cacheResult
-        if expansion != result {
+        cachedIndex = indexResult; indexedDocuments = documents; targetURL = target
+        if expansion != result || previousTarget != target {
             if let analysis {
                 rendered = AttributedString(MarkdownRenderer.render(analysis,
                     documentContext: DocumentContext(fileURL: targetURL)))

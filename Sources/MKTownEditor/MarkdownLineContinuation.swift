@@ -81,7 +81,7 @@ enum MarkdownLineContinuation {
 
 /// A bounded lexical fallback for keystrokes while background analysis is pending.
 enum MarkdownEditingContext {
-    private static let fence = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)*(?:[-+*][ \t]+)?(`{3,}|~{3,})(.*)$"#)
+    private static let fence = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)?(`{3,}|~{3,})(.*)$"#)
 
     static func isInCode(at location: Int, source: String, analysis: MarkdownAnalysis?, allowsAnalysis: Bool) -> Bool {
         if let analysis = analysis ?? (allowsAnalysis ? MarkdownAnalysis(source) : nil) {
@@ -93,6 +93,9 @@ enum MarkdownEditingContext {
         let start = max(0, current.location - 8_192)
         // When the opening fence may precede the bound, decline structural completion.
         guard start == 0 else { return true }
+        let currentLine = text.substring(with: current)
+        if currentLine.hasPrefix("    ") || currentLine.hasPrefix("\t") ||
+            fence.firstMatch(in: currentLine, range: NSRange(location: 0, length: currentLine.utf16.count)) != nil { return true }
         let prefix = text.substring(to: current.location)
         var opening: (Character, Int)?
         for line in prefix.components(separatedBy: .newlines) {

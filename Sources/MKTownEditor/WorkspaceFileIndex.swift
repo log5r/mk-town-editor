@@ -130,6 +130,8 @@ final class WorkspaceStore: ObservableObject {
     }
     @Published private(set) var visibleNodes: [WorkspaceNode] = []
     @Published private(set) var documentURLs: [URL] = []
+    @Published private(set) var documentIndex = WorkspaceDocumentIndex(documents: [])
+    @Published private(set) var fileSystemRevision = 0
     @Published private(set) var openBufferRevision = 0
 
     func openBufferDidChange() { openBufferRevision &+= 1 }
@@ -304,7 +306,11 @@ final class WorkspaceStore: ObservableObject {
         isRefreshing = false
         lastRefresh = .distantPast
         refreshPending = false
-        directoryMonitor = WorkspaceDirectoryMonitor(root: url) { [weak self] in self?.refresh(force: true) }
+        fileSystemRevision &+= 1
+        directoryMonitor = WorkspaceDirectoryMonitor(root: url) { [weak self] in
+            self?.fileSystemRevision &+= 1
+            self?.refresh(force: true)
+        }
         refresh()
     }
 
@@ -317,19 +323,23 @@ final class WorkspaceStore: ObservableObject {
             }
         }
         let urls = documents(in: nodes)
-        if documentURLs != urls { documentURLs = urls }
         displayGeneration += 1
         let requested = displayGeneration
         displayTask?.cancel()
         guard let rootURL else { return }
         let nodes = nodes
         let settings = viewSettings
+        let existingIndex = documentURLs == urls ? documentIndex : nil
         displayTask = Task { [weak self] in
             let result = await Task.detached(priority: .utility) {
-                settings.display(nodes, root: rootURL)
+                (settings.display(nodes, root: rootURL), existingIndex ?? WorkspaceDocumentIndex(documents: urls))
             }.value
             guard let self, !Task.isCancelled, self.displayGeneration == requested else { return }
-            if self.visibleNodes != result { self.visibleNodes = result }
+            if self.documentURLs != urls {
+                self.documentIndex = result.1
+                self.documentURLs = urls
+            }
+            if self.visibleNodes != result.0 { self.visibleNodes = result.0 }
         }
     }
 

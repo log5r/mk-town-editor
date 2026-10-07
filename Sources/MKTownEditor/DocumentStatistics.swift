@@ -148,11 +148,13 @@ final class DocumentStatusStore: ObservableObject {
     private var generation = 0
     private var task: Task<Void, Never>?
     private var source: String?
+    private var dialect: MarkdownDialect?
     private var ranges: [NSRange] = []
 
     func update(snapshot: DocumentSnapshot?, selections: [NSRange]) {
-        guard let snapshot, source != snapshot.source || ranges != selections else { return }
+        guard let snapshot, source != snapshot.source || ranges != selections || dialect != snapshot.dialect else { return }
         source = snapshot.source
+        dialect = snapshot.dialect
         ranges = selections
         generation += 1
         let requested = generation

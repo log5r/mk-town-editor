@@ -4,6 +4,12 @@ import XCTest
 
 @MainActor
 final class MermaidDiagramTests: XCTestCase {
+    func testSharedRendererKeepsEntireTallDiagram() async throws {
+        let source = "graph TD\n" + (0..<65).map { "Node\($0)-->Node\($0 + 1)" }.joined(separator: "\n")
+        let image = try await MermaidRenderService.shared.render(source)
+        XCTAssertGreaterThan(image.size.height / image.size.width, 3_000.0 / 900.0)
+    }
+
     func testSharedRendererCoalescesRequestsAndCachesBitmaps() async throws {
         let renderer = MermaidRenderService.shared
         let source = "graph TD; UniqueCacheTestA-->UniqueCacheTestB"
