@@ -86,16 +86,28 @@ final class RemoteImageStore: ObservableObject {
             guard isEnabled, !Task.isCancelled, data.count <= 10_000_000 else {
                 throw URLError(.cannotDecodeContentData)
             }
-            // デコードはメインアクターの外で行う。
-            let decoded = await Task.detached(priority: .utility) { () -> CGImage? in
-                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                      CGImageSourceGetType(source) != nil else { return nil }
-                return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                    kCGImageSourceCreateThumbnailFromImageAlways: true,
-                    kCGImageSourceCreateThumbnailWithTransform: true,
-                    kCGImageSourceThumbnailMaxPixelSize: 960
-                ] as CFDictionary)
-            }.value
+            // デコードはメインアクターの外で、同時実行数を制限して行う。プレビューを閉じるなどで
+            // 読み込みが取り消されたら、待機中・実行前のデコードも取り消す。
+            let worker = Task.detached(priority: .utility) { () -> CGImage? in
+                let limiter = RemoteImageDecodeLimiter.shared
+                await limiter.acquire()
+                guard !Task.isCancelled else {
+                    await limiter.release()
+                    return nil
+                }
+                let image: CGImage? = {
+                    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                          CGImageSourceGetType(source) != nil else { return nil }
+                    return CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: 960
+                    ] as CFDictionary)
+                }()
+                await limiter.release()
+                return image
+            }
+            let decoded = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
             guard isEnabled, !Task.isCancelled, let thumbnail = decoded else {
                 throw URLError(.cannotDecodeContentData)
             }
@@ -277,6 +289,40 @@ final class LocalImageStore: ObservableObject {
             guard let self else { return }
             self.publishScheduled = false
             self.revision &+= 1
+        }
+    }
+}
+
+/// 外部画像のデコードを同時に実行する数の上限。多数の画像を一度に読み込んでも、
+/// デコード中の画像データとCPUの使用を抑える。
+actor RemoteImageDecodeLimiter {
+    static let shared = RemoteImageDecodeLimiter(limit: 4)
+
+    private var available: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private(set) var running = 0
+    private(set) var maximumRunning = 0
+
+    init(limit: Int) {
+        available = max(1, limit)
+    }
+
+    func acquire() async {
+        if available > 0 {
+            available -= 1
+        } else {
+            await withCheckedContinuation { waiters.append($0) }
+        }
+        running += 1
+        maximumRunning = max(maximumRunning, running)
+    }
+
+    func release() {
+        running -= 1
+        if waiters.isEmpty {
+            available += 1
+        } else {
+            waiters.removeFirst().resume()
         }
     }
 }

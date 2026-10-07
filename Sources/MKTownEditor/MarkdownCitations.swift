@@ -176,7 +176,8 @@ struct MarkdownCitationCatalog: Equatable, Sendable {
     func hasCitation(in analysis: MarkdownAnalysis) -> Bool {
         guard !entries.isEmpty, analysis.containsCitationSyntax else { return false }
         return analysis.blocks.contains { block in
-            block.kind != .codeBlock && replaceInline(block.content) != block.content
+            block.kind != .codeBlock && (replaceInline(block.content) != block.content ||
+                block.inlineCells.contains { replaceInline($0) != $0 })
         } || analysis.footnotes.entries.contains { replaceInline($0.content) != $0.content }
     }
 

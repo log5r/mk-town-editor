@@ -195,6 +195,12 @@ struct MarkdownFootnoteIndex: Sendable {
 }
 
 struct MarkdownBlock: Equatable, Sendable {
+    /// 表の見出しと本文のセル。表ブロックの `content` は空なので、セル内のインライン記法はここから調べる。
+    var inlineCells: [String] {
+        guard let table else { return [] }
+        return table.header + table.rows.flatMap { $0 }
+    }
+
     enum Kind: Hashable, Sendable {
         case paragraph
         case heading(level: Int)
@@ -280,7 +286,10 @@ struct MarkdownAnalysis: Sendable {
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
         crossReferences = MarkdownCrossReferences(blocks: dialect == .extended ? visibleBlocks : [])
         containsCitationSyntax = dialect == .extended && (
-            visibleBlocks.contains { $0.kind != .codeBlock && $0.content.contains("[@") } ||
+            visibleBlocks.contains { block in
+                block.kind != .codeBlock && (block.content.contains("[@") ||
+                    block.inlineCells.contains { $0.contains("[@") })
+            } ||
             index.entries.contains { $0.content.contains("[@") })
     }
 

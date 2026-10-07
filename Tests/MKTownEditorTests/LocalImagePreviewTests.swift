@@ -268,6 +268,37 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertGreaterThan(store.cache.decodeCount, decodes)
     }
 
+    func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
+        let limiter = RemoteImageDecodeLimiter(limit: 4)
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<20 {
+                group.addTask {
+                    await limiter.acquire()
+                    try? await Task.sleep(for: .milliseconds(5))
+                    await limiter.release()
+                }
+            }
+        }
+        let maximumRunning = await limiter.maximumRunning
+        let running = await limiter.running
+        XCTAssertLessThanOrEqual(maximumRunning, 4)
+        XCTAssertEqual(running, 0)
+
+        let imageData = png
+        let store = RemoteImageStore(fetch: { _ in
+            try await Task.sleep(for: .milliseconds(200))
+            return imageData
+        })
+        store.setEnabled(true)
+        let url = URL(string: "https://example.com/cancelled.png")!
+        let load = Task { await store.load(url) }
+        try await Task.sleep(for: .milliseconds(20))
+        load.cancel()
+        await load.value
+        XCTAssertNil(store.image(for: url))
+        XCTAssertFalse(store.hasFailed(url), "A cancelled load is not a failure")
+    }
+
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

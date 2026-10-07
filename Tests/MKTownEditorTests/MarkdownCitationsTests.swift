@@ -136,6 +136,29 @@ final class MarkdownCitationsTests: XCTestCase {
         XCTAssertTrue(catalog.hasCitation(in: MarkdownAnalysis("本文 [@a]")))
     }
 
+    func testCitationsInsideTableCellsAreResolvedAndListed() throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let markdown = "| 出典 | 年 |\n|---|---|\n| [@book1] | 2022 |"
+        let analysis = MarkdownAnalysis(markdown)
+        XCTAssertTrue(analysis.containsCitationSyntax, "Table blocks keep their text in cells, not content")
+        let catalog = try XCTUnwrap(MarkdownCitationCatalog.load(documentURL: document))
+        XCTAssertTrue(catalog.hasCitation(in: analysis))
+
+        // プレビューは引用記法がある時だけ参考文献を読み込み、セルの描画に渡す。
+        var context = DocumentContext(fileURL: document)
+        context.citationCatalog = analysis.containsCitationSyntax ? catalog : .empty
+        let cell = MarkdownRenderer.renderTableCell("[@book1]", in: analysis, documentContext: context)
+        XCTAssertEqual(cell.string, "[2]")
+        // 全文描画は表を素のテキストで出力する（変更前から同じ）が、参考文献の一覧は表の引用でも出す。
+        let rendered = MarkdownRenderer.render(markdown, documentContext: DocumentContext(fileURL: document))
+        XCTAssertTrue(rendered.string.contains("参考文献"))
+        let html = MarkdownHTMLExporter.render(markdown, documentURL: document)
+        XCTAssertFalse(html.contains("[@book1]"))
+        XCTAssertTrue(html.contains("class=\"bibliography\""))
+        XCTAssertFalse(MarkdownAnalysis("| a |\n|---|\n| b |").containsCitationSyntax)
+    }
+
     func testFileMonitorReportsInPlaceAndAtomicBibliographyChanges() async throws {
         let (directory, document) = try fixture()
         defer { try? FileManager.default.removeItem(at: directory) }
