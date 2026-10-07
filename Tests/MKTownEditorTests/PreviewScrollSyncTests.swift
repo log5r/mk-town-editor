@@ -12,6 +12,54 @@ final class PreviewScrollSyncTests: XCTestCase {
                        blocks.last?.id)
     }
 
+    func testIndexedLookupMatchesLinearScanForNestedStructures() {
+        let source = """
+        # Title
+
+        > quote line
+        > - item in quote
+        >   > nested quote
+
+        - first
+          - second
+            continuation
+        1. ordered
+
+        > [!NOTE]
+        > callout body
+
+        ```swift
+        let x = 1
+        ```
+
+        | a | b |
+        |---|---|
+        | 1 | 2 |
+
+        Tail paragraph
+        """
+        let analysis = MarkdownAnalysis(source)
+        let index = PreviewScrollIndex(analysis)
+        let visible = analysis.blocks.filter { $0.kind != .quote }
+        for location in 0...((source as NSString).length + 2) {
+            let expected = visible.last(where: { $0.sourceRange.location <= location }) ?? visible.first
+            XCTAssertEqual(index.block(containingOrBefore: location, in: analysis)?.id, expected?.id,
+                           "location \(location)")
+        }
+        for block in visible {
+            XCTAssertEqual(index.sourceLocation(ofBlockID: block.id), block.sourceRange.location)
+        }
+        let empty = MarkdownAnalysis("")
+        XCTAssertEqual(PreviewScrollIndex(empty).block(containingOrBefore: 0, in: empty)?.id,
+                       empty.blocks.first { $0.kind != .quote }?.id)
+    }
+
+    func testSnapshotProvidesScrollIndex() {
+        let snapshot = DocumentSnapshot(source: "# One\n\nTwo")
+        let block = snapshot.scrollIndex.block(containingOrBefore: 8, in: snapshot.analysis)
+        XCTAssertEqual(block?.content, "Two")
+    }
+
     func testTopVisibleBlockUsesPartiallyScrolledBlock() {
         XCTAssertEqual(PreviewScrollSync.topBlockID(from: [1: -60, 2: 8, 3: 100]), 2)
         XCTAssertEqual(PreviewScrollSync.topBlockID(from: [1: -20, 2: 40]), 1)

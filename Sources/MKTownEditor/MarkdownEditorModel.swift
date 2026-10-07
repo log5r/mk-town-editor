@@ -6,13 +6,37 @@ struct EditorViewport: Equatable {
     let visibleFraction: Double
 }
 
+/// エディタの表示位置。スクロールのたびに変わるため、エディタモデル本体とは別に公開し、
+/// ミニマップや位置の保存など必要なビューだけが監視する。
+@MainActor
+final class EditorViewportState: ObservableObject {
+    @Published private(set) var viewport = EditorViewport(topFraction: 0, visibleFraction: 1)
+    private var pending: EditorViewport?
+    private var publication: Task<Void, Never>?
+
+    var current: EditorViewport { pending ?? viewport }
+
+    /// スクロール通知はレイアウト中にも届くため、最新の値だけを次の実行機会に公開する。
+    func update(_ next: EditorViewport) {
+        guard next != current else { return }
+        pending = next
+        guard publication == nil else { return }
+        publication = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.publication = nil
+            guard let pending = self.pending else { return }
+            self.pending = nil
+            if pending != self.viewport { self.viewport = pending }
+        }
+    }
+}
+
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
     private struct EditorState: Equatable {
         var selectedRange = NSRange(location: 0, length: 0)
         var selectedRanges = [NSRange(location: 0, length: 0)]
         var hasActiveEditor = false
-        var viewport = EditorViewport(topFraction: 0, visibleFraction: 1)
     }
 
     @Published private var editorState = EditorState()
@@ -32,10 +56,8 @@ final class MarkdownEditorModel: ObservableObject {
         get { (pendingEditorState ?? editorState).hasActiveEditor }
         set { updateEditorState { $0.hasActiveEditor = newValue } }
     }
-    private(set) var viewport: EditorViewport {
-        get { (pendingEditorState ?? editorState).viewport }
-        set { updateEditorState { $0.viewport = newValue } }
-    }
+    let viewportState = EditorViewportState()
+    var viewport: EditorViewport { viewportState.current }
 
     // AppKit session state stays synchronous; SwiftUI observes it after its update ends.
     func beginViewUpdate() { viewUpdateDepth += 1 }
@@ -217,7 +239,7 @@ final class MarkdownEditorModel: ObservableObject {
                                   visibleFraction: Double(min(1, visible / document)))
         if abs(next.topFraction - viewport.topFraction) >= 0.001 ||
             abs(next.visibleFraction - viewport.visibleFraction) >= 0.001 {
-            viewport = next
+            viewportState.update(next)
         }
     }
 

@@ -18,6 +18,7 @@ struct DocumentSnapshot: Sendable {
     let inlineCodeRanges: [NSRange]
     let remoteImageURLs: Set<URL>
     let previewLayout: PreviewLayoutIndex
+    let scrollIndex: PreviewScrollIndex
     let needsStructuredPreview: Bool
 
     init(source: String, dialect: MarkdownDialect = .extended) {
@@ -57,6 +58,7 @@ struct DocumentSnapshot: Sendable {
         remoteImageURLs = RemoteImageStore.referencedURLs(in: source, analysis: parsed)
         try checkCancellation()
         previewLayout = PreviewLayoutIndex(parsed)
+        scrollIndex = PreviewScrollIndex(parsed)
         needsStructuredPreview = PreviewStructure.needsStructuredLayout(parsed, source: source)
         try checkCancellation()
     }

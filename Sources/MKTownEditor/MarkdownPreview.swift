@@ -8,8 +8,9 @@ struct PreviewNavigationTarget: Equatable {
     let sourceLocation: Int
     let sequence: Int
 
-    func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String]) -> String? {
-        PreviewScrollSync.block(containingOrBefore: sourceLocation, in: analysis)
+    func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String],
+                        index: PreviewScrollIndex? = nil) -> String? {
+        PreviewScrollSync.block(containingOrBefore: sourceLocation, in: analysis, index: index)
             .flatMap { presentationIDs[$0.id] }
     }
 }
@@ -262,12 +263,14 @@ struct MarkdownPreview: View {
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
-                        if let id = navigationTarget?.presentationID(in: analysis, presentationIDs: presentationIDs) {
+                        if let id = navigationTarget?.presentationID(in: analysis, presentationIDs: presentationIDs,
+                                                                  index: matchingSnapshot?.scrollIndex) {
                             proxy.scrollTo(id, anchor: .top)
                         }
                     }
                     .onChange(of: navigationTarget) { _, target in
-                        if let id = target?.presentationID(in: analysis, presentationIDs: presentationIDs) {
+                        if let id = target?.presentationID(in: analysis, presentationIDs: presentationIDs,
+                                                        index: matchingSnapshot?.scrollIndex) {
                             proxy.scrollTo(id, anchor: .top)
                         }
                     }

@@ -35,7 +35,8 @@ struct EditorWorkspace: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
-    @State private var positionSaveTask: Task<Void, Never>?
+    /// スクロール・選択のたびに書き換わる補助状態。変更でビュー全体を再評価しないよう参照型で保持する。
+    @State private var transientState = EditorWorkspaceTransientState()
     @State private var cloudMonitor: WorkspaceDirectoryMonitor?
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @StateObject private var statusStore = DocumentStatusStore()
@@ -81,7 +82,6 @@ struct EditorWorkspace: View {
     @State private var terminologySource = ""
     @State private var terminologyTask: Task<[TerminologyIssue], Never>?
     @State private var showingAutoFormat = false
-    @State private var synchronizedBlockID: Int?
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
     @State private var pdfExportError: String?
@@ -1103,7 +1103,7 @@ struct EditorWorkspace: View {
         .onChange(of: editorModel.hasActiveEditor) { _, _ in
             if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
         }
-        .onChange(of: editorModel.viewport) { _, _ in schedulePositionSave() }
+        .onReceive(editorModel.viewportState.$viewport.dropFirst()) { _ in schedulePositionSave() }
         .onChange(of: fileURL) { oldURL, newURL in
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
             monitorCloudDocument(newURL)
@@ -1111,8 +1111,8 @@ struct EditorWorkspace: View {
             detachedPreview.updateDocumentURL(newURL)
             // A pending save captured the old URL; it would recreate state under that path
             // after moveDocumentState below. Save the latest position now instead.
-            positionSaveTask?.cancel()
-            positionSaveTask = nil
+            transientState.positionSaveTask?.cancel()
+            transientState.positionSaveTask = nil
             savePosition(for: oldURL)
             if workspaceViewActive {
                 if let oldURL {
@@ -1125,7 +1125,7 @@ struct EditorWorkspace: View {
                 }
             }
             navigationHistory.moveDocument(from: oldURL, to: newURL)
-            synchronizedBlockID = nil
+            transientState.synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
             if showingTerminology { checkTerminology() }
@@ -1154,7 +1154,7 @@ struct EditorWorkspace: View {
             analysisStore.update(source: newText,
                                  dialect: settingsStore.markdownDialect(for: fileURL))
             previewSearchRange = nil
-            synchronizedBlockID = nil
+            transientState.synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
             if showingMarkdownLint { checkMarkdownLint() }
             if showingTerminology { checkTerminology() }
@@ -1206,7 +1206,7 @@ struct EditorWorkspace: View {
             applyNamedLayoutState(layout)
         }
         .onDisappear {
-            positionSaveTask?.cancel()
+            transientState.positionSaveTask?.cancel()
             cloudMonitor?.stop()
             cloudMonitor = nil
             analysisStore.cancel()
@@ -2054,8 +2054,8 @@ struct EditorWorkspace: View {
     }
 
     private func schedulePositionSave() {
-        positionSaveTask?.cancel()
-        positionSaveTask = Task { @MainActor in
+        transientState.positionSaveTask?.cancel()
+        transientState.positionSaveTask = Task { @MainActor in
             do { try await Task.sleep(for: .seconds(1)) } catch { return }
             savePosition(for: fileURL)
         }
@@ -2219,21 +2219,21 @@ struct EditorWorkspace: View {
     private func synchronizePreview(to sourceLocation: Int) {
         guard mode.wrappedValue == .split,
               let snapshot = currentAnalysisSnapshot,
-              let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
-                                                  in: snapshot.analysis),
-              block.id != synchronizedBlockID else { return }
-        synchronizedBlockID = block.id
+              let block = snapshot.scrollIndex.block(containingOrBefore: sourceLocation,
+                                                     in: snapshot.analysis),
+              block.id != transientState.synchronizedBlockID else { return }
+        transientState.synchronizedBlockID = block.id
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(sourceLocation: block.sourceRange.location,
                                                           sequence: navigationSequence)
     }
 
     private func synchronizeEditor(to blockID: Int) {
-        guard mode.wrappedValue == .split, blockID != synchronizedBlockID,
+        guard mode.wrappedValue == .split, blockID != transientState.synchronizedBlockID,
               let snapshot = currentAnalysisSnapshot,
-              let block = snapshot.analysis.blocks.first(where: { $0.id == blockID }) else { return }
-        synchronizedBlockID = blockID
-        editorModel.scrollToTop(sourceLocation: block.sourceRange.location)
+              let location = snapshot.scrollIndex.sourceLocation(ofBlockID: blockID) else { return }
+        transientState.synchronizedBlockID = blockID
+        editorModel.scrollToTop(sourceLocation: location)
     }
 
     private func revealSource(_ range: NSRange) {
@@ -2266,7 +2266,7 @@ struct EditorWorkspace: View {
                                usesTypewriterMode: settingsStore.app.usesTypewriterMode ?? false)
             if settingsStore.app.showsMinimap ?? false {
                 Divider()
-                MarkdownMinimapView(source: document.text, viewport: editorModel.viewport) { location in
+                MarkdownMinimapView(source: document.text, viewportState: editorModel.viewportState) { location in
                     editorModel.selectAndReveal(NSRange(location: location, length: 0))
                 }
             }
@@ -3052,4 +3052,12 @@ enum DocumentOperationGate {
         onError(busyMessage)
         return false
     }
+}
+
+/// `EditorWorkspace` の再描画に関係しない補助状態。値の変更を SwiftUI に通知しない。
+@MainActor
+final class EditorWorkspaceTransientState {
+    var positionSaveTask: Task<Void, Never>?
+    /// スクロール同期で最後に揃えたブロック。同じブロックへの重複した同期を省く。
+    var synchronizedBlockID: Int?
 }

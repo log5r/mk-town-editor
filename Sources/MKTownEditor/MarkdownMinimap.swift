@@ -98,8 +98,11 @@ final class MarkdownMinimapStore: ObservableObject {
 struct MarkdownMinimapView: View {
     @StateObject private var store = MarkdownMinimapStore()
     let source: String
-    let viewport: EditorViewport
+    /// スクロール位置はこのビューだけが監視し、ワークスペース全体を再描画しない。
+    @ObservedObject var viewportState: EditorViewportState
     let onNavigate: (Int) -> Void
+
+    private var viewport: EditorViewport { viewportState.viewport }
 
     var body: some View {
         GeometryReader { geometry in
