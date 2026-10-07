@@ -3,6 +3,54 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceFileOperationsTests: XCTestCase {
+    func testMovePlanningRejectsIndexWithReferencesBeyondEntryLimit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let documents = (0..<5).map { root.appendingPathComponent("doc\($0).md") }
+        for url in documents { try "text".write(to: url, atomically: true, encoding: .utf8) }
+        let index = WorkspaceFileIndex.scan(root: root, maximumEntries: 2)
+        let included = Set(index.nodes.map(\.url))
+        let omitted = try XCTUnwrap(documents.first { !included.contains($0) })
+        let source = try XCTUnwrap(documents.first { $0 != omitted })
+        try "[[\(source.deletingPathExtension().lastPathComponent)]]".write(to: omitted, atomically: true, encoding: .utf8)
+        let originalReference = try Data(contentsOf: omitted)
+        let destination = root.appendingPathComponent("moved.md")
+        XCTAssertThrowsError(try WorkspaceFileOperations.planMove(source: source, destination: destination,
+            root: root, scanMaximumEntries: 2)) { error in
+            guard case .indexTruncated? = error as? WorkspaceFileOperationError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertEqual(try Data(contentsOf: omitted), originalReference)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    func testApplyRejectsTruncatedPlanAndNewDepthTruncation() throws {
+        for alreadyTruncated in [true, false] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let source = root.appendingPathComponent("source.md"), destination = root.appendingPathComponent("moved.md")
+            try "text".write(to: source, atomically: true, encoding: .utf8)
+            var plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
+            plan.isTruncated = alreadyTruncated
+            if !alreadyTruncated {
+                let deep = (0..<17).reduce(root) { $0.appendingPathComponent("level\($1)") }
+                try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+                try "[[source]]".write(to: deep.appendingPathComponent("ref.md"), atomically: true, encoding: .utf8)
+            }
+            XCTAssertThrowsError(try plan.apply()) { error in
+                guard case .indexTruncated? = error as? WorkspaceFileOperationError else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+            }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        }
+    }
+
     func testUnreadableTextDoesNotBlockMoveSearchReplaceOrAttachmentAudit() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
