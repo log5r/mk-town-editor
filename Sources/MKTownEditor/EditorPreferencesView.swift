@@ -432,10 +432,11 @@ struct CommandPaletteView: View {
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
+    @State private var availableCommands: [EditorCommand] = []
 
     private var matches: [EditorCommand] {
         EditorCommand.paletteMatches(query, in: model,
-            shortcutLabel: { settingsStore.shortcut(for: $0)?.label })
+            shortcutLabel: { settingsStore.shortcut(for: $0)?.label }, availableCommands: availableCommands)
     }
 
     var body: some View {
@@ -465,6 +466,7 @@ struct CommandPaletteView: View {
         }
         .padding()
         .frame(width: 500, height: 420)
+        .onAppear { availableCommands = EditorCommand.palette.filter { $0.canExecute(in: model) } }
     }
 
     private func execute(_ command: EditorCommand) {

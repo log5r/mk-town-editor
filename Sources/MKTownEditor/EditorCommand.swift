@@ -219,10 +219,9 @@ enum EditorCommand: Hashable {
 
     @MainActor
     static func paletteMatches(_ query: String, in model: MarkdownEditorModel?,
-                               shortcutLabel: (Self) -> String? = { $0.shortcutLabel }) -> [Self] {
+                               shortcutLabel: (Self) -> String? = { $0.shortcutLabel }, availableCommands: [Self]? = nil) -> [Self] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return palette.filter { command in
-            command.canExecute(in: model) &&
+        return (availableCommands ?? palette.filter { $0.canExecute(in: model) }).filter { command in
                 (term.isEmpty || command.title.localizedStandardContains(term) ||
                     shortcutLabel(command)?.localizedStandardContains(term) == true)
         }
@@ -241,21 +240,11 @@ enum EditorCommand: Hashable {
         guard model?.canExecuteCommand == true else { return false }
         switch self {
         case .selectNextOccurrence: return model?.canAddNextOccurrence == true
-        case .indentList:
-            guard let view = model?.textView else { return false }
-            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
-                                            direction: .indent) != nil
-        case .outdentList:
-            guard let view = model?.textView else { return false }
-            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
-                                            direction: .outdent) != nil
+        case .indentList, .outdentList, .convertLinkForm:
+            return model?.canExecuteStructuralCommand(self) == true
         case .comment:
             guard let view = model?.textView else { return false }
-            return MarkdownFormatter.commentEdit(in: view.string,
-                selection: view.selectedRange()) != nil
-        case .convertLinkForm:
-            guard let view = model?.textView else { return false }
-            return MarkdownReferenceConversion.edit(in: view.string,
+            return MarkdownFormatter.commentEdit(in: view.editorSource,
                 selection: view.selectedRange()) != nil
         case .snippet:
             return !(model?.snippets.isEmpty ?? true)

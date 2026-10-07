@@ -11,6 +11,7 @@ struct DocumentSnapshot: Sendable {
     let outlineEntries: [MarkdownOutlineEntry]
     let sectionActions: [Int: MarkdownSectionActions]
     let syntaxSpans: [MarkdownSyntaxSpan]
+    let hoverLinks: [MarkdownHoverLink]
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
 
     init(source: String, dialect: MarkdownDialect = .extended) {
@@ -24,6 +25,7 @@ struct DocumentSnapshot: Sendable {
         wordCounts = [.whitespace: statistics.words, .japanese: WordCountMode.japanese.count(in: source),
                       .english: WordCountMode.english.count(in: source)]
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
+        hoverLinks = MarkdownLinkHover.links(in: source, analysis: parsed)
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
     }
 

@@ -6,7 +6,8 @@ enum MarkdownLineContinuation {
         pattern: #"^([ \t]*)([-+*]|([0-9]{1,9})([.)]))([ \t]+)(\[[ xX]\](?:[ \t]+|$))?"#
     )
 
-    static func edit(in text: String, selection: NSRange) -> MarkdownEdit? {
+    static func edit(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil,
+                     allowsAnalysis: Bool = true) -> MarkdownEdit? {
         let source = text as NSString
         guard selection.length == 0, selection.location <= source.length else { return nil }
         let lineRange = source.lineRange(for: selection)
@@ -24,9 +25,8 @@ enum MarkdownLineContinuation {
         let list = listPattern.firstMatch(in: remainder,
                                           range: NSRange(location: 0, length: restSource.length))
         guard !quotePrefix.isEmpty || list != nil else { return nil }
-        guard !MarkdownAnalysis(text).blocks.contains(where: {
-            $0.kind == .codeBlock && NSLocationInRange(lineStart, $0.sourceRange)
-        }) else { return nil }
+        guard !MarkdownEditingContext.isInCode(at: lineStart, source: text,
+            analysis: analysis, allowsAnalysis: allowsAnalysis) else { return nil }
 
         let listPrefix = list.map { restSource.substring(with: $0.range) } ?? ""
         let prefix = quotePrefix + listPrefix
@@ -76,5 +76,37 @@ enum MarkdownLineContinuation {
             return end > 1 && source.character(at: end - 2) == 13 ? 2 : 1
         }
         return source.character(at: end - 1) == 13 ? 1 : 0
+    }
+}
+
+/// A bounded lexical fallback for keystrokes while background analysis is pending.
+enum MarkdownEditingContext {
+    private static let fence = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)*(?:[-+*][ \t]+)?(`{3,}|~{3,})(.*)$"#)
+
+    static func isInCode(at location: Int, source: String, analysis: MarkdownAnalysis?, allowsAnalysis: Bool) -> Bool {
+        if let analysis = analysis ?? (allowsAnalysis ? MarkdownAnalysis(source) : nil) {
+            return analysis.blocks.contains { $0.kind == .codeBlock && NSLocationInRange(location, $0.sourceRange) }
+        }
+        let text = source as NSString
+        guard location >= 0, location <= text.length else { return true }
+        let current = text.lineRange(for: NSRange(location: location, length: 0))
+        let start = max(0, current.location - 8_192)
+        // When the opening fence may precede the bound, decline structural completion.
+        guard start == 0 else { return true }
+        let prefix = text.substring(to: current.location)
+        var opening: (Character, Int)?
+        for line in prefix.components(separatedBy: .newlines) {
+            let range = NSRange(location: 0, length: line.utf16.count)
+            guard let match = fence.firstMatch(in: line, range: range) else { continue }
+            let token = (line as NSString).substring(with: match.range(at: 1))
+            let tail = (line as NSString).substring(with: match.range(at: 2))
+            if let active = opening {
+                if token.first == active.0, token.count >= active.1,
+                   tail.trimmingCharacters(in: .whitespaces).isEmpty { opening = nil }
+            } else if token.first != "`" || !tail.contains("`") {
+                opening = (token.first!, token.count)
+            }
+        }
+        return opening != nil
     }
 }
