@@ -6,7 +6,7 @@ import SwiftUI
 /// Math follows the extended Markdown dialect: `$...$` stays on one line and
 /// `$$...$$` forms a display block, on one or more lines. Escaped dollars and code spans are literal.
 enum MarkdownMath {
-    struct Formula: Equatable {
+    struct Formula: Hashable, Sendable {
         let source: String
         let latex: String
         let display: Bool

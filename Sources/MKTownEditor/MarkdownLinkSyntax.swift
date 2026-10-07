@@ -408,7 +408,6 @@ enum MarkdownReferenceConversion {
     }
 }
 
-@MainActor
 enum MarkdownAutolink {
     private static let urlPattern = try! NSRegularExpression(
         pattern: #"(?:https?://|www\.)[^\s<>]+"#, options: [.caseInsensitive]

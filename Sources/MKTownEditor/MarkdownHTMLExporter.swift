@@ -1,14 +1,85 @@
 import AppKit
 import Foundation
+import WebKit
 
-@MainActor
 enum MarkdownHTMLExporter {
     static let coverBreakMarker = "\u{E000}"
 
+    enum ImagePolicy: Sendable { case embedded, fileReferences }
+    @TaskLocal private static var imagePolicy: ImagePolicy = .embedded
+    @TaskLocal private static var mathImages: [String: String] = [:]
+
+    @MainActor
     static func render(_ markdown: String, documentURL: URL? = nil,
                        preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
                        dialect: MarkdownDialect = .extended) -> String {
         let analysis = MarkdownAnalysis(markdown, dialect: dialect)
+        let resources = formulas(in: analysis).reduce(into: [String: String]()) { values, item in
+            values[item.key] = MarkdownMathRenderer.htmlImage(item.formula, fontSize: item.size)
+        }
+        return $mathImages.withValue(resources) {
+            renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+        }
+    }
+
+    @MainActor
+    static func renderAsync(_ markdown: String, documentURL: URL? = nil,
+                            preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
+                            dialect: MarkdownDialect = .extended, images: ImagePolicy = .embedded) async throws -> String {
+        let analysis = try await DocumentWork.perform { MarkdownAnalysis(markdown, dialect: dialect) }
+        let items = try await DocumentWork.perform { formulas(in: analysis) }
+        var resources: [String: String] = [:]
+        for item in items {
+            try Task.checkCancellation()
+            resources[item.key] = MarkdownMathRenderer.htmlImage(item.formula, fontSize: item.size)
+            await Task.yield()
+        }
+        let prepared = resources
+        return try await DocumentWork.perform {
+            $mathImages.withValue(prepared) {
+                $imagePolicy.withValue(images) {
+                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                }
+            }
+        }
+    }
+
+    private struct MathImage: Sendable {
+        let formula: MarkdownMath.Formula
+        let size: CGFloat
+        var key: String { "\(size):\(formula.latex)" }
+    }
+
+    private static func formulas(in analysis: MarkdownAnalysis) -> [MathImage] {
+        guard analysis.dialect == .extended else { return [] }
+        var result: [String: MathImage] = [:]
+        for block in analysis.blocks where block.kind != .codeBlock {
+            var texts = [block.content]
+            if let table = block.table { texts += table.header + table.rows.flatMap { $0 } }
+            for text in texts {
+                if let formula = MarkdownMath.displayFormula(text) {
+                    let item = MathImage(formula: formula, size: 21); result[item.key] = item
+                }
+                for (_, formula) in MarkdownMath.placeholders(in: text).formulas {
+                    let item = MathImage(formula: formula, size: 16); result[item.key] = item
+                }
+            }
+        }
+        for note in analysis.footnotes.entries {
+            for (_, formula) in MarkdownMath.placeholders(in: note.content).formulas {
+                let item = MathImage(formula: formula, size: 16); result[item.key] = item
+            }
+        }
+        return Array(result.values)
+    }
+
+    private static func mathImage(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> String? {
+        mathImages["\(fontSize):\(formula.latex)"]
+    }
+
+    private static func renderPrepared(_ analysis: MarkdownAnalysis, documentURL: URL?,
+                                      preset: MarkdownExportPreset, printLayout: Bool,
+                                      dialect: MarkdownDialect) -> String {
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })
@@ -101,6 +172,7 @@ enum MarkdownHTMLExporter {
         var html = ""
         var index = 0
         while index < blocks.count {
+            if Task<Never, Never>.isCancelled { break }
             let block = blocks[index]
             let listTag: String?
             switch block.kind {
@@ -176,7 +248,7 @@ enum MarkdownHTMLExporter {
                let formula = MarkdownMath.displayFormula(block.content) {
                 let id = target.map { " id=\"\(escape($0.key))\"" } ?? ""
                 let number = target.map { "<span class=\"number\">\(escape($0.label))</span>" } ?? ""
-                return "<div class=\"math-block\"\(id)>\(MarkdownMathRenderer.htmlImage(formula, fontSize: 21) ?? escape(formula.source))\(number)</div>\n"
+                return "<div class=\"math-block\"\(id)>\(mathImage(formula, fontSize: 21) ?? escape(formula.source))\(number)</div>\n"
             }
             let content = MarkdownRenderer.paragraphContent(block)
             let layout = MarkdownImageLayout.parse(
@@ -247,7 +319,7 @@ enum MarkdownHTMLExporter {
             var fallback = escape(resolved)
             for (token, formula) in math.formulas {
                 fallback = fallback.replacingOccurrences(of: token,
-                    with: MarkdownMathRenderer.htmlImage(formula) ?? escape(formula.source))
+                    with: mathImage(formula) ?? escape(formula.source))
             }
             for (token, target) in cross?.targets ?? [] {
                 fallback = fallback.replacingOccurrences(of: token,
@@ -296,7 +368,7 @@ enum MarkdownHTMLExporter {
         }
         for (token, formula) in math.formulas {
             html = html.replacingOccurrences(of: token,
-                with: MarkdownMathRenderer.htmlImage(formula) ?? escape(formula.source))
+                with: mathImage(formula) ?? escape(formula.source))
         }
         for (token, target) in cross?.targets ?? [] {
             html = html.replacingOccurrences(of: token,
@@ -331,9 +403,10 @@ enum MarkdownHTMLExporter {
 
     private static func imageSource(_ url: URL, context: DocumentContext) -> String? {
         if url.scheme == "http" || url.scheme == "https" { return url.absoluteString }
-        guard url.scheme == nil,
-              let fileURL = context.resolveLocalResource(url.relativeString),
-              let data = try? Data(contentsOf: fileURL) else { return nil }
+        guard !Task<Never, Never>.isCancelled, url.scheme == nil,
+              let fileURL = context.resolveLocalResource(url.relativeString) else { return nil }
+        if imagePolicy == .fileReferences { return fileURL.absoluteString }
+        guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let mime: String
         switch fileURL.pathExtension.lowercased() {
         case "png": mime = "image/png"
@@ -369,5 +442,73 @@ enum MarkdownHTMLExporter {
         )
         return (try? AttributedString(markdown: markdown, options: options))
             .map { String($0.characters) } ?? markdown
+    }
+}
+
+/// Pure computation runs outside the main actor; cancellation is forwarded to its worker.
+enum DocumentWork {
+    static func perform<Value: Sendable>(_ operation: @escaping @Sendable () throws -> Value) async throws -> Value {
+        try Task.checkCancellation()
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let value = try operation()
+            try Task.checkCancellation()
+            return value
+        }
+        return try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+    }
+
+    @MainActor
+    static func loadHTML(_ html: String) async throws -> NSAttributedString {
+        try Task.checkCancellation()
+        let state = HTMLLoadState()
+        let value = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard state.install(continuation) else { return }
+                NSAttributedString.loadFromHTML(string: html, options: [.timeout: 30]) { attributed, _, error in
+                    if let attributed { state.finish(.success(AttributedTransfer(attributed))) }
+                    else { state.finish(.failure(error ?? RichTextImportError.invalidDocument)) }
+                }
+            }
+        } onCancel: { state.cancel() }
+        try Task.checkCancellation()
+        return value.value
+    }
+}
+
+/// Immutable attributed text is exclusively owned by the next pipeline stage.
+final class AttributedTransfer: @unchecked Sendable {
+    let value: NSAttributedString
+    init(_ value: NSAttributedString) { self.value = value }
+}
+
+private final class HTMLLoadState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<AttributedTransfer, Error>?
+    private var cancelled = false
+
+    func install(_ value: CheckedContinuation<AttributedTransfer, Error>) -> Bool {
+        lock.lock()
+        if cancelled { lock.unlock(); value.resume(throwing: CancellationError()); return false }
+        continuation = value
+        lock.unlock()
+        return true
+    }
+
+    func finish(_ result: Result<AttributedTransfer, Error>) {
+        lock.lock()
+        let value = continuation
+        continuation = nil
+        lock.unlock()
+        value?.resume(with: result)
+    }
+
+    func cancel() {
+        lock.lock()
+        cancelled = true
+        let value = continuation
+        continuation = nil
+        lock.unlock()
+        value?.resume(throwing: CancellationError())
     }
 }

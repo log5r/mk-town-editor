@@ -88,6 +88,76 @@ enum MarkdownPDFExporter {
         let attributed = NSMutableAttributedString(attributedString: try NSAttributedString(
             data: Data(html.utf8), options: options, documentAttributes: nil
         ))
+        return makeView(attributed, width: width, height: height, preferredWidth: preferredWidth,
+                        title: title, header: header, footer: footer)
+    }
+
+    static func printableViewAsync(_ markdown: String, documentURL: URL?, printInfo info: NSPrintInfo,
+                                   title: String = "", header: Bool = false, footer: Bool = false,
+                                   preset: MarkdownExportPreset = .standard,
+                                   dialect: MarkdownDialect = .extended) async throws -> NSTextView {
+        let preferredWidth = CGFloat(preset.bodyWidth) * 0.75
+        let width = min(info.paperSize.width - info.leftMargin - info.rightMargin, preferredWidth)
+        let height = info.paperSize.height - info.topMargin - info.bottomMargin
+        guard width >= 100, height >= 100 else { throw MarkdownPDFExportError.invalidMargins }
+        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL,
+            preset: preset, printLayout: true, dialect: dialect)
+        let attributed = NSMutableAttributedString(attributedString: try await DocumentWork.loadHTML(html))
+        try Task.checkCancellation()
+        let view = makeView(attributed, width: width, height: height, preferredWidth: preferredWidth,
+                        title: title, header: header, footer: footer, layoutImmediately: false)
+        if let manager = view.layoutManager, let storage = view.textStorage, let container = view.textContainer {
+            for start in stride(from: 0, to: storage.length, by: 5_000) {
+                try Task.checkCancellation()
+                manager.ensureLayout(forCharacterRange: NSRange(location: start, length: min(5_000, storage.length - start)))
+                await Task.yield()
+            }
+            view.frame.size.height = max(100, ceil(manager.usedRect(for: container).height))
+        }
+        try Task.checkCancellation()
+        return view
+    }
+
+    static func exportAsync(_ markdown: String, documentURL: URL?, to destination: URL,
+                            preset: MarkdownExportPreset = .standard,
+                            dialect: MarkdownDialect = .extended) async throws {
+        // Print into a temporary file so cancellation never replaces the requested destination.
+        let temporary = destination.deletingLastPathComponent().appendingPathComponent(".mktown-pdf-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        let info = printInfo(destination: temporary, preset: preset)
+        let view = try await printableViewAsync(markdown, documentURL: documentURL, printInfo: info,
+                                                preset: preset, dialect: dialect)
+        let operation = NSPrintOperation(view: view, printInfo: info)
+        operation.showsPrintPanel = false
+        guard await run(operation) else { throw MarkdownPDFExportError.printingFailed }
+        try Task.checkCancellation()
+        try await DocumentWork.perform {
+            let data = try Data(contentsOf: temporary)
+            guard !data.isEmpty else { throw MarkdownPDFExportError.emptyOutput }
+            try Task.checkCancellation()
+            try data.write(to: destination, options: .atomic)
+        }
+    }
+
+    static func run(_ operation: NSPrintOperation) async -> Bool {
+        let completion = PrintCompletion()
+        let window = NSApp.keyWindow ?? NSWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: false)
+        // NSTextView overrides are main-actor isolated in Swift 6. AppKit may call
+        // pagination on its print thread when this is true, which traps at runtime.
+        operation.canSpawnSeparateThread = false
+        operation.showsProgressPanel = true
+        let result = await withCheckedContinuation { continuation in
+            completion.continuation = continuation
+            operation.runModal(for: window, delegate: completion,
+                didRun: #selector(PrintCompletion.didRun(_:success:context:)), contextInfo: nil)
+        }
+        withExtendedLifetime(completion) {}
+        return result
+    }
+
+    private static func makeView(_ attributed: NSMutableAttributedString, width: CGFloat, height: CGFloat,
+                                 preferredWidth: CGFloat, title: String, header: Bool, footer: Bool,
+                                 layoutImmediately: Bool = true) -> NSTextView {
         let textView = PDFTextView(frame: NSRect(x: 0, y: 0, width: width, height: 100))
         textView.printableHeight = height
         textView.preferredWidth = preferredWidth
@@ -105,7 +175,7 @@ enum MarkdownPDFExporter {
         textView.textContainer?.widthTracksTextView = true
         textView.textContainer?.containerSize = NSSize(width: width, height: .greatestFiniteMagnitude)
         textView.textStorage?.setAttributedString(attributed)
-        if let layoutManager = textView.layoutManager, let container = textView.textContainer {
+        if layoutImmediately, let layoutManager = textView.layoutManager, let container = textView.textContainer {
             layoutManager.ensureLayout(for: container)
             textView.frame.size.height = max(100, ceil(layoutManager.usedRect(for: container).height))
         }
@@ -195,5 +265,14 @@ private final class PDFTextView: NSTextView {
     override func rectForPage(_ page: Int) -> NSRect {
         guard page > 0, page <= pageRects.count else { return .zero }
         return pageRects[page - 1]
+    }
+}
+
+@MainActor
+private final class PrintCompletion: NSObject {
+    var continuation: CheckedContinuation<Bool, Never>?
+    @objc func didRun(_ operation: NSPrintOperation, success: Bool, context: UnsafeMutableRawPointer?) {
+        continuation?.resume(returning: success)
+        continuation = nil
     }
 }
