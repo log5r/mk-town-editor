@@ -1092,6 +1092,17 @@ struct EditorWorkspace: View {
         .onReceive(NotificationCenter.default.publisher(for: NSText.didChangeNotification)) { _ in
             if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: EditorTextView.collaborativeReadinessNotification)) { notification in
+            guard let textView = notification.object as? EditorTextView,
+                  textView === editorModel.textView else { return }
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: workspaceStore.isDocumentLocked(fileURL)) { _, isLocked in
+            if !isLocked, let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: editorModel.hasActiveEditor) { _, _ in
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
         .onChange(of: editorModel.viewport) { _, _ in schedulePositionSave() }
         .onChange(of: fileURL) { oldURL, newURL in
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
@@ -2050,6 +2061,10 @@ struct EditorWorkspace: View {
     private func applyCollaborativeText(_ sharedText: String) {
         guard collaboration.isActive else { pendingCollaborativeText = nil; return }
         guard document.text != sharedText else { pendingCollaborativeText = nil; return }
+        guard !workspaceStore.isDocumentLocked(fileURL) else {
+            pendingCollaborativeText = sharedText
+            return
+        }
         if editorModel.hasActiveEditor {
             guard editorModel.applyCollaborativeText(sharedText,
                 expectedSource: document.text) else {
