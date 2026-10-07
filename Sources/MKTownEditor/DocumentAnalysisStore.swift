@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import CryptoKit
 
 /// Values derived from exactly one immutable version of a document.
 struct DocumentSnapshot: Sendable {
@@ -11,6 +12,7 @@ struct DocumentSnapshot: Sendable {
     let outlineEntries: [MarkdownOutlineEntry]
     let sectionActions: [Int: MarkdownSectionActions]
     let syntaxSpans: [MarkdownSyntaxSpan]
+    let blockPresentationIDs: [Int: String]
     let hoverLinks: [MarkdownHoverLink]
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
 
@@ -19,6 +21,14 @@ struct DocumentSnapshot: Sendable {
         self.source = source
         self.dialect = dialect
         analysis = parsed
+        var occurrences: [String: Int] = [:]
+        blockPresentationIDs = Dictionary(uniqueKeysWithValues: parsed.blocks.map { block in
+            let key = "\(block.kind):\(block.codeLanguage ?? ""):\(block.content)"
+            let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+            let occurrence = occurrences[digest, default: 0]
+            occurrences[digest] = occurrence + 1
+            return (block.id, "\(digest):\(occurrence)")
+        })
         outlineEntries = MarkdownOutline.entries(in: parsed)
         sectionActions = MarkdownSectionActions.all(in: outlineEntries)
         statistics = DocumentStatistics(text: source)

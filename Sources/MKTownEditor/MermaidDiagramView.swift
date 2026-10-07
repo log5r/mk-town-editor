@@ -37,16 +37,16 @@ enum MermaidDiagram {
         <script>
         const engine = globalThis.mermaid;
         engine.initialize({startOnLoad:false,securityLevel:'strict',theme:'default',flowchart:{htmlLabels:false}});
-        async function drawDiagram(source) {
+        async function drawDiagram(source, requestID = null) {
           const container = document.getElementById('diagram');
           container.replaceChildren();
           try {
             const result = await engine.render('mktown-diagram', source);
             container.innerHTML = result.svg;
-            window.webkit.messageHandlers.diagram.postMessage({height:Math.ceil(container.scrollHeight)+8});
+            window.webkit.messageHandlers.diagram.postMessage({requestID:requestID,height:Math.ceil(container.scrollHeight)+8});
           } catch (error) {
             const line = error?.hash?.loc?.first_line ?? error?.hash?.line ?? null;
-            window.webkit.messageHandlers.diagram.postMessage({error:String(error?.message ?? error),line:line});
+            window.webkit.messageHandlers.diagram.postMessage({requestID:requestID,error:String(error?.message ?? error),line:line});
           }
         }
         </script></head><body><div id="diagram"></div></body></html>
@@ -59,7 +59,8 @@ struct MermaidDiagramView: View {
     @State private var showsSource = false
     @State private var renderError: String?
     @State private var errorLine: Int?
-    @State private var diagramHeight: CGFloat = 120
+    @State private var image: NSImage?
+    @State private var isRendering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -82,14 +83,12 @@ struct MermaidDiagramView: View {
                 Text(source)
                     .font(.system(.body, design: .monospaced))
                     .textSelection(.enabled)
-            } else if let script = MermaidDiagram.bundledScript {
-                MermaidWebView(source: source, script: script) { height, error, line in
-                    diagramHeight = max(40, min(height, 3000))
-                    renderError = error
-                    errorLine = MermaidDiagram.errorLine(error ?? "", explicitLine: line)
+            } else if MermaidDiagram.bundledScript != nil {
+                if let image {
+                    Image(nsImage: image).resizable().scaledToFit()
+                        .accessibilityLabel("Mermaid図")
                 }
-                .frame(height: diagramHeight)
-                .accessibilityLabel("Mermaid図")
+                if isRendering { ProgressView() }
             } else {
                 Text("図の描画器が見つかりません。")
                     .foregroundStyle(.secondary)
@@ -98,78 +97,162 @@ struct MermaidDiagramView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .onChange(of: source) { _, _ in
+        .task(id: source) {
+            isRendering = true
             renderError = nil
             errorLine = nil
+            do {
+                let result = try await MermaidRenderService.shared.render(source)
+                try Task.checkCancellation()
+                image = result
+            } catch is CancellationError {
+            } catch let error as MermaidRenderError {
+                guard !Task.isCancelled else { return }
+                renderError = error.message
+                errorLine = error.line
+            } catch {
+                guard !Task.isCancelled else { return }
+                renderError = error.localizedDescription
+            }
+            isRendering = false
         }
     }
 }
 
-private struct MermaidWebView: NSViewRepresentable {
-    let source: String
-    let script: String
-    let onResult: (CGFloat, String?, Int?) -> Void
+struct MermaidRenderError: Error {
+    let message: String
+    let line: Int?
+}
 
-    func makeCoordinator() -> Coordinator { Coordinator(onResult: onResult) }
+/// A single offscreen WebKit renderer, serialized requests and cached bitmap results.
+@MainActor
+final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    static let shared = MermaidRenderService()
+    private var webView: WKWebView?
+    private var ready = false
+    private struct Request {
+        let source: String
+        let continuation: CheckedContinuation<NSImage, Error>
+    }
+    private var pending: [Request] = []
+    private var active: [Request] = []
+    private var requestID = 0
+    private var timeout: Task<Void, Never>?
+    private let cache = NSCache<NSString, NSImage>()
+    private(set) var webViewCreationCount = 0
+    private(set) var renderCount = 0
 
-    func makeNSView(context: Context) -> WKWebView {
+    override init() {
+        super.init()
+        cache.totalCostLimit = 32_000_000
+    }
+
+    func render(_ source: String) async throws -> NSImage {
+        try Task.checkCancellation()
+        guard source.utf8.count <= 256_000 else {
+            throw MermaidRenderError(message: ExternalDiagramError.sourceTooLarge.localizedDescription, line: nil)
+        }
+        if let image = cache.object(forKey: source as NSString) { return image }
+        try startIfNeeded()
+        let image = try await withCheckedThrowingContinuation { continuation in
+            pending.append(Request(source: source, continuation: continuation))
+            pump()
+        }
+        try Task.checkCancellation()
+        return image
+    }
+
+    private func startIfNeeded() throws {
+        guard webView == nil else { return }
+        guard let script = MermaidDiagram.bundledScript else {
+            throw MermaidRenderError(message: String(localized: "図の描画器が見つかりません。"), line: nil)
+        }
         let controller = WKUserContentController()
-        controller.add(context.coordinator, name: "diagram")
-        let config = WKWebViewConfiguration()
-        config.userContentController = controller
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.navigationDelegate = context.coordinator
-        view.loadHTMLString(MermaidDiagram.hostHTML(script: script), baseURL: nil)
-        return view
+        controller.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        controller.add(self, name: "diagram")
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController = controller
+        let view = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 3_000), configuration: configuration)
+        view.navigationDelegate = self
+        webView = view
+        webViewCreationCount += 1
+        view.loadHTMLString(MermaidDiagram.hostHTML(script: ""), baseURL: nil)
+        timeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            guard self?.ready == false else { return }
+            self?.failAll(ExternalDiagramError.timedOut)
+        }
     }
 
-    func updateNSView(_ view: WKWebView, context: Context) {
-        context.coordinator.onResult = onResult
-        context.coordinator.source = source
-        context.coordinator.render(on: view)
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { timeout?.cancel(); ready = true; pump() }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        failAll(error)
     }
 
-    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
-        view.configuration.userContentController.removeScriptMessageHandler(forName: "diagram")
-        view.navigationDelegate = nil
-        view.stopLoading()
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        failAll(error)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        var onResult: (CGFloat, String?, Int?) -> Void
-        var source = ""
-        private var lastSource: String?
-        private var ready = false
+    private func failAll(_ error: Error) {
+        let requests = active + pending
+        active.removeAll(); pending.removeAll()
+        timeout?.cancel()
+        requests.forEach { $0.continuation.resume(throwing: error) }
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "diagram")
+        webView = nil; ready = false
+    }
 
-        init(onResult: @escaping (CGFloat, String?, Int?) -> Void) { self.onResult = onResult }
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
+        navigationAction.request.url?.scheme == "about" ? .allow : .cancel
+    }
 
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            ready = true
-            render(on: webView)
+    private func pump() {
+        guard ready, active.isEmpty, let first = pending.first, let webView else { return }
+        active = pending.filter { $0.source == first.source }
+        pending.removeAll { $0.source == first.source }
+        requestID += 1
+        let token = requestID
+        renderCount += 1
+        timeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(10)) } catch { return }
+            self?.complete(.failure(MermaidRenderError(message: ExternalDiagramError.timedOut.localizedDescription, line: nil)), token: token)
         }
-
-        func webView(_ webView: WKWebView,
-                     decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-            navigationAction.request.url?.scheme == "about" ? .allow : .cancel
+        let encoded = String(data: try! JSONSerialization.data(withJSONObject: [first.source, token]), encoding: .utf8)!
+        webView.evaluateJavaScript("drawDiagram(...\(encoded)); 0") { [weak self] _, error in
+            if let error { self?.complete(.failure(error), token: token) }
         }
+    }
 
-        func render(on view: WKWebView) {
-            guard ready, lastSource != source else { return }
-            lastSource = source
-            let argument = String(data: try! JSONSerialization.data(withJSONObject: [source], options: [.fragmentsAllowed]),
-                                  encoding: .utf8) ?? "[]"
-            view.evaluateJavaScript("drawDiagram(\(argument.dropFirst().dropLast())); 0") { _, error in
-                if let error { self.onResult(120, error.localizedDescription, nil) }
-            }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard let body = message.body as? [String: Any], let token = body["requestID"] as? Int,
+              token == requestID, !active.isEmpty, let webView else { return }
+        if let error = body["error"] as? String {
+            complete(.failure(MermaidRenderError(message: error,
+                line: MermaidDiagram.errorLine(error, explicitLine: body["line"] as? Int))), token: token)
+            return
         }
+        let height = max(40, min((body["height"] as? Double) ?? 120, 3_000))
+        let configuration = WKSnapshotConfiguration()
+        configuration.rect = NSRect(x: 0, y: 0, width: 900, height: height)
+        webView.takeSnapshot(with: configuration) { [weak self] image, error in
+            guard let self else { return }
+            if let image { self.complete(.success(image), token: token) }
+            else { self.complete(.failure(error ?? ExternalDiagramError.invalidImage), token: token) }
+        }
+    }
 
-        func userContentController(_ controller: WKUserContentController,
-                                   didReceive message: WKScriptMessage) {
-            guard let result = message.body as? [String: Any] else { return }
-            let height = (result["height"] as? NSNumber).map { CGFloat(truncating: $0) } ?? 120
-            let error = result["error"] as? String
-            let line = result["line"] as? Int
-            onResult(height, error, line)
+    private func complete(_ result: Result<NSImage, Error>, token: Int) {
+        guard token == requestID, let first = active.first else { return }
+        timeout?.cancel()
+        let requests = active + pending.filter { $0.source == first.source }
+        pending.removeAll { $0.source == first.source }
+        active.removeAll()
+        if case let .success(image) = result {
+            cache.setObject(image, forKey: first.source as NSString,
+                cost: Int(image.size.width * image.size.height * 4))
         }
+        requests.forEach { $0.continuation.resume(with: result) }
+        pump()
     }
 }

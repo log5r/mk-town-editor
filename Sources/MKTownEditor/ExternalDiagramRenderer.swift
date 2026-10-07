@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import CryptoKit
 import Foundation
 
 enum ExternalDiagramKind: String, CaseIterable, Sendable {
@@ -105,12 +106,26 @@ private final class DiagramProcessControl: @unchecked Sendable {
     }
 }
 
+private final class ExternalDiagramImageCache: @unchecked Sendable {
+    let values = NSCache<NSString, NSData>()
+    init() { values.totalCostLimit = 32_000_000 }
+}
+
 enum ExternalDiagramRenderer {
+    private static let cache = ExternalDiagramImageCache()
     static func render(_ source: String, kind: ExternalDiagramKind,
                        configuration: ExternalDiagramConfiguration,
                        timeout: TimeInterval = 8) async throws -> Data {
+        try Task.checkCancellation()
+        let tool = URL(fileURLWithPath: configuration.toolPath(for: kind))
+        var freshTool = tool
+        freshTool.removeAllCachedResourceValues()
+        let metadata = try? freshTool.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let digest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        let key = "\(kind.rawValue):\(tool.path):\(metadata?.contentModificationDate?.timeIntervalSince1970 ?? 0):\(metadata?.fileSize ?? 0):\(digest)" as NSString
+        if let cached = cache.values.object(forKey: key) { return cached as Data }
         let control = DiagramProcessControl()
-        return try await withTaskCancellationHandler {
+        let result = try await withTaskCancellationHandler {
             try await Task.detached(priority: .userInitiated) {
                 try renderBlocking(source, kind: kind, configuration: configuration,
                                    timeout: timeout, control: control)
@@ -118,6 +133,9 @@ enum ExternalDiagramRenderer {
         } onCancel: {
             control.stop(timeout: false)
         }
+        try Task.checkCancellation()
+        cache.values.setObject(result as NSData, forKey: key, cost: result.count)
+        return result
     }
 
     private static func renderBlocking(_ source: String, kind: ExternalDiagramKind,
