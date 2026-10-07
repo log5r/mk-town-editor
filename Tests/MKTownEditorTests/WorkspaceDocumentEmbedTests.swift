@@ -3,6 +3,21 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceDocumentEmbedTests: XCTestCase {
+    func testEmbedCacheAvoidsRepeatedReadsAndReflectsDiskAndOpenChanges() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".md")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "first".write(to: url, atomically: true, encoding: .utf8)
+        var cache = WorkspaceEmbedFileCache()
+        for _ in 0..<10 { XCTAssertEqual(cache.load(url, openBuffers: [:]), "first") }
+        XCTAssertEqual(cache.readCount, 1)
+        XCTAssertEqual(cache.load(url, openBuffers: [url: Data("unsaved".utf8)]), "unsaved")
+        try "second version".write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertEqual(cache.load(url, openBuffers: [:]), "second version")
+        XCTAssertEqual(cache.readCount, 2)
+        try FileManager.default.removeItem(at: url)
+        XCTAssertNil(cache.load(url, openBuffers: [:]))
+    }
+
     private let root = URL(fileURLWithPath: "/tmp/mktown-embed-tests")
 
     func testStandaloneSyntaxAndSectionExtraction() throws {

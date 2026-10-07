@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkspaceEmbedReference: Equatable, Sendable {
+struct WorkspaceEmbedReference: Hashable, Sendable {
     let target: String
     let section: String?
 }
