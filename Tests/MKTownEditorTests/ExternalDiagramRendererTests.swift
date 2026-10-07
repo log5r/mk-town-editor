@@ -28,6 +28,22 @@ final class ExternalDiagramRendererTests: XCTestCase {
         XCTAssertTrue(command.arguments.contains("-pipe"))
     }
 
+    func testSuccessfulRenderIsCachedBySourceAndToolIdentity() async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let png = try XCTUnwrap(testPNG())
+        try png.write(to: directory.appendingPathComponent("reference.png"))
+        let script = try executable(in: directory, body: """
+            echo render >> "$(dirname "$0")/calls.txt"
+            cp "$(dirname "$0")/reference.png" "$4"
+            """)
+        let config = ExternalDiagramConfiguration(graphvizExecutable: script.path, plantUMLJar: "")
+        for _ in 0..<3 { _ = try await ExternalDiagramRenderer.render("digraph { A -> B }", kind: .graphviz, configuration: config) }
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent("calls.txt"), encoding: .utf8), "render\n")
+        _ = try await ExternalDiagramRenderer.render("digraph { B -> C }", kind: .graphviz, configuration: config)
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent("calls.txt"), encoding: .utf8), "render\nrender\n")
+    }
+
     func testGraphvizArgumentsUseSourceFileWithoutShellExpansion() async throws {
         let directory = try fixtureDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class MermaidDiagramTests: XCTestCase {
+    func testSharedRendererCoalescesRequestsAndCachesBitmaps() async throws {
+        let renderer = MermaidRenderService.shared
+        let source = "graph TD; UniqueCacheTestA-->UniqueCacheTestB"
+        let before = renderer.renderCount
+        async let first = renderer.render(source)
+        async let second = renderer.render(source)
+        let images = try await (first, second)
+        XCTAssertGreaterThan(images.0.size.height, 0)
+        XCTAssertTrue(images.0 === images.1)
+        let cached = try await renderer.render(source)
+        XCTAssertTrue(cached === images.0)
+        XCTAssertEqual(renderer.renderCount, before + 1)
+        XCTAssertEqual(renderer.webViewCreationCount, 1)
+    }
+
+    func testDiagramIdentitySurvivesUpstreamParagraphInsertionAndDistinguishesDuplicates() {
+        let code = "```mermaid\ngraph TD; A-->B\n```"
+        let before = DocumentSnapshot(source: code + "\n\n" + code)
+        let after = DocumentSnapshot(source: "paragraph\n\n" + code + "\n\n" + code)
+        let idsBefore = before.analysis.blocks.filter(MermaidDiagram.isDiagram).map { before.blockPresentationIDs[$0.id] }
+        let idsAfter = after.analysis.blocks.filter(MermaidDiagram.isDiagram).map { after.blockPresentationIDs[$0.id] }
+        XCTAssertEqual(idsBefore, idsAfter)
+        XCTAssertNotEqual(idsBefore[0], idsBefore[1])
+    }
+
     func testMermaidCodeBlockSelectionAndErrorPosition() {
         let diagram = MarkdownAnalysis("```mermaid\ngraph TD\nA-->B\n```").blocks[0]
         XCTAssertTrue(MermaidDiagram.isDiagram(diagram))

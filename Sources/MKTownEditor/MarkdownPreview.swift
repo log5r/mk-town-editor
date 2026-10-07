@@ -7,6 +7,11 @@ struct PreviewNavigationTarget: Equatable {
     let sequence: Int
 }
 
+private struct PreviewBlockRow: Identifiable {
+    let block: MarkdownBlock
+    let id: String
+}
+
 struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
@@ -81,7 +86,10 @@ struct MarkdownPreview: View {
                                 .cornerRadius(8)
                                 .padding(.bottom, 16)
                             }
-                            ForEach(layout.visibleBlocks, id: \.id) { block in
+                            ForEach(layout.visibleBlocks.map { block in
+                                PreviewBlockRow(block: block, id: snapshot?.blockPresentationIDs[block.id] ?? String(block.id))
+                            }) { row in
+                                let block = row.block
                                 HStack(alignment: .top, spacing: 8) {
                                     ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
                                         Rectangle()
