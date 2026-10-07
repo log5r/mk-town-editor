@@ -150,6 +150,8 @@ enum WorkspaceFileOperations {
         let index = WorkspaceFileIndex.scan(root: root)
         guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let documents = markdownFiles(in: index.nodes)
+        let documentIndex = WorkspaceDocumentIndex(documents: documents)
+        let movedIndex = WorkspaceDocumentIndex(documents: documents.map { mapped($0, from: source, to: destination) })
         let openData = openDocuments.reduce(into: [URL: Data]()) { result, item in
             result[item.key.resolvingSymlinksInPath().standardizedFileURL] = item.value
         }
@@ -174,7 +176,7 @@ enum WorkspaceFileOperations {
             let (updated, links) = rewriteLinks(opened.text, documentURL: document,
                                                 newDocumentURL: newURL,
                                                 source: source, destination: destination,
-                                                documents: documents)
+                                                documentIndex: documentIndex, movedIndex: movedIndex)
             if !links.isEmpty || document != newURL {
                 var updatedDocument = opened
                 updatedDocument.text = updated
@@ -255,7 +257,7 @@ enum WorkspaceFileOperations {
 
     private static func rewriteLinks(_ text: String, documentURL: URL, newDocumentURL: URL,
                                      source: URL, destination: URL,
-                                     documents: [URL]) -> (String, [WorkspaceLinkChange]) {
+                                     documentIndex: WorkspaceDocumentIndex, movedIndex: WorkspaceDocumentIndex) -> (String, [WorkspaceLinkChange]) {
         let analysis = MarkdownAnalysis(text)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
             MarkdownInlineSyntax.codeSpanRanges(in: text)
@@ -293,23 +295,22 @@ enum WorkspaceFileOperations {
                 after: MarkdownLinkSyntax.escapeDestination(newDestination)
             ))
         }
-        let movedDocuments = documents.map { mapped($0, from: source, to: destination) }
         for wiki in WorkspaceWikiLinks.links(in: text) {
             guard let target = WorkspaceWikiLinks.resolve(wiki.target, from: documentURL,
-                documents: documents) else { continue }
+                index: documentIndex) else { continue }
             let movedTarget = mapped(target, from: source, to: destination)
             let rewritten = WorkspaceWikiLinks.target(for: movedTarget,
-                from: newDocumentURL, documents: movedDocuments)
+                from: newDocumentURL, index: movedIndex)
             guard rewritten != wiki.target else { continue }
             edits.append(WorkspaceLinkChange(range: wiki.targetRange,
                 before: original.substring(with: wiki.targetRange), after: rewritten))
         }
         for embed in WorkspaceDocumentEmbed.links(in: text) {
             guard let target = WorkspaceWikiLinks.resolve(embed.target, from: documentURL,
-                documents: documents) else { continue }
+                index: documentIndex) else { continue }
             let movedTarget = mapped(target, from: source, to: destination)
             let rewritten = WorkspaceWikiLinks.target(for: movedTarget,
-                from: newDocumentURL, documents: movedDocuments)
+                from: newDocumentURL, index: movedIndex)
             guard rewritten != embed.target else { continue }
             edits.append(WorkspaceLinkChange(range: embed.targetRange,
                 before: original.substring(with: embed.targetRange), after: rewritten))

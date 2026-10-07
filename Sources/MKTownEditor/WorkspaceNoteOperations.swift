@@ -162,19 +162,20 @@ enum WorkspaceNoteOperations {
             edits.append((NSRange(location: reference.sourceRange.location + local.location,
                 length: local.length), replacement))
         }
-        let futureDocuments = workspaceDocuments + [destinationURL]
+        let documentIndex = WorkspaceDocumentIndex(documents: workspaceDocuments)
+        let futureIndex = WorkspaceDocumentIndex(documents: workspaceDocuments + [destinationURL])
         for wiki in WorkspaceWikiLinks.links(in: source) {
             guard let target = WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
-                documents: workspaceDocuments) else { continue }
+                index: documentIndex) else { continue }
             let replacement = WorkspaceWikiLinks.target(for: target,
-                from: destinationURL, documents: futureDocuments)
+                from: destinationURL, index: futureIndex)
             if replacement != wiki.target { edits.append((wiki.targetRange, replacement)) }
         }
         for embed in WorkspaceDocumentEmbed.links(in: source) {
             guard let target = WorkspaceWikiLinks.resolve(embed.target, from: sourceURL,
-                documents: workspaceDocuments) else { continue }
+                index: documentIndex) else { continue }
             let replacement = WorkspaceWikiLinks.target(for: target,
-                from: destinationURL, documents: futureDocuments)
+                from: destinationURL, index: futureIndex)
             if replacement != embed.target { edits.append((embed.targetRange, replacement)) }
         }
         let result = NSMutableString(string: source)

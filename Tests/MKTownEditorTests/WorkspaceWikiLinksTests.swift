@@ -3,6 +3,24 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceWikiLinksTests: XCTestCase {
+    func testIndexedResolutionCanonicalizesDocumentsOnceAndPreservesAmbiguity() {
+        let root = URL(fileURLWithPath: "/private/tmp/wiki")
+        let documents = [root.appendingPathComponent("a/Note.md"), root.appendingPathComponent("b/Note.md"),
+                         root.appendingPathComponent("Unique.md")]
+        var calls = 0
+        let index = WorkspaceDocumentIndex(documents: documents) { url in
+            calls += 1
+            return url.standardizedFileURL
+        }
+        for _ in 0..<100 {
+            XCTAssertEqual(WorkspaceWikiLinks.resolve("Note", from: documents[0], index: index), documents[0])
+            XCTAssertNil(WorkspaceWikiLinks.resolve("Note", from: root.appendingPathComponent("other.md"), index: index))
+            XCTAssertEqual(WorkspaceWikiLinks.resolve("../Unique", from: documents[0], index: index), documents[2])
+            XCTAssertEqual(WorkspaceWikiLinks.target(for: documents[2], from: documents[0], index: index), "Unique")
+        }
+        XCTAssertEqual(calls, documents.count)
+    }
+
     func testParsingExcludesCodeFrontMatterAndEscapes() {
         let source = "---\ntitle: [[hidden]]\n---\n[[ノート|表示]] `[[code]]`\\[[escaped]]\n```\n[[block]]\n```"
         let links = WorkspaceWikiLinks.links(in: source)
