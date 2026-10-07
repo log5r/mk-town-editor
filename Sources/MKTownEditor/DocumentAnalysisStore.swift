@@ -57,6 +57,8 @@ final class DocumentAnalysisStore: ObservableObject {
     }
 
     func update(source: String, dialect: MarkdownDialect = .extended) {
+        var source = source
+        source.makeContiguousUTF8()
         if snapshot?.matches(source: source, dialect: dialect) == true {
             if requestedSource != nil { cancel() }
             return

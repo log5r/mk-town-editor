@@ -51,7 +51,9 @@ struct MarkdownTextFormat: Equatable {
         }
         let endings = newlineSequence(in: value)
         let mixed = Set(endings).count > 1 ? endings : nil
-        return (normalize(value), Self(newline: newline, hasUTF8BOM: bom,
+        var normalized = normalize(value)
+        normalized.makeContiguousUTF8()
+        return (normalized, Self(newline: newline, hasUTF8BOM: bom,
                                        originalNewlines: mixed))
     }
 
