@@ -3,6 +3,14 @@ import XCTest
 @testable import MKTownEditor
 
 final class MarkdownAnalysisTests: XCTestCase {
+    func testAnalysisDoesNotRetainPerScalarPositionDictionaries() {
+        let source = String(repeating: "日本語🙂e\u{301}\r\n", count: 1_000)
+        let analysis = MarkdownAnalysis(source)
+        XCTAssertFalse(Mirror(reflecting: analysis).children.contains { $0.value is MarkdownPositionMap })
+        let map = MarkdownPositionMap(source)
+        XCTAssertTrue(analysis.blocks.allSatisfy { map.positions(for: $0.sourceRange) != nil })
+    }
+
     func testBasicDialectLeavesExtendedBlocksAsOrdinaryText() {
         let source = "---\ntitle: Draft\n---\n\n| A |\n| --- |\n| B |\n\nText[^a]\n\n[^a]: Footnote"
         let extended = MarkdownAnalysis(source)
@@ -74,7 +82,7 @@ final class MarkdownAnalysisTests: XCTestCase {
             "# 題🙂\r\n", "\r\n", "- 一\r\n", "  - 二\r\n", ""
         ])
         for block in analysis.blocks {
-            XCTAssertNotNil(analysis.positionMap.positions(for: block.sourceRange))
+            XCTAssertNotNil(MarkdownPositionMap(source).positions(for: block.sourceRange))
         }
     }
 
@@ -160,7 +168,7 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual(original.substring(with: quote.sourceRange), source)
         XCTAssertEqual(original.substring(with: children[0].sourceRange), "> first🙂\r\n> second\r\n")
         XCTAssertEqual(original.substring(with: children[4].sourceRange), "> ```swift\r\n> let x = 1\r\n> ```\r\n")
-        XCTAssertTrue(analysis.blocks.allSatisfy { analysis.positionMap.positions(for: $0.sourceRange) != nil })
+        XCTAssertTrue(analysis.blocks.allSatisfy { MarkdownPositionMap(source).positions(for: $0.sourceRange) != nil })
     }
 
     func testLazyQuoteContinuationEndsAfterQuotedBlankLine() {
@@ -308,7 +316,7 @@ final class MarkdownAnalysisTests: XCTestCase {
         XCTAssertEqual((source as NSString).substring(with: tableBlock.sourceRange),
                        "| Name | Score | Note |\r\n| :--- | ---: | :---: |\r\n| 🙂 | 42 | ok |\r\n| short |\r\n")
         XCTAssertEqual((source as NSString).substring(with: table.rowRanges[0]), "| 🙂 | 42 | ok |\r\n")
-        XCTAssertTrue(analysis.positionMap.positions(for: tableBlock.sourceRange) != nil)
+        XCTAssertTrue(MarkdownPositionMap(source).positions(for: tableBlock.sourceRange) != nil)
     }
 
     func testGFMTableSplitsOnlyUnescapedPipesIncludingInsideCodeSpans() {

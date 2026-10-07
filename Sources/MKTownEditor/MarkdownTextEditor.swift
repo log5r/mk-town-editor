@@ -104,6 +104,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        model.markdownDialect = documentContext.markdownDialect
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         if textView.whitespaceOptions != whitespaceOptions ||
@@ -171,6 +172,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             textView.loadsExternalLinkPreviews != loadsExternalLinkPreviews {
             textView.cancelLinkHover()
         }
+        model.markdownDialect = documentContext.markdownDialect
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         context.coordinator.sharedSnapshot = sharedSnapshot
@@ -196,7 +198,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             context.coordinator.lineNumberRuler?.refresh()
         }
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
-        guard textView.string != text else {
+        guard textView.editorSource != text else {
             context.coordinator.refreshSyntax()
             return
         }
@@ -225,16 +227,23 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         let model: MarkdownEditorModel
-        weak var textView: NSTextView?
+        weak var textView: NSTextView? {
+            didSet { observeProofingEdits() }
+        }
         weak var scrollView: NSScrollView?
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var appliedTextStyle: EditorTextStyle?
         var appliedLayoutOptions: EditorLayoutOptions?
-        var sharedSnapshot: DocumentSnapshot?
-        var usesSharedAnalysis = false
+        var sharedSnapshot: DocumentSnapshot? {
+            didSet { model.sharedSnapshot = sharedSnapshot }
+        }
+        var usesSharedAnalysis = false {
+            didSet { model.usesSharedAnalysis = usesSharedAnalysis }
+        }
         var usesInlineLivePresentation = false
         var usesTypewriterMode = false
         private var lastManualScroll = Date.distantPast
@@ -243,10 +252,14 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var visibleSourceChangeTask: Task<Void, Never>?
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
+        private var proofingDialect: MarkdownDialect?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
+        /// The ranges exactly as analysed for `proofingSource`, before any edit shifted them.
+        private var proofingSourceRanges: [MarkdownProofingContext.ProtectedRange] = []
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
+        private var highlightedDialect: MarkdownDialect?
         private var highlightedWithSharedAnalysis: Bool?
         private var highlightedWithLivePresentation: Bool?
         private var inlineLiveDisplay: MarkdownInlineLiveDisplay?
@@ -260,7 +273,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             (textView as? EditorTextView)?.clearFolds()
-            text = textView.string
+            var source = textView.editorSource
+            source.makeContiguousUTF8()
+            text = source
             (textView as? EditorTextView)?.refreshInvisibles()
             applyProofing()
             refreshSyntax()
@@ -322,30 +337,37 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         @MainActor func refreshSyntax() {
             guard let textView, !textView.hasMarkedText() else { return }
-            let source = textView.string
-            let snapshotSource = sharedSnapshot?.source
+            let source = textView.editorSource
+            let dialect = model.markdownDialect
+            let snapshot = sharedSnapshot.flatMap {
+                $0.matches(source: source, dialect: dialect) ? $0 : nil
+            }
+            let snapshotSource = snapshot?.source
             // TextKit adjusts existing temporary colors as the text changes. Keep them
             // until matching analysis arrives instead of clearing them on every keystroke.
             // Inline marker ranges also belong to the old source and must not be reapplied.
-            if usesSharedAnalysis && snapshotSource != source { return }
+            if usesSharedAnalysis && snapshot == nil { return }
             let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
+                highlightedDialect != dialect ||
                 highlightedWithSharedAnalysis != usesSharedAnalysis ||
                 highlightedWithLivePresentation != usesInlineLivePresentation
             if needsBase {
-                let spans = snapshotSource == source ? sharedSnapshot?.syntaxSpans : nil
-                let displaySpans = usesSharedAnalysis ? spans : MarkdownSyntaxHighlighter.spans(in: source)
+                let analysis = snapshot?.analysis ?? MarkdownAnalysis(source, dialect: dialect)
+                let displaySpans = usesSharedAnalysis ? snapshot?.syntaxSpans
+                    : MarkdownSyntaxHighlighter.spans(in: source, analysis: analysis)
                 MarkdownSyntaxHighlighter.apply(to: textView, spans: displaySpans ?? [])
                 if usesInlineLivePresentation,
                    let displaySpans {
                     inlineLiveDisplay = MarkdownInlineLiveDisplay(textView: textView,
                         ranges: MarkdownInlineLivePresentation.markerRanges(in: source,
                             spans: displaySpans,
-                            analysis: snapshotSource == source ? sharedSnapshot?.analysis : nil))
+                            analysis: analysis))
                 } else {
                     inlineLiveDisplay = nil
                 }
                 highlightedSource = source
                 highlightedSnapshotSource = snapshotSource
+                highlightedDialect = dialect
                 highlightedWithSharedAnalysis = usesSharedAnalysis
                 highlightedWithLivePresentation = usesInlineLivePresentation
             }
@@ -375,15 +397,62 @@ struct MarkdownTextEditor: NSViewRepresentable {
             }
         }
 
+        private weak var observedProofingStorage: NSTextStorage?
+
+        /// Keeps the protected ranges of the last snapshot aligned with the text while
+        /// the background analysis for the edited source is still pending.
+        private func observeProofingEdits() {
+            if let observedProofingStorage {
+                NotificationCenter.default.removeObserver(self, name: NSTextStorage.didProcessEditingNotification,
+                                                          object: observedProofingStorage)
+            }
+            observedProofingStorage = textView?.textStorage
+            if let observedProofingStorage {
+                NotificationCenter.default.addObserver(self, selector: #selector(proofingStorageDidProcessEditing(_:)),
+                    name: NSTextStorage.didProcessEditingNotification, object: observedProofingStorage)
+            }
+        }
+
+        @MainActor @objc private func proofingStorageDidProcessEditing(_ notification: Notification) {
+            guard let storage = notification.object as? NSTextStorage,
+                  storage.editedMask.contains(.editedCharacters) else { return }
+            protectedProofingRanges = MarkdownProofingContext.shifted(protectedProofingRanges,
+                editedRange: storage.editedRange, changeInLength: storage.changeInLength)
+        }
+
         @MainActor func applyProofing() {
             guard let textView else { return }
-            if proofingSource != textView.string {
-                proofingSource = textView.string
-                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: textView.string)
+            let source = textView.editorSource
+            let dialect = model.markdownDialect
+            let needsRanges = proofingSource != source || proofingDialect != dialect
+            if usesSharedAnalysis {
+                if let snapshot = sharedSnapshot, snapshot.matches(source: source, dialect: dialect) {
+                    if needsRanges {
+                        proofingSource = source
+                        proofingDialect = snapshot.dialect
+                        proofingSourceRanges = snapshot.proofingRanges
+                    }
+                }
+            } else if needsRanges {
+                proofingSource = source
+                proofingDialect = dialect
+                proofingSourceRanges = MarkdownProofingContext.protectedRanges(in: source,
+                    analysis: MarkdownAnalysis(source, dialect: dialect))
             }
+            // Shifting drops ranges cut by an edit. When the text is back to the analysed source
+            // (an undo, or the edit retyped before a new snapshot arrived), use the exact ranges.
+            if proofingSource == source { protectedProofingRanges = proofingSourceRanges }
             let location = textView.selectedRange().location
-            let protected = MarkdownProofingContext.isProtected(location,
-                in: protectedProofingRanges)
+            // While the snapshot for an edited source is pending, the previous ranges stay
+            // aligned through proofingStorageDidProcessEditing, and inline code or URLs typed
+            // since then are found in the caret's paragraph, so prose keeps spelling and
+            // correction. A pending dialect change (or no snapshot yet) still suppresses
+            // correction: it can change which regions are protected anywhere in the document.
+            let sourcePending = usesSharedAnalysis && proofingSource != source
+            let dialectPending = usesSharedAnalysis && proofingDialect != dialect
+            let protected = dialectPending
+                || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
+                || (sourcePending && MarkdownProofingContext.isProtectedInParagraph(location, of: source))
             textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
             textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
             if textView.window?.firstResponder === textView { applyProofingLanguage() }
@@ -418,29 +487,73 @@ struct MarkdownTextEditor: NSViewRepresentable {
 }
 
 enum MarkdownProofingContext {
-    struct ProtectedRange: Equatable {
+    struct ProtectedRange: Equatable, Sendable {
         let range: NSRange
         let includesEnd: Bool
     }
 
     private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s)<>\]]+"#)
 
-    static func protectedRanges(in source: String) -> [ProtectedRange] {
-        let analysis = MarkdownAnalysis(source)
+    static func protectedRanges(in source: String, analysis: MarkdownAnalysis? = nil) -> [ProtectedRange] {
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let code = analysis.blocks.filter { $0.kind == .codeBlock }
             .map { ProtectedRange(range: $0.sourceRange, includesEnd: false) }
+        return code + inlineProtectedRanges(in: source)
+    }
+
+    /// Inline code spans and URLs, which need no block analysis.
+    static func inlineProtectedRanges(in source: String) -> [ProtectedRange] {
         let inline = MarkdownInlineSyntax.codeSpanRanges(in: source)
             .map { ProtectedRange(range: $0, includesEnd: false) }
         let full = NSRange(location: 0, length: (source as NSString).length)
         let urls = urlPattern.matches(in: source, range: full)
             .map { ProtectedRange(range: $0.range, includesEnd: true) }
-        return code + inline + urls
+        return inline + urls
     }
 
     static func isProtected(_ location: Int, in ranges: [ProtectedRange]) -> Bool {
         ranges.contains { item in
             NSLocationInRange(location, item.range) ||
                 (item.includesEnd && location == NSMaxRange(item.range))
+        }
+    }
+
+    /// Whether `location` sits in inline code or a URL of its own paragraph. Used while
+    /// whole-document analysis is pending, so it costs one paragraph scan per keystroke.
+    static func isProtectedInParagraph(_ location: Int, of source: String) -> Bool {
+        let text = source as NSString
+        guard location >= 0, location <= text.length else { return false }
+        let paragraph = text.paragraphRange(for: NSRange(location: location, length: 0))
+        let ranges = inlineProtectedRanges(in: text.substring(with: paragraph)).map {
+            ProtectedRange(range: NSRange(location: $0.range.location + paragraph.location,
+                                          length: $0.range.length), includesEnd: $0.includesEnd)
+        }
+        return isProtected(location, in: ranges)
+    }
+
+    /// Realigns ranges after a character edit reported by NSTextStorage. `editedRange` is in
+    /// post-edit coordinates; the replaced pre-edit range had `editedRange.length - changeInLength`
+    /// characters. Ranges containing the edit grow or shrink, ranges after it move, and ranges
+    /// cut by the edit are dropped until the next snapshot arrives.
+    static func shifted(_ ranges: [ProtectedRange], editedRange: NSRange,
+                        changeInLength delta: Int) -> [ProtectedRange] {
+        let replaced = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
+        return ranges.compactMap { item in
+            let range = item.range
+            let end = NSMaxRange(range)
+            let before = item.includesEnd ? end < replaced.location : end <= replaced.location
+            if before { return item }
+            if range.location >= NSMaxRange(replaced) {
+                return ProtectedRange(range: NSRange(location: range.location + delta, length: range.length),
+                                      includesEnd: item.includesEnd)
+            }
+            let inside = replaced.location > range.location && NSMaxRange(replaced) <= end
+            let appended = item.includesEnd && replaced.location == end && replaced.length == 0
+            guard inside || appended else { return nil }
+            let length = range.length + delta
+            guard length > 0 else { return nil }
+            return ProtectedRange(range: NSRange(location: range.location, length: length),
+                                  includesEnd: item.includesEnd)
         }
     }
 }
@@ -466,7 +579,69 @@ private final class EditorScrollView: NSScrollView {
     }
 }
 
+extension NSTextView {
+    var editorSource: String { (self as? EditorTextView)?.sourceText ?? string }
+}
+
 final class EditorTextView: NSTextView {
+    private var cachedSource: String?
+    private var observesSourceEdits = false
+    private var pendingCharacterEdit: (range: NSRange, delta: Int)?
+    private(set) var sourceRevision = 0
+    private(set) var sourceReadCount = 0
+
+    var sourceText: String {
+        if let cachedSource { return cachedSource }
+        var source = super.string
+        source.makeContiguousUTF8()
+        sourceReadCount += 1
+        cachedSource = source
+        return source
+    }
+
+    convenience init() { self.init(frame: .zero) }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        observeSourceEdits()
+    }
+
+    override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
+        super.init(frame: frameRect, textContainer: container)
+        observeSourceEdits()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        observeSourceEdits()
+    }
+
+    private func observeSourceEdits() {
+        guard !observesSourceEdits else { return }
+        observesSourceEdits = true
+        NotificationCenter.default.addObserver(self, selector: #selector(sourceStorageDidChange(_:)),
+            name: NSTextStorage.didProcessEditingNotification, object: textStorage)
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        let allowed = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+        if allowed, let replacementString {
+            pendingCharacterEdit = (affectedCharRange, replacementString.utf16.count - affectedCharRange.length)
+        }
+        return allowed
+    }
+
+    @objc private func sourceStorageDidChange(_ notification: Notification) {
+        guard let storage = notification.object as? NSTextStorage,
+              storage.editedMask.contains(.editedCharacters) else { return }
+        let expected = pendingCharacterEdit
+        pendingCharacterEdit = nil
+        commandModel?.sourceStorageDidChange(range: expected?.range ?? NSRange(location: 0, length: 0), delta: expected?.delta ?? 0,
+            undoing: expected == nil || undoManager?.isUndoing == true || undoManager?.isRedoing == true)
+        cachedSource = nil
+        sourceRevision += 1
+    }
+
     var onFocused: (() -> Void)?
     var onBlurred: (() -> Void)?
     weak var commandModel: MarkdownEditorModel?
@@ -478,7 +653,7 @@ final class EditorTextView: NSTextView {
     var loadsExternalLinkPreviews = false
     private let linkHover = MarkdownLinkHoverPopover()
     private var hoverTrackingArea: NSTrackingArea?
-    private var hoverSource = ""
+    private var hoverRevision = -1
     private var hoverLinks: [MarkdownHoverLink] = []
 
     func cancelLinkHover() { linkHover.cancel() }
@@ -500,9 +675,12 @@ final class EditorTextView: NSTextView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         let point = convert(event.locationInWindow, from: nil)
-        let source = string
-        if hoverSource != source {
-            hoverSource = source
+        let source = sourceText
+        if commandModel?.usesSharedAnalysis == true {
+            guard let snapshot = commandModel?.matchingSnapshot else { linkHover.cancel(); return }
+            hoverLinks = snapshot.hoverLinks
+        } else if hoverRevision != sourceRevision {
+            hoverRevision = sourceRevision
             hoverLinks = MarkdownLinkHover.links(in: source)
         }
         guard let layoutManager, let textContainer else {
@@ -543,6 +721,30 @@ final class EditorTextView: NSTextView {
         super.mouseDown(with: event)
     }
 
+    static let collaborativeReadinessNotification = Notification.Name("MKTownEditor.editorReadyForCollaborativeText")
+    private var readinessNotificationTask: Task<Void, Never>?
+
+    override var isEditable: Bool {
+        didSet {
+            if !isEditable { readinessNotificationTask?.cancel() }
+            else if !oldValue { notifyCollaborativeReadiness() }
+        }
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        notifyCollaborativeReadiness()
+    }
+
+    private func notifyCollaborativeReadiness() {
+        readinessNotificationTask?.cancel()
+        // Defer until updateNSView has finished changing the editor's state.
+        readinessNotificationTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled, let self, self.isEditable, !self.hasMarkedText() else { return }
+            NotificationCenter.default.post(name: Self.collaborativeReadinessNotification, object: self)
+        }
+    }
+
     override func didChangeText() {
         linkHover.cancel()
         super.didChangeText()
@@ -550,18 +752,20 @@ final class EditorTextView: NSTextView {
 
     func refreshInvisibles() {
         invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
-            ? InvisibleCharacterPlan(source: string, tabWidth: max(1, whitespaceTabWidth)) : nil
+            ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth)) : nil
         needsDisplay = true
     }
-    private(set) var foldedPlans: [MarkdownFoldPlan] = []
-    var foldedHeaderLocations: Set<Int> { Set(foldedPlans.map(\.headerLocation)) }
+    private(set) var foldedPlans: [MarkdownFoldPlan] = [] {
+        didSet { foldedHeaderLocations = Set(foldedPlans.map(\.headerLocation)) }
+    }
+    private(set) var foldedHeaderLocations: Set<Int> = []
     private var selectionBeforeImageDrag: NSRange?
     private var imageDropLocation: Int? {
         didSet { needsDisplay = true }
     }
 
     func toggleFold(at location: Int) -> Bool {
-        guard let plan = MarkdownFoldPlan.at(location, in: string) else { return false }
+        guard let plan = MarkdownFoldPlan.at(location, in: sourceText) else { return false }
         if let index = foldedPlans.firstIndex(where: { $0.headerLocation == plan.headerLocation }) {
             foldedPlans.remove(at: index)
         } else {
@@ -591,7 +795,7 @@ final class EditorTextView: NSTextView {
     }
 
     private func refreshFolds() {
-        let length = (string as NSString).length
+        let length = (sourceText as NSString).length
         layoutManager?.invalidateGlyphs(forCharacterRange: NSRange(location: 0, length: length),
             changeInLength: 0, actualCharacterRange: nil)
         enclosingScrollView?.verticalRulerView?.needsDisplay = true
@@ -602,7 +806,7 @@ final class EditorTextView: NSTextView {
         guard let layoutManager, let textContainer else { return nil }
         let visible = convert(scrollView.contentView.bounds, from: scrollView.contentView)
         let point = NSPoint(x: 0, y: max(0, visible.minY - textContainerOrigin.y))
-        return min((string as NSString).length,
+        return min((sourceText as NSString).length,
                    layoutManager.characterIndex(for: point, in: textContainer,
                                                 fractionOfDistanceBetweenInsertionPoints: nil))
     }
@@ -648,7 +852,7 @@ final class EditorTextView: NSTextView {
     override var rangeForUserCompletion: NSRange {
         let fallback = super.rangeForUserCompletion
         guard !hasMarkedText(), selectedRange().length == 0 else { return fallback }
-        let text = string as NSString
+        let text = sourceText as NSString
         let end = selectedRange().location
         var start = end
         while start > 0, end - start < 32 {
@@ -664,7 +868,7 @@ final class EditorTextView: NSTextView {
 
     override func completions(forPartialWordRange charRange: NSRange,
                               indexOfSelectedItem index: UnsafeMutablePointer<Int>) -> [String]? {
-        let matches = MarkdownEmoji.completions(in: string, range: charRange)
+        let matches = MarkdownEmoji.completions(in: sourceText, range: charRange)
         if !matches.isEmpty {
             index.pointee = 0
             return matches
@@ -806,7 +1010,7 @@ final class EditorTextView: NSTextView {
 
     func imageDropIndicatorRect(at location: Int) -> NSRect? {
         guard let window, location >= 0,
-              location <= (string as NSString).length else { return nil }
+              location <= (sourceText as NSString).length else { return nil }
         let screen = firstRect(forCharacterRange: NSRange(location: location, length: 0),
                                actualRange: nil)
         let local = convert(window.convertFromScreen(screen), from: nil)
@@ -815,11 +1019,11 @@ final class EditorTextView: NSTextView {
     }
 
     func dropInsertionLocation(for windowPoint: NSPoint) -> Int {
-        guard let layoutManager, let textContainer else { return (string as NSString).length }
+        guard let layoutManager, let textContainer else { return (sourceText as NSString).length }
         let local = convert(windowPoint, from: nil)
         let containerPoint = NSPoint(x: local.x - textContainerOrigin.x,
                                      y: local.y - textContainerOrigin.y)
-        return min((string as NSString).length,
+        return min((sourceText as NSString).length,
                    layoutManager.characterIndex(for: containerPoint, in: textContainer,
                                                 fractionOfDistanceBetweenInsertionPoints: nil))
     }

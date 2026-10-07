@@ -58,6 +58,19 @@ enum AutomationDocumentWriter {
     }
 
     @MainActor
+    static func exportHTMLAsync(source: URL, to destination: URL) async throws {
+        guard source.isFileURL, ["md", "markdown", "mdown", "mkd", "txt"]
+            .contains(source.pathExtension.lowercased()) else { throw WriterError.invalidSource }
+        let text = try await DocumentWork.perform {
+            let data = try Data(contentsOf: source)
+            guard let document = try? MarkdownDocument(data: data) else { throw WriterError.invalidSource }
+            return document.text
+        }
+        let html = try await MarkdownHTMLExporter.renderAsync(text, documentURL: source)
+        try await DocumentWork.commit { try save(html, at: destination) }
+    }
+
+    @MainActor
     static func exportHTML(source: URL, to destination: URL) throws {
         guard source.isFileURL, ["md", "markdown", "mdown", "mkd", "txt"]
             .contains(source.pathExtension.lowercased()) else { throw WriterError.invalidSource }
@@ -97,7 +110,7 @@ struct ExportMarkdownHTMLAutomationIntent: AppIntent {
         let source = URL(fileURLWithPath: (sourcePath as NSString).expandingTildeInPath)
         let url = try AutomationDocumentWriter.destination(folderPath: folderPath,
             fileName: fileName, extension: "html")
-        try AutomationDocumentWriter.exportHTML(source: source, to: url)
+        try await AutomationDocumentWriter.exportHTMLAsync(source: source, to: url)
         return .result(value: url.path)
     }
 }

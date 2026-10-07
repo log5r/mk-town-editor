@@ -4,6 +4,40 @@ import XCTest
 
 @MainActor
 final class WorkspaceViewSettingsTests: XCTestCase {
+    func testDisplayUsesScannedPathsWithoutFollowingSymlinks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let alias = root.appendingPathComponent("alias.md")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: root.appendingPathComponent("actual.md"))
+        let nodes = [WorkspaceNode(url: alias, name: "alias.md", children: nil),
+                     WorkspaceNode(url: root.appendingPathComponent("first.md"), name: "first.md", children: nil)]
+        var settings = WorkspaceViewSettings()
+        settings.pinnedPaths = ["alias.md"]
+        XCTAssertEqual(settings.display(nodes, root: root).first?.url, alias)
+    }
+
+    @MainActor
+    func testVisibleTreeUpdatesOnSettingsChangesAndIsCachedBetweenReads() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "b".write(to: root.appendingPathComponent("b.md"), atomically: true, encoding: .utf8)
+        try "a".write(to: root.appendingPathComponent("a.md"), atomically: true, encoding: .utf8)
+        let store = WorkspaceStore(defaults: UserDefaults(suiteName: UUID().uuidString)!)
+        store.setRoot(root)
+        for _ in 0..<200 where store.visibleNodes.count != 2 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.map(\.name), ["a.md", "b.md"])
+        store.togglePin(root.appendingPathComponent("b.md"))
+        for _ in 0..<200 where store.visibleNodes.first?.name != "b.md" { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.map(\.name), ["b.md", "a.md"])
+        var notifications = 0
+        let observation = store.objectWillChange.sink { notifications += 1 }
+        for _ in 0..<100 { _ = store.visibleNodes }
+        XCTAssertEqual(notifications, 0)
+        withExtendedLifetime(observation) {}
+    }
+
     private let root = URL(fileURLWithPath: "/private/tmp/mktown-workspace-settings", isDirectory: true)
 
     private var nodes: [WorkspaceNode] {

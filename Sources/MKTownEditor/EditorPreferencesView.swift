@@ -427,6 +427,11 @@ struct SnippetPickerView: View {
     }
 }
 
+struct CommandPaletteMatchesKey: PreferenceKey {
+    static var defaultValue: [EditorCommand] { [] }
+    static func reduce(value: inout [EditorCommand], nextValue: () -> [EditorCommand]) { value = nextValue() }
+}
+
 struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsStore: EditorSettingsStore
@@ -465,6 +470,7 @@ struct CommandPaletteView: View {
         }
         .padding()
         .frame(width: 500, height: 420)
+        .preference(key: CommandPaletteMatchesKey.self, value: matches)
     }
 
     private func execute(_ command: EditorCommand) {

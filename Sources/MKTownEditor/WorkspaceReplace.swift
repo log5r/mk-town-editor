@@ -36,6 +36,8 @@ struct WorkspaceReplacePreview: Sendable {
 
 struct WorkspaceReplacePlan: Sendable {
     let changes: [WorkspaceReplaceChange]
+    var skippedDocuments: [URL] = []
+    var isTruncated = false
 
     var matchCount: Int { changes.reduce(0) { $0 + $1.matches.count } }
 
@@ -82,8 +84,9 @@ struct WorkspaceReplacePlan: Sendable {
 enum WorkspaceReplace {
     static func plan(root: URL, options: WorkspaceSearchOptions,
                      replacement: String) throws -> WorkspaceReplacePlan {
-        let matches = try WorkspaceSearch.search(root: root, options: options,
+        let report = try WorkspaceSearch.report(root: root, options: options,
                                                  maximumResults: 10_001)
+        let matches = report.results
         guard !matches.isEmpty else { throw WorkspaceReplaceError.noMatches }
         guard matches.count <= 10_000 else { throw WorkspaceReplaceError.tooManyMatches }
         let grouped = Dictionary(grouping: matches, by: \.url)
@@ -119,6 +122,6 @@ enum WorkspaceReplace {
                                           originalData: data, updatedData: document.encodedData(),
                                           matches: entries, previews: previews)
         }
-        return WorkspaceReplacePlan(changes: changes)
+        return WorkspaceReplacePlan(changes: changes, skippedDocuments: report.skippedDocuments, isTruncated: report.isTruncated)
     }
 }

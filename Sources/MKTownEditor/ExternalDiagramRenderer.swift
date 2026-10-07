@@ -1,5 +1,6 @@
 import AppKit
 import Darwin
+import CryptoKit
 import Foundation
 
 enum ExternalDiagramKind: String, CaseIterable, Sendable {
@@ -85,7 +86,17 @@ private final class DiagramProcessControl: @unchecked Sendable {
         if hasLaunched && !running { lock.unlock(); return }
         if timeout { timedOut = true } else { cancelled = true }
         lock.unlock()
-        if running { _ = Darwin.kill(process.processIdentifier, SIGTERM) }
+        if running { terminate() }
+    }
+
+    /// Sends SIGTERM, then SIGKILL if the tool is still running 250 ms later, so a tool
+    /// that ignores SIGTERM cannot keep `waitUntilExit()` (and the diagram) waiting forever.
+    private func terminate() {
+        _ = Darwin.kill(process.processIdentifier, SIGTERM)
+        let process = process
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(250)) {
+            if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
+        }
     }
 
     var stopped: Bool {
@@ -101,16 +112,30 @@ private final class DiagramProcessControl: @unchecked Sendable {
     }
 
     func signalIfStopped() {
-        if stopped, process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGTERM) }
+        if stopped, process.isRunning { terminate() }
     }
 }
 
+private final class ExternalDiagramImageCache: @unchecked Sendable {
+    let values = NSCache<NSString, NSData>()
+    init() { values.totalCostLimit = 32_000_000 }
+}
+
 enum ExternalDiagramRenderer {
+    private static let cache = ExternalDiagramImageCache()
     static func render(_ source: String, kind: ExternalDiagramKind,
                        configuration: ExternalDiagramConfiguration,
-                       timeout: TimeInterval = 8) async throws -> Data {
+                       timeout: TimeInterval = 8,
+                       readMetadata: WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read) async throws -> Data {
+        try Task.checkCancellation()
+        let tool = URL(fileURLWithPath: configuration.toolPath(for: kind))
+        let metadata = try? readMetadata(tool)
+        let digest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
+        let generation = metadata?.generation?.map { String(format: "%02x", $0) }.joined() ?? ""
+        let key = "\(kind.rawValue):\(tool.path):\(metadata?.modified?.timeIntervalSince1970 ?? 0):\(metadata?.size ?? 0):\(generation):\(digest)" as NSString
+        if metadata?.identifiesContent == true, let cached = cache.values.object(forKey: key) { return cached as Data }
         let control = DiagramProcessControl()
-        return try await withTaskCancellationHandler {
+        let result = try await withTaskCancellationHandler {
             try await Task.detached(priority: .userInitiated) {
                 try renderBlocking(source, kind: kind, configuration: configuration,
                                    timeout: timeout, control: control)
@@ -118,6 +143,13 @@ enum ExternalDiagramRenderer {
         } onCancel: {
             control.stop(timeout: false)
         }
+        try Task.checkCancellation()
+        // Without a generation identifier, size and date cannot identify the tool.
+        // Bypass caching rather than reuse output from a replaced executable or JAR.
+        if metadata?.identifiesContent == true {
+            cache.values.setObject(result as NSData, forKey: key, cost: result.count)
+        }
+        return result
     }
 
     private static func renderBlocking(_ source: String, kind: ExternalDiagramKind,

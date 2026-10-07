@@ -35,6 +35,7 @@ struct WorkspaceFileOperationSheet: View {
     @State private var template: WorkspaceDocumentTemplate = .blank
     @State private var plan: WorkspaceMovePlan?
     @State private var isWorking = false
+    @State private var operationTask: Task<Void, Never>?
     @State private var errorMessage: String?
 
     let action: WorkspaceFileAction
@@ -96,6 +97,11 @@ struct WorkspaceFileOperationSheet: View {
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             }
             if let plan {
+                if !plan.skippedDocuments.isEmpty {
+                    Text("リンク確認から除外: \(plan.skippedDocuments.count)件")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if plan.isTruncated { Text("ファイル一覧が上限を超えたため、確認結果は一部のみです。") }
                 if plan.changes.contains(where: { $0.openOriginalData != nil && $0.linkCount > 0 }) {
                     Text("開いている参照元書類の未保存内容も、リンク更新と一緒に保存されます。")
                         .font(.caption)
@@ -116,10 +122,14 @@ struct WorkspaceFileOperationSheet: View {
                 }
                 .frame(height: min(180, CGFloat(max(1, plan.changes.count)) * 54))
             }
+            if isWorking { ProgressView("リンクを確認中…") }
             if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("キャンセル") { dismiss() }
+                Button(isWorking ? "中止" : "キャンセル") {
+                    operationTask?.cancel()
+                    if !isWorking { dismiss() }
+                }
                     .keyboardShortcut(.cancelAction)
                 if needsPlan && plan == nil {
                     Button("変更を確認") { preparePlan() }
@@ -127,12 +137,14 @@ struct WorkspaceFileOperationSheet: View {
                 } else {
                     Button(actionIsTrash ? "ゴミ箱へ移動" : "適用") { apply() }
                         .keyboardShortcut(.defaultAction)
-                        .disabled(isWorking || inputIsEmpty || (actionIsTrash && plan == nil))
+                        .disabled(isWorking || inputIsEmpty || plan?.isTruncated == true)
                 }
             }
         }
         .frame(width: 500)
         .padding(20)
+        .interactiveDismissDisabled(isWorking)
+        .onDisappear { operationTask?.cancel() }
         .onAppear {
             if actionIsTrash { preparePlan() }
         }
@@ -189,16 +201,21 @@ struct WorkspaceFileOperationSheet: View {
             isWorking = false
             return
         }
-        Task {
+        operationTask = Task {
             do {
-                let result = try await Task.detached(priority: .userInitiated) {
+                let worker = Task.detached(priority: .userInitiated) {
                     try WorkspaceFileOperations.planMove(source: source, destination: destination,
                                                          root: rootURL,
                                                          openDocuments: openSnapshots)
-                }.value
+                }
+                let result = try await withTaskCancellationHandler { try await worker.value }
+                    onCancel: { worker.cancel() }
+                try Task.checkCancellation()
                 if actionIsTrash || destinationURL?.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
                     plan = result
                 }
+            } catch is CancellationError {
+                // Stop planning without publishing a partial plan.
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -229,10 +246,10 @@ struct WorkspaceFileOperationSheet: View {
         let movePlan = plan
         let lockID = movePlan.flatMap { needsPlan ? workspaceStore.lockOpenDocuments(in: $0) : nil }
         isWorking = true
-        Task {
+        operationTask = Task {
             var appliedMove = false
             do {
-                try await Task.detached(priority: .userInitiated) {
+                let worker = Task.detached(priority: .userInitiated) {
                     switch action {
                     case let .createDocument(directory):
                         _ = try WorkspaceFileOperations.create(name: enteredName, in: directory,
@@ -245,13 +262,14 @@ struct WorkspaceFileOperationSheet: View {
                         guard let movePlan else { throw WorkspaceFileOperationError.workspaceChanged }
                         try movePlan.apply()
                     case let .trash(source):
-                        guard let movePlan else { throw WorkspaceFileOperationError.workspaceChanged }
-                        try movePlan.validateCurrentState()
                         _ = try WorkspaceFileOperations.moveToTrash(source, root: root)
                     }
-                }.value
+                }
+                try await withTaskCancellationHandler { try await worker.value }
+                    onCancel: { worker.cancel() }
                 if let movePlan, needsPlan {
                     appliedMove = true
+                    try Task.checkCancellation()
                     try movePlan.validateAppliedData()
                     try workspaceStore.applyOpenBufferChanges(in: movePlan)
                 }
@@ -269,17 +287,25 @@ struct WorkspaceFileOperationSheet: View {
                 dismiss()
                 onComplete()
             } catch {
+                // A stop requested by the user is not an error to display. Restored
+                // documents carry new metadata, so the plan is confirmed again before reuse.
+                let cancelled = error is CancellationError
                 if appliedMove, let movePlan {
                     do {
                         try await Task.detached(priority: .userInitiated) {
                             try movePlan.rollback()
                         }.value
-                        errorMessage = error.localizedDescription
+                        errorMessage = cancelled ? nil : error.localizedDescription
                     } catch {
                         errorMessage = WorkspaceFileOperationError.rollbackFailed.localizedDescription
                     }
+                    plan = nil
                 } else {
-                    errorMessage = error.localizedDescription
+                    if !cancelled { errorMessage = error.localizedDescription }
+                    // apply() restores documents it already rewrote before rethrowing, which
+                    // gives them new metadata; validation also fails for a changed workspace.
+                    // Either way this plan can no longer pass, so ask for a new one.
+                    if movePlan != nil, needsPlan { plan = nil }
                 }
             }
             if let lockID { workspaceStore.unlockOpenDocuments(lockID) }

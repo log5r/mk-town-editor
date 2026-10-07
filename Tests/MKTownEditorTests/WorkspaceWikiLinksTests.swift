@@ -3,6 +3,24 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceWikiLinksTests: XCTestCase {
+    func testIndexedResolutionCanonicalizesDocumentsOnceAndPreservesAmbiguity() {
+        let root = URL(fileURLWithPath: "/private/tmp/wiki")
+        let documents = [root.appendingPathComponent("a/Note.md"), root.appendingPathComponent("b/Note.md"),
+                         root.appendingPathComponent("Unique.md")]
+        var calls = 0
+        let index = WorkspaceDocumentIndex(documents: documents) { url in
+            calls += 1
+            return url.standardizedFileURL
+        }
+        for _ in 0..<100 {
+            XCTAssertEqual(WorkspaceWikiLinks.resolve("Note", from: documents[0], index: index), documents[0])
+            XCTAssertNil(WorkspaceWikiLinks.resolve("Note", from: root.appendingPathComponent("other.md"), index: index))
+            XCTAssertEqual(WorkspaceWikiLinks.resolve("../Unique", from: documents[0], index: index), documents[2])
+            XCTAssertEqual(WorkspaceWikiLinks.target(for: documents[2], from: documents[0], index: index), "Unique")
+        }
+        XCTAssertEqual(calls, documents.count)
+    }
+
     func testParsingExcludesCodeFrontMatterAndEscapes() {
         let source = "---\ntitle: [[hidden]]\n---\n[[ノート|表示]] `[[code]]`\\[[escaped]]\n```\n[[block]]\n```"
         let links = WorkspaceWikiLinks.links(in: source)
@@ -72,5 +90,22 @@ final class WorkspaceWikiLinksTests: XCTestCase {
             nodes: index.nodes, openBuffers: [:])
         XCTAssertEqual(backlinks.backlinks.count, 1)
         XCTAssertEqual(backlinks.backlinks.first?.excerpt, "[[note]]")
+    }
+
+    @MainActor
+    func testSheetLinkTargetIgnoresIndexBuiltFromAnOlderDocumentList() {
+        let root = URL(fileURLWithPath: "/private/tmp/wiki-sheet-index")
+        let current = root.appendingPathComponent("doc.md")
+        let plan = root.appendingPathComponent("notes/plan.md")
+        let added = root.appendingPathComponent("other/plan.md")
+        let before = [current, plan], after = [current, plan, added]
+        let stale = WorkspaceDocumentIndex(documents: before)
+        XCTAssertEqual(WorkspaceWikiLinkSheet.linkTarget(for: plan, from: current, documents: before,
+            cachedIndex: stale, indexedDocuments: before), "plan")
+        let target = WorkspaceWikiLinkSheet.linkTarget(for: plan, from: current, documents: after,
+            cachedIndex: stale, indexedDocuments: before)
+        XCTAssertEqual(target, "notes/plan", "a second plan.md appeared, so the bare title is ambiguous")
+        XCTAssertEqual(WorkspaceWikiLinks.resolve(target, from: current,
+            index: WorkspaceDocumentIndex(documents: after)), plan)
     }
 }

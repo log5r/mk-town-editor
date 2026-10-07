@@ -64,6 +64,16 @@
         }
       }
     },
+    "別の書き出しまたはコピーを実行中です。完了してから、もう一度お試しください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another export or copy is in progress. Try again when it finishes."
+          }
+        }
+      }
+    },
     "（なし）" : {
       "localizations" : {
         "en" : {
@@ -9403,7 +9413,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Documents not read: %lld"
+            "value" : "Documents that could not be read: %lld"
           }
         }
       }
@@ -10089,6 +10099,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Analyzing items…"
+          }
+        }
+      }
+    },
+    "処理中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processing…"
+          }
+        }
+      }
+    },
+    "リンクを確認中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking links…"
+          }
+        }
+      }
+    },
+    "リンク確認から除外: %lld件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluded from link checking: %lld documents"
+          }
+        }
+      }
+    },
+    "確認が一部のみのため、未使用の候補は表示しません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unused candidates are hidden because the inspection is incomplete."
+          }
+        }
+      }
+    },
+    "ファイル一覧が上限を超えたため、確認結果は一部のみです。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file list exceeds the limit, so the inspection results are incomplete."
+          }
+        }
+      }
+    },
+    "確認結果は一部のみです。対象を絞って再実行してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The inspection results are incomplete. Narrow the scope and try again."
           }
         }
       }

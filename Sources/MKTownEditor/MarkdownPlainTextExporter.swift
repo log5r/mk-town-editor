@@ -1,13 +1,12 @@
 import AppKit
 import Foundation
 
-struct MarkdownPlainTextOptions {
+struct MarkdownPlainTextOptions: Sendable {
     var linkDestinations = false
     var footnotes = true
     var imageDescriptions = true
 }
 
-@MainActor
 enum MarkdownPlainTextExporter {
     private static let footnoteDefinition = try! NSRegularExpression(
         pattern: #"^\[\^([^\]]+)\]:[ \t]*(.*)$"#

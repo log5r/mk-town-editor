@@ -20,6 +20,14 @@ final class MarkdownDocumentTests: XCTestCase {
         XCTAssertEqual(MarkdownDocument.writableContentTypes, [MarkdownDocument.markdownType])
     }
 
+    func testReadProducesContiguousUTF8WithoutReplacingInvalidBytes() throws {
+        let text = String(repeating: "日本語🙂e\u{301}\r\n", count: 100)
+        let document = try MarkdownDocument(data: Data(text.utf8))
+        XCTAssertTrue(document.text.isContiguousUTF8)
+        XCTAssertEqual(document.encodedData(), Data(text.utf8))
+        XCTAssertThrowsError(try MarkdownDocument(data: Data([0xC3, 0x28])))
+    }
+
     func testUTF8RoundTrip() throws {
         let original = MarkdownDocument(text: "# 見出し\n\n本文")
         let restored = try MarkdownDocument.decode(original.encodedData())

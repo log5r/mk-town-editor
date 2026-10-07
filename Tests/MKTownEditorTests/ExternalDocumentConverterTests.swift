@@ -101,6 +101,35 @@ final class ExternalDocumentConverterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous")
     }
 
+    func testCancellationKillsConverterThatIgnoresTermination() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let started = root.appendingPathComponent("started")
+        let executable = try makeExecutable(in: root, body: """
+        trap '' TERM
+        \(ChildProcessFixture.publishPID(to: started))
+        exec /bin/sleep 30
+        """)
+        let destination = root.appendingPathComponent("output.epub")
+        try Data("previous".utf8).write(to: destination)
+        let worker = Task.detached {
+            try ExternalDocumentConverter.convert("# Source", documentURL: nil,
+                destination: destination, format: .epub, dialect: .extended, executable: executable)
+        }
+        var pid: pid_t?
+        defer { worker.cancel(); ChildProcessFixture.reap(pid) }
+        pid = try await ChildProcessFixture.waitForPID(at: started)
+        let child = try XCTUnwrap(pid)
+        XCTAssertTrue(ChildProcessFixture.isRunning(child), "converter must be running before cancellation")
+        let cancelledAt = ContinuousClock.now
+        worker.cancel()
+        do { try await worker.value; XCTFail("Cancelled conversion unexpectedly completed") }
+        catch { XCTAssertEqual(error as? ExternalConversionError, .cancelled) }
+        XCTAssertLessThan(cancelledAt.duration(to: .now), .seconds(2))
+        XCTAssertFalse(ChildProcessFixture.isRunning(child), "cancellation must reap a converter that ignores SIGTERM")
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous")
+    }
+
     func testZeroExitWithoutOutputIsReportedClearly() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -4,13 +4,35 @@ struct WorkspaceEmbeddedDocumentView: View {
     let reference: WorkspaceEmbedReference
     let documentURL: URL
     let documents: [URL]
-    let loadOpenBuffers: (() throws -> [URL: Data])?
+    @ObservedObject var contentRevisions: WorkspaceContentRevisions = .empty
+    var diskRevision: Int?
+    var documentIndex: WorkspaceDocumentIndex?
+    let loadOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
     let onOpen: ((URL) -> Void)?
+    @State private var targetURL: URL?
+    @State private var cachedIndex: WorkspaceDocumentIndex?
+    @State private var indexedDocuments: [URL] = []
     @State private var expansion: WorkspaceEmbedExpansion?
     @State private var refreshID = 0
+    @State private var rendered = AttributedString()
+    @State private var fileCache = WorkspaceEmbedFileCache()
+    @State private var directoryMonitor: WorkspaceDirectoryMonitor?
+    @State private var dependencies: Set<URL> = []
+    @State private var completedRefreshKey: RefreshKey?
 
-    private var targetURL: URL? {
-        WorkspaceWikiLinks.resolve(reference.target, from: documentURL, documents: documents)
+    private struct RefreshKey: Hashable {
+        let reference: WorkspaceEmbedReference
+        let document: URL
+        let documents: [URL]
+        let contentRevisions: [URL: Int]
+        let diskRevision: Int
+    }
+
+    private func refreshKey(dependencies: Set<URL>) -> RefreshKey {
+        RefreshKey(reference: reference, document: documentURL, documents: documents,
+            contentRevisions: Dictionary(uniqueKeysWithValues: dependencies.map {
+                ($0, contentRevisions.values[$0, default: 0])
+            }), diskRevision: (diskRevision ?? 0) &+ refreshID)
     }
 
     var body: some View {
@@ -30,8 +52,7 @@ struct WorkspaceEmbeddedDocumentView: View {
             }
             if let expansion {
                 if !expansion.text.isEmpty {
-                    Text(AttributedString(MarkdownRenderer.render(expansion.text,
-                        documentContext: DocumentContext(fileURL: targetURL))))
+                    Text(rendered)
                         .textSelection(.enabled)
                 }
                 ForEach(expansion.issues.indices, id: \.self) { index in
@@ -46,35 +67,145 @@ struct WorkspaceEmbeddedDocumentView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(Color.secondary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
-        .task(id: refreshID) { await refresh() }
-        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
-            refreshID &+= 1
+        .task(id: refreshKey(dependencies: dependencies)) {
+            await refresh(key: refreshKey(dependencies: dependencies))
+        }
+        .task(id: RefreshKey(reference: reference, document: documentURL, documents: documents,
+                             contentRevisions: [:], diskRevision: diskRevision == nil ? 0 : 1)) {
+            directoryMonitor?.stop(); directoryMonitor = nil
+            guard diskRevision == nil else { return }
+            var components = documentURL.deletingLastPathComponent().pathComponents
+            for url in documents {
+                components = Array(zip(components, url.deletingLastPathComponent().pathComponents)
+                    .prefix { $0 == $1 }.map { $0.0 })
+            }
+            let root = URL(fileURLWithPath: NSString.path(withComponents: components))
+            directoryMonitor = WorkspaceDirectoryMonitor(root: root) { refreshID &+= 1 }
+        }
+        .onDisappear {
+            directoryMonitor?.stop(); directoryMonitor = nil
+            completedRefreshKey = nil
         }
     }
 
-    private func refresh() async {
-        let buffers = (try? loadOpenBuffers?()) ?? [:]
-        let reference = reference
-        let documentURL = documentURL
-        let documents = documents
-        let task = Task.detached(priority: .utility) {
-            WorkspaceDocumentEmbed.expand(reference, from: documentURL,
-                documents: documents) { url in
-                    let data: Data
-                    if let open = buffers[url] {
-                        data = open
-                    } else {
-                        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
-                              size <= WorkspaceDocumentEmbed.maximumBytes,
-                              let file = try? Data(contentsOf: url) else { return nil }
-                        data = file
-                    }
-                    guard data.count <= WorkspaceDocumentEmbed.maximumBytes else { return nil }
-                    return try? MarkdownDocument.decode(data)
+    private func refresh(key: RefreshKey) async {
+        // Discovering a dependency changes the task key. Its initial result is
+        // already current, so that bookkeeping change must not encode it again.
+        guard key != completedRefreshKey else { return }
+        let revisions = contentRevisions.values
+        do {
+            let loaded = try await WorkspaceEmbedLoader.load(reference, from: documentURL,
+                documents: documents, index: documentIndex ?? (indexedDocuments == documents ? cachedIndex : nil),
+                dependencies: dependencies, cache: fileCache, previous: expansion,
+                previousTarget: targetURL, loadOpenBuffers: loadOpenBuffers)
+            try Task.checkCancellation()
+            fileCache = loaded.cache
+            cachedIndex = loaded.index; indexedDocuments = documents; targetURL = loaded.target
+            dependencies = loaded.dependencies
+            completedRefreshKey = RefreshKey(reference: key.reference, document: key.document,
+                documents: key.documents, contentRevisions: Dictionary(uniqueKeysWithValues:
+                    loaded.dependencies.map { ($0, revisions[$0, default: 0]) }), diskRevision: key.diskRevision)
+            if expansion != loaded.expansion || loaded.analysis != nil {
+                if let analysis = loaded.analysis {
+                    rendered = AttributedString(MarkdownRenderer.render(analysis,
+                        documentContext: DocumentContext(fileURL: targetURL)))
                 }
+                expansion = loaded.expansion
+            }
+        } catch is CancellationError {
+        } catch {
+            // Only cancellation is thrown by the background expansion. Buffer
+            // conflicts retain the existing disk fallback in the loader.
         }
-        let result = await task.value
-        guard !Task.isCancelled else { return }
-        expansion = result
+    }
+}
+
+/// Decoded dependency texts, reused while the file's metadata still identifies the same contents.
+/// Volumes without a generation identifier re-read on every refresh, since equal size and date
+/// do not prove the bytes are unchanged there.
+struct WorkspaceEmbedFileCache: Sendable {
+    private struct Entry: Sendable {
+        let metadata: WorkspaceFileMetadata
+        let text: String
+    }
+    private var entries: [URL: Entry] = [:]
+    private(set) var readCount = 0
+    private let readMetadata: WorkspaceFileMetadata.Reader
+
+    init(readMetadata: @escaping WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read) {
+        self.readMetadata = readMetadata
+    }
+
+    mutating func load(_ url: URL, openBuffers: [URL: Data]) -> String? {
+        if let data = openBuffers[url] {
+            guard data.count <= WorkspaceDocumentEmbed.maximumBytes else { return nil }
+            return try? MarkdownDocument.decode(data)
+        }
+        guard let metadata = try? readMetadata(url),
+              let size = metadata.size, size <= WorkspaceDocumentEmbed.maximumBytes else {
+            entries.removeValue(forKey: url)
+            return nil
+        }
+        if let entry = entries[url], entry.metadata.matchesContent(of: metadata) {
+            return entry.text
+        }
+        guard let data = try? Data(contentsOf: url),
+              let text = try? MarkdownDocument.decode(data) else { return nil }
+        readCount += 1
+        entries[url] = Entry(metadata: metadata, text: text)
+        return text
+    }
+}
+
+/// Discover nested dependencies on the worker, then request only their open
+/// buffers on the main actor. Never encode unrelated open documents.
+@MainActor
+enum WorkspaceEmbedLoader {
+    struct Result: Sendable {
+        let expansion: WorkspaceEmbedExpansion
+        let dependencies: Set<URL>
+        let cache: WorkspaceEmbedFileCache
+        let index: WorkspaceDocumentIndex
+        let target: URL?
+        let analysis: MarkdownAnalysis?
+    }
+
+    static func load(_ reference: WorkspaceEmbedReference, from documentURL: URL,
+                     documents: [URL], index suppliedIndex: WorkspaceDocumentIndex? = nil,
+                     dependencies: Set<URL> = [], cache initialCache: WorkspaceEmbedFileCache = .init(),
+                     previous: WorkspaceEmbedExpansion? = nil, previousTarget: URL? = nil,
+                     loadOpenBuffers: ((Set<URL>) throws -> [URL: Data])?) async throws -> Result {
+        try Task.checkCancellation()
+        let index: WorkspaceDocumentIndex
+        if let suppliedIndex { index = suppliedIndex }
+        else { index = try await DocumentWork.perform { WorkspaceDocumentIndex(documents: documents) } }
+        var available = dependencies
+        var buffers = available.isEmpty ? [:] : (try? loadOpenBuffers?(available)) ?? [:]
+        var cache = initialCache
+        while true {
+            try Task.checkCancellation()
+            let known = available, snapshots = buffers, previousCache = cache
+            let result = try await DocumentWork.perform {
+                var cache = previousCache
+                var requested: Set<URL> = []
+                let target = WorkspaceWikiLinks.resolve(reference.target, from: documentURL, index: index)
+                let expansion = WorkspaceDocumentEmbed.expand(reference, from: documentURL, index: index) { url in
+                    requested.insert(url)
+                    guard known.contains(url), !Task.isCancelled else { return nil }
+                    return cache.load(url, openBuffers: snapshots)
+                }
+                let complete = requested.isSubset(of: known)
+                let analysis = complete && (previous?.text != expansion.text || previousTarget != target)
+                    ? MarkdownAnalysis(expansion.text) : nil
+                return Result(expansion: expansion, dependencies: requested, cache: cache,
+                    index: index, target: target, analysis: analysis)
+            }
+            let missing = result.dependencies.subtracting(available)
+            guard !missing.isEmpty else { return result }
+            try Task.checkCancellation()
+            buffers.merge((try? loadOpenBuffers?(missing)) ?? [:]) { _, new in new }
+            available.formUnion(missing)
+            cache = result.cache
+        }
     }
 }

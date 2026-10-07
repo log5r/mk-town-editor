@@ -67,6 +67,81 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     weak var textView: NSTextView?
+    var sharedSnapshot: DocumentSnapshot? {
+        didSet {
+            if oldValue?.source != sharedSnapshot?.source || oldValue?.dialect != sharedSnapshot?.dialect {
+                scheduleAnalysisAvailabilityChange()
+            }
+        }
+    }
+    var usesSharedAnalysis = false {
+        didSet { if oldValue != usesSharedAnalysis { scheduleAnalysisAvailabilityChange() } }
+    }
+    var markdownDialect: MarkdownDialect = .extended {
+        didSet { if oldValue != markdownDialect { scheduleAnalysisAvailabilityChange() } }
+    }
+    private var analysisAvailabilityTask: Task<Void, Never>?
+
+    private func scheduleAnalysisAvailabilityChange() {
+        guard analysisAvailabilityTask == nil else { return }
+        // Coordinators assign analysis during SwiftUI updates. Notify palette
+        // and command observers after that update, while keeping the model current.
+        analysisAvailabilityTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.analysisAvailabilityTask = nil
+            self.objectWillChange.send()
+        }
+    }
+    var matchingSnapshot: DocumentSnapshot? {
+        guard let textView, let sharedSnapshot,
+              sharedSnapshot.matches(source: textView.editorSource, dialect: markdownDialect) else { return nil }
+        return sharedSnapshot
+    }
+    private var structuralAnalysisAvailable: Bool { !usesSharedAnalysis || matchingSnapshot != nil }
+    private var availabilitySource: String?
+    private var availabilitySelections: [NSRange]?
+    private var availabilityDialect: MarkdownDialect?
+    private var availabilityIndentWidths: [Int] = []
+    private var tableAvailability: [MarkdownTableOperation: Bool] = [:]
+    private var gridAvailability: Bool?
+    private var alignmentComputed = false
+    private var cachedAlignment: MarkdownTable.Alignment?
+    private var commandAvailability: [EditorCommand: Bool] = [:]
+
+    private func refreshAvailabilityCache() {
+        let source = textView?.editorSource
+        let selections = textView?.selectedRanges.map(\.rangeValue)
+        let widths = [listIndentWidth, codeIndentWidth]
+        if source != availabilitySource || selections != availabilitySelections ||
+            availabilityDialect != markdownDialect || availabilityIndentWidths != widths {
+            availabilitySource = source; availabilitySelections = selections; availabilityDialect = markdownDialect
+            availabilityIndentWidths = widths
+            tableAvailability.removeAll(); commandAvailability.removeAll()
+            gridAvailability = nil; alignmentComputed = false; cachedAlignment = nil
+        }
+    }
+
+    func canExecuteStructuralCommand(_ command: EditorCommand) -> Bool {
+        guard canExecuteCommand, structuralAnalysisAvailable, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = commandAvailability[command] { return value }
+        let source = textView.editorSource
+        let selection = textView.selectedRange()
+        let analysis = matchingSnapshot?.analysis
+        let result: Bool
+        switch command {
+        case .indentList, .outdentList:
+            result = MarkdownIndentation.edit(in: source, selection: selection,
+                direction: command == .indentList ? .indent : .outdent,
+                listIndentWidth: listIndentWidth, codeIndentWidth: codeIndentWidth, analysis: analysis) != nil
+        case .convertLinkForm:
+            result = MarkdownReferenceConversion.edit(in: source, selection: selection, analysis: analysis) != nil
+        default: result = false
+        }
+        commandAvailability[command] = result
+        return result
+    }
+
     private var transitionSelections: [NSRange]?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
@@ -86,12 +161,19 @@ final class MarkdownEditorModel: ObservableObject {
         var finalCaret: Int
     }
     private var snippetSession: SnippetSession?
+    private var automaticClosers = MarkdownAutomaticClosers()
+
+    func sourceStorageDidChange(range: NSRange, delta: Int, undoing: Bool) {
+        if undoing { automaticClosers.clear() }
+        else { automaticClosers.edited(range: range, delta: delta) }
+    }
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        automaticClosers.clear()
         transitionSelections = nil
         hasActiveEditor = true
-        let length = (textView.string as NSString).length
+        let length = (textView.editorSource as NSString).length
         let restored = selectedRanges.map { range in
             let location = min(max(0, range.location), length)
             return NSRange(location: location, length: min(max(0, range.length), length - location))
@@ -187,11 +269,11 @@ final class MarkdownEditorModel: ObservableObject {
 
     func expandSelection() {
         guard let textView, !textView.hasMarkedText() else { return }
-        if selectionHistoryText != textView.string { selectionHistory.removeAll() }
+        if selectionHistoryText != textView.editorSource { selectionHistory.removeAll() }
         let current = textView.selectedRange()
-        guard let next = MarkdownSelectionExpansion.next(in: textView.string,
+        guard let next = MarkdownSelectionExpansion.next(in: textView.editorSource,
             selection: current) else { return }
-        selectionHistoryText = textView.string
+        selectionHistoryText = textView.editorSource
         selectionHistory.append(current)
         expectedSelection = next
         selectAndReveal(next)
@@ -199,7 +281,7 @@ final class MarkdownEditorModel: ObservableObject {
 
     func shrinkSelection() {
         guard let textView, !textView.hasMarkedText(),
-              selectionHistoryText == textView.string,
+              selectionHistoryText == textView.editorSource,
               let previous = selectionHistory.popLast() else { return }
         expectedSelection = previous
         selectAndReveal(previous)
@@ -225,7 +307,7 @@ final class MarkdownEditorModel: ObservableObject {
               textView.selectedRange().length == 0 else { return false }
         let selection = textView.selectedRange()
         for snippet in snippets.sorted(by: { $0.trigger.count > $1.trigger.count }) where !snippet.trigger.isEmpty {
-            guard let plan = MarkdownSnippetPlan.make(snippet, in: textView.string,
+            guard let plan = MarkdownSnippetPlan.make(snippet, in: textView.editorSource,
                 selection: selection), plan.edit.range.length > 0 else { continue }
             return insertSnippet(snippet)
         }
@@ -236,11 +318,11 @@ final class MarkdownEditorModel: ObservableObject {
     func insertSnippet(_ snippet: EditorSnippet) -> Bool {
         guard let textView, let storage = textView.textStorage,
               canExecuteCommand,
-              let plan = MarkdownSnippetPlan.make(snippet, in: textView.string,
+              let plan = MarkdownSnippetPlan.make(snippet, in: textView.editorSource,
                   selection: textView.selectedRange()),
               perform(plan.edit, in: textView, storage: storage, focusEditor: true) else { return false }
         snippetSession = plan.placeholders.isEmpty ? nil : SnippetSession(
-            snapshot: textView.string, placeholders: plan.placeholders,
+            snapshot: textView.editorSource, placeholders: plan.placeholders,
             index: 0, finalCaret: plan.finalCaret)
         showingSnippetPicker = false
         return true
@@ -249,7 +331,7 @@ final class MarkdownEditorModel: ObservableObject {
     func advanceSnippetPlaceholder(backwards: Bool) -> Bool {
         guard let textView, textView.selectedRanges.count == 1, !textView.hasMarkedText(),
               var session = snippetSession else { return false }
-        guard updateSnippetSession(&session, to: textView.string) else {
+        guard updateSnippetSession(&session, to: textView.editorSource) else {
             snippetSession = nil
             return false
         }
@@ -313,7 +395,7 @@ final class MarkdownEditorModel: ObservableObject {
             return
         }
         pendingNavigationLocation = nil
-        let range = NSRange(location: min(location, (textView.string as NSString).length), length: 0)
+        let range = NSRange(location: min(location, (textView.editorSource as NSString).length), length: 0)
         (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
@@ -330,7 +412,7 @@ final class MarkdownEditorModel: ObservableObject {
             pendingNavigationLocation = location
             return
         }
-        let length = (textView.string as NSString).length
+        let length = (textView.editorSource as NSString).length
         let safeLocation = min(location, length)
         let range = NSRange(location: safeLocation,
                             length: min(max(0, sourceRange.length), length - safeLocation))
@@ -347,7 +429,7 @@ final class MarkdownEditorModel: ObservableObject {
               let layoutManager = textView.layoutManager,
               textView.textContainer != nil,
               layoutManager.numberOfGlyphs > 0 else { return }
-        let length = (textView.string as NSString).length
+        let length = (textView.editorSource as NSString).length
         let location = min(max(sourceLocation, 0), max(length - 1, 0))
         let glyph = min(layoutManager.glyphIndexForCharacter(at: location),
                         layoutManager.numberOfGlyphs - 1)
@@ -370,13 +452,27 @@ final class MarkdownEditorModel: ObservableObject {
 
     var canAddNextOccurrence: Bool {
         guard let textView, !textView.hasMarkedText() else { return false }
-        return MarkdownSelectionOccurrences.addingNext(in: textView.string,
+        refreshAvailabilityCache()
+        if let value = commandAvailability[.selectNextOccurrence] { return value }
+        let value = MarkdownSelectionOccurrences.addingNext(in: textView.editorSource,
             selections: textView.selectedRanges.map(\.rangeValue)) != nil
+        commandAvailability[.selectNextOccurrence] = value
+        return value
+    }
+
+    var canComment: Bool {
+        guard canExecuteCommand, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = commandAvailability[.comment] { return value }
+        let value = MarkdownFormatter.commentEdit(in: textView.editorSource,
+            selection: textView.selectedRange()) != nil
+        commandAvailability[.comment] = value
+        return value
     }
 
     func addNextOccurrence() {
         guard let textView, !textView.hasMarkedText(),
-              let selections = MarkdownSelectionOccurrences.addingNext(in: textView.string,
+              let selections = MarkdownSelectionOccurrences.addingNext(in: textView.editorSource,
                   selections: textView.selectedRanges.map(\.rangeValue)) else { return }
         textView.setSelectedRanges(selections.map(NSValue.init(range:)),
                                    affinity: .upstream, stillSelecting: false)
@@ -389,12 +485,12 @@ final class MarkdownEditorModel: ObservableObject {
               textView.isEditable, !textView.hasMarkedText() else { return }
         let ranges = textView.selectedRanges.map(\.rangeValue)
         if ranges.count > 1 {
-            guard let plan = MarkdownMultiSelectionPlan.make(style: style, source: textView.string,
+            guard let plan = MarkdownMultiSelectionPlan.make(style: style, source: textView.editorSource,
                                                              selections: ranges) else { return }
             perform(plan, in: textView, storage: storage)
             return
         }
-        let edit = MarkdownFormatter.apply(style, to: textView.string, selection: textView.selectedRange())
+        let edit = MarkdownFormatter.apply(style, to: textView.editorSource, selection: textView.selectedRange())
         perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
@@ -416,7 +512,7 @@ final class MarkdownEditorModel: ObservableObject {
     func toggleTaskCompletion() {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownFormatter.toggleTasks(in: textView.string,
+              let edit = MarkdownFormatter.toggleTasks(in: textView.editorSource,
                                                        selection: textView.selectedRange()) else { return }
         perform(edit, in: textView, storage: storage, focusEditor: true)
     }
@@ -425,21 +521,23 @@ final class MarkdownEditorModel: ObservableObject {
     func continueListOrQuote() -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownLineContinuation.edit(in: textView.string,
-                                                       selection: textView.selectedRange()) else { return false }
+              let edit = MarkdownLineContinuation.edit(in: textView.editorSource,
+                                                       selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis,
+                                                       allowsAnalysis: !usesSharedAnalysis) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
     }
 
     @discardableResult
     func changeIndentation(_ direction: MarkdownIndentation.Direction) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownIndentation.edit(in: textView.string,
+              let edit = MarkdownIndentation.edit(in: textView.editorSource,
                                                   selection: textView.selectedRange(),
                                                   direction: direction,
                                                   listIndentWidth: listIndentWidth,
-                                                  codeIndentWidth: codeIndentWidth) else { return false }
+                                                  codeIndentWidth: codeIndentWidth, analysis: matchingSnapshot?.analysis) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
     }
@@ -447,31 +545,62 @@ final class MarkdownEditorModel: ObservableObject {
     func completeSymbol(_ typed: String, replacementRange: NSRange) -> Bool {
         guard replacementRange.location == NSNotFound,
               let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownSymbolCompletion.edit(in: textView.string,
-                                                       selection: textView.selectedRange(),
-                                                       typed: typed) else { return false }
-        perform(edit, in: textView, storage: storage, focusEditor: true)
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1 else { return false }
+        let source = textView.editorSource
+        let selection = textView.selectedRange()
+        // Backslashes are literal inside an already opened backtick code span.
+        // The completion helper still rejects escaped new opening backticks.
+        guard typed == "`" || !MarkdownSymbolCompletion.isEscaped(source as NSString, at: selection.location)
+        else { return false }
+        var edit: MarkdownEdit?
+        var openingStart: Int?
+        if selection.length == 0,
+           let closer = automaticClosers.closer(at: selection.location, typed: typed, source: source) {
+            switch automaticClosers.match(closer, at: selection.location, source: source) {
+            case .extendsOpening:
+                openingStart = closer.openingStart
+                edit = MarkdownEdit(range: selection, replacement: typed + typed,
+                    selection: NSRange(location: selection.location + 1, length: 0))
+            case .exceedsOpening:
+                return false
+            case .closes:
+                automaticClosers.consume(at: selection.location)
+                let next = NSRange(location: selection.location + 1, length: 0)
+                textView.setSelectedRange(next)
+                selectionDidChange([next])
+                return true
+            }
+        } else {
+            let snapshot = matchingSnapshot
+            edit = MarkdownSymbolCompletion.edit(in: source, selection: selection, typed: typed,
+                analysis: snapshot?.analysis, inlineCodeRanges: snapshot?.inlineCodeRanges,
+                allowsAnalysis: !usesSharedAnalysis)
+        }
+        guard let edit else { return false }
+        if perform(edit, in: textView, storage: storage, focusEditor: true) {
+            automaticClosers.register(edit: edit, typed: typed, openingStart: openingStart)
+        }
         return true
     }
 
     func toggleTask(at sourceLocation: Int) {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownFormatter.toggleTasks(in: textView.string,
+              let edit = MarkdownFormatter.toggleTasks(in: textView.editorSource,
                                                        selection: NSRange(location: sourceLocation, length: 0)) else { return }
         perform(edit, in: textView, storage: storage, focusEditor: false)
     }
 
     func presentLinkEditor() {
         guard canExecuteCommand, let textView else { return }
-        linkDraft = MarkdownLinkSyntax.draft(in: textView.string, selection: textView.selectedRange())
+        linkDraft = MarkdownLinkSyntax.draft(in: textView.editorSource, selection: textView.selectedRange())
     }
 
     func convertLinkForm() {
+        guard structuralAnalysisAvailable else { return }
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
-              let edit = MarkdownReferenceConversion.edit(in: textView.string,
-                  selection: textView.selectedRange()) else { return }
+              let edit = MarkdownReferenceConversion.edit(in: textView.editorSource,
+                  selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis) else { return }
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
@@ -479,7 +608,7 @@ final class MarkdownEditorModel: ObservableObject {
                      snapshot: DocumentSnapshot?, dialect: MarkdownDialect) {
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
               let snapshot else { return }
-        let source = textView.string
+        let source = textView.editorSource
         guard snapshot.matches(source: source, dialect: dialect),
               let edit = MarkdownSectionMove.edit(in: source, entries: snapshot.outlineEntries,
                   headingLocation: headingLocation, direction: direction) else { return }
@@ -490,7 +619,7 @@ final class MarkdownEditorModel: ObservableObject {
                             snapshot: DocumentSnapshot?, dialect: MarkdownDialect) {
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
               let snapshot else { return }
-        let source = textView.string
+        let source = textView.editorSource
         guard snapshot.matches(source: source, dialect: dialect),
               let edit = MarkdownSectionLevel.edit(in: source, entries: snapshot.outlineEntries,
                   headingLocation: headingLocation, by: delta) else { return }
@@ -500,7 +629,7 @@ final class MarkdownEditorModel: ObservableObject {
     func commitLink(label: String, destination: String, title: String) -> Bool {
         guard let draft = linkDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownLinkSyntax.edit(in: textView.string, draft: draft,
+              let edit = MarkdownLinkSyntax.edit(in: textView.editorSource, draft: draft,
                                                  label: label, destination: destination, title: title),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         linkDraft = nil
@@ -510,7 +639,7 @@ final class MarkdownEditorModel: ObservableObject {
     func commitReferenceLink(label: String, referenceID: String) -> Bool {
         guard let draft = linkDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownLinkSyntax.referenceEdit(in: textView.string, draft: draft,
+              let edit = MarkdownLinkSyntax.referenceEdit(in: textView.editorSource, draft: draft,
                                                           label: label, referenceID: referenceID),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         linkDraft = nil
@@ -521,7 +650,7 @@ final class MarkdownEditorModel: ObservableObject {
     func pasteURLAsLink(_ pastedText: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownURLPaste.edit(in: textView.string,
+              let edit = MarkdownURLPaste.edit(in: textView.editorSource,
                                                selection: textView.selectedRange(),
                                                pastedText: pastedText) else { return false }
         return perform(edit, in: textView, storage: storage, focusEditor: true)
@@ -529,19 +658,19 @@ final class MarkdownEditorModel: ObservableObject {
 
     func presentImageEditor() {
         guard canExecuteCommand, let textView else { return }
-        imageDraft = MarkdownLinkSyntax.imageDraft(in: textView.string, selection: textView.selectedRange())
+        imageDraft = MarkdownLinkSyntax.imageDraft(in: textView.editorSource, selection: textView.selectedRange())
     }
 
     func presentTableEditor() {
         guard canExecuteCommand, let textView else { return }
-        tableDraft = MarkdownTableInsertion.draft(in: textView.string,
+        tableDraft = MarkdownTableInsertion.draft(in: textView.editorSource,
                                                   selection: textView.selectedRange())
     }
 
     func commitTable(rows: Int, columns: Int) -> Bool {
         guard let draft = tableDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownTableInsertion.edit(in: textView.string, draft: draft,
+              let edit = MarkdownTableInsertion.edit(in: textView.editorSource, draft: draft,
                                                      rows: rows, columns: columns),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
         tableDraft = nil
@@ -549,28 +678,34 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     var canPresentTableGrid: Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard canExecuteCommand, let textView else { return false }
-        return MarkdownTableEditing.gridDraft(in: textView.string,
-                                               selection: textView.selectedRange()) != nil
+        refreshAvailabilityCache()
+        if let gridAvailability { return gridAvailability }
+        let value = MarkdownTableEditing.gridDraft(in: textView.editorSource,
+                                               selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis) != nil
+        gridAvailability = value
+        return value
     }
 
     func presentTableGrid() {
+        guard structuralAnalysisAvailable else { return }
         guard canExecuteCommand, let textView else { return }
-        tableGridDraft = MarkdownTableEditing.gridDraft(in: textView.string,
-                                                        selection: textView.selectedRange())
+        tableGridDraft = MarkdownTableEditing.gridDraft(in: textView.editorSource,
+                                                        selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis)
     }
 
     func commitTableGrid(header: [String], rows: [[String]],
                          alignments: [MarkdownTable.Alignment]) -> Bool {
         if let draft = tableGridDraft, let textView,
-           textView.string == draft.originalText,
+           textView.editorSource == draft.originalText,
            header == draft.header, rows == draft.rows, alignments == draft.alignments {
             tableGridDraft = nil
             return true
         }
         guard let draft = tableGridDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownTableEditing.gridEdit(in: textView.string, draft: draft,
+              let edit = MarkdownTableEditing.gridEdit(in: textView.editorSource, draft: draft,
                                                        header: header, rows: rows,
                                                        alignments: alignments),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
@@ -579,34 +714,44 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func canEditTable(_ operation: MarkdownTableOperation) -> Bool {
-        guard canExecuteCommand, let textView else { return false }
-        return MarkdownTableEditing.edit(in: textView.string,
-                                         selection: textView.selectedRange(),
-                                         operation: operation) != nil
+        guard canExecuteCommand, structuralAnalysisAvailable, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = tableAvailability[operation] { return value }
+        let value = MarkdownTableEditing.edit(in: textView.editorSource,
+            selection: textView.selectedRange(), operation: operation, analysis: matchingSnapshot?.analysis) != nil
+        tableAvailability[operation] = value
+        return value
     }
 
     var selectedTableAlignment: MarkdownTable.Alignment? {
+        guard structuralAnalysisAvailable else { return nil }
         guard let textView else { return nil }
-        return MarkdownTableEditing.alignment(in: textView.string,
-                                              selection: textView.selectedRange())
+        refreshAvailabilityCache()
+        if alignmentComputed { return cachedAlignment }
+        cachedAlignment = MarkdownTableEditing.alignment(in: textView.editorSource,
+                                              selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis)
+        alignmentComputed = true
+        return cachedAlignment
     }
 
     @discardableResult
     func editTable(_ operation: MarkdownTableOperation) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownTableEditing.edit(in: textView.string,
+              let edit = MarkdownTableEditing.edit(in: textView.editorSource,
                                                     selection: textView.selectedRange(),
-                                                    operation: operation) else { return false }
+                                                    operation: operation, analysis: matchingSnapshot?.analysis) else { return false }
         return perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
     func moveTableCell(backwards: Bool) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let action = MarkdownTableEditing.tabAction(in: textView.string,
+              let action = MarkdownTableEditing.tabAction(in: textView.editorSource,
                   selection: textView.selectedRange(), backwards: backwards,
-                  addsRowAtEnd: tableAddsRowOnTab) else { return false }
+                  addsRowAtEnd: tableAddsRowOnTab, analysis: matchingSnapshot?.analysis) else { return false }
         switch action {
         case let .select(range):
             textView.setSelectedRange(range)
@@ -622,7 +767,7 @@ final class MarkdownEditorModel: ObservableObject {
     func convertClipboardTable() {
         guard canExecuteCommand, let textView,
               let clipboard = tablePasteboard.string(forType: .string) else { return }
-        let original = textView.string
+        let original = textView.editorSource
         let selection = textView.selectedRange()
         guard let conversion = MarkdownTableInsertion.conversion(in: original,
             selection: selection, delimitedText: clipboard) else {
@@ -636,7 +781,7 @@ final class MarkdownEditorModel: ObservableObject {
         }
         let applyConversion = { [weak self, weak textView] in
             guard let self, let textView, let storage = textView.textStorage,
-                  textView.string == original, textView.selectedRange() == selection,
+                  textView.editorSource == original, textView.selectedRange() == selection,
                   textView.isEditable, !textView.hasMarkedText() else { return }
             self.perform(conversion.edit, in: textView, storage: storage, focusEditor: true)
         }
@@ -658,7 +803,7 @@ final class MarkdownEditorModel: ObservableObject {
                      width: Int? = nil) -> Bool {
         guard let draft = imageDraft, let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownLinkSyntax.imageEdit(in: textView.string, draft: draft,
+              let edit = MarkdownLinkSyntax.imageEdit(in: textView.editorSource, draft: draft,
                                                       alt: alt, destination: destination,
                                                       title: title, width: width),
               perform(edit, in: textView, storage: storage, focusEditor: true) else { return false }
@@ -669,21 +814,21 @@ final class MarkdownEditorModel: ObservableObject {
     func imageDropDraft(at sourceLocation: Int) -> MarkdownImageDraft? {
         guard canExecuteCommand, let textView,
               sourceLocation >= 0,
-              sourceLocation <= (textView.string as NSString).length else { return nil }
-        return MarkdownLinkSyntax.imageDraft(in: textView.string,
+              sourceLocation <= (textView.editorSource as NSString).length else { return nil }
+        return MarkdownLinkSyntax.imageDraft(in: textView.editorSource,
                                              selection: NSRange(location: sourceLocation, length: 0))
     }
 
     func imagePasteDraft() -> MarkdownImageDraft? {
         guard canExecuteCommand, let textView else { return nil }
-        return MarkdownLinkSyntax.imageDraft(in: textView.string,
+        return MarkdownLinkSyntax.imageDraft(in: textView.editorSource,
                                              selection: textView.selectedRange())
     }
 
     func commitDroppedImage(_ draft: MarkdownImageDraft, alt: String, destination: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              let edit = MarkdownLinkSyntax.imageEdit(in: textView.string, draft: draft,
+              let edit = MarkdownLinkSyntax.imageEdit(in: textView.editorSource, draft: draft,
                                                       alt: alt, destination: destination, title: "") else {
             return false
         }
@@ -739,7 +884,7 @@ final class MarkdownEditorModel: ObservableObject {
     func applyRegexEdit(_ edit: MarkdownEdit, expectedSource: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              textView.string == expectedSource,
+              textView.editorSource == expectedSource,
               edit.range.location >= 0,
               edit.range.location <= (expectedSource as NSString).length,
               edit.range.length >= 0,
@@ -752,7 +897,7 @@ final class MarkdownEditorModel: ObservableObject {
     func applyCollaborativeText(_ next: String, expectedSource: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              textView.string == expectedSource else { return false }
+              textView.editorSource == expectedSource else { return false }
         guard let change = CollaborativeTextReplacement.between(expectedSource, next) else { return true }
         let selections = textView.selectedRanges.map(\.rangeValue).map(change.mapped)
         let edit = MarkdownEdit(range: change.range, replacement: change.replacement,
@@ -766,9 +911,9 @@ final class MarkdownEditorModel: ObservableObject {
     @discardableResult
     func insertFootnote() -> Bool {
         guard let textView,
-              let edit = MarkdownFootnoteInsertion.plan(in: textView.string,
+              let edit = MarkdownFootnoteInsertion.plan(in: textView.editorSource,
                                                         selection: textView.selectedRange()) else { return false }
-        return applyRegexEdit(edit, expectedSource: textView.string)
+        return applyRegexEdit(edit, expectedSource: textView.editorSource)
     }
 
     private func performFinderAction(_ action: NSTextFinder.Action) {

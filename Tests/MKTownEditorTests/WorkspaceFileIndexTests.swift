@@ -4,6 +4,132 @@ import XCTest
 
 @MainActor
 final class WorkspaceFileIndexTests: XCTestCase {
+    func testMonitorCreationAndStartupFailuresFallBackToPollingAndStopCleanly() async throws {
+        for creationFails in [true, false] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let document = root.appendingPathComponent("external.md")
+            var scannedNames: [String] = []
+            var callbacks = 0
+            let monitor = WorkspaceDirectoryMonitor(root: root, fallbackInterval: 0.02,
+                createStream: { root, context in
+                    creationFails ? nil : WorkspaceDirectoryMonitor.createStream(root, &context)
+                }, startStream: { _ in false }, changed: {
+                    callbacks += 1
+                    scannedNames = WorkspaceFileIndex.scan(root: root).nodes.map(\.name)
+                })
+            defer { monitor.stop() }
+            try "external edit".write(to: document, atomically: true, encoding: .utf8)
+            for _ in 0..<200 where !scannedNames.contains("external.md") {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            XCTAssertEqual(scannedNames, ["external.md"], "fallback must detect external additions")
+            try FileManager.default.removeItem(at: document)
+            for _ in 0..<200 where !scannedNames.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertTrue(scannedNames.isEmpty, "fallback must detect external deletions")
+            monitor.stop()
+            // Allow an already queued callback to drain before checking timer teardown.
+            try await Task.sleep(for: .milliseconds(30))
+            let afterStop = callbacks
+            try await Task.sleep(for: .milliseconds(60))
+            XCTAssertEqual(callbacks, afterStop, "stopping must cancel the fallback timer")
+        }
+    }
+
+    func testSwitchingRootClearsPublishedTreeAndDocumentIndexImmediately() async throws {
+        let base = URL(fileURLWithPath: "/private/tmp/workspace-root-switch-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let first = base.appendingPathComponent("first"), second = base.appendingPathComponent("second")
+        for root in [first, second] {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            try "body".write(to: root.appendingPathComponent(root.lastPathComponent + ".md"),
+                             atomically: true, encoding: .utf8)
+        }
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        store.setRoot(first)
+        for _ in 0..<200 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.first?.name, "first.md")
+        XCTAssertEqual(store.documentIndex.canonical.count, 1)
+        store.setRoot(second)
+        // Inspect before the main actor yields to any background result.
+        XCTAssertTrue(store.nodes.isEmpty)
+        XCTAssertTrue(store.visibleNodes.isEmpty)
+        XCTAssertTrue(store.documentURLs.isEmpty)
+        XCTAssertTrue(store.documentIndex.canonical.isEmpty)
+        for _ in 0..<200 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.first?.name, "second.md")
+        XCTAssertEqual(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL },
+                       [second.resolvingSymlinksInPath().standardizedFileURL.appendingPathComponent("second.md")])
+        XCTAssertEqual(store.documentIndex.canonical,
+                       Set(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL }))
+    }
+
+    func testOpenBufferRevisionsAndSnapshotsAreScopedToRequestedDocuments() throws {
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        let root = URL(fileURLWithPath: "/private/tmp/buffer-scope-\(UUID().uuidString)")
+        let a = root.appendingPathComponent("a.md"), b = root.appendingPathComponent("b.md")
+        let conflict = root.appendingPathComponent("conflict.md")
+        let aID = UUID(), bID = UUID()
+        var aEncodes = 0, bEncodes = 0, conflictEncodes = 0
+        store.registerOpenBuffer(id: aID, url: a, encodedData: {
+            aEncodes += 1; return Data("A".utf8)
+        }, updateText: { _ in })
+        store.registerOpenBuffer(id: bID, url: b, encodedData: {
+            bEncodes += 1; return Data("B".utf8)
+        }, updateText: { _ in })
+        for text in ["first", "second"] {
+            store.registerOpenBuffer(id: UUID(), url: conflict, encodedData: {
+                conflictEncodes += 1; return Data(text.utf8)
+            }, updateText: { _ in })
+        }
+        let before = store.openBufferRevisions
+        store.openBufferDidChange(for: a)
+        XCTAssertEqual(store.openBufferRevisions[a], before[a]! + 1)
+        XCTAssertEqual(store.openBufferRevisions[b], before[b])
+        XCTAssertEqual(aEncodes + bEncodes + conflictEncodes, 0)
+        XCTAssertEqual(try store.openBufferSnapshots(under: root, including: [a]), [a: Data("A".utf8)])
+        XCTAssertEqual(aEncodes, 1)
+        XCTAssertEqual(bEncodes, 0)
+        XCTAssertEqual(conflictEncodes, 0)
+        XCTAssertThrowsError(try store.openBufferSnapshots(under: root, including: [conflict]))
+        let revision = store.openBufferRevisions[a]!
+        store.unregisterOpenBuffer(id: aID, url: a)
+        XCTAssertEqual(store.openBufferRevisions[a], revision + 1)
+        XCTAssertTrue(try store.openBufferSnapshots(including: [a]).isEmpty)
+        XCTAssertEqual(store.openBufferRevisions[b], before[b])
+    }
+
+    func testUnchangedRefreshDoesNotPublishAndNestedChangesAreObserved() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sub = root.appendingPathComponent("nested")
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        let store = WorkspaceStore(defaults: defaults)
+        store.setRoot(root)
+        for _ in 0..<200 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+        var changes = 0
+        let observation = store.objectWillChange.sink { changes += 1 }
+        store.refresh(force: true)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(changes, 0)
+        let previousRevision = store.fileSystemRevision
+        try "new".write(to: sub.appendingPathComponent("new.md"), atomically: true, encoding: .utf8)
+        for _ in 0..<300 where store.nodes.first?.children?.isEmpty != false {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.nodes.first?.children?.first?.name, "new.md")
+        for _ in 0..<100 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.documentIndex.canonical, Set(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL }))
+        XCTAssertGreaterThan(store.fileSystemRevision, previousRevision)
+        let reference = WorkspaceEmbedReference(target: "new", section: nil)
+        let expansion = WorkspaceDocumentEmbed.expand(reference, from: root.appendingPathComponent("host.md"), index: store.documentIndex) { _ in "embedded" }
+        XCTAssertEqual(expansion.text, "embedded")
+        withExtendedLifetime(observation) {}
+    }
+
     func testScanBuildsTreeAndSkipsHiddenAndSymbolicLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -22,6 +148,17 @@ final class WorkspaceFileIndexTests: XCTestCase {
         XCTAssertEqual(result.nodes[0].children?.map(\.name), ["日本語.md"])
         XCTAssertTrue(result.nodes[0].children?[0].isEditableDocument == true)
         XCTAssertFalse(result.nodes[1].isEditableDocument)
+    }
+
+    func testScanContinuesPastFormerTenThousandEntryLimit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for index in 0..<10_001 { try Data().write(to: root.appendingPathComponent("\(index).png")) }
+        let result = WorkspaceFileIndex.scan(root: root)
+        XCTAssertFalse(result.isTruncated)
+        XCTAssertEqual(result.nodes.count, 10_001)
+        XCTAssertTrue(WorkspaceFileIndex.scan(root: root, maximumEntries: 2).isTruncated)
     }
 
     func testRescanDetectsExternalFileChanges() throws {

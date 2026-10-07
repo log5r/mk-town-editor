@@ -56,7 +56,6 @@ struct ExternalDiagramView: View {
         .onChange(of: source) { _, _ in isPaused = false }
         .task(id: taskKey) {
             guard !isPaused else { return }
-            image = nil
             error = nil
             isRendering = true
             try? await Task.sleep(for: .milliseconds(250))

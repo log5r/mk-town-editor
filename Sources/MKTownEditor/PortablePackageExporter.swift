@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 import SwiftUI
 
@@ -46,10 +47,25 @@ struct PortablePackagePlan: Sendable {
     let assets: [PortablePackageAsset]
 }
 
-@MainActor
 enum PortablePackagePlanner {
+    @MainActor
     static func plan(source: String, documentURL: URL,
                      dialect: MarkdownDialect = .extended) throws -> PortablePackagePlan {
+        try planPrepared(source: source, documentURL: documentURL, dialect: dialect,
+            renderedHTML: MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect))
+    }
+
+    @MainActor
+    static func planAsync(source: String, documentURL: URL,
+                          dialect: MarkdownDialect = .extended) async throws -> PortablePackagePlan {
+        let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: documentURL, dialect: dialect)
+        return try await DocumentWork.perform {
+            try planPrepared(source: source, documentURL: documentURL, dialect: dialect, renderedHTML: html)
+        }
+    }
+
+    private static func planPrepared(source: String, documentURL: URL,
+                                     dialect: MarkdownDialect, renderedHTML: String) throws -> PortablePackagePlan {
         let context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         guard context.directoryURL != nil else { throw PortablePackageError.unsavedDocument }
         let analysis = MarkdownAnalysis(source, dialect: dialect)
@@ -77,6 +93,7 @@ enum PortablePackagePlanner {
         }
 
         func packagedPath(for destination: String, image: Bool) throws -> String? {
+            try Task.checkCancellation()
             let (path, suffix) = localPathAndSuffix(destination)
             guard let url = context.resolveLocalResource(path) else {
                 if image { throw PortablePackageError.externalImage(destination) }
@@ -151,7 +168,6 @@ enum PortablePackagePlanner {
         for edit in changes.values.sorted(by: { $0.range.location > $1.range.location }) {
             rewritten.replaceCharacters(in: edit.range, with: edit.replacement)
         }
-        let renderedHTML = MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect)
         let html = rewriteHTMLAttachmentLinks(renderedHTML, context: context,
                                               destinations: destinations)
         return PortablePackagePlan(markdown: rewritten as String, html: html, assets: assets)
@@ -183,7 +199,9 @@ enum PortablePackagePlanner {
 
 enum PortablePackageExporter {
     static func export(_ plan: PortablePackagePlan, to parent: URL, name: String,
-                       format: PortablePackageFormat, zip: Bool) throws -> URL {
+                       format: PortablePackageFormat, zip: Bool,
+                       archiveExecutable: URL = URL(fileURLWithPath: "/usr/bin/ditto"),
+                       copyAsset: @Sendable (URL, URL) throws -> Void = { try copyAsset(from: $0, to: $1) }) throws -> URL {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, cleanName != ".", cleanName != "..",
               !cleanName.contains("/"), !cleanName.contains(":") else {
@@ -211,7 +229,7 @@ enum PortablePackageExporter {
             totalSize += values.fileSize ?? 0
             guard totalSize <= 500_000_000 else { throw PortablePackageError.resourceTooLarge }
             let target = staging.appendingPathComponent(asset.relativePath)
-            try manager.copyItem(at: asset.sourceURL, to: target)
+            try copyAsset(asset.sourceURL, target)
         }
         let document = format == .markdown ? plan.markdown : plan.html
         try Data(document.utf8).write(to: staging.appendingPathComponent(format.fileName),
@@ -220,19 +238,7 @@ enum PortablePackageExporter {
         if zip {
             let temporaryZip = parent.appendingPathComponent(".mktown-package-\(UUID().uuidString).zip")
             defer { try? manager.removeItem(at: temporaryZip) }
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", staging.path, temporaryZip.path]
-            let errors = Pipe()
-            process.standardError = errors
-            process.standardOutput = FileHandle.nullDevice
-            try process.run()
-            let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(),
-                                 as: UTF8.self)
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                throw PortablePackageError.archiveFailed(message)
-            }
+            try createArchive(from: staging, to: temporaryZip, executable: archiveExecutable)
             if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
             try manager.moveItem(at: temporaryZip, to: destination)
         } else {
@@ -240,6 +246,96 @@ enum PortablePackageExporter {
         }
         return destination
     }
+
+    static let assetCopyChunkSize = 256 * 1_024
+
+    /// Use bounded native copy blocks and check cancellation after each write,
+    /// preserving macOS metadata (including resource forks) as well as file bytes.
+    static func copyAsset(from source: URL, to target: URL,
+                          didCopyChunk: @escaping (Int) -> Void = { _ in }) throws {
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        let reader = try FileHandle(forReadingFrom: source)
+        defer { try? reader.close() }
+        let descriptor = open(target.path, O_WRONLY | O_CREAT | O_EXCL, 0o666)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        let writer = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        var completed = false
+        defer {
+            try? writer.close()
+            if !completed { try? FileManager.default.removeItem(at: target) }
+        }
+        guard let state = copyfile_state_alloc() else { throw POSIXError(.ENOMEM) }
+        defer { copyfile_state_free(state) }
+        let progress = AssetCopyProgress(didCopyChunk: didCopyChunk)
+        let callback: copyfile_callback_t = { what, stage, state, _, _, context in
+            if Task<Never, Never>.isCancelled { return COPYFILE_QUIT }
+            if what == COPYFILE_COPY_DATA, stage == COPYFILE_PROGRESS, let state, let context {
+                var copied: off_t = 0
+                if copyfile_state_get(state, UInt32(COPYFILE_STATE_COPIED), &copied) == 0 {
+                    Unmanaged<AssetCopyProgress>.fromOpaque(context).takeUnretainedValue().didCopyChunk(Int(copied))
+                }
+            }
+            return Task<Never, Never>.isCancelled ? COPYFILE_QUIT : COPYFILE_CONTINUE
+        }
+        var blockSize = UInt32(assetCopyChunkSize)
+        guard copyfile_state_set(state, UInt32(COPYFILE_STATE_BSIZE), &blockSize) == 0,
+              copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CTX), Unmanaged.passUnretained(progress).toOpaque()) == 0,
+              copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CB), unsafeBitCast(callback, to: UnsafeRawPointer.self)) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let result = withExtendedLifetime(progress) {
+            fcopyfile(reader.fileDescriptor, descriptor, state, copyfile_flags_t(COPYFILE_ALL))
+        }
+        let copyError = errno
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: copyError) ?? .EIO) }
+        try writer.close()
+        completed = true
+    }
+
+    private static func createArchive(from staging: URL, to output: URL, executable: URL) throws {
+        let errorLog = output.deletingLastPathComponent().appendingPathComponent(".mktown-archive-errors-\(UUID().uuidString)")
+        try Data().write(to: errorLog)
+        defer { try? FileManager.default.removeItem(at: errorLog) }
+        let errors = try FileHandle(forWritingTo: errorLog)
+        defer { try? errors.close() }
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["-c", "-k", staging.path, output.path]
+        // A pipe read would wait for compression to finish before cancellation
+        // could be checked. A file lets the worker monitor the child instead.
+        process.standardError = errors
+        process.standardOutput = FileHandle.nullDevice
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        try process.run()
+        while process.isRunning {
+            if Task<Never, Never>.isCancelled {
+                process.terminate()
+                let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+                while process.isRunning && ContinuousClock.now < deadline {
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+                if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
+                process.waitUntilExit()
+                throw PortablePackageError.cancelled
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        process.waitUntilExit()
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        guard process.terminationStatus == 0 else {
+            let reader = try FileHandle(forReadingFrom: errorLog)
+            defer { try? reader.close() }
+            let data = try reader.read(upToCount: 2_000) ?? Data()
+            throw PortablePackageError.archiveFailed(String(decoding: data, as: UTF8.self))
+        }
+    }
+}
+
+/// The native callback borrows this context only for the synchronous fcopyfile call.
+private final class AssetCopyProgress {
+    let didCopyChunk: (Int) -> Void
+    init(didCopyChunk: @escaping (Int) -> Void) { self.didCopyChunk = didCopyChunk }
 }
 
 struct PortablePackageSheet: View {
@@ -248,6 +344,7 @@ struct PortablePackageSheet: View {
     @State private var format: PortablePackageFormat = .markdown
     @State private var zip = false
     @State private var isWorking = false
+    @State private var operationTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var completedURL: URL?
 
@@ -272,7 +369,9 @@ struct PortablePackageSheet: View {
             if let completedURL { Text("保存しました: \(completedURL.path)").textSelection(.enabled) }
             HStack {
                 Spacer()
-                Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(isWorking ? "中止" : "閉じる") {
+                    if isWorking { operationTask?.cancel() } else { dismiss() }
+                }.keyboardShortcut(.cancelAction)
                 Button("保存先を選ぶ…") { chooseParent() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(isWorking || documentURL == nil)
@@ -281,6 +380,7 @@ struct PortablePackageSheet: View {
         .padding(20)
         .frame(width: 540)
         .interactiveDismissDisabled(isWorking)
+        .onDisappear { operationTask?.cancel() }
     }
 
     private func chooseParent() {
@@ -290,26 +390,27 @@ struct PortablePackageSheet: View {
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let parent = panel.url, let documentURL else { return }
-            do {
-                let plan = try PortablePackagePlanner.plan(source: source,
-                    documentURL: documentURL, dialect: dialect)
-                isWorking = true
-                errorMessage = nil
-                completedURL = nil
-                let selectedName = name
-                let selectedFormat = format
-                let selectedZip = zip
-                Task {
-                    do {
-                        let result = try await Task.detached(priority: .userInitiated) {
-                            try PortablePackageExporter.export(plan, to: parent, name: selectedName,
-                                format: selectedFormat, zip: selectedZip)
-                        }.value
-                        completedURL = result
-                    } catch { errorMessage = error.localizedDescription }
-                    isWorking = false
-                }
-            } catch { errorMessage = error.localizedDescription }
+            isWorking = true
+            errorMessage = nil
+            completedURL = nil
+            let selectedName = name
+            let selectedFormat = format
+            let selectedZip = zip
+            operationTask = Task {
+                do {
+                    let plan = try await PortablePackagePlanner.planAsync(source: source,
+                        documentURL: documentURL, dialect: dialect)
+                    let result = try await DocumentWork.commit {
+                        try PortablePackageExporter.export(plan, to: parent, name: selectedName,
+                            format: selectedFormat, zip: selectedZip)
+                    }
+                    completedURL = result
+                } catch is CancellationError {
+                } catch PortablePackageError.cancelled {
+                } catch { errorMessage = error.localizedDescription }
+                isWorking = false
+                operationTask = nil
+            }
         }
     }
 }

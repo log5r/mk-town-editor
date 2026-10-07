@@ -201,7 +201,7 @@ enum MarkdownTableInsertion {
     }
 }
 
-enum MarkdownTableOperation: Equatable {
+enum MarkdownTableOperation: Hashable {
     case insertRow
     case deleteRow
     case insertColumn
@@ -222,10 +222,10 @@ enum MarkdownTableTabAction: Equatable {
 }
 
 enum MarkdownTableEditing {
-    static func gridDraft(in text: String, selection: NSRange) -> MarkdownTableGridDraft? {
+    static func gridDraft(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTableGridDraft? {
         let source = text as NSString
         guard selection.location >= 0, selection.location < source.length,
-              let block = MarkdownAnalysis(text).blocks.first(where: {
+              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
                   $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
               }), let table = block.table else { return nil }
         let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
@@ -290,10 +290,10 @@ enum MarkdownTableEditing {
     }
 
     static func tabAction(in text: String, selection: NSRange,
-                          backwards: Bool, addsRowAtEnd: Bool) -> MarkdownTableTabAction? {
+                          backwards: Bool, addsRowAtEnd: Bool, analysis: MarkdownAnalysis? = nil) -> MarkdownTableTabAction? {
         let source = text as NSString
         guard selection.location >= 0, selection.location < source.length,
-              let block = MarkdownAnalysis(text).blocks.first(where: {
+              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
                   $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
               }), let table = block.table else { return nil }
         let header = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
@@ -381,10 +381,10 @@ enum MarkdownTableEditing {
                                                length: (values[column] as NSString).length))
     }
 
-    static func alignment(in text: String, selection: NSRange) -> MarkdownTable.Alignment? {
+    static func alignment(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTable.Alignment? {
         let source = text as NSString
         guard selection.location >= 0, selection.location < source.length,
-              let block = MarkdownAnalysis(text).blocks.first(where: {
+              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
                   $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
               }), let table = block.table else { return nil }
         let lineRange = source.lineRange(for: NSRange(location: selection.location, length: 0))
@@ -395,10 +395,10 @@ enum MarkdownTableEditing {
     }
 
     static func edit(in text: String, selection: NSRange,
-                     operation: MarkdownTableOperation) -> MarkdownEdit? {
+                     operation: MarkdownTableOperation, analysis: MarkdownAnalysis? = nil) -> MarkdownEdit? {
         let source = text as NSString
         guard selection.location >= 0, selection.location < source.length,
-              let block = MarkdownAnalysis(text).blocks.first(where: {
+              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
                   $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
               }), let table = block.table else { return nil }
         let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))

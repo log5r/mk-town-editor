@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import SwiftUI
 
-struct MarkdownHoverLink: Equatable {
+struct MarkdownHoverLink: Equatable, Sendable {
     let url: URL
     let sourceRange: NSRange
 }
@@ -12,8 +12,8 @@ enum MarkdownLinkHover {
         pattern: #"(!?)\[([^\]\n]+)\]\[([^\]\n]*)\]"#
     )
 
-    static func links(in source: String) -> [MarkdownHoverLink] {
-        let analysis = MarkdownAnalysis(source)
+    static func links(in source: String, analysis: MarkdownAnalysis? = nil) -> [MarkdownHoverLink] {
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
             MarkdownInlineSyntax.codeSpanRanges(in: source)
         func isExcluded(_ range: NSRange) -> Bool {

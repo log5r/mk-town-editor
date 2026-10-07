@@ -221,8 +221,7 @@ enum EditorCommand: Hashable {
     static func paletteMatches(_ query: String, in model: MarkdownEditorModel?,
                                shortcutLabel: (Self) -> String? = { $0.shortcutLabel }) -> [Self] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return palette.filter { command in
-            command.canExecute(in: model) &&
+        return palette.filter { $0.canExecute(in: model) }.filter { command in
                 (term.isEmpty || command.title.localizedStandardContains(term) ||
                     shortcutLabel(command)?.localizedStandardContains(term) == true)
         }
@@ -241,22 +240,10 @@ enum EditorCommand: Hashable {
         guard model?.canExecuteCommand == true else { return false }
         switch self {
         case .selectNextOccurrence: return model?.canAddNextOccurrence == true
-        case .indentList:
-            guard let view = model?.textView else { return false }
-            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
-                                            direction: .indent) != nil
-        case .outdentList:
-            guard let view = model?.textView else { return false }
-            return MarkdownIndentation.edit(in: view.string, selection: view.selectedRange(),
-                                            direction: .outdent) != nil
+        case .indentList, .outdentList, .convertLinkForm:
+            return model?.canExecuteStructuralCommand(self) == true
         case .comment:
-            guard let view = model?.textView else { return false }
-            return MarkdownFormatter.commentEdit(in: view.string,
-                selection: view.selectedRange()) != nil
-        case .convertLinkForm:
-            guard let view = model?.textView else { return false }
-            return MarkdownReferenceConversion.edit(in: view.string,
-                selection: view.selectedRange()) != nil
+            return model?.canComment == true
         case .snippet:
             return !(model?.snippets.isEmpty ?? true)
         default: return true

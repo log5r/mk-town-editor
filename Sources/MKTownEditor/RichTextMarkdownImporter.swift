@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum RichTextImportFormat {
+enum RichTextImportFormat: Sendable {
     case html
     case rtf
 
@@ -19,7 +19,7 @@ enum RichTextImportFormat {
     }
 }
 
-struct RichTextImportResult {
+struct RichTextImportResult: Sendable {
     let markdown: String
     let warnings: [String]
 }
@@ -38,9 +38,35 @@ enum RichTextImportError: LocalizedError {
     }
 }
 
-@MainActor
 enum RichTextMarkdownImporter {
+    @MainActor
     static func convert(_ data: Data, format: RichTextImportFormat) throws -> RichTextImportResult {
+        let prepared = try prepare(data, format: format)
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: format.documentType, .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        let attributed = try NSAttributedString(data: prepared.content, options: options, documentAttributes: nil)
+        return try finish(attributed, format: format, warnings: prepared.warnings)
+    }
+
+    @MainActor
+    static func convertAsync(_ data: Data, format: RichTextImportFormat) async throws -> RichTextImportResult {
+        let prepared = try await DocumentWork.perform { try prepare(data, format: format) }
+        let attributed: AttributedTransfer
+        if format == .html {
+            attributed = AttributedTransfer(try await DocumentWork.loadHTML(String(decoding: prepared.content, as: UTF8.self)))
+        } else {
+            attributed = try await DocumentWork.perform {
+                AttributedTransfer(try NSAttributedString(data: prepared.content,
+                    options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil))
+            }
+        }
+        return try await DocumentWork.perform {
+            try finish(attributed.value, format: format, warnings: prepared.warnings)
+        }
+    }
+
+    private static func prepare(_ data: Data, format: RichTextImportFormat) throws -> (content: Data, warnings: [String]) {
         guard data.count <= 10_000_000 else { throw RichTextImportError.documentTooLarge }
         var warnings: [String] = []
         var content = data
@@ -59,14 +85,12 @@ enum RichTextMarkdownImporter {
                 warnings.append(String(localized: "CSSによる配色・余白などは取り込みません。"))
             }
         }
-        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-            .documentType: format.documentType,
-            .characterEncoding: String.Encoding.utf8.rawValue
-        ]
-        guard let attributed = try? NSAttributedString(data: content, options: options,
-                                                        documentAttributes: nil) else {
-            throw RichTextImportError.invalidDocument
-        }
+        return (content, warnings)
+    }
+
+    private static func finish(_ attributed: NSAttributedString, format: RichTextImportFormat,
+                               warnings initialWarnings: [String]) throws -> RichTextImportResult {
+        var warnings = initialWarnings
         var hasAttachment = false
         var hasDecoration = false
         var hasRelativeLink = false
@@ -122,6 +146,7 @@ enum RichTextMarkdownImporter {
         var paragraphs: [String] = []
         var cursor = 0
         while cursor < source.length {
+            if Task<Never, Never>.isCancelled { break }
             var start = 0
             var end = 0
             var contentsEnd = 0
@@ -141,7 +166,7 @@ enum RichTextMarkdownImporter {
                 } else if plain.hasPrefix("•") {
                     prefix = "- "
                 } else if let font = firstFont(in: content),
-                          NSFontManager.shared.traits(of: font).contains(.boldFontMask),
+                          font.fontDescriptor.symbolicTraits.contains(.bold),
                           font.pointSize >= 22 {
                     prefix = font.pointSize >= 30 ? "# " : "## "
                 } else {
@@ -188,12 +213,12 @@ enum RichTextMarkdownImporter {
                 .replacingOccurrences(of: "[", with: "\\[")
                 .replacingOccurrences(of: "]", with: "\\]")
             if let font = attrs[.font] as? NSFont {
-                let traits = NSFontManager.shared.traits(of: font)
-                if traits.contains(.fixedPitchFontMask) {
+                let traits = font.fontDescriptor.symbolicTraits
+                if traits.contains(.monoSpace) {
                     text = "`\(text.replacingOccurrences(of: "`", with: "\\`"))`"
                 } else {
-                    if traits.contains(.boldFontMask) { text = "**\(text)**" }
-                    if traits.contains(.italicFontMask) { text = "*\(text)*" }
+                    if traits.contains(.bold) { text = "**\(text)**" }
+                    if traits.contains(.italic) { text = "*\(text)*" }
                 }
             }
             if let value = attrs[.link],
@@ -250,6 +275,7 @@ struct RichTextImportSheet: View {
     @State private var sourceName: String?
     @State private var errorMessage: String?
     @State private var isWorking = false
+    @State private var importTask: Task<Void, Never>?
     let onApply: (String, String) -> Bool
 
     var body: some View {
@@ -280,7 +306,9 @@ struct RichTextImportSheet: View {
             if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(isWorking ? "中止" : "閉じる") {
+                    if isWorking { importTask?.cancel() } else { dismiss() }
+                }.keyboardShortcut(.cancelAction)
                 Button("現在の書類へ適用") {
                     guard let result else { return }
                     if onApply(result.markdown, currentText) { dismiss() }
@@ -292,6 +320,8 @@ struct RichTextImportSheet: View {
         }
         .padding(20)
         .frame(width: 700)
+        .interactiveDismissDisabled(isWorking)
+        .onDisappear { importTask?.cancel() }
     }
 
     private func chooseFile() {
@@ -306,17 +336,21 @@ struct RichTextImportSheet: View {
             isWorking = true
             result = nil
             errorMessage = nil
-            Task {
+            importTask = Task {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
                 do {
-                    let data = try await Task.detached(priority: .userInitiated) {
+                    let data = try await DocumentWork.perform {
                         if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
                            size > 10_000_000 { throw RichTextImportError.documentTooLarge }
                         return try Data(contentsOf: url)
-                    }.value
-                    result = try RichTextMarkdownImporter.convert(data, format: format)
+                    }
+                    result = try await RichTextMarkdownImporter.convertAsync(data, format: format)
                     sourceName = url.lastPathComponent
+                } catch is CancellationError {
                 } catch { errorMessage = error.localizedDescription }
                 isWorking = false
+                importTask = nil
             }
         }
     }
