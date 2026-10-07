@@ -79,6 +79,39 @@ final class DocumentAnalysisStoreTests: XCTestCase {
                        MarkdownRenderer.render(source).string)
     }
 
+    func testLargeOutlineReusesBackgroundSnapshotActionsDuringRepeatedRequests() async throws {
+        let source = (0..<400).map { index in
+            "## Heading \(index)\n" + String(repeating: "本文🙂 content ", count: 60)
+        }.joined(separator: "\n\n")
+        let probe = AnalysisExecutionProbe()
+        let store = DocumentAnalysisStore { source in
+            await probe.record(isMainThread: isExecutingOnMainThread())
+            return DocumentSnapshot(source: source)
+        }
+        store.update(source: source)
+        for _ in 0..<1_000 where store.snapshot == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let snapshot = try XCTUnwrap(store.snapshot)
+        XCTAssertEqual(snapshot.outlineEntries.count, 400)
+        XCTAssertEqual(snapshot.sectionActions.count, 400)
+        // Selection/scroll-driven rebuilds read the same snapshot. Four lookups
+        // per row replace the old four full-document edits/analyses per row.
+        for _ in 0..<10 {
+            store.update(source: source)
+            for (index, entry) in snapshot.outlineEntries.enumerated() {
+                let actions = try XCTUnwrap(store.snapshot?.sectionActions[entry.id])
+                XCTAssertEqual(actions.canMoveUp, index > 0)
+                XCTAssertEqual(actions.canMoveDown, index < 399)
+                XCTAssertTrue(actions.canPromote)
+                XCTAssertTrue(actions.canDemote)
+            }
+        }
+        let result = await probe.result()
+        XCTAssertEqual(result.count, 1)
+        XCTAssertFalse(result.isMainThread)
+    }
+
     func testLateResultFromOldGenerationCannotReplaceNewerSnapshot() async throws {
         let store = DocumentAnalysisStore { source in
             if source == "old" {

@@ -7,6 +7,8 @@ struct DocumentSnapshot: Sendable {
     let dialect: MarkdownDialect
     let analysis: MarkdownAnalysis
     let statistics: DocumentStatistics
+    let outlineEntries: [MarkdownOutlineEntry]
+    let sectionActions: [Int: MarkdownSectionActions]
     let syntaxSpans: [MarkdownSyntaxSpan]
 
     init(source: String, dialect: MarkdownDialect = .extended) {
@@ -14,6 +16,8 @@ struct DocumentSnapshot: Sendable {
         self.source = source
         self.dialect = dialect
         analysis = parsed
+        outlineEntries = MarkdownOutline.entries(in: parsed)
+        sectionActions = MarkdownSectionActions.all(in: outlineEntries)
         statistics = DocumentStatistics(text: source)
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
     }

@@ -475,16 +475,24 @@ final class MarkdownEditorModel: ObservableObject {
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
-    func moveSection(at headingLocation: Int, direction: SectionMoveDirection) {
+    func moveSection(at headingLocation: Int, direction: SectionMoveDirection,
+                     snapshot: DocumentSnapshot?) {
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
-              let edit = MarkdownSectionMove.edit(in: textView.string,
+              let snapshot else { return }
+        let source = textView.string
+        guard snapshot.source == source,
+              let edit = MarkdownSectionMove.edit(in: source, entries: snapshot.outlineEntries,
                   headingLocation: headingLocation, direction: direction) else { return }
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
-    func changeSectionLevel(at headingLocation: Int, by delta: Int) {
+    func changeSectionLevel(at headingLocation: Int, by delta: Int,
+                            snapshot: DocumentSnapshot?) {
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
-              let edit = MarkdownSectionLevel.edit(in: textView.string,
+              let snapshot else { return }
+        let source = textView.string
+        guard snapshot.source == source,
+              let edit = MarkdownSectionLevel.edit(in: source, entries: snapshot.outlineEntries,
                   headingLocation: headingLocation, by: delta) else { return }
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
