@@ -2,7 +2,7 @@
 
 ## 実行構成
 
-`.github/workflows/ci.yml`はpush、Pull Request、手動実行を受け付ける。macOS 26 runnerでXcode 26.6を`DEVELOPER_DIR`に指定し、`bash Tools/ci.sh`を実行する。Xcodeプロジェクトにはテストターゲットがないため、既存のSwift Packageのテストターゲットを使う。
+`.github/workflows/ci.yml`はpush、Pull Request、手動実行を受け付ける。`xcode-27` runner（macOS 27）でXcode 27.0を`DEVELOPER_DIR`に指定し、`bash Tools/ci.sh`を実行する。Xcodeプロジェクトにはテストターゲットがないため、既存のSwift Packageのテストターゲットを使う。
 
 `Tools/ci.sh`はリポジトリのルートへ移動し、Pythonのスクリプトテスト、Swiftの全ユニットテスト、Swift PackageのReleaseビルドを順番に実行する。AppKitやWebKitを扱うテストがあるため、Linux runnerやテストの並列実行は使わない。署名や配布は行わない。
 
@@ -10,7 +10,9 @@
 
 ## ツールチェーンの選択
 
-初回のGitHub Actions実行では、Xcode 16.4のSwiftコンパイラが既存コードの型検査、MainActorの呼び出し、Mermaidの継続への結果送信でエラーを出した。また、MarkdownメニューのSwiftUIビルダーで`extra argument in call`が出た。ローカルのXcode 27では全811テストとReleaseビルドが成功したため、CIは新しいSDKとコンパイラを含む安定版Xcode 26.6に固定する。新しいrunner上でも全テストを省略せず実行する。
+既存コードはXcode 16.4と26.6でコンパイルエラーになった。16.4では型検査、MainActorの呼び出し、Mermaidの継続への結果送信でエラーが出た。26.6でもMarkdownメニューのSwiftUIビルダーで`extra argument in call`、ワークスペースビューで型検査の時間超過が出た。ローカルのXcode 27では全811テストとReleaseビルドが成功したため、CIもXcode 27.0に固定する。
+
+`xcode-27` runnerはGitHubで公開プレビュー扱いである。アプリのビルド環境に合わせて採用し、プレビューのrunnerであることをREADMEにも記載する。テストの省略やコンパイルエラーの無視は行わない。
 
 ## 失敗時の挙動
 
@@ -32,7 +34,9 @@ Swift 6.1の`--xunit-output`は、逐次実行のXCTest結果をXMLに出力し�
 ## 参照
 
 - [GitHub Actions workflow構文](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
-- [macOS 26 runnerのXcode一覧](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)
+- [Xcode 27 runnerのツール一覧](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)
 - [actions/checkout](https://github.com/actions/checkout)
 - [actions/upload-artifact](https://github.com/actions/upload-artifact)
 - [Swift 6.1のテスト実行とXML生成](https://github.com/swiftlang/swift-package-manager/blob/swift-6.1.2-RELEASE/Sources/Commands/SwiftTestCommand.swift)
+
+- [Xcode 27 runnerの公開プレビュー告知](https://github.com/actions/runner-images/issues/14404)

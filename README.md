@@ -165,7 +165,7 @@ MKTownEditor は、macOS の標準コンポーネントで構成した書類ベ�
 ## 動作環境
 
 - macOS 14 以降
-- Xcode 16 以降（Swift 6）
+- Xcode 27（Swift 6.4、CIで検証するビルド環境）
 
 ## 実行
 
@@ -212,7 +212,7 @@ $$
 swift test
 ```
 
-GitHub Actionsの[CI](.github/workflows/ci.yml)は、push・Pull Request・手動実行時にmacOS 26 / Xcode 26.6で全ユニットテストとReleaseビルドを実行します。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
+GitHub Actionsの[CI](.github/workflows/ci.yml)は、push・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で全ユニットテストとReleaseビルドを実行します。実行ログはActionsの`ci-results`から7日間ダウンロードできます。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。
 
 CIと同じチェックをローカルで実行するには、次のコマンドを使用します。Python 3が必要です。
 
