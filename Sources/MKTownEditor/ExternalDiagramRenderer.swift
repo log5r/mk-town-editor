@@ -125,14 +125,15 @@ enum ExternalDiagramRenderer {
     private static let cache = ExternalDiagramImageCache()
     static func render(_ source: String, kind: ExternalDiagramKind,
                        configuration: ExternalDiagramConfiguration,
-                       timeout: TimeInterval = 8) async throws -> Data {
+                       timeout: TimeInterval = 8,
+                       readMetadata: WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read) async throws -> Data {
         try Task.checkCancellation()
         let tool = URL(fileURLWithPath: configuration.toolPath(for: kind))
-        let metadata = try? WorkspaceFileMetadata(url: tool)
+        let metadata = try? readMetadata(tool)
         let digest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
         let generation = metadata?.generation?.map { String(format: "%02x", $0) }.joined() ?? ""
         let key = "\(kind.rawValue):\(tool.path):\(metadata?.modified?.timeIntervalSince1970 ?? 0):\(metadata?.size ?? 0):\(generation):\(digest)" as NSString
-        if let cached = cache.values.object(forKey: key) { return cached as Data }
+        if metadata?.identifiesContent == true, let cached = cache.values.object(forKey: key) { return cached as Data }
         let control = DiagramProcessControl()
         let result = try await withTaskCancellationHandler {
             try await Task.detached(priority: .userInitiated) {
@@ -143,7 +144,11 @@ enum ExternalDiagramRenderer {
             control.stop(timeout: false)
         }
         try Task.checkCancellation()
-        cache.values.setObject(result as NSData, forKey: key, cost: result.count)
+        // Without a generation identifier, size and date cannot identify the tool.
+        // Bypass caching rather than reuse output from a replaced executable or JAR.
+        if metadata?.identifiesContent == true {
+            cache.values.setObject(result as NSData, forKey: key, cost: result.count)
+        }
         return result
     }
 
