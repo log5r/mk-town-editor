@@ -27,15 +27,30 @@ enum WordCountMode: String, Codable, CaseIterable, Sendable {
         if self == .whitespace {
             return text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
         }
+        return count(in: text, checkCancellation: {})
+    }
+
+    /// Returning false from NLTokenizer's callback stops traversal immediately.
+    func count<Failure>(in text: String,
+                        checkCancellation: () throws(Failure) -> Void) throws(Failure) -> Int {
+        try checkCancellation()
+        if self == .whitespace {
+            return try DocumentStatistics.scan(text, checkCancellation: checkCancellation).words
+        }
         guard !text.isEmpty else { return 0 }
         let tokenizer = NLTokenizer(unit: .word)
         tokenizer.setLanguage(self == .japanese ? .japanese : .english)
         tokenizer.string = text
         var count = 0
+        var failure: Failure?
         tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { _, _ in
+            do throws(Failure) { try checkCancellation() }
+            catch { failure = error; return false }
             count += 1
             return true
         }
+        if let failure { throw failure }
+        try checkCancellation()
         return count
     }
 }
@@ -103,8 +118,8 @@ struct DocumentStatistics: Equatable, Sendable {
 
     /// Single-pass scan that calls `checkCancellation` before the first character and after every
     /// `cancellationCheckInterval` characters. A non-throwing closure makes the scan non-throwing.
-    private static func scan<Failure>(_ text: String,
-                                      checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics {
+    static func scan<Failure>(_ text: String,
+                               checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics {
         var characters = 0
         var nonWhitespace = 0
         var words = 0
@@ -147,7 +162,7 @@ struct DocumentStatistics: Equatable, Sendable {
     }
 
     private static func selection<Failure>(in text: String, range: NSRange,
-                                           checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
+                                    checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
         let source = text as NSString
         guard range.length > 0, range.location >= 0, range.location <= source.length,
               range.length <= source.length - range.location else { return nil }
@@ -156,7 +171,7 @@ struct DocumentStatistics: Equatable, Sendable {
     }
 
     private static func selection<Failure>(in text: String, ranges: [NSRange],
-                                           checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
+                                    checkCancellation: () throws(Failure) -> Void) throws(Failure) -> DocumentStatistics? {
         var parts: [DocumentStatistics] = []
         for range in ranges {
             if let part = try selection(in: text, range: range, checkCancellation: checkCancellation) {
