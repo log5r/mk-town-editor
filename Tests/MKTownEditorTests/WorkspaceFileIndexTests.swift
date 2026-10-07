@@ -4,6 +4,34 @@ import XCTest
 
 @MainActor
 final class WorkspaceFileIndexTests: XCTestCase {
+    func testSwitchingRootClearsPublishedTreeAndDocumentIndexImmediately() async throws {
+        let base = URL(fileURLWithPath: "/private/tmp/workspace-root-switch-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let first = base.appendingPathComponent("first"), second = base.appendingPathComponent("second")
+        for root in [first, second] {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            try "body".write(to: root.appendingPathComponent(root.lastPathComponent + ".md"),
+                             atomically: true, encoding: .utf8)
+        }
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        store.setRoot(first)
+        for _ in 0..<200 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.first?.name, "first.md")
+        XCTAssertEqual(store.documentIndex.canonical.count, 1)
+        store.setRoot(second)
+        // Inspect before the main actor yields to any background result.
+        XCTAssertTrue(store.nodes.isEmpty)
+        XCTAssertTrue(store.visibleNodes.isEmpty)
+        XCTAssertTrue(store.documentURLs.isEmpty)
+        XCTAssertTrue(store.documentIndex.canonical.isEmpty)
+        for _ in 0..<200 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.visibleNodes.first?.name, "second.md")
+        XCTAssertEqual(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL },
+                       [second.resolvingSymlinksInPath().standardizedFileURL.appendingPathComponent("second.md")])
+        XCTAssertEqual(store.documentIndex.canonical,
+                       Set(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL }))
+    }
+
     func testOpenBufferRevisionsAndSnapshotsAreScopedToRequestedDocuments() throws {
         let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
         let root = URL(fileURLWithPath: "/private/tmp/buffer-scope-\(UUID().uuidString)")

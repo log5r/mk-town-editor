@@ -312,6 +312,11 @@ final class WorkspaceStore: ObservableObject {
             viewSettings = WorkspaceViewSettings()
         }
         nodes = []
+        // Published caches belong to the previous root until their worker finishes.
+        // Clear them synchronously so the new workspace cannot expose old files.
+        visibleNodes = []
+        documentIndex = WorkspaceDocumentIndex(documents: [])
+        documentURLs = []
         generation += 1
         isRefreshing = false
         lastRefresh = .distantPast
