@@ -3,6 +3,20 @@ import XCTest
 
 @MainActor
 final class DocumentAnalysisStoreTests: XCTestCase {
+    func testPresentationIDsMapCurrentSourceBlocksAfterInsertion() throws {
+        let source = "# Heading\n\nParagraph\n\n# Heading"
+        let before = MarkdownAnalysis(source)
+        let after = MarkdownAnalysis("Inserted\n\n" + source)
+        let originalIDs = PreviewBlockIdentity.identifiers(in: before)
+        let currentIDs = PreviewBlockIdentity.identifiers(in: after)
+        let oldHeadings = before.blocks.filter { $0.kind == .heading(level: 1) }
+        let newHeadings = after.blocks.filter { $0.kind == .heading(level: 1) }
+        XCTAssertNotEqual(oldHeadings.map(\.id), newHeadings.map(\.id))
+        XCTAssertEqual(oldHeadings.map { originalIDs[$0.id] }, newHeadings.map { currentIDs[$0.id] })
+        XCTAssertNotEqual(currentIDs[newHeadings[0].id], currentIDs[newHeadings[1].id])
+        XCTAssertEqual(currentIDs, DocumentSnapshot(source: "Inserted\n\n" + source).blockPresentationIDs)
+    }
+
     func testAnalysisBoundaryNormalizesBridgedText() async throws {
         let text = NSMutableString(string: String(repeating: "日本語🙂\n", count: 100)) as String
         let store = DocumentAnalysisStore(analyze: { source in
