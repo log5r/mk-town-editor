@@ -67,9 +67,31 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     weak var textView: NSTextView?
-    var sharedSnapshot: DocumentSnapshot?
-    var usesSharedAnalysis = false
-    var markdownDialect: MarkdownDialect = .extended
+    var sharedSnapshot: DocumentSnapshot? {
+        didSet {
+            if oldValue?.source != sharedSnapshot?.source || oldValue?.dialect != sharedSnapshot?.dialect {
+                scheduleAnalysisAvailabilityChange()
+            }
+        }
+    }
+    var usesSharedAnalysis = false {
+        didSet { if oldValue != usesSharedAnalysis { scheduleAnalysisAvailabilityChange() } }
+    }
+    var markdownDialect: MarkdownDialect = .extended {
+        didSet { if oldValue != markdownDialect { scheduleAnalysisAvailabilityChange() } }
+    }
+    private var analysisAvailabilityTask: Task<Void, Never>?
+
+    private func scheduleAnalysisAvailabilityChange() {
+        guard analysisAvailabilityTask == nil else { return }
+        // Coordinators assign analysis during SwiftUI updates. Notify palette
+        // and command observers after that update, while keeping the model current.
+        analysisAvailabilityTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.analysisAvailabilityTask = nil
+            self.objectWillChange.send()
+        }
+    }
     var matchingSnapshot: DocumentSnapshot? {
         guard let textView, let sharedSnapshot,
               sharedSnapshot.matches(source: textView.editorSource, dialect: markdownDialect) else { return nil }
@@ -77,8 +99,9 @@ final class MarkdownEditorModel: ObservableObject {
     }
     private var structuralAnalysisAvailable: Bool { !usesSharedAnalysis || matchingSnapshot != nil }
     private var availabilitySource: String?
-    private var availabilitySelection: NSRange?
+    private var availabilitySelections: [NSRange]?
     private var availabilityDialect: MarkdownDialect?
+    private var availabilityIndentWidths: [Int] = []
     private var tableAvailability: [MarkdownTableOperation: Bool] = [:]
     private var gridAvailability: Bool?
     private var alignmentComputed = false
@@ -87,9 +110,12 @@ final class MarkdownEditorModel: ObservableObject {
 
     private func refreshAvailabilityCache() {
         let source = textView?.editorSource
-        let selection = textView?.selectedRange()
-        if source != availabilitySource || selection != availabilitySelection || availabilityDialect != markdownDialect {
-            availabilitySource = source; availabilitySelection = selection; availabilityDialect = markdownDialect
+        let selections = textView?.selectedRanges.map(\.rangeValue)
+        let widths = [listIndentWidth, codeIndentWidth]
+        if source != availabilitySource || selections != availabilitySelections ||
+            availabilityDialect != markdownDialect || availabilityIndentWidths != widths {
+            availabilitySource = source; availabilitySelections = selections; availabilityDialect = markdownDialect
+            availabilityIndentWidths = widths
             tableAvailability.removeAll(); commandAvailability.removeAll()
             gridAvailability = nil; alignmentComputed = false; cachedAlignment = nil
         }
@@ -426,8 +452,22 @@ final class MarkdownEditorModel: ObservableObject {
 
     var canAddNextOccurrence: Bool {
         guard let textView, !textView.hasMarkedText() else { return false }
-        return MarkdownSelectionOccurrences.addingNext(in: textView.editorSource,
+        refreshAvailabilityCache()
+        if let value = commandAvailability[.selectNextOccurrence] { return value }
+        let value = MarkdownSelectionOccurrences.addingNext(in: textView.editorSource,
             selections: textView.selectedRanges.map(\.rangeValue)) != nil
+        commandAvailability[.selectNextOccurrence] = value
+        return value
+    }
+
+    var canComment: Bool {
+        guard canExecuteCommand, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = commandAvailability[.comment] { return value }
+        let value = MarkdownFormatter.commentEdit(in: textView.editorSource,
+            selection: textView.selectedRange()) != nil
+        commandAvailability[.comment] = value
+        return value
     }
 
     func addNextOccurrence() {

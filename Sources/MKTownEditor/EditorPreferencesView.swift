@@ -427,16 +427,20 @@ struct SnippetPickerView: View {
     }
 }
 
+struct CommandPaletteMatchesKey: PreferenceKey {
+    static var defaultValue: [EditorCommand] { [] }
+    static func reduce(value: inout [EditorCommand], nextValue: () -> [EditorCommand]) { value = nextValue() }
+}
+
 struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
-    @State private var availableCommands: [EditorCommand] = []
 
     private var matches: [EditorCommand] {
         EditorCommand.paletteMatches(query, in: model,
-            shortcutLabel: { settingsStore.shortcut(for: $0)?.label }, availableCommands: availableCommands)
+            shortcutLabel: { settingsStore.shortcut(for: $0)?.label })
     }
 
     var body: some View {
@@ -466,7 +470,7 @@ struct CommandPaletteView: View {
         }
         .padding()
         .frame(width: 500, height: 420)
-        .onAppear { availableCommands = EditorCommand.palette.filter { $0.canExecute(in: model) } }
+        .preference(key: CommandPaletteMatchesKey.self, value: matches)
     }
 
     private func execute(_ command: EditorCommand) {
