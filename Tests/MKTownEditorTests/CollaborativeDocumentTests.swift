@@ -146,7 +146,8 @@ final class CollaborativeDocumentTests: XCTestCase {
             let delta = document.edit(to: text)
             XCTAssertEqual(delta.inserts.count, 1)
         }
-        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+        // 変更前の実装は手元のDebugビルドで約14秒かかった。CIの速度差を見込んで上限を置く。
+        XCTAssertLessThan(Date().timeIntervalSince(start), 8)
         XCTAssertEqual(document.text, text)
         XCTAssertEqual(document.visibleAtoms, document.orderedVisibleAtoms())
         XCTAssertTrue(document.edit(to: text).isEmpty)

@@ -42,4 +42,34 @@ final class SheetDerivedValueTests: XCTestCase {
         for _ in 0..<20 { _ = FrontMatterProperties.items(in: long) }
         XCTAssertLessThan(Date().timeIntervalSince(start), 2)
     }
+
+    func testFrontMatterScanMatchesFullLineIndexReference() {
+        let pieces = ["---", "...", "title: a", "", "本文", "--- ", "\r\n", "\n", "\r"]
+        var generator = SystemRandomNumberGenerator()
+        for _ in 0..<2_000 {
+            let source = (0..<Int.random(in: 0...8, using: &generator))
+                .map { _ in pieces.randomElement(using: &generator)! }.joined()
+            let expected = Self.referenceFrontMatter(source)
+            let actual = MarkdownFrontMatter(source: source)
+            XCTAssertEqual(actual?.sourceRange, expected?.range, source.debugDescription)
+            XCTAssertEqual(actual?.content, expected?.content, source.debugDescription)
+        }
+    }
+
+    private static func referenceFrontMatter(_ source: String) -> (range: NSRange, content: String)? {
+        let text = source as NSString
+        let starts = MarkdownLineIndex(source).starts
+        guard starts.count >= 2 else { return nil }
+        func line(_ index: Int) -> String {
+            let end = index + 1 < starts.count ? starts[index + 1] : text.length
+            return text.substring(with: NSRange(location: starts[index], length: end - starts[index]))
+                .trimmingCharacters(in: .newlines)
+        }
+        guard line(0) == "---",
+              let closing = (1..<starts.count).first(where: { line($0) == "---" || line($0) == "..." })
+        else { return nil }
+        let end = closing + 1 < starts.count ? starts[closing + 1] : text.length
+        return (NSRange(location: 0, length: end),
+                text.substring(with: NSRange(location: starts[1], length: starts[closing] - starts[1])))
+    }
 }

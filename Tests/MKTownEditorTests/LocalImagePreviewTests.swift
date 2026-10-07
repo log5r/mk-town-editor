@@ -208,7 +208,7 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertNotNil(small.image(at: first))
         XCTAssertNotNil(small.image(at: second))
         let key = try XCTUnwrap(LocalImageCache.key(for: first))
-        XCTAssertNil(small.cachedImage(for: key), "The least recently used image is evicted")
+        XCTAssertFalse(small.contains(key), "The least recently used image is evicted")
     }
 
     func testPreviewDecodesLocalImagesInBackgroundAndRendersAfterRevision() async throws {

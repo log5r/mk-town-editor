@@ -80,24 +80,38 @@ struct MarkdownFrontMatter: Equatable, Sendable {
         // 先頭行が区切り線でなければ、行の索引を作らずに終える。
         guard source.hasPrefix("---") else { return nil }
         let text = source as NSString
-        let starts = MarkdownLineIndex(source).starts
-        guard starts.count >= 2 else { return nil }
-        func line(_ index: Int) -> String {
-            let start = starts[index]
-            let end = index + 1 < starts.count ? starts[index + 1] : text.length
-            return text.substring(with: NSRange(location: start, length: end - start))
+        // 行頭を順に求め、閉じ区切りが見つかった時点で走査を止める。本文の長さに依存しない。
+        func nextLineStart(after start: Int) -> Int? {
+            var offset = start
+            while offset < text.length {
+                let unit = text.character(at: offset)
+                if unit == 13, offset + 1 < text.length, text.character(at: offset + 1) == 10 { return offset + 2 }
+                if unit == 10 || unit == 13 { return offset + 1 }
+                offset += 1
+            }
+            return nil
+        }
+        func line(from start: Int, to end: Int) -> String {
+            text.substring(with: NSRange(location: start, length: end - start))
                 .trimmingCharacters(in: .newlines)
         }
-        guard line(0) == "---" else { return nil }
-        guard let closing = (1..<starts.count).first(where: {
-            line($0) == "---" || line($0) == "..."
-        }) else { return nil }
-        let end = closing + 1 < starts.count ? starts[closing + 1] : text.length
-        sourceRange = NSRange(location: 0, length: end)
+        guard let firstContent = nextLineStart(after: 0),
+              line(from: 0, to: firstContent) == "---" else { return nil }
+        var start = firstContent
+        var closing: (start: Int, end: Int)?
+        while closing == nil {
+            let next = nextLineStart(after: start)
+            let end = next ?? text.length
+            let value = line(from: start, to: end)
+            if value == "---" || value == "..." { closing = (start, end); break }
+            guard let next else { break }
+            start = next
+        }
+        guard let closing else { return nil }
+        sourceRange = NSRange(location: 0, length: closing.end)
         raw = text.substring(with: sourceRange)
-        let firstContent = starts[1]
         content = text.substring(with: NSRange(location: firstContent,
-            length: starts[closing] - firstContent))
+            length: closing.start - firstContent))
     }
 }
 

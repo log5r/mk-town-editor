@@ -718,7 +718,7 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(isPresented: $showingWikiLinks) {
-            if let root = workspaceStore.rootURL, let fileURL {
+            if workspaceStore.rootURL != nil, let fileURL {
                 WorkspaceWikiLinkSheet(index: workspaceStore.quickOpenIndex,
                     documentURL: fileURL, source: document.text,
                     selection: wikiSelection, onApply: { edit, expectedSource in
