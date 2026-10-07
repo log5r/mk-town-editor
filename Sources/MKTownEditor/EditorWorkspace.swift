@@ -133,7 +133,7 @@ struct EditorWorkspace: View {
     @State private var previewSearchRange: NSRange?
     @State private var showingStatistics = false
     @State private var writingGoalInput = ""
-    @State private var unsavedSessionBaseline: Int?
+    @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -1058,7 +1058,7 @@ struct EditorWorkspace: View {
                 settingsStore.ensureWritingSession(for: fileURL,
                     initialText: document.text)
             } else if unsavedSessionBaseline == nil {
-                unsavedSessionBaseline = document.text.count
+                unsavedSessionBaseline = WritingSessionBaseline(text: document.text)
             }
             receivePendingDocumentLink()
             receivePendingSearchPosition()
@@ -1109,6 +1109,10 @@ struct EditorWorkspace: View {
             monitorCloudDocument(newURL)
             refreshCloudStatus()
             detachedPreview.updateDocumentURL(newURL)
+            // A pending save captured the old URL; it would recreate state under that path
+            // after moveDocumentState below. Save the latest position now instead.
+            positionSaveTask?.cancel()
+            positionSaveTask = nil
             savePosition(for: oldURL)
             if workspaceViewActive {
                 if let oldURL {
@@ -1133,7 +1137,7 @@ struct EditorWorkspace: View {
                     settingsStore.setMode(unsavedMode, for: newURL)
                 }
                 settingsStore.ensureWritingSession(for: newURL,
-                    initialCharacters: unsavedSessionBaseline ?? document.text.count)
+                    baseline: unsavedSessionBaseline ?? WritingSessionBaseline(text: document.text))
             case let (oldURL?, nil):
                 unsavedMode = settingsStore.mode(for: oldURL)
             case (nil, nil):
@@ -1176,6 +1180,9 @@ struct EditorWorkspace: View {
         }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
+        // savePosition also records the sidebar; it used to be saved by a 3-second timer.
+        .onChange(of: sidebarTab) { _, _ in schedulePositionSave() }
+        .onChange(of: sidebarVisibility) { _, _ in schedulePositionSave() }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receiveCompletedAnalysis()
         }
@@ -1996,7 +2003,7 @@ struct EditorWorkspace: View {
 
     private func startDocumentOperation(_ action: @escaping @MainActor () async throws -> Void,
                                         onError: @escaping @MainActor (String) -> Void) {
-        guard !documentOperationRunning else { return }
+        guard DocumentOperationGate.admit(running: documentOperationRunning, onError: onError) else { return }
         documentOperationRunning = true
         documentOperation = Task { @MainActor in
             defer { documentOperationRunning = false; documentOperation = nil }
@@ -2027,7 +2034,8 @@ struct EditorWorkspace: View {
     }
 
     private func exportPDF() {
-        guard !documentOperationRunning else { return }
+        guard DocumentOperationGate.admit(running: documentOperationRunning,
+                                          onError: { pdfExportError = $0 }) else { return }
         exportFormat = .pdf
     }
 
@@ -2092,7 +2100,8 @@ struct EditorWorkspace: View {
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
-        guard !documentOperationRunning else { return }
+        guard DocumentOperationGate.admit(running: documentOperationRunning,
+                                          onError: { pdfExportError = $0 }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
@@ -2471,14 +2480,14 @@ struct EditorWorkspace: View {
                 Text("セッションの増減: \(change >= 0 ? "+" : "")\(change) 文字")
                 Button("セッションをここから開始") {
                     settingsStore.resetWritingSession(for: fileURL,
-                        currentCharacters: document.text.count)
+                        baseline: WritingSessionBaseline(text: document.text))
                 }
                 .font(.caption)
             } else {
                 Text("目標を保存するには書類を保存してください。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                let change = statistics.characters - (unsavedSessionBaseline ?? statistics.characters)
+                let change = statistics.characters - (unsavedSessionBaseline?.characters ?? statistics.characters)
                 Text("このウインドウの増減: \(change >= 0 ? "+" : "")\(change) 文字")
             }
         }
@@ -3033,5 +3042,21 @@ private struct LinkEditorSheet: View {
             }
             isAttaching = false
         }
+    }
+}
+
+/// One export, print or rich copy runs at a time per window. A request made while another is
+/// running is reported instead of being dropped silently, so the user never assumes a file was
+/// written or the clipboard was replaced when nothing happened.
+enum DocumentOperationGate {
+    static var busyMessage: String {
+        String(localized: "別の書き出しまたはコピーを実行中です。完了してから、もう一度お試しください。")
+    }
+
+    @MainActor
+    static func admit(running: Bool, onError: (String) -> Void) -> Bool {
+        guard running else { return true }
+        onError(busyMessage)
+        return false
     }
 }

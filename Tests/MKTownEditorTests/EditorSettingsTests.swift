@@ -359,13 +359,21 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCharacters, text.count)
     }
 
+    func testSessionBaselineCountsCharactersLikeDocumentStatistics() {
+        // The panel subtracts the baseline from DocumentStatistics.characters; both must count
+        // the same units, including emoji sequences, combining marks and CRLF.
+        for text in ["", "既存の本文👨‍👩‍👧‍👦é", "line\r\nline\n", "e\u{301}🙂 \t"] {
+            XCTAssertEqual(WritingSessionBaseline(text: text).characters, DocumentStatistics(text: text).characters, text)
+        }
+    }
+
     func testWritingGoalAndSessionBaselinePersistAndFollowRename() {
         let defaults = isolatedDefaults()
         let oldURL = URL(fileURLWithPath: "/tmp/work/draft.md")
         let newURL = URL(fileURLWithPath: "/tmp/work/final.md")
         let store = EditorSettingsStore(defaults: defaults)
-        store.ensureWritingSession(for: oldURL, initialCharacters: 120)
-        store.ensureWritingSession(for: oldURL, initialCharacters: 140)
+        store.ensureWritingSession(for: oldURL, baseline: WritingSessionBaseline(text: String(repeating: "a", count: 120)))
+        store.ensureWritingSession(for: oldURL, baseline: WritingSessionBaseline(text: String(repeating: "a", count: 140)))
         store.setWritingGoal(500, for: oldURL)
         store.moveDocumentState(from: oldURL, to: newURL)
 
@@ -373,7 +381,7 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertNil(restored.displayState(for: oldURL))
         XCTAssertEqual(restored.displayState(for: newURL)?.writingGoal, 500)
         XCTAssertEqual(restored.displayState(for: newURL)?.sessionBaselineCharacters, 120)
-        restored.resetWritingSession(for: newURL, currentCharacters: 150)
+        restored.resetWritingSession(for: newURL, baseline: WritingSessionBaseline(text: String(repeating: "a", count: 150)))
         XCTAssertEqual(EditorSettingsStore(defaults: defaults)
             .displayState(for: newURL)?.sessionBaselineCharacters, 150)
         restored.setWritingGoal(nil, for: newURL)

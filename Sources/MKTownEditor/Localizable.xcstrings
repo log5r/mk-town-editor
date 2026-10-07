@@ -64,6 +64,16 @@
         }
       }
     },
+    "別の書き出しまたはコピーを実行中です。完了してから、もう一度お試しください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another export or copy is in progress. Try again when it finishes."
+          }
+        }
+      }
+    },
     "（なし）" : {
       "localizations" : {
         "en" : {

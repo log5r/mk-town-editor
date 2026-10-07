@@ -179,6 +179,15 @@ final class WorkspaceFileOperationsTests: XCTestCase {
             XCTAssertEqual(try identity(url), before[url] ?? nil,
                            "\(url.lastPathComponent) was never written and must not be replaced by the rollback")
         }
+        // The restored document has new file metadata, so the same plan can never pass again;
+        // the sheet therefore drops it after any failed apply and asks for a new check.
+        try FileManager.default.setAttributes([.immutable: false], ofItemAtPath: failing.path)
+        XCTAssertThrowsError(try plan.validateCurrentState()) { error in
+            guard case let .documentChanged(url)? = error as? WorkspaceFileOperationError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(url, order[0])
+        }
     }
 
     func testApplyStopsWhenDocumentUnreadableDuringPlanningBecomesReadable() throws {

@@ -254,6 +254,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var proofingSource: String?
         private var proofingDialect: MarkdownDialect?
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
+        /// The ranges exactly as analysed for `proofingSource`, before any edit shifted them.
+        private var proofingSourceRanges: [MarkdownProofingContext.ProtectedRange] = []
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
@@ -428,15 +430,18 @@ struct MarkdownTextEditor: NSViewRepresentable {
                     if needsRanges {
                         proofingSource = source
                         proofingDialect = snapshot.dialect
-                        protectedProofingRanges = snapshot.proofingRanges
+                        proofingSourceRanges = snapshot.proofingRanges
                     }
                 }
             } else if needsRanges {
                 proofingSource = source
                 proofingDialect = dialect
-                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: source,
+                proofingSourceRanges = MarkdownProofingContext.protectedRanges(in: source,
                     analysis: MarkdownAnalysis(source, dialect: dialect))
             }
+            // Shifting drops ranges cut by an edit. When the text is back to the analysed source
+            // (an undo, or the edit retyped before a new snapshot arrived), use the exact ranges.
+            if proofingSource == source { protectedProofingRanges = proofingSourceRanges }
             let location = textView.selectedRange().location
             // While the snapshot for an edited source is pending, the previous ranges stay
             // aligned through proofingStorageDidProcessEditing, and inline code or URLs typed

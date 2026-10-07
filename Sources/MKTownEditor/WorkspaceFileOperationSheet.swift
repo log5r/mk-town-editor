@@ -300,9 +300,12 @@ struct WorkspaceFileOperationSheet: View {
                         errorMessage = WorkspaceFileOperationError.rollbackFailed.localizedDescription
                     }
                     plan = nil
-                } else if !cancelled {
-                    errorMessage = error.localizedDescription
-                    if movePlan != nil, needsPlan, error is WorkspaceFileOperationError { plan = nil }
+                } else {
+                    if !cancelled { errorMessage = error.localizedDescription }
+                    // apply() restores documents it already rewrote before rethrowing, which
+                    // gives them new metadata; validation also fails for a changed workspace.
+                    // Either way this plan can no longer pass, so ask for a new one.
+                    if movePlan != nil, needsPlan { plan = nil }
                 }
             }
             if let lockID { workspaceStore.unlockOpenDocuments(lockID) }

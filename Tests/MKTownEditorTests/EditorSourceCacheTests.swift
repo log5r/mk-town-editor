@@ -65,6 +65,37 @@ final class EditorSourceCacheTests: XCTestCase {
         XCTAssertFalse(view.isAutomaticSpellingCorrectionEnabled)
     }
 
+    func testUndoBackToAnalysedSourceRestoresRangesDroppedByShifting() {
+        let view = EditorTextView()
+        view.allowsUndo = true
+        let original = "prose\n\n```\ncoode\n```\n"
+        view.string = original
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.sourceText), model: MarkdownEditorModel())
+        coordinator.textView = view
+        coordinator.usesSharedAnalysis = true
+        coordinator.proofing.checksSpelling = true
+        coordinator.proofing.correctsSpelling = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: original)
+        coordinator.applyProofing()
+        let code = (original as NSString).range(of: "coode").location
+        view.setSelectedRange(NSRange(location: code + 2, length: 0))
+        coordinator.applyProofing()
+        XCTAssertFalse(view.isAutomaticSpellingCorrectionEnabled)
+
+        // A deletion running from prose into the fence cuts the code-block range.
+        let cut = NSRange(location: 3, length: 7)
+        view.textStorage?.replaceCharacters(in: cut, with: "")
+        // Restoring the same text before any new snapshot arrives (as Cmd+Z does).
+        view.textStorage?.replaceCharacters(in: NSRange(location: 3, length: 0),
+                                            with: (original as NSString).substring(with: cut))
+        XCTAssertEqual(view.sourceText, original)
+        XCTAssertEqual(coordinator.sharedSnapshot?.source, original)
+        view.setSelectedRange(NSRange(location: code + 2, length: 0))
+        coordinator.applyProofing()
+        XCTAssertFalse(view.isContinuousSpellCheckingEnabled, "the restored code block must be protected again")
+        XCTAssertFalse(view.isAutomaticSpellingCorrectionEnabled)
+    }
+
     func testShiftedProofingRangesFollowInsertionsDeletionsAndDropCutRanges() {
         typealias Range = MarkdownProofingContext.ProtectedRange
         let code = Range(range: NSRange(location: 10, length: 5), includesEnd: false)

@@ -107,7 +107,7 @@ final class ExternalDocumentConverterTests: XCTestCase {
         let started = root.appendingPathComponent("started")
         let executable = try makeExecutable(in: root, body: """
         trap '' TERM
-        printf '%s' $$ > "\(started.path)"
+        \(ChildProcessFixture.publishPID(to: started))
         exec /bin/sleep 30
         """)
         let destination = root.appendingPathComponent("output.epub")
@@ -116,17 +116,17 @@ final class ExternalDocumentConverterTests: XCTestCase {
             try ExternalDocumentConverter.convert("# Source", documentURL: nil,
                 destination: destination, format: .epub, dialect: .extended, executable: executable)
         }
-        for _ in 0..<200 where !FileManager.default.fileExists(atPath: started.path) {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        let pid = try XCTUnwrap(Int32(try String(contentsOf: started, encoding: .utf8)))
-        XCTAssertEqual(Darwin.kill(pid, 0), 0, "converter must be running before cancellation")
+        var pid: pid_t?
+        defer { worker.cancel(); ChildProcessFixture.reap(pid) }
+        pid = try await ChildProcessFixture.waitForPID(at: started)
+        let child = try XCTUnwrap(pid)
+        XCTAssertTrue(ChildProcessFixture.isRunning(child), "converter must be running before cancellation")
         let cancelledAt = ContinuousClock.now
         worker.cancel()
         do { try await worker.value; XCTFail("Cancelled conversion unexpectedly completed") }
         catch { XCTAssertEqual(error as? ExternalConversionError, .cancelled) }
         XCTAssertLessThan(cancelledAt.duration(to: .now), .seconds(2))
-        XCTAssertNotEqual(Darwin.kill(pid, 0), 0, "cancellation must reap a converter that ignores SIGTERM")
+        XCTAssertFalse(ChildProcessFixture.isRunning(child), "cancellation must reap a converter that ignores SIGTERM")
         XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous")
     }
 
