@@ -528,6 +528,12 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    /// Capture the opening text before asynchronous analysis has produced statistics.
+    func ensureWritingSession(for documentURL: URL, initialText: String) {
+        guard values.documents[Self.key(for: documentURL)]?.sessionBaselineCharacters == nil else { return }
+        ensureWritingSession(for: documentURL, initialCharacters: initialText.count)
+    }
+
     func ensureWritingSession(for documentURL: URL, initialCharacters: Int) {
         let key = Self.key(for: documentURL)
         var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
