@@ -104,7 +104,7 @@ final class PreviewRenderCache: ObservableObject {
 
     /// 上限を超えたら、最近使っていない項目から `trimTarget` 件になるまで除く。
     let capacity: Int
-    private var trimTarget: Int { capacity * 3 / 4 }
+    private var trimTarget: Int { max(1, capacity * 3 / 4) }
     private var blocks: [BlockKey: Entry] = [:]
     private var cells: [CellKey: Entry] = [:]
     private var clock: UInt64 = 0

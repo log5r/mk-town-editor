@@ -10,10 +10,12 @@ struct PreviewScrollIndex: Sendable {
         var locations: [Int] = []
         var indices: [Int] = []
         var byID: [Int: Int] = [:]
-        for (index, block) in analysis.blocks.enumerated() where block.kind != .quote {
+        for (index, block) in analysis.blocks.enumerated() {
+            // コールアウトは引用ブロックだがプレビューの行として表示されるため、番号からは引けるようにする。
+            byID[block.id] = block.sourceRange.location
+            guard block.kind != .quote else { continue }
             locations.append(block.sourceRange.location)
             indices.append(index)
-            byID[block.id] = block.sourceRange.location
         }
         // 子ブロックは親より後ろに出現するが、開始位置は親の範囲内なので並べ替えて保持する。
         let order = locations.indices.sorted { (locations[$0], $0) < (locations[$1], $1) }

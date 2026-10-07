@@ -560,6 +560,27 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(restored.settingsWriteCount, writes, "Position saves do not rewrite shared settings")
     }
 
+    func testMigratedStatesWithoutRecencyAreNotTrimmedArbitrarily() throws {
+        let defaults = isolatedDefaults()
+        let legacyDocuments = (0..<250).map { "\"/tmp/work/legacy\($0).md\":{\"mode\":\"preview\"}" }
+            .joined(separator: ",")
+        let legacy = "{\"app\":{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3," +
+            "\"wrapsLines\":true},\"folders\":{},\"documents\":{\(legacyDocuments)}}"
+        defaults.set(Data(legacy.utf8), forKey: "MKTownEditor.editorSettings.v1")
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(store.documentStateCount, 250, "Legacy states have no recency to choose by")
+        let limit = EditorSettingsStore.documentStateLimit
+        for index in 0..<(limit + 10) {
+            store.setMode(.split, for: URL(fileURLWithPath: "/tmp/work/new\(index).md"))
+        }
+        XCTAssertEqual(store.documentStateCount, 250 + limit)
+        XCTAssertFalse(store.hasDocumentState(for: URL(fileURLWithPath: "/tmp/work/new0.md")))
+        XCTAssertTrue(store.hasDocumentState(for: URL(fileURLWithPath: "/tmp/work/legacy0.md")))
+        store.setMode(.editor, for: URL(fileURLWithPath: "/tmp/work/legacy0.md"))
+        XCTAssertEqual(store.mode(for: URL(fileURLWithPath: "/tmp/work/legacy0.md")), .editor)
+        XCTAssertEqual(store.documentStateCount, 249 + limit, "A rewritten legacy state joins the bounded set")
+    }
+
     func testMissingDocumentsArePrunedButUnreachableFoldersAreKept() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -594,7 +594,12 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(isPresented: $showingPreviewSearch) {
-            PreviewSearchSheet(query: $previewSearchQuery,
+            // 検索語の変更と同時に古い一致位置を消し、直後の移動で設定した位置を残す。
+            PreviewSearchSheet(query: Binding(get: { previewSearchQuery }, set: { query in
+                                   guard query != previewSearchQuery else { return }
+                                   previewSearchQuery = query
+                                   previewSearchRange = nil
+                               }),
                                caseSensitive: $previewSearchCaseSensitive,
                                source: document.text,
                                selectedLocation: previewSearchRange?.location,
@@ -622,8 +627,11 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(isPresented: $showingRegexSearch) {
-            RegexSearchSheet(source: document.text, selectedRange: editorModel.selectedRange,
-                             initialScope: editorModel.selectedRange,
+            // 一致を選ぶと選択範囲が変わるため、次の一致は最新の選択範囲から求める。
+            let initialScope = editorModel.selectedRange
+            EditorSelectionReader(selection: editorModel.selectionState) { selection in
+            RegexSearchSheet(source: document.text, selectedRange: selection,
+                             initialScope: initialScope,
                              onSelect: { range in
                                 let destination = NavigationPoint(documentURL: fileURL,
                                                                   utf16Location: range.location)
@@ -632,6 +640,7 @@ struct EditorWorkspace: View {
                              }, onReplace: { edit, source in
                                 editorModel.applyRegexEdit(edit, expectedSource: source)
                              })
+            }
         }
         .sheet(isPresented: $showingLinkDiagnostics) {
             LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,
@@ -1172,7 +1181,6 @@ struct EditorWorkspace: View {
         .onChange(of: settingsStore.app.terminologyOptions) { _, _ in
             if showingTerminology { checkTerminology() }
         }
-        .onChange(of: previewSearchQuery) { _, _ in previewSearchRange = nil }
         .onChange(of: settingsStore.markdownDialect(for: fileURL)) { _, dialect in
             analysisStore.update(source: document.text, dialect: dialect)
             previewUpdates.resume()

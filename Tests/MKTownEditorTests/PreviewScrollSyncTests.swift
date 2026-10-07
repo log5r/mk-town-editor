@@ -54,6 +54,16 @@ final class PreviewScrollSyncTests: XCTestCase {
                        empty.blocks.first { $0.kind != .quote }?.id)
     }
 
+    func testCalloutRowsMapBackToTheirSource() throws {
+        let source = "Intro\n\n> [!NOTE]\n> Callout body\n\nTail"
+        let analysis = MarkdownAnalysis(source)
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+        XCTAssertEqual(callout.kind, .quote)
+        XCTAssertEqual(PreviewScrollIndex(analysis).sourceLocation(ofBlockID: callout.id),
+                       callout.sourceRange.location,
+                       "Callouts are visible preview rows and must synchronize the editor")
+    }
+
     func testSnapshotProvidesScrollIndex() {
         let snapshot = DocumentSnapshot(source: "# One\n\nTwo")
         let block = snapshot.scrollIndex.block(containingOrBefore: 8, in: snapshot.analysis)

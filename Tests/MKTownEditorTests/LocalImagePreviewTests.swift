@@ -243,6 +243,31 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(store.cache.decodeCount, decodes + 1)
     }
 
+    func testEvictedPreviewImagesAreReloadedSynchronouslyInsteadOfLooping() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
+        for url in urls { try png.write(to: url) }
+        // 1枚分しか保持できない上限で、表示中の画像が互いを追い出す状況を作る。
+        let store = LocalImageStore(cache: LocalImageCache(costLimit: 4))
+        for url in urls { guard case .loading = store.lookup(url) else { return XCTFail("expected loading") } }
+        let deadline = Date().addingTimeInterval(5)
+        while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(20))
+        let revision = store.revision
+        let decodes = store.cache.decodeCount
+        for _ in 0..<3 {
+            for url in urls {
+                guard case .image = store.lookup(url) else { return XCTFail("evicted image must render") }
+            }
+        }
+        XCTAssertFalse(store.hasPendingDecodes)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(store.revision, revision, "Re-reading evicted images must not trigger another render pass")
+        XCTAssertGreaterThan(store.cache.decodeCount, decodes)
+    }
+
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

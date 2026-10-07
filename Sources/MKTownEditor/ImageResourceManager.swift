@@ -139,6 +139,8 @@ final class LocalImageCache: @unchecked Sendable {
     private var entries: [Key: Entry] = [:]
     private var totalCost = 0
     private var clock: UInt64 = 0
+    /// 上限超過で追い出した画像。表示中の画像を追い出し合う繰り返しを防ぐため、次は同期的に読む。
+    private var evicted: Set<Key> = []
     private(set) var decodeCount = 0
 
     init(costLimit: Int = 64_000_000) {
@@ -185,6 +187,7 @@ final class LocalImageCache: @unchecked Sendable {
         defer { lock.unlock() }
         decodeCount += 1
         clock += 1
+        evicted.remove(key)
         if let previous = entries.removeValue(forKey: key) { totalCost -= previous.cost }
         // 同じファイルの古い版は表示されないため、更新時にまとめて除く。
         for (staleKey, stale) in entries where staleKey.path == key.path {
@@ -197,8 +200,22 @@ final class LocalImageCache: @unchecked Sendable {
               let oldest = entries.filter({ $0.key != key }).min(by: { $0.value.lastUse < $1.value.lastUse }) {
             entries[oldest.key] = nil
             totalCost -= oldest.value.cost
+            if evicted.count >= 1_024 { evicted.removeAll() }
+            evicted.insert(oldest.key)
         }
         return image
+    }
+
+    func wasEvicted(_ key: Key) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return evicted.contains(key)
+    }
+
+    func contains(_ key: Key) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[key] != nil
     }
 
     func removeAll() {
@@ -233,6 +250,11 @@ final class LocalImageStore: ObservableObject {
         if let cached = cache.cachedImage(for: key) {
             return cached.map(Lookup.image) ?? .unavailable
         }
+        // 上限で追い出された画像を背景で読み直すと、完了通知の再描画が別の画像を追い出し、
+        // 読み込みが終わらなくなる。一度読んだ画像はその場で読み直す。
+        if cache.wasEvicted(key) {
+            return cache.decode(key: key, fileURL: fileURL).map(Lookup.image) ?? .unavailable
+        }
         if inFlight.insert(key).inserted {
             let cache = cache
             Task.detached(priority: .userInitiated) { [weak self] in
@@ -247,7 +269,7 @@ final class LocalImageStore: ObservableObject {
 
     private func finish(_ key: LocalImageCache.Key) {
         inFlight.remove(key)
-        guard !publishScheduled else { return }
+        guard !publishScheduled, cache.contains(key) else { return }
         // 同時に終わったデコードをまとめ、プレビューの再描画を1回にする。
         publishScheduled = true
         Task { @MainActor [weak self] in

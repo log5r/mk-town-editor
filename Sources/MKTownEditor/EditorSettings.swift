@@ -704,12 +704,13 @@ final class EditorSettingsStore: ObservableObject {
         saveDocuments()
     }
 
+    /// 書き込み日時のある状態を、新しい順に上限まで残す。以前の版から移行した日時のない状態は
+    /// 使われた順序が分からないため、上限では削除せず、ファイルが消えた時か書き込み時に整理する。
     private func trimDocuments() {
-        let excess = documents.count - Self.documentStateLimit
+        let dated = documents.filter { $0.value.lastUsed != nil }
+        let excess = dated.count - Self.documentStateLimit
         guard excess > 0 else { return }
-        let oldest = documents.sorted {
-            ($0.value.lastUsed ?? .distantPast, $0.key) < ($1.value.lastUsed ?? .distantPast, $1.key)
-        }.prefix(excess)
+        let oldest = dated.sorted { ($0.value.lastUsed!, $0.key) < ($1.value.lastUsed!, $1.key) }.prefix(excess)
         for (key, _) in oldest { documents[key] = nil }
     }
 
