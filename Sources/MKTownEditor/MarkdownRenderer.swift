@@ -18,6 +18,10 @@ enum MarkdownRenderer {
         var context = documentContext
         context.markdownDialect = analysis.dialect
         context.crossReferences = analysis.crossReferences
+        if analysis.dialect == .extended, context.citationCatalog == nil {
+            context.citationCatalog = analysis.containsCitationSyntax
+                ? MarkdownCitationCatalog.load(documentURL: context.fileURL) ?? .empty : .empty
+        }
         let output = NSMutableAttributedString(attributedString:
             renderSequence(analysis.rootBlocks, in: analysis, context: context))
         if !analysis.footnotes.entries.isEmpty {
@@ -35,7 +39,7 @@ enum MarkdownRenderer {
             }
         }
         if analysis.dialect == .extended,
-           let catalog = MarkdownCitationCatalog.load(documentURL: context.fileURL),
+           let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
             output.append(NSAttributedString(string: "\n\n" + String(localized: "参考文献") + "\n"))
             for (index, entry) in catalog.entries.enumerated() {
@@ -273,7 +277,7 @@ enum MarkdownRenderer {
         let cross = context.crossReferences?.placeholders(in: markdown)
         let linked = cross?.text ?? markdown
         let cited = context.markdownDialect == .extended && linked.contains("[@")
-            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
+            ? MarkdownCitationCatalog.resolved(for: context)?.replaceInline(linked) ?? linked
             : linked
         let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
             ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])

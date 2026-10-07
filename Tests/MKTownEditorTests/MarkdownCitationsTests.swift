@@ -84,6 +84,90 @@ final class MarkdownCitationsTests: XCTestCase {
         XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["new"])
     }
 
+    func testCatalogIsParsedOnceUntilTheBibliographyChanges() throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let cache = MarkdownCitationCatalogCache.shared
+        let before = cache.parseCount
+        for _ in 0..<20 {
+            XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.count, 2)
+        }
+        XCTAssertEqual(cache.parseCount, before + 1)
+
+        try "@book{new, title={Another}, year={2024}}".write(
+            to: directory.appendingPathComponent("references.bib"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["new"])
+        XCTAssertEqual(cache.parseCount, before + 2)
+    }
+
+    func testRenderingResolvesTheCatalogOnceAndPrefersTheProvidedCatalog() throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let markdown = (0..<200).map { "段落 \($0) [@book1] と [@smith2020]" }.joined(separator: "\n\n")
+        let cache = MarkdownCitationCatalogCache.shared
+        _ = MarkdownCitationCatalog.load(documentURL: document)
+        let parses = cache.parseCount
+
+        let html = MarkdownHTMLExporter.render(markdown, documentURL: document)
+        XCTAssertTrue(html.contains("段落 199 [2] と [1]"))
+        let rendered = MarkdownRenderer.render(markdown, documentContext: DocumentContext(fileURL: document))
+        XCTAssertTrue(rendered.string.contains("段落 199 [2] と [1]"))
+        XCTAssertEqual(cache.parseCount, parses)
+
+        let provided = try XCTUnwrap(MarkdownCitationCatalog.load(documentURL: document))
+        try FileManager.default.removeItem(at: directory.appendingPathComponent("references.bib"))
+        var context = DocumentContext(fileURL: document)
+        context.citationCatalog = provided
+        let analysis = MarkdownAnalysis(markdown)
+        let leaf = MarkdownRenderer.renderLeaf(analysis.blocks[0], in: analysis, documentContext: context)
+        XCTAssertEqual(leaf.string.trimmingCharacters(in: .whitespacesAndNewlines), "段落 0 [2] と [1]")
+        context.citationCatalog = .empty
+        XCTAssertTrue(MarkdownRenderer.render(analysis, documentContext: context).string
+            .contains("段落 0 [@book1]"))
+    }
+
+    func testAnalysisRecordsWhetherCitationSyntaxIsPresent() throws {
+        XCTAssertTrue(MarkdownAnalysis("本文 [@a]").containsCitationSyntax)
+        XCTAssertTrue(MarkdownAnalysis("本文[^1]\n\n[^1]: 注 [@a]").containsCitationSyntax)
+        XCTAssertFalse(MarkdownAnalysis("```\n[@a]\n```").containsCitationSyntax)
+        XCTAssertFalse(MarkdownAnalysis("本文 [@a]", dialect: .basic).containsCitationSyntax)
+        let catalog = MarkdownCitationCatalog(entries: [BibTeXEntry(key: "a", fields: [:])])
+        XCTAssertFalse(catalog.hasCitation(in: MarkdownAnalysis("引用なし")))
+        XCTAssertTrue(catalog.hasCitation(in: MarkdownAnalysis("本文 [@a]")))
+    }
+
+    func testFileMonitorReportsInPlaceAndAtomicBibliographyChanges() async throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bib = directory.appendingPathComponent("references.bib")
+        let counter = ChangeCounter()
+        let consumer = Task {
+            for await _ in MarkdownCitationFileMonitor.changes(documentURL: document) {
+                await counter.increment()
+            }
+        }
+        defer { consumer.cancel() }
+        try await Task.sleep(for: .milliseconds(100))
+
+        let handle = try FileHandle(forWritingTo: bib)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("\n@misc{later, title={Later}}".utf8))
+        try handle.close()
+        let afterAppend = try await counter.wait(above: 0)
+
+        try "@book{replaced, title={Replaced}}".write(to: bib, atomically: true, encoding: .utf8)
+        _ = try await counter.wait(above: afterAppend)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["replaced"])
+
+        // 置き換え後のファイルも監視が張り直されている。
+        let afterReplace = await counter.value
+        let replacedHandle = try FileHandle(forWritingTo: bib)
+        try replacedHandle.seekToEnd()
+        try replacedHandle.write(contentsOf: Data("\n".utf8))
+        try replacedHandle.close()
+        _ = try await counter.wait(above: afterReplace)
+    }
+
     private func fixture() throws -> (URL, URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -94,5 +178,23 @@ final class MarkdownCitationsTests: XCTestCase {
         try bib.write(to: directory.appendingPathComponent("references.bib"),
                       atomically: true, encoding: .utf8)
         return (directory, directory.appendingPathComponent("notes.md"))
+    }
+}
+
+private actor ChangeCounter {
+    private(set) var value = 0
+
+    func increment() { value += 1 }
+
+    func wait(above previous: Int, timeout: Duration = .seconds(5)) async throws -> Int {
+        let deadline = ContinuousClock.now + timeout
+        while value <= previous {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("No file change was reported")
+                return value
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return value
     }
 }

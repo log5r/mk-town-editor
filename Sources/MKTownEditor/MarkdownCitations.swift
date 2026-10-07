@@ -131,32 +131,57 @@ enum BibTeXParser {
 }
 
 struct MarkdownCitationCatalog: Equatable, Sendable {
+    static let empty = MarkdownCitationCatalog(entries: [])
+
     let entries: [BibTeXEntry]
+    private let numbers: [String: Int]
+
+    init(entries: [BibTeXEntry]) {
+        self.entries = entries
+        numbers = Dictionary(entries.enumerated().map { ($0.element.key, $0.offset + 1) },
+                             uniquingKeysWith: { first, _ in first })
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.entries == rhs.entries }
+
+    static func bibliographyURL(documentURL: URL?) -> URL? {
+        guard let documentURL, documentURL.isFileURL else { return nil }
+        return documentURL.deletingLastPathComponent().appendingPathComponent("references.bib")
+    }
 
     static func fingerprint(documentURL: URL?) -> String? {
-        guard let documentURL, documentURL.isFileURL else { return nil }
-        let url = documentURL.deletingLastPathComponent().appendingPathComponent("references.bib")
-        guard let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else {
+        guard let url = bibliographyURL(documentURL: documentURL),
+              let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]) else {
             return nil
         }
         return "\(values.fileSize ?? -1):\(values.contentModificationDate?.timeIntervalSince1970 ?? 0)"
     }
 
+    /// 同じ大きさ・更新日時の参考文献は、解析済みの結果を共有キャッシュから返す。
     static func load(documentURL: URL?) -> MarkdownCitationCatalog? {
-        guard let documentURL, documentURL.isFileURL else { return nil }
-        let url = documentURL.deletingLastPathComponent().appendingPathComponent("references.bib")
+        MarkdownCitationCatalogCache.shared.catalog(documentURL: documentURL)
+    }
+
+    /// 文脈に解決済みのカタログがあればそれを使い、なければディスクから読む。
+    static func resolved(for context: DocumentContext) -> MarkdownCitationCatalog? {
+        context.citationCatalog ?? load(documentURL: context.fileURL)
+    }
+
+    fileprivate static func read(bibliography url: URL) -> MarkdownCitationCatalog? {
         guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
               size <= 1_000_000, let source = try? String(contentsOf: url, encoding: .utf8) else { return nil }
         return MarkdownCitationCatalog(entries: BibTeXParser.parse(source))
     }
 
     func hasCitation(in analysis: MarkdownAnalysis) -> Bool {
-        analysis.blocks.contains { block in
+        guard !entries.isEmpty, analysis.containsCitationSyntax else { return false }
+        return analysis.blocks.contains { block in
             block.kind != .codeBlock && replaceInline(block.content) != block.content
         } || analysis.footnotes.entries.contains { replaceInline($0.content) != $0.content }
     }
 
     func replaceInline(_ source: String) -> String {
+        guard !entries.isEmpty, source.contains("[@") else { return source }
         let chars = Array(source)
         var result = ""
         var index = 0
@@ -175,7 +200,7 @@ struct MarkdownCitationCatalog: Equatable, Sendable {
                let end = chars[(index + 2)...].firstIndex(of: "]") {
                 let key = String(chars[(index + 2)..<end])
                 if key.allSatisfy({ $0.isLetter || $0.isNumber || "_:.+-".contains($0) }),
-                   let number = entries.firstIndex(where: { $0.key == key }).map({ $0 + 1 }) {
+                   let number = numbers[key] {
                     result += "[\(number)]"
                     index = end + 1
                     continue
@@ -210,5 +235,112 @@ struct MarkdownCitationCatalog: Equatable, Sendable {
 
     private func escaped(_ chars: [Character], _ index: Int) -> Bool {
         index > 0 && chars[index - 1] == "\\"
+    }
+}
+
+/// 参考文献ファイルの解析結果を、大きさ・更新日時が変わるまで共有する。
+final class MarkdownCitationCatalogCache: @unchecked Sendable {
+    static let shared = MarkdownCitationCatalogCache()
+
+    private struct Entry {
+        let fingerprint: String
+        let catalog: MarkdownCitationCatalog?
+    }
+
+    private let lock = NSLock()
+    private var entries: [URL: Entry] = [:]
+    private(set) var parseCount = 0
+
+    func catalog(documentURL: URL?) -> MarkdownCitationCatalog? {
+        guard let url = MarkdownCitationCatalog.bibliographyURL(documentURL: documentURL),
+              let fingerprint = MarkdownCitationCatalog.fingerprint(documentURL: documentURL) else {
+            return nil
+        }
+        lock.lock()
+        if let cached = entries[url], cached.fingerprint == fingerprint {
+            lock.unlock()
+            return cached.catalog
+        }
+        lock.unlock()
+        let catalog = MarkdownCitationCatalog.read(bibliography: url)
+        lock.lock()
+        parseCount += 1
+        if entries.count >= 64 { entries.removeAll() }
+        entries[url] = Entry(fingerprint: fingerprint, catalog: catalog)
+        lock.unlock()
+        return catalog
+    }
+}
+
+/// 書類のフォルダと `references.bib` の変更を通知する。ポーリングは行わない。
+///
+/// 保存時の置き換え（rename）を検出するためフォルダを監視し、内容の上書きを検出するため
+/// ファイル自体も監視する。ファイルが置き換わるたびにファイル側の監視を張り直す。
+final class MarkdownCitationFileMonitor: @unchecked Sendable {
+    private let directory: URL
+    private let file: URL
+    private let queue = DispatchQueue(label: "MKTownEditor.citationMonitor")
+    private var directorySource: DispatchSourceFileSystemObject?
+    private var fileSource: DispatchSourceFileSystemObject?
+    private var onChange: (@Sendable () -> Void)?
+
+    private init(file: URL) {
+        self.file = file
+        directory = file.deletingLastPathComponent()
+    }
+
+    static func changes(documentURL: URL?) -> AsyncStream<Void> {
+        AsyncStream { continuation in
+            guard let file = MarkdownCitationCatalog.bibliographyURL(documentURL: documentURL) else {
+                continuation.finish()
+                return
+            }
+            let monitor = MarkdownCitationFileMonitor(file: file)
+            guard monitor.start(onChange: { continuation.yield(()) }) else {
+                continuation.finish()
+                return
+            }
+            continuation.onTermination = { _ in monitor.stop() }
+        }
+    }
+
+    private func start(onChange: @escaping @Sendable () -> Void) -> Bool {
+        queue.sync {
+            self.onChange = onChange
+            guard let source = makeSource(directory, mask: .write) else { return false }
+            directorySource = source
+            watchFile()
+            return true
+        }
+    }
+
+    private func stop() {
+        queue.async { [self] in
+            onChange = nil
+            directorySource?.cancel()
+            directorySource = nil
+            fileSource?.cancel()
+            fileSource = nil
+        }
+    }
+
+    private func watchFile() {
+        fileSource?.cancel()
+        fileSource = makeSource(file, mask: [.write, .extend, .delete, .rename, .attrib])
+    }
+
+    private func makeSource(_ url: URL, mask: DispatchSource.FileSystemEvent) -> DispatchSourceFileSystemObject? {
+        let descriptor = open(url.path, O_EVTONLY)
+        guard descriptor >= 0 else { return nil }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor,
+                                                               eventMask: mask, queue: queue)
+        source.setEventHandler { [weak self] in
+            guard let self, self.onChange != nil else { return }
+            self.watchFile()
+            self.onChange?()
+        }
+        source.setCancelHandler { close(descriptor) }
+        source.resume()
+        return source
     }
 }

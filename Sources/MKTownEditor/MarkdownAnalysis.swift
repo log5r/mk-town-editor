@@ -236,6 +236,8 @@ struct MarkdownAnalysis: Sendable {
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
     let crossReferences: MarkdownCrossReferences
+    /// コードブロック以外のブロックまたは脚注に引用記法 `[@` が含まれるか。
+    let containsCitationSyntax: Bool
 
     init(_ markdown: String, dialect: MarkdownDialect = .extended) {
         self.dialect = dialect
@@ -255,6 +257,9 @@ struct MarkdownAnalysis: Sendable {
         blocks = visibleBlocks
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
         crossReferences = MarkdownCrossReferences(blocks: dialect == .extended ? visibleBlocks : [])
+        containsCitationSyntax = dialect == .extended && (
+            visibleBlocks.contains { $0.kind != .codeBlock && $0.content.contains("[@") } ||
+            index.entries.contains { $0.content.contains("[@") })
     }
 
     var rootBlocks: [MarkdownBlock] { blocks.filter { $0.parentID == nil } }

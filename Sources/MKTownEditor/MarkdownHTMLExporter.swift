@@ -85,6 +85,9 @@ enum MarkdownHTMLExporter {
         })
         var context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         context.crossReferences = analysis.crossReferences
+        // 参考文献は書き出し1回につき1度だけ解決し、段落ごとに読み直さない。
+        context.citationCatalog = dialect == .extended && analysis.containsCitationSyntax
+            ? MarkdownCitationCatalog.load(documentURL: documentURL) ?? .empty : .empty
         var body = sequence(analysis.rootBlocks, analysis: analysis,
                             context: context, anchors: anchors)
         for note in analysis.footnotes.entries {
@@ -104,7 +107,7 @@ enum MarkdownHTMLExporter {
             body += "</ol></section>"
         }
         if dialect == .extended,
-           let catalog = MarkdownCitationCatalog.load(documentURL: documentURL),
+           let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
             body += "<section class=\"bibliography\"><h2>参考文献</h2><ol>"
             for entry in catalog.entries {
@@ -299,7 +302,7 @@ enum MarkdownHTMLExporter {
         let cross = context.crossReferences?.placeholders(in: markdown)
         let linked = cross?.text ?? markdown
         let cited = context.markdownDialect == .extended && linked.contains("[@")
-            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
+            ? MarkdownCitationCatalog.resolved(for: context)?.replaceInline(linked) ?? linked
             : linked
         let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
             ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
