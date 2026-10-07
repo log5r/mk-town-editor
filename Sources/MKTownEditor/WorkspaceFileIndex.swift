@@ -159,7 +159,23 @@ final class WorkspaceContentRevisions: ObservableObject {
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var rootURL: URL?
     @Published private(set) var nodes: [WorkspaceNode] = [] {
-        didSet { updateVisibleNodes() }
+        didSet {
+            nodesRevision &+= 1
+            updateVisibleNodes()
+        }
+    }
+    private var nodesRevision = 0
+    private var quickOpenCache: (root: URL, revision: Int, index: WorkspaceQuickOpenIndex)?
+
+    /// 書類一覧が変わるまで、クイックオープン・Wikiリンク・結合のシートで同じ索引を使う。
+    var quickOpenIndex: WorkspaceQuickOpenIndex {
+        guard let rootURL else { return .empty }
+        if let cache = quickOpenCache, cache.root == rootURL, cache.revision == nodesRevision {
+            return cache.index
+        }
+        let index = WorkspaceQuickOpenIndex(nodes: nodes, root: rootURL)
+        quickOpenCache = (rootURL, nodesRevision, index)
+        return index
     }
     @Published private(set) var visibleNodes: [WorkspaceNode] = []
     @Published private(set) var documentURLs: [URL] = []

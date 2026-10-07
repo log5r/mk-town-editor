@@ -48,6 +48,12 @@ struct PortablePackagePlan: Sendable {
 }
 
 enum PortablePackagePlanner {
+    private static let referenceLinkExpression = try! NSRegularExpression(
+        pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#)
+    private static let referenceDestinationExpression = try! NSRegularExpression(
+        pattern: #"^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|(\S+))"#)
+    private static let anchorExpression = try! NSRegularExpression(pattern: #"<a href="([^"]+)""#)
+
     @MainActor
     static func plan(source: String, documentURL: URL,
                      dialect: MarkdownDialect = .extended) throws -> PortablePackagePlan {
@@ -133,8 +139,7 @@ enum PortablePackagePlanner {
                 MarkdownLinkSyntax.escapeDestination(relative))
         }
 
-        let referencePattern = try! NSRegularExpression(
-            pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#)
+        let referencePattern = referenceLinkExpression
         let matches = referencePattern.matches(in: visible,
             range: NSRange(location: 0, length: (visible as NSString).length))
         let original = source as NSString
@@ -153,8 +158,7 @@ enum PortablePackagePlanner {
                   let relative = try packagedPath(for: reference.destination, image: isImage)
             else { continue }
             let definition = original.substring(with: reference.sourceRange)
-            let destinationPattern = try! NSRegularExpression(
-                pattern: #"^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|(\S+))"#)
+            let destinationPattern = referenceDestinationExpression
             guard let parsed = destinationPattern.firstMatch(in: definition,
                 range: NSRange(location: 0, length: (definition as NSString).length)) else { continue }
             let capture = parsed.range(at: 1).location == NSNotFound
@@ -175,7 +179,7 @@ enum PortablePackagePlanner {
 
     private static func rewriteHTMLAttachmentLinks(_ html: String, context: DocumentContext,
                                                     destinations: [URL: String]) -> String {
-        let pattern = try! NSRegularExpression(pattern: #"<a href="([^"]+)""#)
+        let pattern = anchorExpression
         let original = html as NSString
         let output = NSMutableString(string: html)
         for match in pattern.matches(in: html, range: NSRange(location: 0, length: original.length)).reversed() {

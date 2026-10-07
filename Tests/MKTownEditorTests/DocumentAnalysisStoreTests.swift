@@ -76,6 +76,24 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(currentIDs, DocumentSnapshot(source: "Inserted\n\n" + source).blockPresentationIDs)
     }
 
+    func testNavigationTargetResolvesBySourceLocationAfterBlocksShift() throws {
+        let source = "# First\n\nBody\n\n## Second\n\nTail"
+        let edited = "Inserted paragraph\n\n" + source
+        let before = DocumentSnapshot(source: source)
+        let after = DocumentSnapshot(source: edited)
+        let headingLocation = (edited as NSString).range(of: "## Second").location
+        let target = PreviewNavigationTarget(sourceLocation: headingLocation, sequence: 1)
+        let oldHeading = try XCTUnwrap(before.analysis.blocks.first { $0.kind == .heading(level: 2) })
+        XCTAssertEqual(target.presentationID(in: after.analysis, presentationIDs: after.blockPresentationIDs),
+                       before.blockPresentationIDs[oldHeading.id],
+                       "The same heading keeps its presentation identity and is found by location")
+        let inBody = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "Tail").location + 2,
+                                             sequence: 2)
+        let tail = try XCTUnwrap(after.analysis.blocks.last { $0.kind == .paragraph })
+        XCTAssertEqual(inBody.presentationID(in: after.analysis, presentationIDs: after.blockPresentationIDs),
+                       after.blockPresentationIDs[tail.id])
+    }
+
     func testAnalysisBoundaryNormalizesBridgedText() async throws {
         let text = NSMutableString(string: String(repeating: "日本語🙂\n", count: 100)) as String
         let store = DocumentAnalysisStore(analyze: { source in
@@ -291,6 +309,27 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         store.update(source: "original")
         try await Task.sleep(for: .milliseconds(110))
         XCTAssertEqual(store.snapshot?.source, "original")
+    }
+
+    func testNavigationRequestedBeforeAnalysisCatchesUpIsReplayedOnce() {
+        let edited = "Inserted\n\n# Heading"
+        let target = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "# Heading").location,
+                                             sequence: 3, source: edited)
+        XCTAssertFalse(target.isSettled(byDisplayedSource: "# Heading"),
+                       "A preview still showing the previous text must apply the target again later")
+        XCTAssertTrue(target.isSettled(byDisplayedSource: edited))
+        XCTAssertTrue(PreviewNavigationTarget(sourceLocation: 0, sequence: 1)
+            .isSettled(byDisplayedSource: "anything"))
+    }
+
+    func testNavigationSettlesAfterTheFirstNewerAnalysisWhenTheRequestedOneIsSkipped() {
+        let requested = "S1\n\n# Heading"
+        let target = PreviewNavigationTarget(sourceLocation: 4, sequence: 7, source: requested)
+        // 要求時はまだ古い表示（S0）なので確定しない。
+        XCTAssertFalse(target.settles(afterAnalysisChange: false, displayedSource: "S0\n\n# Heading"))
+        // S1 の解析が続く編集で取り消され、次に S2 が表示されても、そこで一度だけ適用して確定する。
+        XCTAssertTrue(target.settles(afterAnalysisChange: true, displayedSource: "S2 edited\n\n# Heading"))
+        XCTAssertTrue(target.settles(afterAnalysisChange: false, displayedSource: requested))
     }
 }
 

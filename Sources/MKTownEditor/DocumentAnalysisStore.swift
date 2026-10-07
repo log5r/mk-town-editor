@@ -16,6 +16,13 @@ struct DocumentSnapshot: Sendable {
     let hoverLinks: [MarkdownHoverLink]
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
     let inlineCodeRanges: [NSRange]
+    let remoteImageURLs: Set<URL>
+    /// 本文の画像の参照先（コード内を除く）。
+    let imageDestinations: [String]
+    let previewLayout: PreviewLayoutIndex
+    let scrollIndex: PreviewScrollIndex
+    let needsStructuredPreview: Bool
+    let containsDocumentEmbeds: Bool
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         self.init(source: source, dialect: dialect, checkCancellation: {})
@@ -50,6 +57,15 @@ struct DocumentSnapshot: Sendable {
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
         try checkCancellation()
         inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
+        try checkCancellation()
+        imageDestinations = RemoteImageStore.imageDestinations(in: source, analysis: parsed)
+        remoteImageURLs = Set(imageDestinations.compactMap { URL(string: $0) }
+            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
+        try checkCancellation()
+        previewLayout = PreviewLayoutIndex(parsed)
+        scrollIndex = PreviewScrollIndex(parsed)
+        needsStructuredPreview = PreviewStructure.needsStructuredLayout(parsed, source: source)
+        containsDocumentEmbeds = source.contains("![[")
         try checkCancellation()
     }
 

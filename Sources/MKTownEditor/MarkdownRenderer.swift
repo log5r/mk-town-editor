@@ -3,6 +3,11 @@ import Foundation
 
 @MainActor
 enum MarkdownRenderer {
+    /// プレビューではローカル画像を背景でデコードし、完了まで読み込み中の表示にする。
+    /// 値は要求元のプレビューで、閉じた時に待機中のデコードを取り消すために使う。
+    /// 書き出し・印刷では既定の `nil` のまま同期的にデコードし、画像を欠かさない。
+    @TaskLocal nonisolated static var localImageRequester: LocalImageRequester?
+
     nonisolated private static let referencePattern = try! NSRegularExpression(
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
     )
@@ -18,6 +23,10 @@ enum MarkdownRenderer {
         var context = documentContext
         context.markdownDialect = analysis.dialect
         context.crossReferences = analysis.crossReferences
+        if analysis.dialect == .extended, context.citationCatalog == nil {
+            context.citationCatalog = analysis.containsCitationSyntax
+                ? MarkdownCitationCatalog.load(documentURL: context.fileURL) ?? .empty : .empty
+        }
         let output = NSMutableAttributedString(attributedString:
             renderSequence(analysis.rootBlocks, in: analysis, context: context))
         if !analysis.footnotes.entries.isEmpty {
@@ -35,7 +44,7 @@ enum MarkdownRenderer {
             }
         }
         if analysis.dialect == .extended,
-           let catalog = MarkdownCitationCatalog.load(documentURL: context.fileURL),
+           let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
             output.append(NSAttributedString(string: "\n\n" + String(localized: "参考文献") + "\n"))
             for (index, entry) in catalog.entries.enumerated() {
@@ -273,7 +282,7 @@ enum MarkdownRenderer {
         let cross = context.crossReferences?.placeholders(in: markdown)
         let linked = cross?.text ?? markdown
         let cited = context.markdownDialect == .extended && linked.contains("[@")
-            ? MarkdownCitationCatalog.load(documentURL: context.fileURL)?.replaceInline(linked) ?? linked
+            ? MarkdownCitationCatalog.resolved(for: context)?.replaceInline(linked) ?? linked
             : linked
         let extensions: (text: String, items: [(String, MarkdownInlineExtensions.Item)]) = context.markdownDialect == .extended
             ? MarkdownInlineExtensions.placeholders(in: cited) : (cited, [])
@@ -336,9 +345,16 @@ enum MarkdownRenderer {
         var renderedAttachment = false
         for (range, url, alt, width) in images.reversed() {
             let replacement: NSAttributedString
-            if url.scheme == nil,
-               let fileURL = context.resolveLocalResource(url.relativeString),
-               let image = ImageResourceManager().previewImage(at: fileURL, alt: alt) {
+            let localFile = url.scheme == nil ? context.resolveLocalResource(url.relativeString) : nil
+            let localLookup: LocalImageStore.Lookup? = localFile.map { fileURL in
+                if let requester = localImageRequester {
+                    return LocalImageStore.shared.lookup(fileURL, requester: requester)
+                }
+                return LocalImageCache.shared.image(at: fileURL).map(LocalImageStore.Lookup.image) ?? .unavailable
+            }
+            if let fileURL = localFile, case let .image(cached)? = localLookup {
+                let image = (cached.copy() as? NSImage) ?? cached
+                image.accessibilityDescription = alt
                 let attachment = MarkdownImageAttachment()
                 renderedAttachment = true
                 attachment.image = sizedImage(image, width: width)
@@ -373,6 +389,8 @@ enum MarkdownRenderer {
                     status = RemoteImageStore.shared.isEnabled
                         ? (RemoteImageStore.shared.hasFailed(url) ? String(localized: "画像を読み込めません") : String(localized: "画像を読み込み中"))
                         : String(localized: "外部画像の読込オフ")
+                } else if case .loading? = localLookup {
+                    status = String(localized: "画像を読み込み中")
                 } else {
                     status = String(localized: "画像")
                 }
@@ -380,6 +398,10 @@ enum MarkdownRenderer {
                                                       attributes: baseAttributes(font: baseFont, color: color,
                                                                                  paragraphSpacing: paragraphSpacing))
                 value.addAttribute(.link, value: url, range: NSRange(location: 0, length: value.length))
+                if case .loading? = localLookup {
+                    value.addAttribute(.pendingLocalImage, value: true,
+                                       range: NSRange(location: 0, length: value.length))
+                }
                 replacement = value
             }
             result.replaceCharacters(in: range, with: replacement)
@@ -436,7 +458,7 @@ enum MarkdownRenderer {
 
     private static func applyFootnoteMarkers(to result: NSMutableAttributedString,
                                              footnotes: MarkdownFootnoteIndex) {
-        let expression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let expression = MarkdownFootnoteIndex.referenceExpression
         let source = result.string as NSString
         let matches = expression.matches(in: result.string,
             range: NSRange(location: 0, length: source.length))
@@ -529,10 +551,13 @@ struct MarkdownImageLayout {
     let widths: [CGFloat?]
     let standaloneCaption: String?
 
+    private static let widthExpression = try! NSRegularExpression(
+        pattern: #"^\{width=([1-9][0-9]{0,3})(?:px)?\}"#)
+
     static func parse(_ markdown: String) -> Self {
         let source = markdown as NSString
         let codeRanges = MarkdownInlineSyntax.codeSpanRanges(in: markdown)
-        let expression = try! NSRegularExpression(pattern: #"^\{width=([1-9][0-9]{0,3})(?:px)?\}"#)
+        let expression = widthExpression
         var widths: [CGFloat?] = []
         var removals: [NSRange] = []
         var caption: String?
@@ -573,5 +598,23 @@ final class MarkdownImageAttachment: NSTextAttachment {
         let availableWidth = max(1, lineFrag.maxX - position.x - 8)
         let scale = min(1, availableWidth / original.width)
         return CGRect(x: 0, y: 0, width: original.width * scale, height: original.height * scale)
+    }
+}
+
+extension NSAttributedString.Key {
+    /// 背景で読み込み中のローカル画像の仮表示。描画キャッシュはこの結果を保持しない。
+    static let pendingLocalImage = NSAttributedString.Key("MKTownPendingLocalImage")
+}
+
+extension NSAttributedString {
+    var containsPendingLocalImage: Bool {
+        var found = false
+        enumerateAttribute(.pendingLocalImage, in: NSRange(location: 0, length: length)) { value, _, stop in
+            if value != nil {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
     }
 }

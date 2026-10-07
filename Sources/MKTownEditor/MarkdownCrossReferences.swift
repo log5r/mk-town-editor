@@ -22,18 +22,27 @@ struct MarkdownCrossReferenceTarget: Equatable, Sendable {
 }
 
 struct MarkdownCrossReferences: Equatable, Sendable {
+    private static let referenceExpression = try! NSRegularExpression(
+        pattern: #"@(fig|tbl|eq):([A-Za-z][A-Za-z0-9_-]*)(?![A-Za-z0-9_:-]|\.[A-Za-z0-9_-])"#)
+    private static let markerExpression = try! NSRegularExpression(
+        pattern: #"^\{#(fig|tbl|eq):([A-Za-z][A-Za-z0-9_-]*)\}$"#)
+
     let targets: [MarkdownCrossReferenceTarget]
     let markerBlockIDs: Set<Int>
+    private let targetsByKey: [String: MarkdownCrossReferenceTarget]
+    private let targetsByBlockID: [Int: MarkdownCrossReferenceTarget]
 
     init(blocks: [MarkdownBlock]) {
         var found: [MarkdownCrossReferenceTarget] = []
         var markers: Set<Int> = []
         var counts: [MarkdownCrossReferenceKind: Int] = [:]
+        var keys: Set<String> = []
         for (index, block) in blocks.enumerated() {
             guard block.kind == .paragraph,
+                  block.content.contains("{#"),
                   let (kind, identifier) = Self.marker(block.content),
                   index > 0,
-                  !found.contains(where: { $0.key == "\(kind.rawValue):\(identifier)" }) else { continue }
+                  !keys.contains("\(kind.rawValue):\(identifier)") else { continue }
             guard let target = blocks[..<index].reversed().first(where: {
                 $0.kind != .blank && !markers.contains($0.id)
             }), Self.matches(target, kind: kind) else { continue }
@@ -43,13 +52,16 @@ struct MarkdownCrossReferences: Equatable, Sendable {
                                                       kind: kind, number: number,
                                                       blockID: target.id))
             markers.insert(block.id)
+            keys.insert("\(kind.rawValue):\(identifier)")
         }
         targets = found
         markerBlockIDs = markers
+        targetsByKey = Dictionary(found.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        targetsByBlockID = Dictionary(found.map { ($0.blockID, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     func target(forBlockID id: Int) -> MarkdownCrossReferenceTarget? {
-        targets.first(where: { $0.blockID == id })
+        targetsByBlockID[id]
     }
 
     func replaceInline(_ source: String) -> String {
@@ -68,46 +80,47 @@ struct MarkdownCrossReferences: Equatable, Sendable {
 
     private func transformInline(_ source: String,
                                  replacement: (MarkdownCrossReferenceTarget) -> String) -> String {
-        let chars = Array(source)
+        guard !targets.isEmpty, source.contains("@") else { return source }
+        // 本文をUTF-16のまま走査し、照合はアンカー付きの範囲指定で行う。部分文字列は作らない。
+        let text = source as NSString
+        let length = text.length
         var result = ""
+        var segmentStart = 0
         var index = 0
         var ticks = 0
-        while index < chars.count {
-            if chars[index] == "`" {
-                let count = chars[index...].prefix(while: { $0 == "`" }).count
+        while index < length {
+            let unit = text.character(at: index)
+            if unit == 0x60 {
+                var end = index
+                while end < length, text.character(at: end) == 0x60 { end += 1 }
+                let count = end - index
                 if ticks == 0 { ticks = count }
                 else if ticks == count { ticks = 0 }
-                result += String(chars[index..<(index + count)])
-                index += count
+                index = end
                 continue
             }
-            if ticks == 0, chars[index] == "@", index + 5 < chars.count,
-               (index == 0 || chars[index - 1] != "\\") {
-                let rest = String(chars[index...])
-                if let match = Self.referencePattern.firstMatch(in: rest,
-                    range: NSRange(location: 0, length: (rest as NSString).length)), match.range.location == 0 {
-                    let key = (rest as NSString).substring(with: match.range(at: 1)) + ":" +
-                        (rest as NSString).substring(with: match.range(at: 2))
-                    if let target = targets.first(where: { $0.key == key }) {
-                        result += replacement(target)
-                        index += Array((rest as NSString).substring(with: match.range)).count
-                        continue
-                    }
-                }
+            if ticks == 0, unit == 0x40, index + 5 < length,
+               index == 0 || text.character(at: index - 1) != 0x5C,
+               let match = Self.referenceExpression.firstMatch(
+                in: source, options: .anchored, range: NSRange(location: index, length: length - index)),
+               let target = targetsByKey[text.substring(with: match.range(at: 1)) + ":" +
+                    text.substring(with: match.range(at: 2))] {
+                result += text.substring(with: NSRange(location: segmentStart, length: index - segmentStart))
+                result += replacement(target)
+                index = NSMaxRange(match.range)
+                segmentStart = index
+                continue
             }
-            result.append(chars[index])
             index += 1
         }
+        guard segmentStart > 0 else { return source }
+        result += text.substring(from: segmentStart)
         return result
-    }
-
-    private static var referencePattern: NSRegularExpression {
-        try! NSRegularExpression(pattern: #"^@(fig|tbl|eq):([A-Za-z][A-Za-z0-9_-]*)(?![A-Za-z0-9_:-]|\.[A-Za-z0-9_-])"#)
     }
 
     static func marker(_ content: String) -> (MarkdownCrossReferenceKind, String)? {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        let pattern = try! NSRegularExpression(pattern: #"^\{#(fig|tbl|eq):([A-Za-z][A-Za-z0-9_-]*)\}$"#)
+        let pattern = markerExpression
         let source = trimmed as NSString
         guard let match = pattern.firstMatch(in: trimmed, range: NSRange(location: 0, length: source.length)),
               let kind = MarkdownCrossReferenceKind(rawValue: source.substring(with: match.range(at: 1))) else {

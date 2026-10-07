@@ -85,4 +85,24 @@ final class MarkdownCrossReferencesTests: XCTestCase {
         XCTAssertTrue(html.contains("@fig:overview"))
         XCTAssertFalse(html.contains("id=\"fig:overview\""))
     }
+
+    func testInlineReplacementScansUTF16WithoutChangingSemantics() {
+        let references = MarkdownAnalysis(source).crossReferences
+        XCTAssertEqual(references.replaceInline("日本🙂@fig:overview。``@tbl:data`` @tbl:data:x @eq:pythagoras"),
+                       "日本🙂図1。``@tbl:data`` @tbl:data:x 式(1)")
+        XCTAssertEqual(references.replaceInline("先頭なし"), "先頭なし")
+        let placeholders = references.placeholders(in: "@fig:overview と @tbl:data")
+        XCTAssertEqual(placeholders.text, "MKTOWNCROSSREFERENCE0END と MKTOWNCROSSREFERENCE1END")
+        XCTAssertEqual(placeholders.targets.map(\.1.key), ["fig:overview", "tbl:data"])
+        XCTAssertEqual(references.target(forBlockID: references.targets[1].blockID)?.key, "tbl:data")
+    }
+
+    func testInlineReplacementIsLinearForManyReferences() {
+        let references = MarkdownAnalysis(source).crossReferences
+        let paragraph = String(repeating: "本文 @fig:overview と @unknown ", count: 20_000)
+        let start = Date()
+        let replaced = references.replaceInline(paragraph)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+        XCTAssertEqual(replaced, String(repeating: "本文 図1 と @unknown ", count: 20_000))
+    }
 }

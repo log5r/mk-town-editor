@@ -96,14 +96,9 @@ struct GitCommitSheet: View {
                                     if let selectedPath { Task { await loadDiff(path: selectedPath) } }
                                 }
                         }
-                        ScrollView([.vertical, .horizontal]) {
-                            Text(diff.isEmpty ? "差分なし（未追跡ファイルはステージ後に表示）" : diff)
-                                .font(.system(.caption, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                        }
-                        .background(Color.secondary.opacity(0.05))
+                        GitDiffView(diff: diff,
+                                    placeholder: String(localized: "差分なし（未追跡ファイルはステージ後に表示）"))
+                            .background(Color.secondary.opacity(0.05))
                     }
                 }
                 Text("ステージ済み \(staged.count) 件")

@@ -82,4 +82,31 @@ final class WorkspaceNoteOperationsTests: XCTestCase {
             retainsLocalFragments: true)
         XCTAssertEqual(result, "![alt][asset]\n\n[asset]: ../a/image.png")
     }
+
+    @MainActor
+    func testSplitPlanDependsOnWorkspaceDocumentsAndSheetKeyIncludesThem() throws {
+        let root = URL(fileURLWithPath: "/tmp/note-split-documents")
+        let sourceURL = root.appendingPathComponent("a/source.md")
+        let destination = root.appendingPathComponent("b/extracted.md")
+        let note = root.appendingPathComponent("a/Note.md")
+        let sameName = root.appendingPathComponent("c/Note.md")
+        let source = "# Top\n\n## Section\nsee [[Note]]\n"
+        let heading = try XCTUnwrap(MarkdownOutline.entries(in: MarkdownAnalysis(source))
+            .first { $0.title == "Section" })
+        let unique = try XCTUnwrap(WorkspaceNoteOperations.split(source,
+            headingLocation: heading.sourceRange.location, sourceURL: sourceURL,
+            destinationURL: destination, workspaceDocuments: [sourceURL, note]))
+        let ambiguous = try XCTUnwrap(WorkspaceNoteOperations.split(source,
+            headingLocation: heading.sourceRange.location, sourceURL: sourceURL,
+            destinationURL: destination, workspaceDocuments: [sourceURL, note, sameName]))
+        XCTAssertNotEqual(unique.extractedText, ambiguous.extractedText,
+                          "Adding a same-named note changes how the extracted link is written")
+        let key = { (documents: [URL]) in
+            WorkspaceNoteSplitSheet.PlanKey(source: source, sourceURL: sourceURL,
+                headingLocation: heading.sourceRange.location, destinationURL: destination,
+                workspaceDocuments: documents)
+        }
+        XCTAssertNotEqual(key([sourceURL, note]), key([sourceURL, note, sameName]),
+                          "The sheet must not reuse a plan built from an older document list")
+    }
 }

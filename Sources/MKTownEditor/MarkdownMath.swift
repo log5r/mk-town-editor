@@ -161,14 +161,27 @@ struct MarkdownMathView: NSViewRepresentable {
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel(frame: .zero)
         view.setContentHuggingPriority(.required, for: .vertical)
-        return view
-    }
-
-    func updateNSView(_ view: MTMathUILabel, context: Context) {
-        view.latex = formula.latex
         view.fontSize = 21
         view.labelMode = .display
         view.textColor = .labelColor
+        return view
+    }
+
+    final class Coordinator {
+        var colorScheme: ColorScheme?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func updateNSView(_ view: MTMathUILabel, context: Context) {
+        // 文字色は設定時に解決されるため、外観が変わった時は設定し直す。
+        if context.coordinator.colorScheme != context.environment.colorScheme {
+            context.coordinator.colorScheme = context.environment.colorScheme
+            view.effectiveAppearance.performAsCurrentDrawingAppearance { view.textColor = .labelColor }
+        }
+        // latexの再設定は再解析を伴うため、式が変わった時だけ行う。
+        guard view.latex != formula.latex else { return }
+        view.latex = formula.latex
         view.invalidateIntrinsicContentSize()
     }
 

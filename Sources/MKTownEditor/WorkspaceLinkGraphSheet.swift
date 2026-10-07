@@ -22,6 +22,8 @@ struct WorkspaceLinkGraphSheet: View {
     }
 
     var body: some View {
+        // 表示する部分グラフは body ごとに一度だけ求める。
+        let displayed = displayed
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("文書リンクのグラフ").font(.headline)
@@ -72,7 +74,7 @@ struct WorkspaceLinkGraphSheet: View {
                 HStack {
                     Text("\(displayed.nodes.count)書類・\(displayed.edges.count)リンク")
                     if displayed.isLimited {
-                        Text("表示は150書類までです。")
+                        Text("表示は\(displayed.limit)書類までです。")
                     }
                     if graph.isTruncated {
                         Text("ファイル一覧が上限に達しました。")

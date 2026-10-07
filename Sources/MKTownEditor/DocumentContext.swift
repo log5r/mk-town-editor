@@ -6,6 +6,8 @@ struct DocumentContext: Equatable, Sendable {
     var attachmentDirectory: AttachmentDirectory = .assets
     var markdownDialect: MarkdownDialect = .extended
     var crossReferences: MarkdownCrossReferences? = nil
+    /// 解決済みの参考文献。`nil` の場合は描画時に書類のフォルダから読み込む。
+    var citationCatalog: MarkdownCitationCatalog? = nil
 
     var directoryURL: URL? {
         guard let fileURL, fileURL.isFileURL else { return nil }
