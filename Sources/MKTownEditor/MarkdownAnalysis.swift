@@ -227,7 +227,6 @@ struct MarkdownBlock: Equatable, Sendable {
 struct MarkdownAnalysis: Sendable {
     let dialect: MarkdownDialect
     let blocks: [MarkdownBlock]
-    let positionMap: MarkdownPositionMap
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
@@ -235,7 +234,6 @@ struct MarkdownAnalysis: Sendable {
 
     init(_ markdown: String, dialect: MarkdownDialect = .extended) {
         self.dialect = dialect
-        positionMap = MarkdownPositionMap(markdown)
         let preliminary = Self.parse(markdown, dialect: dialect)
         let frontMatter = dialect == .extended ? MarkdownFrontMatter(source: markdown) : nil
         self.frontMatter = frontMatter
