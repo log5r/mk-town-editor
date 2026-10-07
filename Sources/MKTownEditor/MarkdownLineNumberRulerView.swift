@@ -1,7 +1,8 @@
 import AppKit
 
 struct MarkdownLineNumberIndex {
-    let starts: [Int]
+    private(set) var starts: [Int]
+    private(set) var length: Int
 
     init(_ text: String) {
         let source = text as NSString
@@ -21,6 +22,33 @@ struct MarkdownLineNumberIndex {
             offset += 1
         }
         starts = result
+        length = source.length
+    }
+
+    /// Rescan only the edited lines and their CR/LF boundary neighbors.
+    mutating func update(in source: NSString, editedRange: NSRange, changeInLength delta: Int) {
+        let oldEnd = NSMaxRange(editedRange) - delta
+        let startPosition = max(0, editedRange.location - 1)
+        let startIndex = max(0, upperBound(startPosition) - 1)
+        let start = starts[startIndex]
+        let endIndex = upperBound(min(length, oldEnd + 1))
+        let oldBoundary = endIndex < starts.count ? starts[endIndex] : length
+        let newBoundary = min(source.length, max(start, oldBoundary + delta))
+        let local = MarkdownLineNumberIndex(source.substring(with:
+            NSRange(location: start, length: newBoundary - start)))
+        let suffix = starts.dropFirst(endIndex).filter { $0 > oldBoundary }.map { $0 + delta }
+        starts = Array(starts.prefix(startIndex)) + local.starts.map { $0 + start } + suffix
+        length = source.length
+    }
+
+    private func upperBound(_ location: Int) -> Int {
+        var low = 0
+        var high = starts.count
+        while low < high {
+            let middle = (low + high) / 2
+            if starts[middle] <= location { low = middle + 1 } else { high = middle }
+        }
+        return low
     }
 
     func number(atFragmentStart location: Int) -> Int? {
@@ -42,11 +70,11 @@ struct MarkdownLineNumberLabel {
 
 @MainActor
 enum MarkdownLineNumberLayout {
-    static func labels(in textView: NSTextView, visibleRect: NSRect) -> [MarkdownLineNumberLabel] {
+    static func labels(in textView: NSTextView, visibleRect: NSRect,
+                       cachedIndex: MarkdownLineNumberIndex? = nil) -> [MarkdownLineNumberLabel] {
         guard let manager = textView.layoutManager, let container = textView.textContainer else { return [] }
-        let source = textView.editorSource as NSString
-        let index = MarkdownLineNumberIndex(textView.editorSource)
-        if source.length == 0 {
+        let index = cachedIndex ?? MarkdownLineNumberIndex(textView.editorSource)
+        if index.length == 0 {
             let origin = textView.textContainerOrigin
             let height = manager.defaultLineHeight(for: textView.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize))
             return NSRect(origin: origin, size: NSSize(width: 1, height: height)).intersects(visibleRect)
@@ -65,7 +93,7 @@ enum MarkdownLineNumberLayout {
                                                   height: rectangle.height))
         }
 
-        if index.starts.last == source.length {
+        if index.starts.last == index.length {
             let extra = manager.extraLineFragmentRect
             if extra.height > 0 {
                 let origin = NSPoint(x: textView.textContainerOrigin.x + extra.minX,
@@ -83,11 +111,15 @@ enum MarkdownLineNumberLayout {
 @MainActor
 final class MarkdownLineNumberRulerView: NSRulerView {
     private weak var editor: NSTextView?
+    private(set) var index: MarkdownLineNumberIndex
 
     init(scrollView: NSScrollView, editor: NSTextView) {
         self.editor = editor
+        index = MarkdownLineNumberIndex(editor.editorSource)
         super.init(scrollView: scrollView, orientation: .verticalRuler)
         clientView = editor
+        NotificationCenter.default.addObserver(self, selector: #selector(storageDidChange(_:)),
+            name: NSTextStorage.didProcessEditingNotification, object: editor.textStorage)
         setAccessibilityLabel("行番号")
         refresh()
     }
@@ -96,9 +128,16 @@ final class MarkdownLineNumberRulerView: NSRulerView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    @objc private func storageDidChange(_ notification: Notification) {
+        guard let storage = notification.object as? NSTextStorage,
+              storage.editedMask.contains(.editedCharacters) else { return }
+        index.update(in: storage.string as NSString, editedRange: storage.editedRange,
+                     changeInLength: storage.changeInLength)
+        refresh()
+    }
+
     func refresh() {
-        guard let editor else { return }
-        let digits = String(MarkdownLineNumberIndex(editor.editorSource).starts.count).count
+        let digits = String(index.starts.count).count
         let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
                                                    weight: .regular)
         let width = (String(repeating: "8", count: digits) as NSString)
@@ -117,12 +156,12 @@ final class MarkdownLineNumberRulerView: NSRulerView {
             .font: font,
             .foregroundColor: NSColor.secondaryLabelColor
         ]
-        let lineStarts = MarkdownLineNumberIndex(editor.editorSource).starts
-        for label in MarkdownLineNumberLayout.labels(in: editor, visibleRect: editor.visibleRect) {
+        let lineStarts = index.starts
+        let foldedLocations = (editor as? EditorTextView)?.foldedHeaderLocations ?? []
+        for label in MarkdownLineNumberLayout.labels(in: editor, visibleRect: editor.visibleRect, cachedIndex: index) {
             let point = convert(label.origin, from: editor)
-            if let foldingEditor = editor as? EditorTextView,
-               label.number <= lineStarts.count,
-               foldingEditor.foldedHeaderLocations.contains(lineStarts[label.number - 1]) {
+            if label.number <= lineStarts.count,
+               foldedLocations.contains(lineStarts[label.number - 1]) {
                 ("▶" as NSString).draw(at: NSPoint(x: 3,
                     y: point.y + (label.height - font.pointSize) / 2),
                     withAttributes: attributes)
