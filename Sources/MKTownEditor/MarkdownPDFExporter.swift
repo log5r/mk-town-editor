@@ -121,7 +121,8 @@ enum MarkdownPDFExporter {
     static func exportAsync(_ markdown: String, documentURL: URL?, to destination: URL,
                             preset: MarkdownExportPreset = .standard,
                             dialect: MarkdownDialect = .extended) async throws {
-        // Print into a temporary file so cancellation never replaces the requested destination.
+        // Cancellation before publication preserves the destination; once the atomic
+        // write starts, a completed publication is reported as success.
         let temporary = destination.deletingLastPathComponent().appendingPathComponent(".mktown-pdf-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: temporary) }
         let info = printInfo(destination: temporary, preset: preset)
@@ -131,12 +132,12 @@ enum MarkdownPDFExporter {
         operation.showsPrintPanel = false
         guard await run(operation) else { throw MarkdownPDFExportError.printingFailed }
         try Task.checkCancellation()
-        try await DocumentWork.perform {
+        let data = try await DocumentWork.perform {
             let data = try Data(contentsOf: temporary)
             guard !data.isEmpty else { throw MarkdownPDFExportError.emptyOutput }
-            try Task.checkCancellation()
-            try data.write(to: destination, options: .atomic)
+            return data
         }
+        try await DocumentWork.commit { try data.write(to: destination, options: .atomic) }
     }
 
     static func run(_ operation: NSPrintOperation) async -> Bool {
