@@ -2,7 +2,8 @@ import Foundation
 
 enum MarkdownSymbolCompletion {
     static func edit(in text: String, selection: NSRange, typed: String,
-                     analysis: MarkdownAnalysis? = nil, allowsAnalysis: Bool = true) -> MarkdownEdit? {
+                     analysis: MarkdownAnalysis? = nil, inlineCodeRanges: [NSRange]? = nil,
+                     allowsAnalysis: Bool = true) -> MarkdownEdit? {
         let source = text as NSString
         guard selection.location <= source.length,
               selection.length <= source.length - selection.location,
@@ -13,11 +14,14 @@ enum MarkdownSymbolCompletion {
         if isMarkdownMarker {
             let inCodeBlock = MarkdownEditingContext.isInCode(at: position, source: text,
                 analysis: analysis, allowsAnalysis: allowsAnalysis)
-            let line = source.lineRange(for: NSRange(location: position, length: 0))
-            let inCodeSpan = MarkdownInlineSyntax.codeSpanRanges(in: source.substring(with: line)).contains {
-                position > line.location + $0.location && position < line.location + NSMaxRange($0)
+            guard !inCodeBlock else { return nil }
+            // Inline code may span lines. Use background ranges when available;
+            // pending large documents must not trigger an unbounded keystroke scan.
+            guard inlineCodeRanges != nil || allowsAnalysis || source.length <= 8_192 else { return nil }
+            let inCodeSpan = (inlineCodeRanges ?? MarkdownInlineSyntax.codeSpanRanges(in: text)).contains {
+                position > $0.location && position < NSMaxRange($0)
             }
-            if inCodeBlock || inCodeSpan { return nil }
+            if inCodeSpan { return nil }
         }
 
         let opening: String
@@ -50,7 +54,7 @@ enum MarkdownSymbolCompletion {
                                                length: selection.length))
     }
 
-    private static func isEscaped(_ source: NSString, at position: Int) -> Bool {
+    static func isEscaped(_ source: NSString, at position: Int) -> Bool {
         var cursor = position - 1
         while cursor >= 0 && source.character(at: cursor) == 92 { cursor -= 1 }
         return (position - cursor - 1) % 2 == 1
