@@ -33,12 +33,22 @@ jobs:
           xcodebuild -version
           swift --version
 
+      - name: Configure Japanese test locale
+        run: |
+          defaults write NSGlobalDomain AppleLanguages -array ja en
+          defaults write NSGlobalDomain AppleLocale -string ja_JP
+
       - name: Run unit tests and build Release
         env:
           CI_ARTIFACTS_DIR: ${{ runner.temp }}/ci-results
         run: |
           mkdir -p "$CI_ARTIFACTS_DIR"
           bash Tools/ci.sh 2>&1 | tee "$CI_ARTIFACTS_DIR/ci.log"
+
+      - name: Diagnose PDF test failures
+        if: ${{ failure() }}
+        run: |
+          swift -e 'import PDFKit; import Foundation; for path in ["/private/tmp/mktown-pdf-qa.pdf", "/private/tmp/mktown-cover-qa.pdf"] { if let pdf = PDFDocument(url: URL(fileURLWithPath: path)) { print("PDF:", path, "pages:", pdf.pageCount); print(String((pdf.string ?? "").prefix(1500)).debugDescription) } }'
 
       - name: Upload CI log
         if: ${{ always() }}
