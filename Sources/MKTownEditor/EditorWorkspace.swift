@@ -35,6 +35,8 @@ struct EditorWorkspace: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
+    @State private var positionSaveTask: Task<Void, Never>?
+    @State private var cloudMonitor: WorkspaceDirectoryMonitor?
     @StateObject private var analysisStore = DocumentAnalysisStore()
     @StateObject private var statusStore = DocumentStatusStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
@@ -1049,6 +1051,7 @@ struct EditorWorkspace: View {
             receivePendingDocumentLink()
             receivePendingSearchPosition()
             workspaceStore.refresh()
+            monitorCloudDocument(fileURL)
             refreshCloudStatus()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -1071,16 +1074,16 @@ struct EditorWorkspace: View {
                 workspaceViewActive = false
             }
         }
-        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
-            workspaceStore.refresh()
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshCloudStatus()
-            if let pendingCollaborativeText {
-                applyCollaborativeText(pendingCollaborativeText)
-            }
-            savePosition(for: fileURL)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSText.didChangeNotification)) { _ in
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: editorModel.viewport) { _, _ in schedulePositionSave() }
         .onChange(of: fileURL) { oldURL, newURL in
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
+            monitorCloudDocument(newURL)
             refreshCloudStatus()
             detachedPreview.updateDocumentURL(newURL)
             savePosition(for: oldURL)
@@ -1144,6 +1147,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onChange(of: editorModel.selectedRanges) { _, _ in
+            schedulePositionSave()
             statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
         }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
@@ -1171,6 +1175,9 @@ struct EditorWorkspace: View {
             applyNamedLayoutState(layout)
         }
         .onDisappear {
+            positionSaveTask?.cancel()
+            cloudMonitor?.stop()
+            cloudMonitor = nil
             analysisStore.cancel()
         }
     }
@@ -1991,6 +1998,21 @@ struct EditorWorkspace: View {
         let deck = MarkdownSlideDeck(document.text, dialect: documentContext.markdownDialect)
         slideWindow.show(deck: deck, context: documentContext) {
             saveSlidePDF(deck)
+        }
+    }
+
+    private func monitorCloudDocument(_ url: URL?) {
+        cloudMonitor?.stop()
+        cloudMonitor = url.map { url in
+            WorkspaceDirectoryMonitor(root: url.deletingLastPathComponent()) { refreshCloudStatus() }
+        }
+    }
+
+    private func schedulePositionSave() {
+        positionSaveTask?.cancel()
+        positionSaveTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            savePosition(for: fileURL)
         }
     }
 
