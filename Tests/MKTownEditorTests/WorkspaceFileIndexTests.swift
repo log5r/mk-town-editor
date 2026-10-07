@@ -109,7 +109,15 @@ final class WorkspaceFileIndexTests: XCTestCase {
         let store = WorkspaceStore(defaults: defaults)
         store.setRoot(root)
         for _ in 0..<200 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(100))
+        // 表示ツリー・書類索引の作成と、テスト用フォルダ作成のファイル監視の通知（遅延0.5秒）は
+        // 非同期に届く。遅い環境でも初期化の通知を計測に含めないよう、通知が1秒途絶えるまで待つ。
+        var lastSetupChange = Date()
+        let setupObservation = store.objectWillChange.sink { lastSetupChange = Date() }
+        let deadline = Date().addingTimeInterval(8)
+        while Date().timeIntervalSince(lastSetupChange) < 1, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        setupObservation.cancel()
         var changes = 0
         let observation = store.objectWillChange.sink { changes += 1 }
         store.refresh(force: true)
