@@ -79,4 +79,20 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
             }
         }
     }
+
+    func testRowsSplitLinesOnceAndMatchHunkExcerpts() {
+        let saved = (0..<200).map { "line \($0)" }.joined(separator: "\n")
+        var lines = saved.components(separatedBy: "\n")
+        lines[10] = "changed 10"
+        lines.insert("inserted", at: 120)
+        lines.remove(at: 190)
+        let current = lines.joined(separator: "\n")
+        let rows = WorkspaceSnapshotDiff.rows(snapshot: saved, current: current)
+        XCTAssertEqual(rows.map(\.hunk), WorkspaceSnapshotDiff.hunks(snapshot: saved, current: current))
+        let first = rows[0]
+        XCTAssertEqual(first.currentExcerpt, "changed 10")
+        XCTAssertEqual(first.snapshotExcerpt, "line 10")
+        XCTAssertTrue(rows.contains { $0.snapshotExcerpt == "（なし）" && $0.currentExcerpt == "inserted" })
+    }
 }
+

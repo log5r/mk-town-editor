@@ -217,6 +217,9 @@ final class WorkspaceFileIndexTests: XCTestCase {
         XCTAssertEqual(Set(result.unused.map { $0.url.lastPathComponent }), ["old.heic", "old.png"])
         XCTAssertEqual(result.used.map { $0.url.lastPathComponent }, ["図 one.png"])
         XCTAssertEqual(Set(result.used[0].sources), Set([first, second]))
+        XCTAssertEqual(result.missing.map(\.exists), [false])
+        XCTAssertTrue((result.used + result.unused).allSatisfy(\.exists),
+                      "Existence is recorded during the scan instead of being checked by each row")
 
         let changed = try await WorkspaceAttachmentAudit.scan(root: root,
             openDocuments: [first: Data("![now used](assets/old.heic)".utf8)])

@@ -8940,16 +8940,6 @@
         }
       }
     },
-    "表示は150書類までです。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Showing up to 150 documents."
-          }
-        }
-      }
-    },
     "表示は先頭30,000文字までです。適用時は全文を取り込みます。" : {
       "localizations" : {
         "en" : {
@@ -10219,6 +10209,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Showing the first %1$lld lines (%2$lld lines total)"
+          }
+        }
+      }
+    },
+    "表示は%lld書類までです。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing up to %lld documents."
           }
         }
       }

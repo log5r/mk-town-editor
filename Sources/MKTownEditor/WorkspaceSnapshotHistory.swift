@@ -85,10 +85,36 @@ struct WorkspaceSnapshotHunk: Equatable, Sendable {
     var firstCurrentLine: Int { currentRange.lowerBound + 1 }
 }
 
+/// 差分の1区間と、表示用の抜粋。抜粋は比較と同じ背景処理で一度だけ作る。
+struct WorkspaceSnapshotHunkRow: Equatable, Sendable {
+    let hunk: WorkspaceSnapshotHunk
+    let currentExcerpt: String
+    let snapshotExcerpt: String
+}
+
 enum WorkspaceSnapshotDiff {
     static func hunks(snapshot: String, current: String) -> [WorkspaceSnapshotHunk] {
+        hunks(oldLines: snapshot.components(separatedBy: "\n"),
+              newLines: current.components(separatedBy: "\n"))
+    }
+
+    /// 行の配列を一度だけ作り、差分の区間と各区間の抜粋をまとめて求める。
+    static func rows(snapshot: String, current: String) -> [WorkspaceSnapshotHunkRow] {
         let oldLines = snapshot.components(separatedBy: "\n")
         let newLines = current.components(separatedBy: "\n")
+        return hunks(oldLines: oldLines, newLines: newLines).map { hunk in
+            WorkspaceSnapshotHunkRow(hunk: hunk,
+                                     currentExcerpt: excerpt(newLines, lines: hunk.currentRange),
+                                     snapshotExcerpt: excerpt(oldLines, lines: hunk.snapshotRange))
+        }
+    }
+
+    static func excerpt(_ lines: [String], lines range: Range<Int>) -> String {
+        let value = lines[range].prefix(3).joined(separator: " ⏎ ")
+        return value.isEmpty ? String(localized: "（なし）") : String(value.prefix(180))
+    }
+
+    private static func hunks(oldLines: [String], newLines: [String]) -> [WorkspaceSnapshotHunk] {
         let difference = newLines.difference(from: oldLines)
         var removed = Set<Int>()
         var inserted = Set<Int>()
@@ -138,8 +164,9 @@ struct WorkspaceSnapshotHistorySheet: View {
     @State private var selectedText: String?
     @State private var comparedText: String?
     @State private var comparedSnapshot: String?
-    @State private var comparedHunks: [WorkspaceSnapshotHunk] = []
+    @State private var comparedRows: [WorkspaceSnapshotHunkRow] = []
     @State private var comparisonGeneration = 0
+    @State private var comparisonTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var isWorking = false
 
@@ -148,8 +175,8 @@ struct WorkspaceSnapshotHistorySheet: View {
     let onApply: (String, String) -> Bool
     private let store = WorkspaceSnapshotStore.appSupport
 
-    private var hunks: [WorkspaceSnapshotHunk] {
-        comparedText == currentText && comparedSnapshot == selectedText ? comparedHunks : []
+    private var rows: [WorkspaceSnapshotHunkRow] {
+        comparedText == currentText && comparedSnapshot == selectedText ? comparedRows : []
     }
 
     private var isComparing: Bool {
@@ -195,19 +222,19 @@ struct WorkspaceSnapshotHistorySheet: View {
                         if isComparing {
                             ProgressView("差分を比較中")
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else if hunks.isEmpty {
+                        } else if rows.isEmpty {
                             ContentUnavailableView("差分はありません", systemImage: "checkmark.circle")
                         } else {
-                            List(Array(hunks.enumerated()), id: \.offset) { _, hunk in
+                            List(Array(rows.enumerated()), id: \.offset) { _, row in
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("現在の \(hunk.firstCurrentLine) 行付近")
+                                    Text("現在の \(row.hunk.firstCurrentLine) 行付近")
                                         .font(.caption.weight(.semibold))
-                                    Text("現在: \(excerpt(currentText, lines: hunk.currentRange))")
+                                    Text("現在: \(row.currentExcerpt)")
                                         .foregroundStyle(.red)
-                                    Text("保存時: \(excerpt(selectedText, lines: hunk.snapshotRange))")
+                                    Text("保存時: \(row.snapshotExcerpt)")
                                         .foregroundStyle(.green)
                                     Button("この変更を復元") {
-                                        apply(WorkspaceSnapshotDiff.restoring(hunk,
+                                        apply(WorkspaceSnapshotDiff.restoring(row.hunk,
                                             snapshot: selectedText, current: currentText))
                                     }
                                     .disabled(isWorking)
@@ -234,12 +261,7 @@ struct WorkspaceSnapshotHistorySheet: View {
         .task { loadEntries() }
         .onChange(of: currentText) { _, _ in compare() }
         .onChange(of: selectedText) { _, _ in compare() }
-    }
-
-    private func excerpt(_ text: String, lines: Range<Int>) -> String {
-        let parts = text.components(separatedBy: "\n")
-        let value = parts[lines].prefix(3).joined(separator: " ⏎ ")
-        return value.isEmpty ? String(localized: "（なし）") : String(value.prefix(180))
+        .onDisappear { comparisonTask?.cancel() }
     }
 
     private func loadEntries() {
@@ -283,19 +305,22 @@ struct WorkspaceSnapshotHistorySheet: View {
     private func compare() {
         comparisonGeneration += 1
         let generation = comparisonGeneration
+        comparisonTask?.cancel()
+        comparisonTask = nil
         comparedText = nil
         comparedSnapshot = nil
-        guard let selectedText else { comparedHunks = []; return }
+        guard let selectedText else { comparedRows = []; return }
         let current = currentText
-        Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard !Task.isCancelled else { return [WorkspaceSnapshotHunk]() }
-                return WorkspaceSnapshotDiff.hunks(snapshot: selectedText, current: current)
-            }.value
-            guard generation == comparisonGeneration,
+        comparisonTask = Task {
+            // 入力が続く間は比較を始めず、置き換えられた比較は背景処理の前に取り消す。
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            let worker = Task.detached(priority: .userInitiated) {
+                WorkspaceSnapshotDiff.rows(snapshot: selectedText, current: current)
+            }
+            let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+            guard !Task.isCancelled, generation == comparisonGeneration,
                   currentText == current, self.selectedText == selectedText else { return }
-            comparedHunks = result
+            comparedRows = result
             comparedText = current
             comparedSnapshot = selectedText
         }
