@@ -16,6 +16,12 @@ struct PreviewNavigationTarget: Equatable {
         source == nil || source == displayedSource
     }
 
+    /// 要求後に初めて表示が新しい解析に変わった時は、原文が一致しなくても確定する。
+    /// 要求した原文の解析が続く編集で取り消された場合に、古い移動を繰り返さないため。
+    func settles(afterAnalysisChange: Bool, displayedSource: String) -> Bool {
+        afterAnalysisChange || isSettled(byDisplayedSource: displayedSource)
+    }
+
     func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String],
                         index: PreviewScrollIndex? = nil) -> String? {
         PreviewScrollSync.block(containingOrBefore: sourceLocation, in: analysis, index: index)
@@ -379,7 +385,9 @@ struct MarkdownPreview: View {
         if let id = target.presentationID(in: analysis, presentationIDs: presentationIDs, index: index) {
             proxy.scrollTo(id, anchor: .top)
         }
-        if target.isSettled(byDisplayedSource: displayedSource) { settledNavigationSequence = target.sequence }
+        if target.settles(afterAnalysisChange: !force, displayedSource: displayedSource) {
+            settledNavigationSequence = target.sequence
+        }
     }
 
     private func reloadCitations(documentURL: URL?) async {

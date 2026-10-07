@@ -310,6 +310,27 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(110))
         XCTAssertEqual(store.snapshot?.source, "original")
     }
+
+    func testNavigationRequestedBeforeAnalysisCatchesUpIsReplayedOnce() {
+        let edited = "Inserted\n\n# Heading"
+        let target = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "# Heading").location,
+                                             sequence: 3, source: edited)
+        XCTAssertFalse(target.isSettled(byDisplayedSource: "# Heading"),
+                       "A preview still showing the previous text must apply the target again later")
+        XCTAssertTrue(target.isSettled(byDisplayedSource: edited))
+        XCTAssertTrue(PreviewNavigationTarget(sourceLocation: 0, sequence: 1)
+            .isSettled(byDisplayedSource: "anything"))
+    }
+
+    func testNavigationSettlesAfterTheFirstNewerAnalysisWhenTheRequestedOneIsSkipped() {
+        let requested = "S1\n\n# Heading"
+        let target = PreviewNavigationTarget(sourceLocation: 4, sequence: 7, source: requested)
+        // 要求時はまだ古い表示（S0）なので確定しない。
+        XCTAssertFalse(target.settles(afterAnalysisChange: false, displayedSource: "S0\n\n# Heading"))
+        // S1 の解析が続く編集で取り消され、次に S2 が表示されても、そこで一度だけ適用して確定する。
+        XCTAssertTrue(target.settles(afterAnalysisChange: true, displayedSource: "S2 edited\n\n# Heading"))
+        XCTAssertTrue(target.settles(afterAnalysisChange: false, displayedSource: requested))
+    }
 }
 
 private func isExecutingOnMainThread() -> Bool {
@@ -339,16 +360,5 @@ private final class SnapshotWordCountGate: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         count += 1
         return count
-    }
-
-    func testNavigationRequestedBeforeAnalysisCatchesUpIsReplayedOnce() {
-        let edited = "Inserted\n\n# Heading"
-        let target = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "# Heading").location,
-                                             sequence: 3, source: edited)
-        XCTAssertFalse(target.isSettled(byDisplayedSource: "# Heading"),
-                       "A preview still showing the previous text must apply the target again later")
-        XCTAssertTrue(target.isSettled(byDisplayedSource: edited))
-        XCTAssertTrue(PreviewNavigationTarget(sourceLocation: 0, sequence: 1)
-            .isSettled(byDisplayedSource: "anything"))
     }
 }

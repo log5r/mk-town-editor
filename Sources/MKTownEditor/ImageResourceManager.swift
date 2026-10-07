@@ -208,9 +208,12 @@ final class LocalImageCache: @unchecked Sendable {
         defer { lock.unlock() }
         decodeCount += 1
         clock += 1
+        // 同じファイルのより新しい版が既にあれば、遅れて終わった古い版のデコードは保持しない。
+        let isOlder = { (lhs: Key, rhs: Key) in (lhs.modified ?? .distantPast) < (rhs.modified ?? .distantPast) }
+        if entries.keys.contains(where: { $0.path == key.path && isOlder(key, $0) }) { return image }
         if let previous = entries.removeValue(forKey: key) { totalCost -= previous.cost }
         // 同じファイルの古い版は表示されないため、更新時にまとめて除く。
-        for (staleKey, stale) in entries where staleKey.path == key.path {
+        for (staleKey, stale) in entries where staleKey.path == key.path && isOlder(staleKey, key) {
             entries[staleKey] = nil
             totalCost -= stale.cost
         }

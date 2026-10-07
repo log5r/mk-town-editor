@@ -309,6 +309,31 @@ final class LocalImagePreviewTests: XCTestCase {
         guard case .image = store.lookup(image) else { return XCTFail("the reloaded image is displayed") }
     }
 
+    func testStaleDecodeFinishingLastDoesNotEvictTheNewerVersion() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("photo.png")
+        try png.write(to: url)
+        let path = url.standardizedFileURL.path
+        let old = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 100), size: 1)
+        let new = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 200), size: 2)
+
+        // 新しい版のデコードが先に終わり、古い版が遅れて終わる。
+        let outOfOrder = LocalImageCache()
+        outOfOrder.decode(key: new, fileURL: url)
+        outOfOrder.decode(key: old, fileURL: url)
+        XCTAssertTrue(outOfOrder.contains(new), "A late stale decode must not remove the newer version")
+        XCTAssertFalse(outOfOrder.contains(old))
+
+        // 順に終わった場合は、古い版を除いて新しい版だけを残す。
+        let inOrder = LocalImageCache()
+        inOrder.decode(key: old, fileURL: url)
+        inOrder.decode(key: new, fileURL: url)
+        XCTAssertTrue(inOrder.contains(new))
+        XCTAssertFalse(inOrder.contains(old))
+    }
+
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
         let limiter = ImageDecodeLimiter(limit: 4)
         await withTaskGroup(of: Void.self) { group in
