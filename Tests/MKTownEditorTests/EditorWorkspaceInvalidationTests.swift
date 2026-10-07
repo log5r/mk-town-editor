@@ -10,6 +10,28 @@ private final class EvaluationCounter {
     var lastLocation = -1
 }
 
+@MainActor
+private final class FocusedRangesBox {
+    var ranges: [NSRange]?
+}
+
+private struct FocusedRangesProbe: View {
+    @FocusedValue(\.editorSelectedRanges) private var ranges
+    let box: FocusedRangesBox
+
+    var body: some View {
+        let _ = box.ranges = ranges
+        Text(ranges.map { "\($0)" } ?? "none")
+    }
+}
+
+private struct FocusableTextView: NSViewRepresentable {
+    let view: NSTextView
+
+    func makeNSView(context: Context) -> NSTextView { view }
+    func updateNSView(_ nsView: NSTextView, context: Context) {}
+}
+
 /// `EditorWorkspace` と同じく、エディタモデル本体を監視する親ビュー。
 private struct ObservingParent: View {
     @ObservedObject var model: MarkdownEditorModel
@@ -76,5 +98,40 @@ final class EditorWorkspaceInvalidationTests: XCTestCase {
         XCTAssertEqual(counter.lastLocation, 4)
         XCTAssertGreaterThan(counter.reader, readerEvaluations)
         XCTAssertEqual(counter.parent, parentEvaluations)
+    }
+
+    func testSelectionSceneValueReachesCommandsWhileTheEditorHasFocus() async throws {
+        let model = MarkdownEditorModel()
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 100))
+        textView.string = "abcdef"
+        model.connect(textView)
+        let box = FocusedRangesBox()
+        // ワークスペースと同じく、選択範囲を読む背景のビューからシーンの値として公開する。
+        let root = VStack {
+            FocusableTextView(view: textView).frame(width: 200, height: 100)
+            FocusedRangesProbe(box: box)
+        }
+        .background {
+            EditorSelectionReader(selection: model.selectionState) { _ in
+                Color.clear.focusedSceneValue(\.editorSelectedRanges, model.selectionState.selectedRanges)
+            }
+        }
+        let host = NSHostingView(rootView: root)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        window.makeFirstResponder(textView)
+        model.selectionDidChange(NSRange(location: 1, length: 3))
+        for _ in 0..<100 where box.ranges != [NSRange(location: 1, length: 3)] ||
+            window.firstResponder !== textView {
+            window.makeFirstResponder(textView)
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(window.firstResponder === textView)
+        XCTAssertEqual(box.ranges, [NSRange(location: 1, length: 3)])
     }
 }

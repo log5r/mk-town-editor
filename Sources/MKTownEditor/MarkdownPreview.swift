@@ -7,6 +7,14 @@ import SwiftUI
 struct PreviewNavigationTarget: Equatable {
     let sourceLocation: Int
     let sequence: Int
+    /// 移動を要求した時点の原文。表示中の解析がこの原文のものになるまで、移動は確定しない。
+    var source: String? = nil
+
+    /// 表示中の原文で移動先を解決できたか。解析待ちの古い表示で解決した移動は、
+    /// 一致する解析結果が届いた時にもう一度適用する。
+    func isSettled(byDisplayedSource displayedSource: String) -> Bool {
+        source == nil || source == displayedSource
+    }
 
     func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String],
                         index: PreviewScrollIndex? = nil) -> String? {
@@ -27,6 +35,8 @@ struct MarkdownPreview: View {
     @ObservedObject private var localImages = LocalImageStore.shared
     @State private var citationCatalog = MarkdownCitationCatalog.empty
     @State private var inspectedImage: ImageInspectionItem?
+    /// 要求した原文に一致する表示で適用し終えた移動の番号。
+    @State private var settledNavigationSequence: Int?
     let markdown: String
     let documentContext: DocumentContext
     var onToggleTask: ((Int) -> Void)? = nil
@@ -263,16 +273,17 @@ struct MarkdownPreview: View {
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
-                        if let id = navigationTarget?.presentationID(in: analysis, presentationIDs: presentationIDs,
-                                                                  index: matchingSnapshot?.scrollIndex) {
-                            proxy.scrollTo(id, anchor: .top)
-                        }
+                        applyNavigation(navigationTarget, force: true, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
                     }
                     .onChange(of: navigationTarget) { _, target in
-                        if let id = target?.presentationID(in: analysis, presentationIDs: presentationIDs,
-                                                        index: matchingSnapshot?.scrollIndex) {
-                            proxy.scrollTo(id, anchor: .top)
-                        }
+                        applyNavigation(target, force: true, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
+                    }
+                    .onChange(of: analysis.identity) { _, _ in
+                        // 編集直後の移動は古い表示で解決している。要求した原文の解析が届いたら一度だけ合わせ直す。
+                        applyNavigation(navigationTarget, force: false, proxy: proxy, analysis: analysis,
+                                        presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
                     }
                     .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
                         if let blockID = PreviewScrollSync.topBlockID(from: origins) {
@@ -357,6 +368,18 @@ struct MarkdownPreview: View {
         .sheet(item: $inspectedImage) { item in
             ImageInspectionView(url: item.url)
         }
+    }
+
+    private var displayedSource: String { snapshot?.source ?? markdown }
+
+    private func applyNavigation(_ target: PreviewNavigationTarget?, force: Bool, proxy: ScrollViewProxy,
+                                 analysis: MarkdownAnalysis, presentationIDs: [Int: String],
+                                 index: PreviewScrollIndex?) {
+        guard let target, force || settledNavigationSequence != target.sequence else { return }
+        if let id = target.presentationID(in: analysis, presentationIDs: presentationIDs, index: index) {
+            proxy.scrollTo(id, anchor: .top)
+        }
+        if target.isSettled(byDisplayedSource: displayedSource) { settledNavigationSequence = target.sequence }
     }
 
     private func reloadCitations(documentURL: URL?) async {

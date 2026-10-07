@@ -340,4 +340,15 @@ private final class SnapshotWordCountGate: @unchecked Sendable {
         count += 1
         return count
     }
+
+    func testNavigationRequestedBeforeAnalysisCatchesUpIsReplayedOnce() {
+        let edited = "Inserted\n\n# Heading"
+        let target = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "# Heading").location,
+                                             sequence: 3, source: edited)
+        XCTAssertFalse(target.isSettled(byDisplayedSource: "# Heading"),
+                       "A preview still showing the previous text must apply the target again later")
+        XCTAssertTrue(target.isSettled(byDisplayedSource: edited))
+        XCTAssertTrue(PreviewNavigationTarget(sourceLocation: 0, sequence: 1)
+            .isSettled(byDisplayedSource: "anything"))
+    }
 }

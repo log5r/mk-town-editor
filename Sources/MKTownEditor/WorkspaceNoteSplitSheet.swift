@@ -15,9 +15,13 @@ struct WorkspaceNoteSplitSheet: View {
     @State private var errorMessage: String?
     @State private var planCache = DerivedValueCache<PlanKey, WorkspaceSectionSplit?>()
 
-    private struct PlanKey: Equatable {
+    /// 分割計画の入力すべて。書類一覧の変化でもWikiリンクの解決先が変わるため、キーに含める。
+    struct PlanKey: Equatable {
         let source: String
+        let sourceURL: URL
+        let headingLocation: Int
         let destinationURL: URL
+        let workspaceDocuments: [URL]
     }
 
     init(root: URL, sourceURL: URL, source: String, headingLocation: Int,
@@ -63,10 +67,12 @@ struct WorkspaceNoteSplitSheet: View {
     /// 分割計画は本文と保存先が変わった時だけ作り直す。
     private func plan(destinationURL: URL) -> WorkspaceSectionSplit? {
         guard didSuggestDestination, !fileName.isEmpty else { return nil }
-        return planCache.value(for: PlanKey(source: source, destinationURL: destinationURL)) { key in
-            WorkspaceNoteOperations.split(key.source, headingLocation: headingLocation,
-                sourceURL: sourceURL, destinationURL: key.destinationURL,
-                workspaceDocuments: workspaceDocuments)
+        let key = PlanKey(source: source, sourceURL: sourceURL, headingLocation: headingLocation,
+                          destinationURL: destinationURL, workspaceDocuments: workspaceDocuments)
+        return planCache.value(for: key) { key in
+            WorkspaceNoteOperations.split(key.source, headingLocation: key.headingLocation,
+                sourceURL: key.sourceURL, destinationURL: key.destinationURL,
+                workspaceDocuments: key.workspaceDocuments)
         }
     }
 

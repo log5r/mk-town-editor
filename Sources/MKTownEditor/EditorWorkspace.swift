@@ -2210,7 +2210,8 @@ struct EditorWorkspace: View {
     private func scrollPreview(to sourceLocation: Int) {
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(sourceLocation: sourceLocation,
-                                                          sequence: navigationSequence)
+                                                          sequence: navigationSequence,
+                                                          source: document.text)
     }
 
     private func navigatePreviewSearch(backwards: Bool) {
@@ -2242,7 +2243,8 @@ struct EditorWorkspace: View {
         transientState.synchronizedBlockID = block.id
         navigationSequence += 1
         previewNavigationTarget = PreviewNavigationTarget(sourceLocation: block.sourceRange.location,
-                                                          sequence: navigationSequence)
+                                                          sequence: navigationSequence,
+                                                          source: snapshot.source)
     }
 
     private func synchronizeEditor(to blockID: Int) {
