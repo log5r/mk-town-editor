@@ -36,6 +36,7 @@ struct EditorWorkspace: View {
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
     @StateObject private var analysisStore = DocumentAnalysisStore()
+    @StateObject private var statusStore = DocumentStatusStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @StateObject private var detachedPreview = DetachedPreviewWindowManager()
     @StateObject private var slideWindow = MarkdownSlideWindowManager()
@@ -174,23 +175,17 @@ struct EditorWorkspace: View {
     }
 
     private var statistics: DocumentStatistics {
-        if let snapshot = analysisStore.snapshot, snapshot.source == document.text {
-            return snapshot.statistics
-        }
-        return DocumentStatistics(text: document.text)
+        analysisStore.snapshot?.statistics ?? .empty
     }
 
-    private var selectionStatistics: DocumentStatistics? {
-        DocumentStatistics.selection(in: document.text, ranges: editorModel.selectedRanges)
-    }
+    private var selectionStatistics: DocumentStatistics? { statusStore.selection }
 
     private var wordCountMode: WordCountMode {
         settingsStore.app.wordCountMode ?? .whitespace
     }
 
     private var displayedWordCount: Int {
-        if wordCountMode == .whitespace { return statistics.words }
-        return wordCountMode.count(in: document.text)
+        analysisStore.snapshot?.wordCounts[wordCountMode] ?? 0
     }
 
     private var wordCountBinding: Binding<WordCountMode> {
@@ -232,17 +227,7 @@ struct EditorWorkspace: View {
                 })
     }
 
-    private var sectionStatistics: (title: String, value: DocumentStatistics)? {
-        guard let snapshot = currentAnalysisSnapshot else { return nil }
-        let entries = MarkdownOutline.entries(in: snapshot.analysis)
-        guard let heading = MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
-                                                           in: entries),
-              let range = DocumentStatistics.sectionRange(
-                at: editorModel.selectedRange.location, in: snapshot.analysis,
-                documentLength: (document.text as NSString).length) else { return nil }
-        let section = (document.text as NSString).substring(with: range)
-        return (heading.title, DocumentStatistics(text: section))
-    }
+    private var sectionStatistics: (title: String, value: DocumentStatistics)? { statusStore.section }
 
     private var documentContext: DocumentContext {
         DocumentContext(fileURL: fileURL,
@@ -1158,6 +1143,9 @@ struct EditorWorkspace: View {
             previewUpdates.resume()
         }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
+        .onChange(of: editorModel.selectedRanges) { _, _ in
+            statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
+        }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
@@ -1807,6 +1795,7 @@ struct EditorWorkspace: View {
 
     private func receiveCompletedAnalysis() {
         guard currentAnalysisSnapshot != nil else { return }
+        statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
         receivePendingDocumentLink()
         receivePendingWorkspaceTask()
         if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
@@ -2396,9 +2385,13 @@ struct EditorWorkspace: View {
     }
 
     private func estimatedTimeLabel(spoken: Bool) -> String {
-        guard let minutes = readingEstimate.estimatedMinutes(for: document.text, spoken: spoken) else {
+        let amount = readingEstimate.language == .japanese
+            ? statistics.nonWhitespaceCharacters : (analysisStore.snapshot?.wordCounts[.english] ?? 0)
+        let rate = max(1, spoken ? readingEstimate.speakingRate : readingEstimate.readingRate)
+        guard amount > 0 else {
             return "—"
         }
+        let minutes = (amount + rate - 1) / rate
         return String(localized: "約\(minutes) 分")
     }
 

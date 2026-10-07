@@ -2,6 +2,35 @@ import XCTest
 @testable import MKTownEditor
 
 final class DocumentStatisticsTests: XCTestCase {
+    func testSinglePassMatchesOriginalDefinitionsForUnicodeAndNewlines() {
+        for text in ["", "a\r\nb\rc\nd\u{85}e\u{2028}f\u{2029}", "🙂e\u{301} 家族👨‍👩‍👧‍👦 \tword", " \n\n"] {
+            let value = DocumentStatistics(text: text)
+            XCTAssertEqual(value.characters, text.count)
+            XCTAssertEqual(value.nonWhitespaceCharacters, text.filter { !$0.isWhitespace && !$0.isNewline }.count)
+            XCTAssertEqual(value.words, text.split { $0.isWhitespace || $0.isNewline }.count)
+            XCTAssertEqual(value.lines, text.isEmpty ? 0 : text.components(separatedBy: .newlines).count)
+        }
+    }
+
+    @MainActor
+    func testStatusKeepsPreviousValuesUntilBackgroundUpdateAndIgnoresRepeatedSelection() async throws {
+        let store = DocumentStatusStore()
+        let snapshot = DocumentSnapshot(source: "# One\nabc\n# Two\ndef")
+        store.update(snapshot: snapshot, selections: [NSRange(location: 6, length: 3)])
+        for _ in 0..<100 where store.selection == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.selection?.characters, 3)
+        XCTAssertEqual(store.section?.title, "One")
+        var changes = 0
+        let observation = store.objectWillChange.sink { changes += 1 }
+        store.update(snapshot: snapshot, selections: [NSRange(location: 6, length: 3)])
+        store.update(snapshot: nil, selections: [NSRange(location: 0, length: 0)])
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(changes, 0)
+        XCTAssertEqual(store.selection?.characters, 3)
+        withExtendedLifetime(observation) {}
+        XCTAssertEqual(snapshot.wordCounts[.english], WordCountMode.english.count(in: snapshot.source))
+    }
+
     func testCountsCharactersWordsAndLines() {
         let statistics = DocumentStatistics(text: "Hello Markdown\nこんにちは 世界")
 

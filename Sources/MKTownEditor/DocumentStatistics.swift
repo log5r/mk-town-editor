@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import NaturalLanguage
 
@@ -85,11 +86,30 @@ struct DocumentStatistics: Equatable, Sendable {
         self.lines = lines
     }
 
+    static let empty = DocumentStatistics(text: "")
+
     init(text: String) {
-        characters = text.count
-        nonWhitespaceCharacters = text.filter { !$0.isWhitespace && !$0.isNewline }.count
-        words = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
-        lines = text.isEmpty ? 0 : text.components(separatedBy: .newlines).count
+        var characters = 0
+        var nonWhitespace = 0
+        var words = 0
+        var lines = text.isEmpty ? 0 : 1
+        var inWord = false
+        for character in text {
+            characters += 1
+            let whitespace = character.isWhitespace || character.isNewline
+            if !whitespace {
+                nonWhitespace += 1
+                if !inWord { words += 1 }
+            }
+            inWord = !whitespace
+            for scalar in character.unicodeScalars where CharacterSet.newlines.contains(scalar) {
+                lines += 1
+            }
+        }
+        self.characters = characters
+        nonWhitespaceCharacters = nonWhitespace
+        self.words = words
+        self.lines = lines
     }
 
     static func selection(in text: String, range: NSRange) -> DocumentStatistics? {
@@ -117,5 +137,45 @@ struct DocumentStatistics: Equatable, Sendable {
             .sourceRange.location ?? documentLength
         return NSRange(location: current.sourceRange.location,
                        length: max(0, end - current.sourceRange.location))
+    }
+}
+
+/// Selection and section scans run only when the source snapshot or selection changes.
+@MainActor
+final class DocumentStatusStore: ObservableObject {
+    @Published private(set) var selection: DocumentStatistics?
+    @Published private(set) var section: (title: String, value: DocumentStatistics)?
+    private var generation = 0
+    private var task: Task<Void, Never>?
+    private var source: String?
+    private var ranges: [NSRange] = []
+
+    func update(snapshot: DocumentSnapshot?, selections: [NSRange]) {
+        guard let snapshot, source != snapshot.source || ranges != selections else { return }
+        source = snapshot.source
+        ranges = selections
+        generation += 1
+        let requested = generation
+        task?.cancel()
+        task = Task.detached(priority: .utility) { [weak self] in
+            let selection = DocumentStatistics.selection(in: snapshot.source, ranges: selections)
+            let location = selections.first?.location ?? 0
+            let heading = MarkdownOutline.currentSection(at: location, in: snapshot.outlineEntries)
+            let range = DocumentStatistics.sectionRange(at: location, in: snapshot.analysis,
+                documentLength: snapshot.source.utf16.count)
+            let section = range.map {
+                DocumentStatistics(text: (snapshot.source as NSString).substring(with: $0))
+            }
+            guard !Task.isCancelled else { return }
+            await self?.publish(selection: selection, title: heading?.title, section: section, generation: requested)
+        }
+    }
+
+    private func publish(selection: DocumentStatistics?, title: String?,
+                         section: DocumentStatistics?, generation: Int) {
+        guard self.generation == generation else { return }
+        if self.selection != selection { self.selection = selection }
+        let next = title.flatMap { title in section.map { (title: title, value: $0) } }
+        if self.section?.title != next?.title || self.section?.value != next?.value { self.section = next }
     }
 }
