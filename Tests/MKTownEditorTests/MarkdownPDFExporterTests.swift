@@ -5,6 +5,71 @@ import XCTest
 
 @MainActor
 final class MarkdownPDFExporterTests: XCTestCase {
+    func testCancellationDuringPrintingStopsRenderingAndAllowsNextPrint() async throws {
+        _ = NSApplication.shared
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("cancel-print-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let info = MarkdownPDFExporter.printInfo(destination: destination)
+        let view = CancellingPDFTextView(frame: NSRect(x: 0, y: 0, width: 499, height: 100))
+        view.textContainer?.containerSize = NSSize(width: 499, height: CGFloat.greatestFiniteMagnitude)
+        view.textStorage?.setAttributedString(NSAttributedString(string:
+            String(repeating: "Printing cancellation regression paragraph.\n\n", count: 1_000),
+            attributes: [.font: NSFont.systemFont(ofSize: 13)]))
+        let manager = try XCTUnwrap(view.layoutManager), container = try XCTUnwrap(view.textContainer)
+        manager.ensureLayout(for: container)
+        view.frame.size.height = ceil(manager.usedRect(for: container).height)
+        let operation = NSPrintOperation(view: view, printInfo: info)
+        operation.showsPrintPanel = false
+        var task: Task<Bool, Error>?
+        view.cancelDuringDrawing = { task?.cancel() }
+        task = Task { try await MarkdownPDFExporter.run(operation) }
+        let started = ContinuousClock.now
+        do { _ = try await task!.value; XCTFail("Expected cancellation during printing") }
+        catch is CancellationError { }
+        XCTAssertLessThan(started.duration(to: .now), .seconds(2))
+        XCTAssertEqual(operation.printInfo.jobDisposition, .cancel)
+        XCTAssertEqual(view.drawnPages, 2, "Cancellation must stop rendering the remaining pages")
+        XCTAssertNil(NSPrintOperation.current, "AppKit must finish cleanup before returning cancellation")
+        try await MarkdownPDFExporter.exportAsync("# Next print\n\nWorks", documentURL: nil, to: destination)
+        XCTAssertTrue(PDFDocument(url: destination)?.string?.contains("Next print") == true)
+    }
+
+    func testCancellationDuringPaginationKeepsValidGeometryAndStopsDrawing() async throws {
+        _ = NSApplication.shared
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("cancel-pagination-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let view = CancellingPDFTextView(frame: NSRect(x: 0, y: 0, width: 499, height: 100))
+        view.string = "Cancelled while determining pages"
+        let operation = NSPrintOperation(view: view, printInfo: MarkdownPDFExporter.printInfo(destination: destination))
+        operation.showsPrintPanel = false
+        var task: Task<Bool, Error>?
+        view.cancelDuringPagination = { task?.cancel() }
+        task = Task { try await MarkdownPDFExporter.run(operation) }
+        let started = ContinuousClock.now
+        do { _ = try await task!.value; XCTFail("Expected cancellation during pagination") }
+        catch is CancellationError { }
+        XCTAssertLessThan(started.duration(to: .now), .seconds(2))
+        XCTAssertEqual(view.drawnPages, 0)
+        XCTAssertEqual(operation.printInfo.jobDisposition, .cancel)
+        XCTAssertNil(NSPrintOperation.current)
+    }
+
+    func testCancellationBeforePrintingDoesNotRenderAnyPages() async throws {
+        _ = NSApplication.shared
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("cancel-before-print-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let view = CancellingPDFTextView(frame: NSRect(x: 0, y: 0, width: 499, height: 100))
+        view.string = "Should not render"
+        let operation = NSPrintOperation(view: view, printInfo: MarkdownPDFExporter.printInfo(destination: destination))
+        operation.showsPrintPanel = false
+        let task = Task { try await MarkdownPDFExporter.run(operation) }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Expected cancellation") }
+        catch is CancellationError { }
+        XCTAssertEqual(view.drawnPages, 0)
+        XCTAssertNil(NSPrintOperation.current)
+    }
+
     func testA4PrintSettingsUseReadableMargins() {
         let destination = URL(fileURLWithPath: "/private/tmp/mktown-print-settings.pdf")
         let info = MarkdownPDFExporter.printInfo(destination: destination)
@@ -69,5 +134,23 @@ final class MarkdownPDFExporterTests: XCTestCase {
         XCTAssertTrue((pdf.string ?? "").contains("印刷確認"))
         XCTAssertTrue((pdf.string ?? "").contains("印刷書類"))
         XCTAssertTrue((pdf.string ?? "").contains("1 / 1"))
+    }
+}
+
+@MainActor
+private final class CancellingPDFTextView: PDFTextView {
+    var drawnPages = 0
+    var cancelDuringDrawing: (() -> Void)?
+    var cancelDuringPagination: (() -> Void)?
+    override func knowsPageRange(_ range: NSRangePointer) -> Bool {
+        cancelDuringPagination?()
+        return super.knowsPageRange(range)
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        if NSGraphicsContext.current?.isDrawingToScreen == false && printCancellation?.isCancelled != true {
+            drawnPages += 1
+            if drawnPages == 2 { cancelDuringDrawing?() }
+        }
+        super.draw(dirtyRect)
     }
 }

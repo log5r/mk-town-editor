@@ -2122,7 +2122,7 @@ struct EditorWorkspace: View {
             let operation = NSPrintOperation(view: view, printInfo: info)
             operation.jobTitle = title
             operation.showsPrintPanel = true
-            _ = await MarkdownPDFExporter.run(operation)
+            _ = try await MarkdownPDFExporter.run(operation)
         } onError: { printError = $0 }
     }
 
