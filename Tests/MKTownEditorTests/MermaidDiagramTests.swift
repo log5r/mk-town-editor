@@ -4,6 +4,37 @@ import XCTest
 
 @MainActor
 final class MermaidDiagramTests: XCTestCase {
+    func testTimedOutEngineIsResetBeforeRenderingQueuedSource() async throws {
+        let script = """
+        let busy = false;
+        globalThis.mermaid = {
+          initialize() {},
+          async render(id, source) {
+            if (source === 'blocked') busy = true;
+            // Mermaid serializes rendering internally. An abandoned promise
+            // leaves later requests waiting until its JavaScript context is reset.
+            if (busy) return await new Promise(() => {});
+            return {svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>'};
+          }
+        };
+        """
+        let renderer = MermaidRenderService(script: script, renderTimeout: .seconds(1))
+        let first = Task { try await renderer.render("blocked") }
+        try await waitForRequests(renderer, active: 1, pending: 0)
+        let next = Task { try await renderer.render("next") }
+        try await waitForRequests(renderer, active: 1, pending: 1)
+        do { _ = try await first.value; XCTFail("Expected render timeout") }
+        catch let error as MermaidRenderError {
+            XCTAssertEqual(error.message, ExternalDiagramError.timedOut.localizedDescription)
+        }
+        let image = try await next.value
+        XCTAssertGreaterThan(image.size.height, 0)
+        XCTAssertEqual(renderer.webViewCreationCount, 1)
+        XCTAssertEqual(renderer.renderCount, 2)
+        XCTAssertEqual(renderer.activeRequestCount, 0)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+    }
+
     private static let controlledScript = """
     globalThis.mermaid = {
       initialize() {},
