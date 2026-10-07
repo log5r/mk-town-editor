@@ -153,6 +153,38 @@ final class ExternalDiagramRendererTests: XCTestCase {
                        "a replaced tool must not reuse the previous tool's cached image")
     }
 
+    func testToolWithoutGenerationIdentifierNeverReusesPreservedMetadataOutput() async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try XCTUnwrap(testPNG()).write(to: directory.appendingPathComponent("reference.png"))
+        func body(_ marker: String) -> String {
+            """
+            echo \(marker) >> "$(dirname "$0")/calls.txt"
+            cp "$(dirname "$0")/reference.png" "$4"
+            """
+        }
+        let script = try executable(in: directory, body: body("one"))
+        let pinned = Date(timeIntervalSince1970: 1_700_000_000)
+        try FileManager.default.setAttributes([.modificationDate: pinned], ofItemAtPath: script.path)
+        let reader: WorkspaceFileMetadata.Reader = {
+            let metadata = try WorkspaceFileMetadata(url: $0)
+            return WorkspaceFileMetadata(modified: metadata.modified, size: metadata.size, generation: nil)
+        }
+        let before = try reader(script)
+        let config = ExternalDiagramConfiguration(graphvizExecutable: script.path, plantUMLJar: "")
+        let source = "digraph { tool_without_generation }"
+        for _ in 0..<2 {
+            _ = try await ExternalDiagramRenderer.render(source, kind: .graphviz, configuration: config, readMetadata: reader)
+        }
+        let handle = try FileHandle(forWritingTo: script)
+        try handle.write(contentsOf: Data(("#!/bin/sh\n" + body("two") + "\n").utf8))
+        try handle.close()
+        try FileManager.default.setAttributes([.modificationDate: pinned], ofItemAtPath: script.path)
+        XCTAssertEqual(try reader(script), before, "metadata cannot distinguish these tools")
+        _ = try await ExternalDiagramRenderer.render(source, kind: .graphviz, configuration: config, readMetadata: reader)
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent("calls.txt"), encoding: .utf8), "one\none\ntwo\n")
+    }
+
     func testInstalledGraphvizProducesPNGWhenAvailable() async throws {
         let candidates = ["/opt/homebrew/bin/dot", "/usr/local/bin/dot", "/usr/bin/dot"]
         guard let executable = candidates.first(where: FileManager.default.isExecutableFile(atPath:)) else {
