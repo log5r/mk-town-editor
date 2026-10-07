@@ -46,17 +46,44 @@ struct WorkspaceLinkChange: Sendable {
     let after: String
 }
 
+/// File identity used to skip re-reading unchanged documents.
+///
+/// Size and modification date alone are not a content identity: timestamps are coarse on some
+/// volumes, and tools can rewrite a file with same-length content while preserving its date. On
+/// APFS and HFS+ the file system's generation identifier changes whenever the data is rewritten,
+/// so equal metadata that includes it proves unchanged contents. Volumes without it (exFAT, some
+/// network file systems) report nil, and callers must then compare contents instead.
 struct WorkspaceFileMetadata: Sendable, Equatable {
+    typealias Reader = @Sendable (URL) throws -> WorkspaceFileMetadata
+
     let modified: Date?
     let size: Int?
+    let generation: Data?
 
     init(url: URL) throws {
         var fresh = url
         fresh.removeAllCachedResourceValues()
-        let values = try fresh.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
-        modified = values.contentModificationDate
-        size = values.fileSize
+        let values = try fresh.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey,
+                                                        .generationIdentifierKey])
+        self.init(modified: values.contentModificationDate, size: values.fileSize,
+                  generation: (values.generationIdentifier as? NSData).map { Data(referencing: $0) })
     }
+
+    init(modified: Date?, size: Int?, generation: Data?) {
+        self.modified = modified
+        self.size = size
+        self.generation = generation
+    }
+
+    /// Whether equal metadata implies equal contents.
+    var identifiesContent: Bool { generation != nil }
+
+    /// True when both describe the same contents without reading the file.
+    func matchesContent(of other: WorkspaceFileMetadata) -> Bool {
+        self == other && identifiesContent
+    }
+
+    static let read: Reader = { try WorkspaceFileMetadata(url: $0) }
 }
 
 final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
@@ -75,26 +102,49 @@ final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
         init(_ value: Entry) { self.value = value }
     }
     private let entries = NSCache<NSURL, CachedEntry>()
+    let readMetadata: WorkspaceFileMetadata.Reader
 
-    init() { entries.totalCostLimit = 64_000_000; entries.countLimit = 50_000 }
+    init(readMetadata: @escaping WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read) {
+        self.readMetadata = readMetadata
+        entries.totalCostLimit = 64_000_000
+        entries.countLimit = 50_000
+    }
     private var builds = 0
     var analysisBuildCount: Int { lock.lock(); defer { lock.unlock() }; return builds }
 
     func load(_ url: URL, openData: Data?) throws -> Entry {
         try Task.checkCancellation()
-        let metadata = try WorkspaceFileMetadata(url: url)
+        let metadata = try readMetadata(url)
         let previous = entries.object(forKey: url as NSURL)?.value
-        if let previous, previous.metadata == metadata, previous.openData == openData { return previous }
-        let data = previous?.metadata == metadata ? previous!.original : try Data(contentsOf: url)
-        let document = try? MarkdownDocument(data: openData ?? data)
-        let analysis = document.map { MarkdownAnalysis($0.text) }
+        if let previous, previous.metadata.matchesContent(of: metadata), previous.openData == openData {
+            return previous
+        }
+        let data: Data
+        let digest: Data
+        if let previous, previous.metadata.matchesContent(of: metadata) {
+            data = previous.original
+            digest = previous.digest
+        } else {
+            // Without a generation identifier, equal size and date are confirmed by content.
+            data = try Data(contentsOf: url)
+            digest = Data(SHA256.hash(data: data))
+        }
         try Task.checkCancellation()
-        let entry = Entry(metadata: metadata, original: data,
-            digest: Data(SHA256.hash(data: data)), openData: openData, document: document, analysis: analysis)
+        let entry: Entry
+        if let previous, previous.digest == digest, previous.openData == openData {
+            entry = Entry(metadata: metadata, original: data, digest: digest, openData: openData,
+                          document: previous.document, analysis: previous.analysis)
+        } else {
+            let document = try? MarkdownDocument(data: openData ?? data)
+            let analysis = document.map { MarkdownAnalysis($0.text) }
+            try Task.checkCancellation()
+            entry = Entry(metadata: metadata, original: data, digest: digest, openData: openData,
+                          document: document, analysis: analysis)
+            lock.lock()
+            if analysis != nil { builds += 1 }
+            lock.unlock()
+        }
         entries.setObject(CachedEntry(entry), forKey: url as NSURL, cost: data.count * 4)
-        lock.lock()
-        if analysis != nil { builds += 1 }
-        lock.unlock()
         return entry
     }
 }
@@ -114,6 +164,7 @@ struct WorkspaceMovePlan: Sendable {
     let inspectedOpenDocuments: [URL: Data]
     var skippedDocuments: [URL] = []
     var isTruncated = false
+    var readMetadata: WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read
 
     var changedLinks: Int { changes.reduce(0) { $0 + $1.linkCount } }
 
@@ -137,10 +188,15 @@ struct WorkspaceMovePlan: Sendable {
         let affected = Set(changes.map(\.oldURL))
         for snapshot in inspectedDocuments {
             try Task.checkCancellation()
-            guard (try? WorkspaceFileMetadata(url: snapshot.url)) == snapshot.metadata else {
+            guard let metadata = try? readMetadata(snapshot.url), metadata == snapshot.metadata else {
                 throw WorkspaceFileOperationError.documentChanged(snapshot.url)
             }
-            guard affected.contains(snapshot.url) || snapshot.url.path.hasPrefix(sourceURL.path + "/") else { continue }
+            // Rewritten documents, documents under the moved folder, and documents on volumes
+            // without a generation identifier are confirmed by content before committing.
+            let confirmByContent = affected.contains(snapshot.url)
+                || snapshot.url.path.hasPrefix(sourceURL.path + "/")
+                || !metadata.identifiesContent
+            guard confirmByContent else { continue }
             guard let current = try? Data(contentsOf: snapshot.url),
                   Data(SHA256.hash(data: current)) == snapshot.digest else {
                 throw WorkspaceFileOperationError.documentChanged(snapshot.url)
@@ -263,7 +319,8 @@ enum WorkspaceFileOperations {
                                  destinationURL: destination, changes: changes,
                                  inspectedDocuments: inspectedDocuments,
                                  inspectedOpenDocuments: inspectedOpenDocuments,
-                                 skippedDocuments: skippedDocuments, isTruncated: index.isTruncated)
+                                 skippedDocuments: skippedDocuments, isTruncated: index.isTruncated,
+                                 readMetadata: cache.readMetadata)
     }
 
     static func create(name: String, in directory: URL, root: URL, folder: Bool,

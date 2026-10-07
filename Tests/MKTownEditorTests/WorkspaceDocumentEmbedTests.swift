@@ -96,6 +96,36 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
         XCTAssertNil(cache.load(url, openBuffers: [:]))
     }
 
+    func testEmbedCacheRereadsSameSizeSameDateEditsWithAndWithoutGenerationIdentifiers() throws {
+        let pinnedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        func overwritePreservingMetadata(_ url: URL, with text: String) throws {
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.truncate(atOffset: 0)
+            try handle.write(contentsOf: Data(text.utf8))
+            try handle.close()
+            try FileManager.default.setAttributes([.modificationDate: pinnedDate], ofItemAtPath: url.path)
+        }
+        let withoutGeneration: WorkspaceFileMetadata.Reader = {
+            let metadata = try WorkspaceFileMetadata(url: $0)
+            return WorkspaceFileMetadata(modified: metadata.modified, size: metadata.size, generation: nil)
+        }
+        for (reader, rereadsUnchangedFiles) in [(WorkspaceFileMetadata.read, false), (withoutGeneration, true)] {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".md")
+            defer { try? FileManager.default.removeItem(at: url) }
+            try "".write(to: url, atomically: true, encoding: .utf8)
+            try overwritePreservingMetadata(url, with: "first")
+            var cache = WorkspaceEmbedFileCache(readMetadata: reader)
+            XCTAssertEqual(cache.load(url, openBuffers: [:]), "first")
+            XCTAssertEqual(cache.load(url, openBuffers: [:]), "first")
+            XCTAssertEqual(cache.readCount, rereadsUnchangedFiles ? 2 : 1)
+            try overwritePreservingMetadata(url, with: "FIRST")
+            XCTAssertEqual(try reader(url).size, 5)
+            XCTAssertEqual(try reader(url).modified, pinnedDate)
+            XCTAssertEqual(cache.load(url, openBuffers: [:]), "FIRST")
+            XCTAssertEqual(cache.readCount, rereadsUnchangedFiles ? 3 : 2)
+        }
+    }
+
     private let root = URL(fileURLWithPath: "/tmp/mktown-embed-tests")
 
     func testStandaloneSyntaxAndSectionExtraction() throws {
