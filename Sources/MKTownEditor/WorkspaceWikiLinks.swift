@@ -35,9 +35,9 @@ struct WorkspaceDocumentIndex: Sendable {
 enum WorkspaceWikiLinks {
     private static let pattern = try! NSRegularExpression(pattern: #"\[\[([^\]\n|]+)(?:\|([^\]\n]+))?\]\]"#)
 
-    static func links(in source: String) -> [WorkspaceWikiLink] {
+    static func links(in source: String, analysis: MarkdownAnalysis? = nil) -> [WorkspaceWikiLink] {
         let text = source as NSString
-        let analysis = MarkdownAnalysis(source)
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
             + MarkdownInlineSyntax.codeSpanRanges(in: source)
             + (analysis.frontMatter.map { [$0.sourceRange] } ?? [])

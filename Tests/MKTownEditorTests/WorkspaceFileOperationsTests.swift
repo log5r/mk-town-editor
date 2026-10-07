@@ -27,6 +27,33 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         XCTAssertTrue(audit.unused.isEmpty)
     }
 
+    func testRepeatedMovePlanningReusesAnalysisAndCancellationLeavesFilesUntouched() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let reference = root.appendingPathComponent("ref.md")
+        let destination = root.appendingPathComponent("moved.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try "[[source]]\n![[source]]".write(to: reference, atomically: true, encoding: .utf8)
+        let cache = WorkspaceLinkAnalysisCache()
+        for _ in 0..<3 {
+            _ = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root, cache: cache)
+        }
+        XCTAssertEqual(cache.analysisBuildCount, 2)
+        let cancelled = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root, cache: cache)
+        }
+        do { _ = try await cancelled.value; XCTFail("Expected cancellation") } catch is CancellationError {}
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        try "changed [[source]]".write(to: reference, atomically: true, encoding: .utf8)
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root, cache: cache)
+        XCTAssertEqual(cache.analysisBuildCount, 3)
+        XCTAssertEqual(plan.changedLinks, 1)
+    }
+
     func testMovePlanRebasesIncomingAndOutgoingLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

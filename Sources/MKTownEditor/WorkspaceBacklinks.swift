@@ -71,7 +71,7 @@ struct WorkspaceBacklinkIndex: Sendable {
                     relativePath: relativePath, sourceRange: item.sourceRange,
                     line: line, excerpt: String(excerpt.prefix(240))))
             }
-            for wiki in WorkspaceWikiLinks.links(in: source) {
+            for wiki in WorkspaceWikiLinks.links(in: source, analysis: analysis) {
                 guard WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
                     index: documentIndex) == target else { continue }
                 let line = lines.line(containingUTF16Offset: wiki.range.location)

@@ -164,14 +164,14 @@ enum WorkspaceNoteOperations {
         }
         let documentIndex = WorkspaceDocumentIndex(documents: workspaceDocuments)
         let futureIndex = WorkspaceDocumentIndex(documents: workspaceDocuments + [destinationURL])
-        for wiki in WorkspaceWikiLinks.links(in: source) {
+        for wiki in WorkspaceWikiLinks.links(in: source, analysis: analysis) {
             guard let target = WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
                 index: documentIndex) else { continue }
             let replacement = WorkspaceWikiLinks.target(for: target,
                 from: destinationURL, index: futureIndex)
             if replacement != wiki.target { edits.append((wiki.targetRange, replacement)) }
         }
-        for embed in WorkspaceDocumentEmbed.links(in: source) {
+        for embed in WorkspaceDocumentEmbed.links(in: source, analysis: analysis) {
             guard let target = WorkspaceWikiLinks.resolve(embed.target, from: sourceURL,
                 index: documentIndex) else { continue }
             let replacement = WorkspaceWikiLinks.target(for: target,

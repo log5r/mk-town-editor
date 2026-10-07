@@ -35,6 +35,7 @@ struct WorkspaceFileOperationSheet: View {
     @State private var template: WorkspaceDocumentTemplate = .blank
     @State private var plan: WorkspaceMovePlan?
     @State private var isWorking = false
+    @State private var operationTask: Task<Void, Never>?
     @State private var errorMessage: String?
 
     let action: WorkspaceFileAction
@@ -121,10 +122,14 @@ struct WorkspaceFileOperationSheet: View {
                 }
                 .frame(height: min(180, CGFloat(max(1, plan.changes.count)) * 54))
             }
+            if isWorking { ProgressView("リンクを確認中…") }
             if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("キャンセル") { dismiss() }
+                Button(isWorking ? "中止" : "キャンセル") {
+                    operationTask?.cancel()
+                    if !isWorking { dismiss() }
+                }
                     .keyboardShortcut(.cancelAction)
                 if needsPlan && plan == nil {
                     Button("変更を確認") { preparePlan() }
@@ -138,6 +143,8 @@ struct WorkspaceFileOperationSheet: View {
         }
         .frame(width: 500)
         .padding(20)
+        .interactiveDismissDisabled(isWorking)
+        .onDisappear { operationTask?.cancel() }
         .onAppear {
             if actionIsTrash { preparePlan() }
         }
@@ -194,16 +201,21 @@ struct WorkspaceFileOperationSheet: View {
             isWorking = false
             return
         }
-        Task {
+        operationTask = Task {
             do {
-                let result = try await Task.detached(priority: .userInitiated) {
+                let worker = Task.detached(priority: .userInitiated) {
                     try WorkspaceFileOperations.planMove(source: source, destination: destination,
                                                          root: rootURL,
                                                          openDocuments: openSnapshots)
-                }.value
+                }
+                let result = try await withTaskCancellationHandler { try await worker.value }
+                    onCancel: { worker.cancel() }
+                try Task.checkCancellation()
                 if actionIsTrash || destinationURL?.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
                     plan = result
                 }
+            } catch is CancellationError {
+                // Stop planning without publishing a partial plan.
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -234,10 +246,10 @@ struct WorkspaceFileOperationSheet: View {
         let movePlan = plan
         let lockID = movePlan.flatMap { needsPlan ? workspaceStore.lockOpenDocuments(in: $0) : nil }
         isWorking = true
-        Task {
+        operationTask = Task {
             var appliedMove = false
             do {
-                try await Task.detached(priority: .userInitiated) {
+                let worker = Task.detached(priority: .userInitiated) {
                     switch action {
                     case let .createDocument(directory):
                         _ = try WorkspaceFileOperations.create(name: enteredName, in: directory,
@@ -252,9 +264,12 @@ struct WorkspaceFileOperationSheet: View {
                     case let .trash(source):
                         _ = try WorkspaceFileOperations.moveToTrash(source, root: root)
                     }
-                }.value
+                }
+                try await withTaskCancellationHandler { try await worker.value }
+                    onCancel: { worker.cancel() }
                 if let movePlan, needsPlan {
                     appliedMove = true
+                    try Task.checkCancellation()
                     try movePlan.validateAppliedData()
                     try workspaceStore.applyOpenBufferChanges(in: movePlan)
                 }

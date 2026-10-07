@@ -86,9 +86,13 @@ struct WorkspaceAttachmentAuditSheet: View {
     private func refresh() async {
         do {
             let snapshots = try workspaceStore.openBufferSnapshots(under: root)
-            result = try await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 try await WorkspaceAttachmentAudit.scan(root: root, openDocuments: snapshots)
-            }.value
+            }
+            let value = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+            try Task.checkCancellation()
+            result = value
+        } catch is CancellationError {
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -35,8 +35,8 @@ enum WorkspaceDocumentEmbed {
         return WorkspaceEmbedReference(target: target, section: section)
     }
 
-    static func links(in source: String) -> [WorkspaceEmbedLink] {
-        let analysis = MarkdownAnalysis(source)
+    static func links(in source: String, analysis: MarkdownAnalysis? = nil) -> [WorkspaceEmbedLink] {
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
             + (analysis.frontMatter.map { [$0.sourceRange] } ?? [])
         let text = source as NSString

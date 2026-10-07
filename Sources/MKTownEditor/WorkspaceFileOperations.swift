@@ -46,9 +46,63 @@ struct WorkspaceLinkChange: Sendable {
     let after: String
 }
 
+struct WorkspaceFileMetadata: Sendable, Equatable {
+    let modified: Date?
+    let size: Int?
+
+    init(url: URL) throws {
+        var fresh = url
+        fresh.removeAllCachedResourceValues()
+        let values = try fresh.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        modified = values.contentModificationDate
+        size = values.fileSize
+    }
+}
+
+final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
+    static let shared = WorkspaceLinkAnalysisCache()
+    struct Entry {
+        let metadata: WorkspaceFileMetadata
+        let original: Data
+        let digest: Data
+        let openData: Data?
+        let document: MarkdownDocument?
+        let analysis: MarkdownAnalysis?
+    }
+    private let lock = NSLock()
+    private final class CachedEntry: NSObject {
+        let value: Entry
+        init(_ value: Entry) { self.value = value }
+    }
+    private let entries = NSCache<NSURL, CachedEntry>()
+
+    init() { entries.totalCostLimit = 64_000_000; entries.countLimit = 50_000 }
+    private var builds = 0
+    var analysisBuildCount: Int { lock.lock(); defer { lock.unlock() }; return builds }
+
+    func load(_ url: URL, openData: Data?) throws -> Entry {
+        try Task.checkCancellation()
+        let metadata = try WorkspaceFileMetadata(url: url)
+        let previous = entries.object(forKey: url as NSURL)?.value
+        if let previous, previous.metadata == metadata, previous.openData == openData { return previous }
+        let data = previous?.metadata == metadata ? previous!.original : try Data(contentsOf: url)
+        let document = try? MarkdownDocument(data: openData ?? data)
+        let analysis = document.map { MarkdownAnalysis($0.text) }
+        try Task.checkCancellation()
+        let entry = Entry(metadata: metadata, original: data,
+            digest: Data(SHA256.hash(data: data)), openData: openData, document: document, analysis: analysis)
+        entries.setObject(CachedEntry(entry), forKey: url as NSURL, cost: data.count * 4)
+        lock.lock()
+        if analysis != nil { builds += 1 }
+        lock.unlock()
+        return entry
+    }
+}
+
 struct WorkspaceDocumentSnapshot: Sendable {
     let url: URL
     let digest: Data
+    let metadata: WorkspaceFileMetadata
 }
 
 struct WorkspaceMovePlan: Sendable {
@@ -80,7 +134,13 @@ struct WorkspaceMovePlan: Sendable {
         guard !manager.fileExists(atPath: destinationURL.path) else {
             throw WorkspaceFileOperationError.destinationExists
         }
+        let affected = Set(changes.map(\.oldURL))
         for snapshot in inspectedDocuments {
+            try Task.checkCancellation()
+            guard (try? WorkspaceFileMetadata(url: snapshot.url)) == snapshot.metadata else {
+                throw WorkspaceFileOperationError.documentChanged(snapshot.url)
+            }
+            guard affected.contains(snapshot.url) || snapshot.url.path.hasPrefix(sourceURL.path + "/") else { continue }
             guard let current = try? Data(contentsOf: snapshot.url),
                   Data(SHA256.hash(data: current)) == snapshot.digest else {
                 throw WorkspaceFileOperationError.documentChanged(snapshot.url)
@@ -91,9 +151,11 @@ struct WorkspaceMovePlan: Sendable {
     func apply() throws {
         let manager = FileManager.default
         try validateCurrentState()
+        try Task.checkCancellation()
         try manager.moveItem(at: sourceURL, to: destinationURL)
         do {
             for change in changes where change.linkCount > 0 {
+                try Task.checkCancellation()
                 try change.updatedData.write(to: change.newURL, options: .atomic)
             }
         } catch {
@@ -132,7 +194,8 @@ struct WorkspaceMovePlan: Sendable {
 
 enum WorkspaceFileOperations {
     static func planMove(source: URL, destination: URL, root: URL,
-                         openDocuments: [URL: Data] = [:]) throws -> WorkspaceMovePlan {
+                         openDocuments: [URL: Data] = [:],
+                         cache: WorkspaceLinkAnalysisCache = .shared) throws -> WorkspaceMovePlan {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
         let destination = destination.deletingLastPathComponent()
             .resolvingSymlinksInPath().standardizedFileURL
@@ -166,14 +229,16 @@ enum WorkspaceFileOperations {
         var skippedDocuments: [URL] = []
         for scannedDocument in documents {
             let document = scannedDocument.resolvingSymlinksInPath().standardizedFileURL
-            guard let original = try? Data(contentsOf: document) else {
+            try Task.checkCancellation()
+            guard let entry = try? cache.load(document, openData: openData[document]) else {
+                try Task.checkCancellation()
                 skippedDocuments.append(document)
                 continue
             }
-            inspectedDocuments.append(WorkspaceDocumentSnapshot(
-                url: document, digest: Data(SHA256.hash(data: original))
-            ))
-            guard let opened = try? MarkdownDocument(data: openData[document] ?? original) else {
+            let original = entry.original
+            inspectedDocuments.append(WorkspaceDocumentSnapshot(url: document, digest: entry.digest,
+                metadata: entry.metadata))
+            guard let opened = entry.document, let analysis = entry.analysis else {
                 skippedDocuments.append(document)
                 continue
             }
@@ -181,7 +246,7 @@ enum WorkspaceFileOperations {
             let (updated, links) = rewriteLinks(opened.text, documentURL: document,
                                                 newDocumentURL: newURL,
                                                 source: source, destination: destination,
-                                                documentIndex: documentIndex, movedIndex: movedIndex)
+                                                documentIndex: documentIndex, movedIndex: movedIndex, analysis: analysis)
             if !links.isEmpty || document != newURL {
                 var updatedDocument = opened
                 updatedDocument.text = updated
@@ -263,8 +328,7 @@ enum WorkspaceFileOperations {
 
     private static func rewriteLinks(_ text: String, documentURL: URL, newDocumentURL: URL,
                                      source: URL, destination: URL,
-                                     documentIndex: WorkspaceDocumentIndex, movedIndex: WorkspaceDocumentIndex) -> (String, [WorkspaceLinkChange]) {
-        let analysis = MarkdownAnalysis(text)
+                                     documentIndex: WorkspaceDocumentIndex, movedIndex: WorkspaceDocumentIndex, analysis: MarkdownAnalysis) -> (String, [WorkspaceLinkChange]) {
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
             MarkdownInlineSyntax.codeSpanRanges(in: text)
         let context = DocumentContext(fileURL: documentURL)
@@ -301,7 +365,7 @@ enum WorkspaceFileOperations {
                 after: MarkdownLinkSyntax.escapeDestination(newDestination)
             ))
         }
-        for wiki in WorkspaceWikiLinks.links(in: text) {
+        for wiki in WorkspaceWikiLinks.links(in: text, analysis: analysis) {
             guard let target = WorkspaceWikiLinks.resolve(wiki.target, from: documentURL,
                 index: documentIndex) else { continue }
             let movedTarget = mapped(target, from: source, to: destination)
@@ -311,7 +375,7 @@ enum WorkspaceFileOperations {
             edits.append(WorkspaceLinkChange(range: wiki.targetRange,
                 before: original.substring(with: wiki.targetRange), after: rewritten))
         }
-        for embed in WorkspaceDocumentEmbed.links(in: text) {
+        for embed in WorkspaceDocumentEmbed.links(in: text, analysis: analysis) {
             guard let target = WorkspaceWikiLinks.resolve(embed.target, from: documentURL,
                 index: documentIndex) else { continue }
             let movedTarget = mapped(target, from: source, to: destination)
