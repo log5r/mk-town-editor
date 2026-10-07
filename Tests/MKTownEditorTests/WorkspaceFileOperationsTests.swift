@@ -3,6 +3,30 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceFileOperationsTests: XCTestCase {
+    func testUnreadableTextDoesNotBlockMoveSearchReplaceOrAttachmentAudit() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let bad = root.appendingPathComponent("legacy.txt")
+        let destination = root.appendingPathComponent("moved.md")
+        try "needle".write(to: source, atomically: true, encoding: .utf8)
+        try Data([0x82, 0xA0]).write(to: bad)
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
+        XCTAssertEqual(plan.skippedDocuments, [bad.resolvingSymlinksInPath()])
+        try plan.apply()
+        XCTAssertEqual(try Data(contentsOf: bad), Data([0x82, 0xA0]))
+        let report = try WorkspaceSearch.report(root: root, options: WorkspaceSearchOptions(query: "needle"))
+        XCTAssertEqual(report.results.count, 1)
+        XCTAssertEqual(report.skippedDocuments.count, 1)
+        let replacement = try WorkspaceReplace.plan(root: root, options: WorkspaceSearchOptions(query: "needle"), replacement: "new")
+        XCTAssertEqual(replacement.skippedDocuments.count, 1)
+        try replacement.apply(selectedURLs: [destination], openDocuments: [])
+        let audit = try await WorkspaceAttachmentAudit.scan(root: root)
+        XCTAssertEqual(audit.skippedDocuments.count, 1)
+        XCTAssertTrue(audit.unused.isEmpty)
+    }
+
     func testMovePlanRebasesIncomingAndOutgoingLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

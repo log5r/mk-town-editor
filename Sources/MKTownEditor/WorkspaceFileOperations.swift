@@ -58,17 +58,18 @@ struct WorkspaceMovePlan: Sendable {
     let changes: [WorkspaceDocumentChange]
     let inspectedDocuments: [WorkspaceDocumentSnapshot]
     let inspectedOpenDocuments: [URL: Data]
+    var skippedDocuments: [URL] = []
+    var isTruncated = false
 
     var changedLinks: Int { changes.reduce(0) { $0 + $1.linkCount } }
 
     func validateCurrentState() throws {
         let manager = FileManager.default
         let currentIndex = WorkspaceFileIndex.scan(root: rootURL)
-        guard !currentIndex.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let currentDocuments = Set(WorkspaceFileOperations.markdownFiles(in: currentIndex.nodes)
             .map { $0.resolvingSymlinksInPath().standardizedFileURL.path })
-        let plannedDocuments = Set(inspectedDocuments.map {
-            $0.url.resolvingSymlinksInPath().standardizedFileURL.path
+        let plannedDocuments = Set((inspectedDocuments.map(\.url) + skippedDocuments).map {
+            $0.resolvingSymlinksInPath().standardizedFileURL.path
         })
         guard currentDocuments == plannedDocuments else {
             throw WorkspaceFileOperationError.workspaceChanged
@@ -148,7 +149,6 @@ enum WorkspaceFileOperations {
             throw WorkspaceFileOperationError.destinationExists
         }
         let index = WorkspaceFileIndex.scan(root: root)
-        guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let documents = markdownFiles(in: index.nodes)
         let documentIndex = WorkspaceDocumentIndex(documents: documents)
         let movedIndex = WorkspaceDocumentIndex(documents: documents.map { mapped($0, from: source, to: destination) })
@@ -163,15 +163,20 @@ enum WorkspaceFileOperations {
         }
         var changes: [WorkspaceDocumentChange] = []
         var inspectedDocuments: [WorkspaceDocumentSnapshot] = []
+        var skippedDocuments: [URL] = []
         for scannedDocument in documents {
             let document = scannedDocument.resolvingSymlinksInPath().standardizedFileURL
-            guard let original = try? Data(contentsOf: document),
-                  let opened = try? MarkdownDocument(data: openData[document] ?? original) else {
-                throw WorkspaceFileOperationError.unreadableDocument(document)
+            guard let original = try? Data(contentsOf: document) else {
+                skippedDocuments.append(document)
+                continue
             }
             inspectedDocuments.append(WorkspaceDocumentSnapshot(
                 url: document, digest: Data(SHA256.hash(data: original))
             ))
+            guard let opened = try? MarkdownDocument(data: openData[document] ?? original) else {
+                skippedDocuments.append(document)
+                continue
+            }
             let newURL = mapped(document, from: source, to: destination)
             let (updated, links) = rewriteLinks(opened.text, documentURL: document,
                                                 newDocumentURL: newURL,
@@ -192,7 +197,8 @@ enum WorkspaceFileOperations {
         return WorkspaceMovePlan(rootURL: root, sourceURL: source,
                                  destinationURL: destination, changes: changes,
                                  inspectedDocuments: inspectedDocuments,
-                                 inspectedOpenDocuments: inspectedOpenDocuments)
+                                 inspectedOpenDocuments: inspectedOpenDocuments,
+                                 skippedDocuments: skippedDocuments, isTruncated: index.isTruncated)
     }
 
     static func create(name: String, in directory: URL, root: URL, folder: Bool,

@@ -46,10 +46,10 @@ enum WorkspaceFileIndex {
         "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp",
         "heic", "tif", "tiff", "bmp", "pdf"
     ]
-    private static let maximumEntries = 10_000
+    private static let maximumEntries = 50_000
     private static let maximumDepth = 16
 
-    static func scan(root: URL) -> WorkspaceScanResult {
+    static func scan(root: URL, maximumEntries: Int = maximumEntries) -> WorkspaceScanResult {
         var visited = 0
         var truncated = false
         let manager = FileManager.default
