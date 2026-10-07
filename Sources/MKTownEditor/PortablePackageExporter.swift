@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 import SwiftUI
 
@@ -198,7 +199,8 @@ enum PortablePackagePlanner {
 
 enum PortablePackageExporter {
     static func export(_ plan: PortablePackagePlan, to parent: URL, name: String,
-                       format: PortablePackageFormat, zip: Bool) throws -> URL {
+                       format: PortablePackageFormat, zip: Bool,
+                       archiveExecutable: URL = URL(fileURLWithPath: "/usr/bin/ditto")) throws -> URL {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, cleanName != ".", cleanName != "..",
               !cleanName.contains("/"), !cleanName.contains(":") else {
@@ -235,25 +237,51 @@ enum PortablePackageExporter {
         if zip {
             let temporaryZip = parent.appendingPathComponent(".mktown-package-\(UUID().uuidString).zip")
             defer { try? manager.removeItem(at: temporaryZip) }
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
-            process.arguments = ["-c", "-k", staging.path, temporaryZip.path]
-            let errors = Pipe()
-            process.standardError = errors
-            process.standardOutput = FileHandle.nullDevice
-            try process.run()
-            let message = String(decoding: errors.fileHandleForReading.readDataToEndOfFile(),
-                                 as: UTF8.self)
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                throw PortablePackageError.archiveFailed(message)
-            }
+            try createArchive(from: staging, to: temporaryZip, executable: archiveExecutable)
             if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
             try manager.moveItem(at: temporaryZip, to: destination)
         } else {
             try manager.moveItem(at: staging, to: destination)
         }
         return destination
+    }
+
+    private static func createArchive(from staging: URL, to output: URL, executable: URL) throws {
+        let errorLog = output.deletingLastPathComponent().appendingPathComponent(".mktown-archive-errors-\(UUID().uuidString)")
+        try Data().write(to: errorLog)
+        defer { try? FileManager.default.removeItem(at: errorLog) }
+        let errors = try FileHandle(forWritingTo: errorLog)
+        defer { try? errors.close() }
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["-c", "-k", staging.path, output.path]
+        // A pipe read would wait for compression to finish before cancellation
+        // could be checked. A file lets the worker monitor the child instead.
+        process.standardError = errors
+        process.standardOutput = FileHandle.nullDevice
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        try process.run()
+        while process.isRunning {
+            if Task<Never, Never>.isCancelled {
+                process.terminate()
+                let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+                while process.isRunning && ContinuousClock.now < deadline {
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+                if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
+                process.waitUntilExit()
+                throw PortablePackageError.cancelled
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        process.waitUntilExit()
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        guard process.terminationStatus == 0 else {
+            let reader = try FileHandle(forReadingFrom: errorLog)
+            defer { try? reader.close() }
+            let data = try reader.read(upToCount: 2_000) ?? Data()
+            throw PortablePackageError.archiveFailed(String(decoding: data, as: UTF8.self))
+        }
     }
 }
 
@@ -325,6 +353,7 @@ struct PortablePackageSheet: View {
                     }
                     completedURL = result
                 } catch is CancellationError {
+                } catch PortablePackageError.cancelled {
                 } catch { errorMessage = error.localizedDescription }
                 isWorking = false
                 operationTask = nil
