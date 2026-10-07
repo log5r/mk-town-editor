@@ -1,9 +1,60 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import MKTownEditor
 
 @MainActor
 final class PortablePackageExporterTests: XCTestCase {
+    func testCancellationDuringArchiveCreationTerminatesChildAndRemovesTemporaryOutput() async throws {
+        // Also cover a child that ignores SIGTERM so cancellation stays bounded.
+        for ignoresTermination in [false, true] {
+            let root = try makeRoot()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let executable = root.appendingPathComponent("slow-archive")
+            let started = root.appendingPathComponent("started")
+            let trap = ignoresTermination ? "trap '' TERM\n" : ""
+            let script = "#!/bin/sh\n" + trap + "printf '%s' $$ > \"\(started.path)\"\nprintf 'partial archive' > \"$4\"\nexec /bin/sleep 30\n"
+            try script.write(to: executable, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+            let plan = PortablePackagePlan(markdown: "body", html: "<p>body</p>", assets: [])
+            let task = Task {
+                try await DocumentWork.commit {
+                    try PortablePackageExporter.export(plan, to: root, name: "book", format: .markdown,
+                        zip: true, archiveExecutable: executable)
+                }
+            }
+            for _ in 0..<200 where !FileManager.default.fileExists(atPath: started.path) {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            let pid = try XCTUnwrap(Int32(try String(contentsOf: started, encoding: .utf8)))
+            XCTAssertEqual(Darwin.kill(pid, 0), 0, "Archive child must be running before cancellation")
+            let cancellationStarted = ContinuousClock.now
+            task.cancel()
+            do { _ = try await task.value; XCTFail("Expected archive cancellation") }
+            catch { XCTAssertEqual(error as? PortablePackageError, .cancelled) }
+            XCTAssertLessThan(cancellationStarted.duration(to: .now), .seconds(2))
+            XCTAssertNotEqual(Darwin.kill(pid, 0), 0, "Cancellation must reap the archive child")
+            XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("book.zip").path))
+            XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path)
+                .contains { $0.hasPrefix(".mktown-") }, "Staging, partial ZIP and stderr must all be removed")
+        }
+    }
+
+    func testArchiveFailureReportsStderrAndLeavesNoPackage() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = root.appendingPathComponent("failed-archive")
+        try "#!/bin/sh\nprintf 'archive fixture failed' >&2\nexit 23\n".write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        let plan = PortablePackagePlan(markdown: "body", html: "<p>body</p>", assets: [])
+        XCTAssertThrowsError(try PortablePackageExporter.export(plan, to: root, name: "book", format: .markdown,
+            zip: true, archiveExecutable: executable)) { error in
+                XCTAssertEqual(error as? PortablePackageError, .archiveFailed("archive fixture failed"))
+            }
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path)
+            .contains { $0.hasPrefix(".mktown-") || $0 == "book.zip" })
+    }
+
     func testPlanRewritesInlineAndReferenceImagesButKeepsCodeLiteral() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }
