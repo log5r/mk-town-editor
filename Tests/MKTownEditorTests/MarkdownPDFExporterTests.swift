@@ -34,6 +34,42 @@ final class MarkdownPDFExporterTests: XCTestCase {
         XCTAssertTrue(PDFDocument(url: destination)?.string?.contains("Next print") == true)
     }
 
+    func testNativePrintCancellationThrowsWithoutCancellingTask() async throws {
+        _ = NSApplication.shared
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent("native-cancel-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let view = CancellingPDFTextView(frame: NSRect(x: 0, y: 0, width: 499, height: 100))
+        view.string = String(repeating: "Native print progress cancellation.\n\n", count: 200)
+        let manager = try XCTUnwrap(view.layoutManager), container = try XCTUnwrap(view.textContainer)
+        manager.ensureLayout(for: container)
+        view.frame.size.height = ceil(manager.usedRect(for: container).height)
+        let operation = NSPrintOperation(view: view, printInfo: MarkdownPDFExporter.printInfo(destination: destination))
+        operation.showsPrintPanel = false
+        defer { view.cancelDuringDrawing = nil } // Break the view → callback → operation cycle.
+        var clickedNativeCancel = false
+        view.cancelDuringDrawing = {
+            func buttons(in view: NSView) -> [NSButton] {
+                (view as? NSButton).map { [$0] } ?? view.subviews.flatMap { buttons(in: $0) }
+            }
+            let buttons = NSApp.windows.compactMap(\.contentView).flatMap { buttons(in: $0) }
+            if let cancel = buttons.first(where: { $0.action == NSSelectorFromString("cancelButtonPressed:") }) {
+                clickedNativeCancel = true
+                cancel.performClick(nil)
+            } else {
+                XCTFail("No native progress Cancel button")
+                operation.printInfo.jobDisposition = .cancel
+            }
+        }
+        do { _ = try await MarkdownPDFExporter.run(operation); XCTFail("Native cancellation must not return printing failure") }
+        catch is CancellationError { }
+        XCTAssertFalse(Task.isCancelled)
+        XCTAssertTrue(clickedNativeCancel, "exercise AppKit's actual progress panel, not task cancellation")
+        XCTAssertEqual(operation.printInfo.jobDisposition, .cancel)
+        XCTAssertNil(NSPrintOperation.current)
+        try await MarkdownPDFExporter.exportAsync("# After native cancellation", documentURL: nil, to: destination)
+        XCTAssertTrue(PDFDocument(url: destination)?.string?.contains("After native cancellation") == true)
+    }
+
     func testCancellationDuringPaginationKeepsValidGeometryAndStopsDrawing() async throws {
         _ = NSApplication.shared
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent("cancel-pagination-\(UUID().uuidString).pdf")

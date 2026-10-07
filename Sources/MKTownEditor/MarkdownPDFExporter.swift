@@ -175,6 +175,7 @@ enum MarkdownPDFExporter {
         // the temporary output, and before another print operation can start.
         withExtendedLifetime(completion) {}
         try Task.checkCancellation()
+        if operation.printInfo.jobDisposition == .cancel { throw CancellationError() }
         return result
     }
 
