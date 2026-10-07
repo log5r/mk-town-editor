@@ -12,6 +12,7 @@ struct WorkspaceWikiLinkSheet: View {
     @FocusState private var searchFocused: Bool
     @State private var query = ""
     @State private var documentIndex = WorkspaceDocumentIndex(documents: [])
+    @State private var indexedDocuments: [URL] = []
 
     private var existing: WorkspaceWikiLink? {
         WorkspaceWikiLinks.link(at: selection, in: source)
@@ -70,9 +71,13 @@ struct WorkspaceWikiLinkSheet: View {
         }
         .frame(width: 540)
         .padding(20)
-        .task {
+        .task(id: documents) {
+            // The list follows workspace changes while the sheet is open; so does the index.
             let urls = documents
-            documentIndex = await Task.detached(priority: .utility) { WorkspaceDocumentIndex(documents: urls) }.value
+            let index = await Task.detached(priority: .utility) { WorkspaceDocumentIndex(documents: urls) }.value
+            guard !Task.isCancelled else { return }
+            documentIndex = index
+            indexedDocuments = urls
         }
         .onAppear {
             query = existing?.target ?? ""
@@ -81,10 +86,19 @@ struct WorkspaceWikiLinkSheet: View {
     }
 
     private func insert(_ url: URL) {
-        let target = WorkspaceWikiLinks.target(for: url, from: documentURL,
-            index: documentIndex)
+        let target = Self.linkTarget(for: url, from: documentURL, documents: documents,
+                                     cachedIndex: documentIndex, indexedDocuments: indexedDocuments)
         guard let edit = WorkspaceWikiLinks.insertion(in: source,
             selection: selection, target: target), onApply(edit, source) else { return }
         dismiss()
+    }
+
+    /// The link text for `url`, disambiguated against the documents listed now. The cached
+    /// background index is used only when it was built from that same list; otherwise a newly
+    /// added document with the same title would make the inserted link ambiguous.
+    static func linkTarget(for url: URL, from documentURL: URL, documents: [URL],
+                           cachedIndex: WorkspaceDocumentIndex, indexedDocuments: [URL]) -> String {
+        let index = indexedDocuments == documents ? cachedIndex : WorkspaceDocumentIndex(documents: documents)
+        return WorkspaceWikiLinks.target(for: url, from: documentURL, index: index)
     }
 }

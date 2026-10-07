@@ -1284,7 +1284,7 @@ struct EditorWorkspace: View {
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
             workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
-            workspaceContentRevisions: workspaceStore.openBufferRevisions,
+            workspaceContentRevisions: workspaceStore.contentRevisions,
             workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
             workspaceIndex: workspaceStore.documentIndex,
             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
@@ -2132,8 +2132,10 @@ struct EditorWorkspace: View {
         let selection = textView.selectedRange()
         guard selection.length > 0, NSMaxRange(selection) <= source.length else { return }
         let selected = source.substring(with: selection), url = fileURL, dialect = documentContext.markdownDialect
+        let changeCount = NSPasteboard.general.changeCount
         startDocumentOperation {
-            try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect)
+            try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
+                                                      startingChangeCount: changeCount)
         } onError: { richCopyError = $0 }
     }
 

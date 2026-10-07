@@ -101,6 +101,35 @@ final class ExternalDocumentConverterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous")
     }
 
+    func testCancellationKillsConverterThatIgnoresTermination() async throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let started = root.appendingPathComponent("started")
+        let executable = try makeExecutable(in: root, body: """
+        trap '' TERM
+        printf '%s' $$ > "\(started.path)"
+        exec /bin/sleep 30
+        """)
+        let destination = root.appendingPathComponent("output.epub")
+        try Data("previous".utf8).write(to: destination)
+        let worker = Task.detached {
+            try ExternalDocumentConverter.convert("# Source", documentURL: nil,
+                destination: destination, format: .epub, dialect: .extended, executable: executable)
+        }
+        for _ in 0..<200 where !FileManager.default.fileExists(atPath: started.path) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let pid = try XCTUnwrap(Int32(try String(contentsOf: started, encoding: .utf8)))
+        XCTAssertEqual(Darwin.kill(pid, 0), 0, "converter must be running before cancellation")
+        let cancelledAt = ContinuousClock.now
+        worker.cancel()
+        do { try await worker.value; XCTFail("Cancelled conversion unexpectedly completed") }
+        catch { XCTAssertEqual(error as? ExternalConversionError, .cancelled) }
+        XCTAssertLessThan(cancelledAt.duration(to: .now), .seconds(2))
+        XCTAssertNotEqual(Darwin.kill(pid, 0), 0, "cancellation must reap a converter that ignores SIGTERM")
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "previous")
+    }
+
     func testZeroExitWithoutOutputIsReportedClearly() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }

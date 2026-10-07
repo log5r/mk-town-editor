@@ -4,7 +4,7 @@ struct WorkspaceEmbeddedDocumentView: View {
     let reference: WorkspaceEmbedReference
     let documentURL: URL
     let documents: [URL]
-    var contentRevisions: [URL: Int] = [:]
+    @ObservedObject var contentRevisions: WorkspaceContentRevisions = .empty
     var diskRevision: Int?
     var documentIndex: WorkspaceDocumentIndex?
     let loadOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
@@ -31,7 +31,7 @@ struct WorkspaceEmbeddedDocumentView: View {
     private func refreshKey(dependencies: Set<URL>) -> RefreshKey {
         RefreshKey(reference: reference, document: documentURL, documents: documents,
             contentRevisions: Dictionary(uniqueKeysWithValues: dependencies.map {
-                ($0, contentRevisions[$0, default: 0])
+                ($0, contentRevisions.values[$0, default: 0])
             }), diskRevision: (diskRevision ?? 0) &+ refreshID)
     }
 
@@ -92,7 +92,7 @@ struct WorkspaceEmbeddedDocumentView: View {
         // Discovering a dependency changes the task key. Its initial result is
         // already current, so that bookkeeping change must not encode it again.
         guard key != completedRefreshKey else { return }
-        let revisions = contentRevisions
+        let revisions = contentRevisions.values
         do {
             let loaded = try await WorkspaceEmbedLoader.load(reference, from: documentURL,
                 documents: documents, index: documentIndex ?? (indexedDocuments == documents ? cachedIndex : nil),

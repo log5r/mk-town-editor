@@ -231,7 +231,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         let model: MarkdownEditorModel
-        weak var textView: NSTextView?
+        weak var textView: NSTextView? {
+            didSet { observeProofingEdits() }
+        }
         weak var scrollView: NSScrollView?
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var appliedTextStyle: EditorTextStyle?
@@ -393,6 +395,29 @@ struct MarkdownTextEditor: NSViewRepresentable {
             }
         }
 
+        private weak var observedProofingStorage: NSTextStorage?
+
+        /// Keeps the protected ranges of the last snapshot aligned with the text while
+        /// the background analysis for the edited source is still pending.
+        private func observeProofingEdits() {
+            if let observedProofingStorage {
+                NotificationCenter.default.removeObserver(self, name: NSTextStorage.didProcessEditingNotification,
+                                                          object: observedProofingStorage)
+            }
+            observedProofingStorage = textView?.textStorage
+            if let observedProofingStorage {
+                NotificationCenter.default.addObserver(self, selector: #selector(proofingStorageDidProcessEditing(_:)),
+                    name: NSTextStorage.didProcessEditingNotification, object: observedProofingStorage)
+            }
+        }
+
+        @MainActor @objc private func proofingStorageDidProcessEditing(_ notification: Notification) {
+            guard let storage = notification.object as? NSTextStorage,
+                  storage.editedMask.contains(.editedCharacters) else { return }
+            protectedProofingRanges = MarkdownProofingContext.shifted(protectedProofingRanges,
+                editedRange: storage.editedRange, changeInLength: storage.changeInLength)
+        }
+
         @MainActor func applyProofing() {
             guard let textView else { return }
             let source = textView.editorSource
@@ -413,10 +438,16 @@ struct MarkdownTextEditor: NSViewRepresentable {
                     analysis: MarkdownAnalysis(source, dialect: dialect))
             }
             let location = textView.selectedRange().location
-            // Stale offsets cannot protect a newly inserted code/URL range. Until
-            // analysis for both the source and dialect arrives, suppress correction.
-            let protected = (usesSharedAnalysis && (proofingSource != source || proofingDialect != dialect)) ||
-                MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
+            // While the snapshot for an edited source is pending, the previous ranges stay
+            // aligned through proofingStorageDidProcessEditing, and inline code or URLs typed
+            // since then are found in the caret's paragraph, so prose keeps spelling and
+            // correction. A pending dialect change (or no snapshot yet) still suppresses
+            // correction: it can change which regions are protected anywhere in the document.
+            let sourcePending = usesSharedAnalysis && proofingSource != source
+            let dialectPending = usesSharedAnalysis && proofingDialect != dialect
+            let protected = dialectPending
+                || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
+                || (sourcePending && MarkdownProofingContext.isProtectedInParagraph(location, of: source))
             textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
             textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
             if textView.window?.firstResponder === textView { applyProofingLanguage() }
@@ -462,18 +493,62 @@ enum MarkdownProofingContext {
         let analysis = analysis ?? MarkdownAnalysis(source)
         let code = analysis.blocks.filter { $0.kind == .codeBlock }
             .map { ProtectedRange(range: $0.sourceRange, includesEnd: false) }
+        return code + inlineProtectedRanges(in: source)
+    }
+
+    /// Inline code spans and URLs, which need no block analysis.
+    static func inlineProtectedRanges(in source: String) -> [ProtectedRange] {
         let inline = MarkdownInlineSyntax.codeSpanRanges(in: source)
             .map { ProtectedRange(range: $0, includesEnd: false) }
         let full = NSRange(location: 0, length: (source as NSString).length)
         let urls = urlPattern.matches(in: source, range: full)
             .map { ProtectedRange(range: $0.range, includesEnd: true) }
-        return code + inline + urls
+        return inline + urls
     }
 
     static func isProtected(_ location: Int, in ranges: [ProtectedRange]) -> Bool {
         ranges.contains { item in
             NSLocationInRange(location, item.range) ||
                 (item.includesEnd && location == NSMaxRange(item.range))
+        }
+    }
+
+    /// Whether `location` sits in inline code or a URL of its own paragraph. Used while
+    /// whole-document analysis is pending, so it costs one paragraph scan per keystroke.
+    static func isProtectedInParagraph(_ location: Int, of source: String) -> Bool {
+        let text = source as NSString
+        guard location >= 0, location <= text.length else { return false }
+        let paragraph = text.paragraphRange(for: NSRange(location: location, length: 0))
+        let ranges = inlineProtectedRanges(in: text.substring(with: paragraph)).map {
+            ProtectedRange(range: NSRange(location: $0.range.location + paragraph.location,
+                                          length: $0.range.length), includesEnd: $0.includesEnd)
+        }
+        return isProtected(location, in: ranges)
+    }
+
+    /// Realigns ranges after a character edit reported by NSTextStorage. `editedRange` is in
+    /// post-edit coordinates; the replaced pre-edit range had `editedRange.length - changeInLength`
+    /// characters. Ranges containing the edit grow or shrink, ranges after it move, and ranges
+    /// cut by the edit are dropped until the next snapshot arrives.
+    static func shifted(_ ranges: [ProtectedRange], editedRange: NSRange,
+                        changeInLength delta: Int) -> [ProtectedRange] {
+        let replaced = NSRange(location: editedRange.location, length: max(0, editedRange.length - delta))
+        return ranges.compactMap { item in
+            let range = item.range
+            let end = NSMaxRange(range)
+            let before = item.includesEnd ? end < replaced.location : end <= replaced.location
+            if before { return item }
+            if range.location >= NSMaxRange(replaced) {
+                return ProtectedRange(range: NSRange(location: range.location + delta, length: range.length),
+                                      includesEnd: item.includesEnd)
+            }
+            let inside = replaced.location > range.location && NSMaxRange(replaced) <= end
+            let appended = item.includesEnd && replaced.location == end && replaced.length == 0
+            guard inside || appended else { return nil }
+            let length = range.length + delta
+            guard length > 0 else { return nil }
+            return ProtectedRange(range: NSRange(location: range.location, length: length),
+                                  includesEnd: item.includesEnd)
         }
     }
 }

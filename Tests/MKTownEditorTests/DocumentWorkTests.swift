@@ -92,6 +92,24 @@ final class DocumentWorkTests: XCTestCase {
         XCTAssertNotNil(board.data(forType: .rtf))
     }
 
+    func testAsyncClipboardKeepsContentsCopiedWhileRendering() async throws {
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        let requestedAt = board.changeCount
+        board.declareTypes([.string], owner: nil)
+        board.setString("copied later", forType: .string)
+        do {
+            try await MarkdownRichClipboard.copyAsync("**stale**", documentURL: nil, to: board,
+                                                      startingChangeCount: requestedAt)
+            XCTFail("A newer copy must not be overwritten")
+        } catch is CancellationError {}
+        XCTAssertEqual(board.string(forType: .string), "copied later")
+        XCTAssertNil(board.string(forType: .html))
+        try await MarkdownRichClipboard.copyAsync("**fresh**", documentURL: nil, to: board,
+                                                  startingChangeCount: board.changeCount)
+        XCTAssertEqual(board.string(forType: .string), "fresh")
+    }
+
     func testAsyncClipboardImageSurvivesDeletingOriginal() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

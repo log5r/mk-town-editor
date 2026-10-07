@@ -89,11 +89,29 @@ struct MarkdownAutomaticClosers {
         return item
     }
 
-    func extendsOpening(_ item: Closer, at location: Int, source: String) -> Bool {
-        guard ["*", "_", "`"].contains(item.marker), item.openingStart < location else { return false }
-        let opening = (source as NSString).substring(with:
-            NSRange(location: item.openingStart, length: location - item.openingStart))
-        return opening.allSatisfy { String($0) == item.marker }
+    enum Match {
+        /// The typed marker lengthens a balanced pair, e.g. "*|*" to "**|**".
+        case extendsOpening
+        /// Tracked closers already outnumber the opening run (after Backspace inside a pair);
+        /// the typed marker is inserted literally, which restores the balance.
+        case exceedsOpening
+        /// A plain closer that the caret steps over.
+        case closes
+    }
+
+    func match(_ item: Closer, at location: Int, source: String) -> Match {
+        guard ["*", "_", "`"].contains(item.marker), item.openingStart < location else { return .closes }
+        let text = source as NSString
+        let opening = text.substring(with: NSRange(location: item.openingStart, length: location - item.openingStart))
+        guard opening.allSatisfy({ String($0) == item.marker }) else { return .closes }
+        var closing = 0
+        while location + closing < text.length,
+              text.substring(with: NSRange(location: location + closing, length: 1)) == item.marker,
+              closers.contains(where: { $0.location == location + closing && $0.marker == item.marker }) {
+            closing += 1
+        }
+        if closing == opening.utf16.count { return .extendsOpening }
+        return closing > opening.utf16.count ? .exceedsOpening : .closes
     }
 
     mutating func consume(at location: Int) { closers.removeAll { $0.location == location } }

@@ -91,4 +91,21 @@ final class WorkspaceWikiLinksTests: XCTestCase {
         XCTAssertEqual(backlinks.backlinks.count, 1)
         XCTAssertEqual(backlinks.backlinks.first?.excerpt, "[[note]]")
     }
+
+    @MainActor
+    func testSheetLinkTargetIgnoresIndexBuiltFromAnOlderDocumentList() {
+        let root = URL(fileURLWithPath: "/private/tmp/wiki-sheet-index")
+        let current = root.appendingPathComponent("doc.md")
+        let plan = root.appendingPathComponent("notes/plan.md")
+        let added = root.appendingPathComponent("other/plan.md")
+        let before = [current, plan], after = [current, plan, added]
+        let stale = WorkspaceDocumentIndex(documents: before)
+        XCTAssertEqual(WorkspaceWikiLinkSheet.linkTarget(for: plan, from: current, documents: before,
+            cachedIndex: stale, indexedDocuments: before), "plan")
+        let target = WorkspaceWikiLinkSheet.linkTarget(for: plan, from: current, documents: after,
+            cachedIndex: stale, indexedDocuments: before)
+        XCTAssertEqual(target, "notes/plan", "a second plan.md appeared, so the bare title is ambiguous")
+        XCTAssertEqual(WorkspaceWikiLinks.resolve(target, from: current,
+            index: WorkspaceDocumentIndex(documents: after)), plan)
+    }
 }

@@ -122,6 +122,20 @@ final class WorkspaceDirectoryMonitor: @unchecked Sendable {
     deinit { stop() }
 }
 
+/// Per-document revisions of open, possibly unsaved buffers. Kept out of `WorkspaceStore`'s
+/// published state because it changes on every keystroke: only views that read open-buffer
+/// contents (embedded documents) observe it, so typing does not re-evaluate every window that
+/// observes the workspace.
+@MainActor
+final class WorkspaceContentRevisions: ObservableObject {
+    @Published private(set) var values: [URL: Int] = [:]
+
+    /// A fixed instance for previews without a workspace; it never changes.
+    static let empty = WorkspaceContentRevisions()
+
+    func bump(_ key: URL) { values[key, default: 0] &+= 1 }
+}
+
 @MainActor
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var rootURL: URL?
@@ -132,12 +146,14 @@ final class WorkspaceStore: ObservableObject {
     @Published private(set) var documentURLs: [URL] = []
     @Published private(set) var documentIndex = WorkspaceDocumentIndex(documents: [])
     @Published private(set) var fileSystemRevision = 0
-    @Published private(set) var openBufferRevisions: [URL: Int] = [:]
+    /// Observed only by embedded document views; see `WorkspaceContentRevisions`.
+    let contentRevisions = WorkspaceContentRevisions()
+    var openBufferRevisions: [URL: Int] { contentRevisions.values }
 
     func openBufferDidChange(for url: URL) {
         // Registration resolves aliases once; typing must not perform filesystem I/O.
         guard let key = openBufferKeys[url.standardizedFileURL] else { return }
-        openBufferRevisions[key, default: 0] &+= 1
+        contentRevisions.bump(key)
     }
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?

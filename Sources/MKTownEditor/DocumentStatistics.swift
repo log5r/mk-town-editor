@@ -191,6 +191,16 @@ struct DocumentStatistics: Equatable, Sendable {
 /// synchronously, and superseded background scans stop at their next cancellation check.
 @MainActor
 final class DocumentStatusStore: ObservableObject {
+    /// Background scans that ran to completion, including superseded ones whose result is
+    /// discarded. Cancellation-aware scans keep this close to the number of published results.
+    final class ScanCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var completed: Int { lock.withLock { count } }
+        func record() { lock.withLock { count += 1 } }
+    }
+    let scanCounter = ScanCounter()
+
     @Published private(set) var selection: DocumentStatistics?
     @Published private(set) var section: (title: String, value: DocumentStatistics)?
     private var generation = 0
@@ -225,6 +235,7 @@ final class DocumentStatusStore: ObservableObject {
             return
         }
 
+        let counter = scanCounter
         task = Task.detached(priority: .utility) { [weak self] in
             do {
                 let selection = needsSelection
@@ -240,6 +251,7 @@ final class DocumentStatusStore: ObservableObject {
                 } else {
                     section = nil
                 }
+                counter.record()
                 try Task.checkCancellation()
                 await self?.receive(selection: selection, title: title, sectionRange: sectionRange,
                                     section: section, generation: requested)

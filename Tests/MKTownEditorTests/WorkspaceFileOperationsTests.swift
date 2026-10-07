@@ -144,6 +144,91 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         }
     }
 
+    func testFailedApplyRestoresOnlyWrittenDocumentsAndLeavesOthersUntouched() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let destination = root.appendingPathComponent("moved.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        let references = ["a", "b", "c", "d"].map { root.appendingPathComponent("ref-\($0).md") }
+        for url in references { try "[[source]]".write(to: url, atomically: true, encoding: .utf8) }
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
+        let order = plan.changes.filter { $0.linkCount > 0 }.map(\.newURL)
+        XCTAssertEqual(order.count, 4)
+        // The second rewrite fails: one document was written before it, two were never touched.
+        let failing = order[1]
+        try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: failing.path)
+        defer {
+            try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: failing.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        func identity(_ url: URL) throws -> NSObject? {
+            var url = url
+            url.removeAllCachedResourceValues()
+            return try url.resourceValues(forKeys: [.fileResourceIdentifierKey]).fileResourceIdentifier as? NSObject
+        }
+        let before = try Dictionary(uniqueKeysWithValues: order.map { ($0, try identity($0)) })
+
+        XCTAssertThrowsError(try plan.apply())
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        for url in order {
+            XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), "[[source]]", url.lastPathComponent)
+        }
+        for url in order.suffix(2) {
+            XCTAssertEqual(try identity(url), before[url] ?? nil,
+                           "\(url.lastPathComponent) was never written and must not be replaced by the rollback")
+        }
+    }
+
+    func testApplyStopsWhenDocumentUnreadableDuringPlanningBecomesReadable() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let destination = root.appendingPathComponent("moved.md")
+        let offline = root.appendingPathComponent("offline.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try "[[source]]".write(to: offline, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: offline.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: offline.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
+        XCTAssertEqual(plan.skippedDocuments.map(\.lastPathComponent), ["offline.md"])
+        XCTAssertEqual(plan.changedLinks, 0, "its link to the moved document was never examined")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: offline.path)
+        XCTAssertThrowsError(try plan.apply()) { error in
+            guard case let .documentChanged(url)? = error as? WorkspaceFileOperationError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(url.lastPathComponent, "offline.md")
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        let replanned = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
+        XCTAssertEqual(replanned.changedLinks, 1)
+        try replanned.apply()
+        XCTAssertEqual(try String(contentsOf: offline, encoding: .utf8), "[[moved]]")
+    }
+
+    func testApplyProceedsWhileSkippedDocumentStaysUnreadable() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let offline = root.appendingPathComponent("offline.md")
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try "text".write(to: offline, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: offline.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: offline.path)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let plan = try WorkspaceFileOperations.planMove(source: source,
+            destination: root.appendingPathComponent("moved.md"), root: root)
+        XCTAssertNoThrow(try plan.apply())
+    }
+
     func testMovePlanRebasesIncomingAndOutgoingLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
