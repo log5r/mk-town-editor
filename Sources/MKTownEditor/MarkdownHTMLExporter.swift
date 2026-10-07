@@ -458,6 +458,17 @@ enum DocumentWork {
         return try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
     }
 
+    /// Once the final mutation starts, completion wins over cancellation. The
+    /// operation may check cancellation during preparation, but not after commit.
+    static func commit<Value: Sendable>(_ operation: @escaping @Sendable () throws -> Value) async throws -> Value {
+        try Task.checkCancellation()
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try operation()
+        }
+        return try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+    }
+
     @MainActor
     static func loadHTML(_ html: String) async throws -> NSAttributedString {
         try Task.checkCancellation()

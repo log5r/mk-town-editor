@@ -2021,7 +2021,7 @@ struct EditorWorkspace: View {
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset, dialect: dialect)
-                try await DocumentWork.perform { try Data(html.utf8).write(to: destination, options: .atomic) }
+                try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
             } onError: { htmlExportError = $0 }
         }
     }
@@ -2146,11 +2146,10 @@ struct EditorWorkspace: View {
             guard response == .OK, let destination = panel.url else { return }
             let source = document.text, options = plainOptions
             startDocumentOperation {
-                try await DocumentWork.perform {
-                    let text = MarkdownPlainTextExporter.render(source, options: options)
-                    try Task.checkCancellation()
-                    try Data(text.utf8).write(to: destination, options: .atomic)
+                let text = try await DocumentWork.perform {
+                    MarkdownPlainTextExporter.render(source, options: options)
                 }
+                try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
             } onError: { plainExportError = $0 }
         }
     }

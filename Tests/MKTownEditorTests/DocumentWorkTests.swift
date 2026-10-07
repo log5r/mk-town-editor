@@ -21,6 +21,46 @@ final class DocumentWorkTests: XCTestCase {
         catch is CancellationError { }
     }
 
+    func testCancellationDuringCommitReportsSuccessfulAtomicReplacement() async throws {
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: destination) }
+        try Data("original".utf8).write(to: destination)
+        let started = expectation(description: "Final write started")
+        let release = DispatchSemaphore(value: 0)
+        let task = Task {
+            try await DocumentWork.commit {
+                started.fulfill()
+                guard release.wait(timeout: .now() + 5) == .success else { throw CocoaError(.fileWriteUnknown) }
+                try Data("replacement".utf8).write(to: destination, options: .atomic)
+            }
+        }
+        await fulfillment(of: [started], timeout: 5)
+        task.cancel()
+        release.signal()
+        try await task.value
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "replacement")
+    }
+
+    func testCancellationBeforeCommitPreservesExistingDestination() async throws {
+        let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: destination) }
+        try Data("original".utf8).write(to: destination)
+        let task = Task {
+            try await DocumentWork.commit { try Data("replacement".utf8).write(to: destination, options: .atomic) }
+        }
+        task.cancel()
+        do { try await task.value; XCTFail("Expected cancellation before commit") }
+        catch is CancellationError { }
+        XCTAssertEqual(try String(contentsOf: destination, encoding: .utf8), "original")
+    }
+
+    func testCommitStillReportsWriteErrors() async throws {
+        do {
+            try await DocumentWork.commit { throw CocoaError(.fileWriteNoPermission) }
+            XCTFail("Expected write failure")
+        } catch let error as CocoaError { XCTAssertEqual(error.code, .fileWriteNoPermission) }
+    }
+
     func testAsyncHTMLKeepsMathTablesAndEmbeddedImages() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

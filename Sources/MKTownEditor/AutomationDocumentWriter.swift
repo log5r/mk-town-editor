@@ -67,7 +67,7 @@ enum AutomationDocumentWriter {
             return document.text
         }
         let html = try await MarkdownHTMLExporter.renderAsync(text, documentURL: source)
-        try await DocumentWork.perform { try save(html, at: destination) }
+        try await DocumentWork.commit { try save(html, at: destination) }
     }
 
     @MainActor

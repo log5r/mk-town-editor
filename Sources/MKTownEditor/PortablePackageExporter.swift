@@ -319,7 +319,7 @@ struct PortablePackageSheet: View {
                 do {
                     let plan = try await PortablePackagePlanner.planAsync(source: source,
                         documentURL: documentURL, dialect: dialect)
-                    let result = try await DocumentWork.perform {
+                    let result = try await DocumentWork.commit {
                         try PortablePackageExporter.export(plan, to: parent, name: selectedName,
                             format: selectedFormat, zip: selectedZip)
                     }

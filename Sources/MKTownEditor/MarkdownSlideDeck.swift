@@ -61,7 +61,7 @@ enum MarkdownSlidePDFExporter {
             await Task.yield()
         }
         guard let data = output.dataRepresentation() else { throw MarkdownSlidePDFError.writeFailed }
-        try await DocumentWork.perform { try data.write(to: destination, options: .atomic) }
+        try await DocumentWork.commit { try data.write(to: destination, options: .atomic) }
     }
 
     static func export(_ deck: MarkdownSlideDeck, documentURL: URL?, to destination: URL,
