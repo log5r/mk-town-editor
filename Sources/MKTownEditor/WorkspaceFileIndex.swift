@@ -125,10 +125,17 @@ final class WorkspaceDirectoryMonitor: @unchecked Sendable {
 @MainActor
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var rootURL: URL?
-    @Published private(set) var nodes: [WorkspaceNode] = []
+    @Published private(set) var nodes: [WorkspaceNode] = [] {
+        didSet { updateVisibleNodes() }
+    }
+    @Published private(set) var visibleNodes: [WorkspaceNode] = []
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var viewSettings = WorkspaceViewSettings()
+    @Published private(set) var viewSettings = WorkspaceViewSettings() {
+        didSet { if viewSettings != oldValue { updateVisibleNodes() } }
+    }
+    private var displayGeneration = 0
+    private var displayTask: Task<Void, Never>?
     @Published private(set) var lockedDocumentPaths: Set<String> = []
 
     private let defaults: UserDefaults
@@ -274,6 +281,7 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func setRoot(_ url: URL) {
+        let url = url.resolvingSymlinksInPath().standardizedFileURL
         directoryMonitor?.stop()
         directoryMonitor = nil
         if hasSecurityScope { rootURL?.stopAccessingSecurityScopedResource() }
@@ -296,9 +304,20 @@ final class WorkspaceStore: ObservableObject {
 
     func clearError() { errorMessage = nil }
 
-    var visibleNodes: [WorkspaceNode] {
-        guard let rootURL else { return [] }
-        return viewSettings.display(nodes, root: rootURL)
+    private func updateVisibleNodes() {
+        displayGeneration += 1
+        let requested = displayGeneration
+        displayTask?.cancel()
+        guard let rootURL else { return }
+        let nodes = nodes
+        let settings = viewSettings
+        displayTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                settings.display(nodes, root: rootURL)
+            }.value
+            guard let self, !Task.isCancelled, self.displayGeneration == requested else { return }
+            if self.visibleNodes != result { self.visibleNodes = result }
+        }
     }
 
     var availableExtensions: [String] {
