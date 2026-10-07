@@ -7,6 +7,7 @@ struct DocumentSnapshot: Sendable {
     let dialect: MarkdownDialect
     let analysis: MarkdownAnalysis
     let statistics: DocumentStatistics
+    let wordCounts: [WordCountMode: Int]
     let outlineEntries: [MarkdownOutlineEntry]
     let sectionActions: [Int: MarkdownSectionActions]
     let syntaxSpans: [MarkdownSyntaxSpan]
@@ -20,6 +21,8 @@ struct DocumentSnapshot: Sendable {
         outlineEntries = MarkdownOutline.entries(in: parsed)
         sectionActions = MarkdownSectionActions.all(in: outlineEntries)
         statistics = DocumentStatistics(text: source)
+        wordCounts = [.whitespace: statistics.words, .japanese: WordCountMode.japanese.count(in: source),
+                      .english: WordCountMode.english.count(in: source)]
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
     }
