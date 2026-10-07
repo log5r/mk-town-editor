@@ -23,6 +23,31 @@ final class EditorSourceCacheTests: XCTestCase {
         XCTAssertEqual(view.sourceReadCount - before, 1)
     }
 
+    func testProofingUsesBackgroundRangesAndSuppressesCorrectionWhilePending() {
+        let view = EditorTextView()
+        view.string = "plain `code` https://example.com"
+        let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.sourceText), model: MarkdownEditorModel())
+        coordinator.textView = view
+        coordinator.usesSharedAnalysis = true
+        coordinator.proofing.checksSpelling = true
+        coordinator.proofing.correctsSpelling = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.sourceText)
+        view.setSelectedRange(NSRange(location: 2, length: 0))
+        coordinator.applyProofing()
+        XCTAssertTrue(view.isAutomaticSpellingCorrectionEnabled)
+        view.setSelectedRange(NSRange(location: 8, length: 0))
+        coordinator.applyProofing()
+        XCTAssertFalse(view.isAutomaticSpellingCorrectionEnabled)
+        view.textStorage?.replaceCharacters(in: NSRange(location: 0, length: 0), with: "`new` ")
+        view.setSelectedRange(NSRange(location: 2, length: 0))
+        coordinator.applyProofing()
+        XCTAssertFalse(view.isAutomaticSpellingCorrectionEnabled)
+        coordinator.sharedSnapshot = DocumentSnapshot(source: view.sourceText)
+        view.setSelectedRange(NSRange(location: 8, length: 0))
+        coordinator.applyProofing()
+        XCTAssertTrue(view.isAutomaticSpellingCorrectionEnabled)
+    }
+
     func testStorageEditsUndoAndReplacementInvalidateCacheButAttributesDoNot() {
         let view = EditorTextView()
         view.string = "abc"
