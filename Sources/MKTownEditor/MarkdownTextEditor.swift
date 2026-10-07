@@ -260,7 +260,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             (textView as? EditorTextView)?.clearFolds()
-            text = textView.string
+            var source = textView.string
+            source.makeContiguousUTF8()
+            text = source
             (textView as? EditorTextView)?.refreshInvisibles()
             applyProofing()
             refreshSyntax()

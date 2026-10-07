@@ -3,6 +3,20 @@ import XCTest
 
 @MainActor
 final class DocumentAnalysisStoreTests: XCTestCase {
+    func testAnalysisBoundaryNormalizesBridgedText() async throws {
+        let text = NSMutableString(string: String(repeating: "日本語🙂\n", count: 100)) as String
+        let store = DocumentAnalysisStore(analyze: { source in
+            XCTAssertTrue(source.isContiguousUTF8)
+            return DocumentSnapshot(source: source)
+        })
+        store.update(source: text)
+        for _ in 0..<100 where store.snapshot == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(store.snapshot?.source, text)
+        XCTAssertEqual(store.snapshot?.source.isContiguousUTF8, true)
+    }
+
     func testPreviewKeepsCompletedSourceDuringTypingAndUpdatesWhenAnalysisFinishes() async throws {
         let store = DocumentAnalysisStore()
         store.update(source: "# Before")
