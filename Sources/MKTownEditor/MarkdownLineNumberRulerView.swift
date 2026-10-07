@@ -44,8 +44,8 @@ struct MarkdownLineNumberLabel {
 enum MarkdownLineNumberLayout {
     static func labels(in textView: NSTextView, visibleRect: NSRect) -> [MarkdownLineNumberLabel] {
         guard let manager = textView.layoutManager, let container = textView.textContainer else { return [] }
-        let source = textView.string as NSString
-        let index = MarkdownLineNumberIndex(textView.string)
+        let source = textView.editorSource as NSString
+        let index = MarkdownLineNumberIndex(textView.editorSource)
         if source.length == 0 {
             let origin = textView.textContainerOrigin
             let height = manager.defaultLineHeight(for: textView.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize))
@@ -98,7 +98,7 @@ final class MarkdownLineNumberRulerView: NSRulerView {
 
     func refresh() {
         guard let editor else { return }
-        let digits = String(MarkdownLineNumberIndex(editor.string).starts.count).count
+        let digits = String(MarkdownLineNumberIndex(editor.editorSource).starts.count).count
         let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
                                                    weight: .regular)
         let width = (String(repeating: "8", count: digits) as NSString)
@@ -117,7 +117,7 @@ final class MarkdownLineNumberRulerView: NSRulerView {
             .font: font,
             .foregroundColor: NSColor.secondaryLabelColor
         ]
-        let lineStarts = MarkdownLineNumberIndex(editor.string).starts
+        let lineStarts = MarkdownLineNumberIndex(editor.editorSource).starts
         for label in MarkdownLineNumberLayout.labels(in: editor, visibleRect: editor.visibleRect) {
             let point = convert(label.origin, from: editor)
             if let foldingEditor = editor as? EditorTextView,

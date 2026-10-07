@@ -196,7 +196,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             context.coordinator.lineNumberRuler?.refresh()
         }
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
-        guard textView.string != text else {
+        guard textView.editorSource != text else {
             context.coordinator.refreshSyntax()
             return
         }
@@ -260,7 +260,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView else { return }
             (textView as? EditorTextView)?.clearFolds()
-            var source = textView.string
+            var source = textView.editorSource
             source.makeContiguousUTF8()
             text = source
             (textView as? EditorTextView)?.refreshInvisibles()
@@ -324,7 +324,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         @MainActor func refreshSyntax() {
             guard let textView, !textView.hasMarkedText() else { return }
-            let source = textView.string
+            let source = textView.editorSource
             let snapshotSource = sharedSnapshot?.source
             // TextKit adjusts existing temporary colors as the text changes. Keep them
             // until matching analysis arrives instead of clearing them on every keystroke.
@@ -379,9 +379,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         @MainActor func applyProofing() {
             guard let textView else { return }
-            if proofingSource != textView.string {
-                proofingSource = textView.string
-                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: textView.string)
+            if proofingSource != textView.editorSource {
+                proofingSource = textView.editorSource
+                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: textView.editorSource)
             }
             let location = textView.selectedRange().location
             let protected = MarkdownProofingContext.isProtected(location,
@@ -468,7 +468,53 @@ private final class EditorScrollView: NSScrollView {
     }
 }
 
+extension NSTextView {
+    var editorSource: String { (self as? EditorTextView)?.sourceText ?? string }
+}
+
 final class EditorTextView: NSTextView {
+    private var cachedSource: String?
+    private(set) var sourceRevision = 0
+    private(set) var sourceReadCount = 0
+
+    var sourceText: String {
+        if let cachedSource { return cachedSource }
+        var source = super.string
+        source.makeContiguousUTF8()
+        sourceReadCount += 1
+        cachedSource = source
+        return source
+    }
+
+    convenience init() { self.init(frame: .zero) }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        observeSourceEdits()
+    }
+
+    override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
+        super.init(frame: frameRect, textContainer: container)
+        observeSourceEdits()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        observeSourceEdits()
+    }
+
+    private func observeSourceEdits() {
+        NotificationCenter.default.addObserver(self, selector: #selector(sourceStorageDidChange(_:)),
+            name: NSTextStorage.didProcessEditingNotification, object: textStorage)
+    }
+
+    @objc private func sourceStorageDidChange(_ notification: Notification) {
+        guard let storage = notification.object as? NSTextStorage,
+              storage.editedMask.contains(.editedCharacters) else { return }
+        cachedSource = nil
+        sourceRevision += 1
+    }
+
     var onFocused: (() -> Void)?
     var onBlurred: (() -> Void)?
     weak var commandModel: MarkdownEditorModel?
@@ -480,7 +526,7 @@ final class EditorTextView: NSTextView {
     var loadsExternalLinkPreviews = false
     private let linkHover = MarkdownLinkHoverPopover()
     private var hoverTrackingArea: NSTrackingArea?
-    private var hoverSource = ""
+    private var hoverRevision = -1
     private var hoverLinks: [MarkdownHoverLink] = []
 
     func cancelLinkHover() { linkHover.cancel() }
@@ -502,9 +548,9 @@ final class EditorTextView: NSTextView {
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
         let point = convert(event.locationInWindow, from: nil)
-        let source = string
-        if hoverSource != source {
-            hoverSource = source
+        let source = sourceText
+        if hoverRevision != sourceRevision {
+            hoverRevision = sourceRevision
             hoverLinks = MarkdownLinkHover.links(in: source)
         }
         guard let layoutManager, let textContainer else {
@@ -552,7 +598,7 @@ final class EditorTextView: NSTextView {
 
     func refreshInvisibles() {
         invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
-            ? InvisibleCharacterPlan(source: string, tabWidth: max(1, whitespaceTabWidth)) : nil
+            ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth)) : nil
         needsDisplay = true
     }
     private(set) var foldedPlans: [MarkdownFoldPlan] = []
@@ -563,7 +609,7 @@ final class EditorTextView: NSTextView {
     }
 
     func toggleFold(at location: Int) -> Bool {
-        guard let plan = MarkdownFoldPlan.at(location, in: string) else { return false }
+        guard let plan = MarkdownFoldPlan.at(location, in: sourceText) else { return false }
         if let index = foldedPlans.firstIndex(where: { $0.headerLocation == plan.headerLocation }) {
             foldedPlans.remove(at: index)
         } else {
@@ -593,7 +639,7 @@ final class EditorTextView: NSTextView {
     }
 
     private func refreshFolds() {
-        let length = (string as NSString).length
+        let length = (sourceText as NSString).length
         layoutManager?.invalidateGlyphs(forCharacterRange: NSRange(location: 0, length: length),
             changeInLength: 0, actualCharacterRange: nil)
         enclosingScrollView?.verticalRulerView?.needsDisplay = true
@@ -604,7 +650,7 @@ final class EditorTextView: NSTextView {
         guard let layoutManager, let textContainer else { return nil }
         let visible = convert(scrollView.contentView.bounds, from: scrollView.contentView)
         let point = NSPoint(x: 0, y: max(0, visible.minY - textContainerOrigin.y))
-        return min((string as NSString).length,
+        return min((sourceText as NSString).length,
                    layoutManager.characterIndex(for: point, in: textContainer,
                                                 fractionOfDistanceBetweenInsertionPoints: nil))
     }
@@ -650,7 +696,7 @@ final class EditorTextView: NSTextView {
     override var rangeForUserCompletion: NSRange {
         let fallback = super.rangeForUserCompletion
         guard !hasMarkedText(), selectedRange().length == 0 else { return fallback }
-        let text = string as NSString
+        let text = sourceText as NSString
         let end = selectedRange().location
         var start = end
         while start > 0, end - start < 32 {
@@ -666,7 +712,7 @@ final class EditorTextView: NSTextView {
 
     override func completions(forPartialWordRange charRange: NSRange,
                               indexOfSelectedItem index: UnsafeMutablePointer<Int>) -> [String]? {
-        let matches = MarkdownEmoji.completions(in: string, range: charRange)
+        let matches = MarkdownEmoji.completions(in: sourceText, range: charRange)
         if !matches.isEmpty {
             index.pointee = 0
             return matches
@@ -808,7 +854,7 @@ final class EditorTextView: NSTextView {
 
     func imageDropIndicatorRect(at location: Int) -> NSRect? {
         guard let window, location >= 0,
-              location <= (string as NSString).length else { return nil }
+              location <= (sourceText as NSString).length else { return nil }
         let screen = firstRect(forCharacterRange: NSRange(location: location, length: 0),
                                actualRange: nil)
         let local = convert(window.convertFromScreen(screen), from: nil)
@@ -817,11 +863,11 @@ final class EditorTextView: NSTextView {
     }
 
     func dropInsertionLocation(for windowPoint: NSPoint) -> Int {
-        guard let layoutManager, let textContainer else { return (string as NSString).length }
+        guard let layoutManager, let textContainer else { return (sourceText as NSString).length }
         let local = convert(windowPoint, from: nil)
         let containerPoint = NSPoint(x: local.x - textContainerOrigin.x,
                                      y: local.y - textContainerOrigin.y)
-        return min((string as NSString).length,
+        return min((sourceText as NSString).length,
                    layoutManager.characterIndex(for: containerPoint, in: textContainer,
                                                 fractionOfDistanceBetweenInsertionPoints: nil))
     }
