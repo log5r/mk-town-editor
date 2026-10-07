@@ -66,6 +66,38 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         }
         XCTAssertFalse(store.snapshot?.analysis.blocks.contains { $0.kind == .table } == true)
     }
+    func testSnapshotValidityRequiresBothSourceAndDialect() {
+        let source = "# Heading"
+        for dialect in [MarkdownDialect.basic, .extended] {
+            let snapshot = DocumentSnapshot(source: source, dialect: dialect)
+            XCTAssertTrue(snapshot.matches(source: source, dialect: dialect))
+            XCTAssertFalse(snapshot.matches(source: "# Changed", dialect: dialect))
+            let other: MarkdownDialect = dialect == .basic ? .extended : .basic
+            XCTAssertFalse(snapshot.matches(source: source, dialect: other))
+        }
+    }
+
+    func testDialectSwitchRejectsPreviousOutlineUntilMatchingSnapshotArrives() async throws {
+        let source = "---\n# Hidden\nkey: value\n---\n# Visible\nbody\n# Next\nend"
+        let store = DocumentAnalysisStore()
+        for dialect in [MarkdownDialect.basic, .extended, .basic] {
+            let previous = store.snapshot
+            store.update(source: source, dialect: dialect)
+            // No main-actor suspension: the same-source, old-dialect snapshot
+            // remains published, but must not enable outline actions/navigation.
+            if let previous {
+                XCTAssertEqual(store.snapshot?.dialect, previous.dialect)
+                XCTAssertFalse(previous.matches(source: source, dialect: dialect))
+            }
+            for _ in 0..<100 where store.snapshot?.dialect != dialect {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            let snapshot = try XCTUnwrap(store.snapshot)
+            XCTAssertTrue(snapshot.matches(source: source, dialect: dialect))
+            XCTAssertEqual(snapshot.outlineEntries.contains { $0.title == "Hidden" }, dialect == .basic)
+        }
+    }
+
     func testSnapshotSharesSourceAcrossAnalysisStatisticsAndHighlighting() {
         let source = "# 見出し\n\n- [x] 完了"
         let snapshot = DocumentSnapshot(source: source)

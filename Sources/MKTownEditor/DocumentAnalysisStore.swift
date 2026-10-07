@@ -21,6 +21,11 @@ struct DocumentSnapshot: Sendable {
         statistics = DocumentStatistics(text: source)
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
     }
+
+    /// Source offsets and parsed structure are valid only for both inputs.
+    func matches(source: String, dialect: MarkdownDialect) -> Bool {
+        self.dialect == dialect && self.source == source
+    }
 }
 
 /// Keep the last completed preview visible while the next source is being analyzed.
@@ -52,7 +57,7 @@ final class DocumentAnalysisStore: ObservableObject {
     }
 
     func update(source: String, dialect: MarkdownDialect = .extended) {
-        if snapshot?.source == source && snapshot?.dialect == dialect {
+        if snapshot?.matches(source: source, dialect: dialect) == true {
             if requestedSource != nil { cancel() }
             return
         }
