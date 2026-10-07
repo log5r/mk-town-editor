@@ -75,7 +75,14 @@
       }
     },
     "「%@」" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”"
+          }
+        }
+      }
     },
     "「%@」と重複しています。" : {
       "localizations" : {
@@ -198,7 +205,14 @@
       }
     },
     "%@ の差分" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff for %@"
+          }
+        }
+      }
     },
     "%@ 列、%lld 行目、%@" : {
       "localizations" : {
@@ -244,6 +258,12 @@
     },
     "%@: %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -406,6 +426,12 @@
     },
     "%lld / %lld" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -695,10 +721,24 @@
       }
     },
     "AIによる推敲・翻訳の提案" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Proofreading and Translation Suggestions"
+          }
+        }
+      }
     },
     "APIの転送先が変わったため送信を停止しました。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The request was stopped because the API redirected to a different destination."
+          }
+        }
+      }
     },
     "assets にコピー" : {
       "localizations" : {
@@ -771,28 +811,84 @@
       }
     },
     "GitHubトークン" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub Token"
+          }
+        }
+      }
     },
     "GitHubの所有者/リポジトリ" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub Owner/Repository"
+          }
+        }
+      }
     },
     "Gitのステージとコミット" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Staging and Commits"
+          }
+        }
+      }
     },
     "Gitの差分と履歴" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Diff and History"
+          }
+        }
+      }
     },
     "Gitの読み取りが時間切れになりました。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Git read operation timed out."
+          }
+        }
+      }
     },
     "Gitの読み取りに失敗しました。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Git read operation failed."
+          }
+        }
+      }
     },
     "Gitの読み取り結果が大きすぎます。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Git read result is too large."
+          }
+        }
+      }
     },
     "Git管理下の保存済み文書を選んでください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a saved document tracked by Git."
+          }
+        }
+      }
     },
     "Graphviz dot の実行ファイル" : {
       "localizations" : {
@@ -895,7 +991,14 @@
       }
     },
     "iCloud管理のファイル" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File Managed by iCloud"
+          }
+        }
+      }
     },
     "JARファイルが見つかりません。" : {
       "localizations" : {
@@ -908,16 +1011,44 @@
       }
     },
     "Jekyllの公開元ルートに下書きは_drafts、公開記事は_postsとして新規作成します。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New drafts are created in _drafts and published posts in _posts at the Jekyll source root."
+          }
+        }
+      }
     },
     "JSON拡張を読み込む…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import JSON Extension…"
+          }
+        }
+      }
     },
     "Keychainから読込" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load from Keychain"
+          }
+        }
+      }
     },
     "Keychainに保存" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to Keychain"
+          }
+        }
+      }
     },
     "macOSの「バージョンを戻す」とは別に、名前を付けた時点を保存します。復元は現在の書類に対する編集としてUndoできます。" : {
       "localizations" : {
@@ -960,7 +1091,14 @@
       }
     },
     "MarkdownをHTMLに書き出す" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Markdown to HTML"
+          }
+        }
+      }
     },
     "Markdownを確認中" : {
       "localizations" : {
@@ -1013,10 +1151,24 @@
       }
     },
     "Markdown書類を保存" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Markdown Document"
+          }
+        }
+      }
     },
     "Markdown書類を読み取れません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Markdown document could not be read."
+          }
+        }
+      }
     },
     "Markdown構文" : {
       "localizations" : {
@@ -1090,16 +1242,44 @@
       }
     },
     "OpenAI APIがHTTP %lldを返しました。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The OpenAI API returned HTTP %lld."
+          }
+        }
+      }
     },
     "OpenAI APIキー" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAI API Key"
+          }
+        }
+      }
     },
     "OpenAI APIキーを入力してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your OpenAI API key."
+          }
+        }
+      }
     },
     "Pagesの公開元ブランチ" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pages Source Branch"
+          }
+        }
+      }
     },
     "Pandoc の実行ファイル" : {
       "localizations" : {
@@ -1282,13 +1462,34 @@
       }
     },
     "WordPressサイトのHTTPS URL" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WordPress Site HTTPS URL"
+          }
+        }
+      }
     },
     "WordPressの投稿APIへ本文をHTMLとして送信します。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document body is sent as HTML to the WordPress posts API."
+          }
+        }
+      }
     },
     "WordPressユーザー名" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WordPress Username"
+          }
+        }
+      }
     },
     "ZIPで保存" : {
       "localizations" : {
@@ -1321,7 +1522,14 @@
       }
     },
     "アプリケーションパスワード" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application Password"
+          }
+        }
+      }
     },
     "インスペクタ" : {
       "localizations" : {
@@ -1540,10 +1748,24 @@
       }
     },
     "このウインドウの書類が共有内容の保存元です。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document in this window is the source of the shared content."
+          }
+        }
+      }
     },
     "このファイルはiCloudのダウンロード対象ではありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is not available for download from iCloud."
+          }
+        }
+      }
     },
     "このフォルダの字下げ・添付先・Markdown構文" : {
       "localizations" : {
@@ -1586,7 +1808,14 @@
       }
     },
     "この文書の共同編集を開始" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Collaborating on This Document"
+          }
+        }
+      }
     },
     "この書類のフォルダ内" : {
       "localizations" : {
@@ -1599,7 +1828,14 @@
       }
     },
     "コピー" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy"
+          }
+        }
+      }
     },
     "コマンドパレット…" : {
       "localizations" : {
@@ -1642,10 +1878,24 @@
       }
     },
     "コミットメッセージ" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit Message"
+          }
+        }
+      }
     },
     "コミット対象のステージ済みファイルをすべて選択してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select all staged files to include in the commit."
+          }
+        }
+      }
     },
     "ゴミ箱へ移動" : {
       "localizations" : {
@@ -1668,7 +1918,14 @@
       }
     },
     "コメント" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comments"
+          }
+        }
+      }
     },
     "コメントにする／解除" : {
       "localizations" : {
@@ -1752,16 +2009,44 @@
       }
     },
     "ステージ済み" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staged"
+          }
+        }
+      }
     },
     "ステージ済み %lld 件" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Staged Files"
+          }
+        }
+      }
     },
     "ステージ済みの変更をコミット" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commit Staged Changes"
+          }
+        }
+      }
     },
     "ステージ済みの差分" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Staged Diff"
+          }
+        }
+      }
     },
     "スナップショットを復元" : {
       "localizations" : {
@@ -1794,7 +2079,14 @@
       }
     },
     "スニペットの短縮語と本文を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the snippet abbreviation and body."
+          }
+        }
+      }
     },
     "スニペットを挿入" : {
       "localizations" : {
@@ -1888,6 +2180,12 @@
     },
     "スライド %lld / %lld" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slide %1$lld / %2$lld"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -1897,19 +2195,54 @@
       }
     },
     "スライドPDFを保存できません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The slide PDF could not be saved."
+          }
+        }
+      }
     },
     "スライドPDFを書き出す" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Slide PDF"
+          }
+        }
+      }
     },
     "スライドのPDFページを作成できません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The PDF page for the slide could not be created."
+          }
+        }
+      }
     },
     "スライド表示" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slideshow"
+          }
+        }
+      }
     },
     "スラッグ（英小文字・数字・ハイフン）" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slug (Lowercase Letters, Numbers, and Hyphens)"
+          }
+        }
+      }
     },
     "セクション" : {
       "localizations" : {
@@ -2028,7 +2361,14 @@
       }
     },
     "タイトル" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title"
+          }
+        }
+      }
     },
     "タイトル（任意）" : {
       "localizations" : {
@@ -2051,10 +2391,24 @@
       }
     },
     "ダウンロードを開始" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start Download"
+          }
+        }
+      }
     },
     "ダウンロード中" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading"
+          }
+        }
+      }
     },
     "タグが見つかりません" : {
       "localizations" : {
@@ -2238,6 +2592,12 @@
     },
     "テーマ %lld・スニペット %lld" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Themes: %1$lld · Snippets: %2$lld"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -2247,19 +2607,54 @@
       }
     },
     "テーマの文字色と背景色のコントラストを高くしてください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increase the contrast between the theme's text and background colors."
+          }
+        }
+      }
     },
     "テーマの色指定を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the theme's color values."
+          }
+        }
+      }
     },
     "ディスクの内容が編集中の文書と異なります" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The contents on disk differ from the document being edited"
+          }
+        }
+      }
     },
     "ディスク更新: %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disk Updated: %@"
+          }
+        }
+      }
     },
     "ディスク版" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disk Version"
+          }
+        }
+      }
     },
     "テキスト…" : {
       "localizations" : {
@@ -2272,7 +2667,14 @@
       }
     },
     "テキストを指定したフォルダにMarkdown書類として保存します。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The text is saved as a Markdown document in the specified folder."
+          }
+        }
+      }
     },
     "テキストを書き出せません" : {
       "localizations" : {
@@ -2305,7 +2707,14 @@
       }
     },
     "ハイライト" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight"
+          }
+        }
+      }
     },
     "はじめに" : {
       "localizations" : {
@@ -2418,7 +2827,14 @@
       }
     },
     "ファイルの内容を読み取れません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file contents could not be read."
+          }
+        }
+      }
     },
     "ファイルへの相対リンクを補完するには、先に書類を保存してください。" : {
       "localizations" : {
@@ -2481,7 +2897,14 @@
       }
     },
     "ファイルを開く" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open File"
+          }
+        }
+      }
     },
     "ファイルを開けません" : {
       "localizations" : {
@@ -2584,7 +3007,14 @@
       }
     },
     "ファイル名を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the file name."
+          }
+        }
+      }
     },
     "ファイル画像を挿入するには、先に文書を保存してください。" : {
       "localizations" : {
@@ -2607,7 +3037,14 @@
       }
     },
     "フォルダの変更" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder Changes"
+          }
+        }
+      }
     },
     "フォルダの編集設定" : {
       "localizations" : {
@@ -2890,7 +3327,14 @@
       }
     },
     "ブログ・静的サイトへ公開" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish to Blog or Static Site"
+          }
+        }
+      }
     },
     "プロパティを変更できませんでした" : {
       "localizations" : {
@@ -2963,7 +3407,14 @@
       }
     },
     "ホストの共有内容をこの書類に反映します。この書類は参加者側のローカルコピーとして保存されます。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The host's shared content is applied to this document. This document is saved as a local copy on the participant's device."
+          }
+        }
+      }
     },
     "ミニマップを表示" : {
       "localizations" : {
@@ -3196,10 +3647,24 @@
       }
     },
     "ローカルの対応ファイルを再生できません" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The supported local file could not be played"
+          }
+        }
+      }
     },
     "ローカルまたはファイルプロバイダのファイル" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local or File Provider File"
+          }
+        }
+      }
     },
     "ローカルリンク" : {
       "localizations" : {
@@ -3292,7 +3757,14 @@
       }
     },
     "一度に送れる選択範囲は6,000文字までです。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can send up to 6,000 selected characters at a time."
+          }
+        }
+      }
     },
     "一時的に確認できません" : {
       "localizations" : {
@@ -3375,7 +3847,14 @@
       }
     },
     "上付き" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Superscript"
+          }
+        }
+      }
     },
     "下" : {
       "localizations" : {
@@ -3398,10 +3877,24 @@
       }
     },
     "下付き" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subscript"
+          }
+        }
+      }
     },
     "下書きを作成" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create Draft"
+          }
+        }
+      }
     },
     "下線・打ち消し線・背景色など一部の装飾は失われます。" : {
       "localizations" : {
@@ -3584,7 +4077,14 @@
       }
     },
     "保存するテキストがありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no text to save."
+          }
+        }
+      }
     },
     "保存先" : {
       "localizations" : {
@@ -3607,10 +4107,24 @@
       }
     },
     "保存先フォルダが見つかりません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The destination folder could not be found."
+          }
+        }
+      }
     },
     "保存先フォルダのパス" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destination Folder Path"
+          }
+        }
+      }
     },
     "保存先フォルダを使用できません。" : {
       "localizations" : {
@@ -3653,19 +4167,54 @@
       }
     },
     "保存済みMarkdown書類を指定したフォルダにHTMLとして書き出します。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The saved Markdown document is exported as HTML to the specified folder."
+          }
+        }
+      }
     },
     "保存済みのAPIキーがありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no saved API key."
+          }
+        }
+      }
     },
     "保存済みの認証情報がありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no saved credentials."
+          }
+        }
+      }
     },
     "保存済みファイルのGit状態を表示しています" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Showing the Git status of the saved file"
+          }
+        }
+      }
     },
     "保存済みファイルの変更を操作します。通信操作は行いません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes to saved files are managed locally. No network operations are performed."
+          }
+        }
+      }
     },
     "値" : {
       "localizations" : {
@@ -3698,7 +4247,14 @@
       }
     },
     "元のMarkdown書類のパス" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source Markdown Document Path"
+          }
+        }
+      }
     },
     "元のファイルまたはフォルダが見つかりません。" : {
       "localizations" : {
@@ -3811,19 +4367,53 @@
       }
     },
     "公開" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish"
+          }
+        }
+      }
     },
     "公開を実行" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish Now"
+          }
+        }
+      }
     },
     "公開先" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publishing Destination"
+          }
+        }
+      }
     },
     "公開先、タイトル、スラッグを確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the publishing destination, title, and slug."
+          }
+        }
+      }
     },
     "公開先がHTTP %lldを返しました: %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The publishing destination returned HTTP %1$lld: %2$@"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -3833,31 +4423,94 @@
       }
     },
     "公開先が別のURLへ転送しました。公開先設定を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The publishing destination redirected to a different URL. Check the destination settings."
+          }
+        }
+      }
     },
     "公開先で確認" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View at Destination"
+          }
+        }
+      }
     },
     "公開先の応答を確認できません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The response from the publishing destination could not be verified."
+          }
+        }
+      }
     },
     "共同編集とコメント" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaboration and Comments"
+          }
+        }
+      }
     },
     "共同編集の上限に達したため、接続を終了しました。文書の編集は続けられます。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection was closed because the collaboration limit was reached. You can continue editing the document."
+          }
+        }
+      }
     },
     "共同編集は20,000文字以下の文書で開始できます。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaboration can be started on documents of up to 20,000 characters."
+          }
+        }
+      }
     },
     "共同編集を終了" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End Collaboration"
+          }
+        }
+      }
     },
     "共有データが上限を超えたため、接続を終了しました。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection was closed because the shared data exceeded the limit."
+          }
+        }
+      }
     },
     "再接続" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect"
+          }
+        }
+      }
     },
     "再試行" : {
       "localizations" : {
@@ -4136,7 +4789,14 @@
       }
     },
     "動画" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
+      }
     },
     "区切り文字、引用符、行の内容を確認してください。" : {
       "localizations" : {
@@ -4159,7 +4819,14 @@
       }
     },
     "区切り線をスライド境界として全画面表示" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Full Screen with Horizontal Rules as Slide Boundaries"
+          }
+        }
+      }
     },
     "印刷…" : {
       "localizations" : {
@@ -4212,19 +4879,54 @@
       }
     },
     "参加" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join"
+          }
+        }
+      }
     },
     "参加コード" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join Code"
+          }
+        }
+      }
     },
     "参加コード: %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join Code: %@"
+          }
+        }
+      }
     },
     "参加して置き換える" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join and Replace"
+          }
+        }
+      }
     },
     "参加者: %@" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Participants: %@"
+          }
+        }
+      }
     },
     "参照ID" : {
       "localizations" : {
@@ -4367,7 +5069,14 @@
       }
     },
     "受信した文書が共同編集の上限を超えています。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The received document exceeds the collaboration limit."
+          }
+        }
+      }
     },
     "右" : {
       "localizations" : {
@@ -4400,7 +5109,14 @@
       }
     },
     "同じネットワークの参加者が表示されます。参加にはホストが示す6桁のコードが必要です。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Participants on the same network are shown. To join, enter the six-digit code provided by the host."
+          }
+        }
+      }
     },
     "同じ名前で保存すると、そのレイアウトを更新します。" : {
       "localizations" : {
@@ -4443,7 +5159,14 @@
       }
     },
     "同名のファイルが既にあります。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A file with the same name already exists."
+          }
+        }
+      }
     },
     "同名の出力が既にあります。上書きせずにスキップしました。" : {
       "localizations" : {
@@ -4456,7 +5179,14 @@
       }
     },
     "同期状態と競合版" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Status and Conflicting Versions"
+          }
+        }
+      }
     },
     "名前" : {
       "localizations" : {
@@ -4759,10 +5489,24 @@
       }
     },
     "変更ファイル" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changed Files"
+          }
+        }
+      }
     },
     "変更ファイルの選択を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the selection of changed files."
+          }
+        }
+      }
     },
     "変更を確認" : {
       "localizations" : {
@@ -4925,7 +5669,14 @@
       }
     },
     "宣言的なテーマとスニペットのみを読み込みます。コードは実行しません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only declarative themes and snippets are imported. No code is executed."
+          }
+        }
+      }
     },
     "対象" : {
       "localizations" : {
@@ -5018,7 +5769,14 @@
       }
     },
     "履歴" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History"
+          }
+        }
+      }
     },
     "履歴を選択" : {
       "localizations" : {
@@ -5071,7 +5829,14 @@
       }
     },
     "差分" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff"
+          }
+        }
+      }
     },
     "差分はありません" : {
       "localizations" : {
@@ -5154,7 +5919,14 @@
       }
     },
     "必要なら現在の文書を別名で保存してから参加してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If needed, save the current document under a different name before joining."
+          }
+        }
+      }
     },
     "戻る" : {
       "localizations" : {
@@ -5177,7 +5949,14 @@
       }
     },
     "拡張" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extensions"
+          }
+        }
+      }
     },
     "拡張（表・脚注・フロントマター）" : {
       "localizations" : {
@@ -5190,13 +5969,34 @@
       }
     },
     "拡張ファイルの形式を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the extension file format."
+          }
+        }
+      }
     },
     "拡張ファイルは100KB以下にしてください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The extension file must be 100 KB or smaller."
+          }
+        }
+      }
     },
     "拡張を読み込めません" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The extension could not be imported"
+          }
+        }
+      }
     },
     "持ち出し用パッケージ" : {
       "localizations" : {
@@ -5259,7 +6059,14 @@
       }
     },
     "採用後に文書を保存し、保存完了後に解消を確定してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save the document after adopting a version, then confirm resolution once saving is complete."
+          }
+        }
+      }
     },
     "推奨表記" : {
       "localizations" : {
@@ -5282,7 +6089,14 @@
       }
     },
     "推敲" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofread"
+          }
+        }
+      }
     },
     "描画器のファイルを開けません。" : {
       "localizations" : {
@@ -5315,16 +6129,44 @@
       }
     },
     "提案の差分" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggestion Diff"
+          }
+        }
+      }
     },
     "提案の本文を応答から読み取れません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The suggested text could not be read from the response."
+          }
+        }
+      }
     },
     "提案を採用" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply Suggestion"
+          }
+        }
+      }
     },
     "操作" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action"
+          }
+        }
+      }
     },
     "改行形式" : {
       "localizations" : {
@@ -5447,7 +6289,14 @@
       }
     },
     "文書が変わりました。提案を採用するには選択し直してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document has changed. Select the text again to apply the suggestion."
+          }
+        }
+      }
     },
     "文書の抜粋を読み込めません" : {
       "localizations" : {
@@ -5966,7 +6815,14 @@
       }
     },
     "未ダウンロード" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Downloaded"
+          }
+        }
+      }
     },
     "未使用の候補（%lld）" : {
       "localizations" : {
@@ -6389,10 +7245,24 @@
       }
     },
     "比較する版" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version to Compare"
+          }
+        }
+      }
     },
     "比較できるファイルサイズは4MBまでです。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files of up to 4 MB can be compared."
+          }
+        }
+      }
     },
     "注意" : {
       "localizations" : {
@@ -6571,7 +7441,14 @@
       }
     },
     "現在の文書を共有内容に置き換えますか？" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace the current document with the shared content?"
+          }
+        }
+      }
     },
     "現在の書類のプレビューを別ウインドウで表示" : {
       "localizations" : {
@@ -6964,7 +7841,14 @@
       }
     },
     "相対リンクと添付の公開先での動作を確認してください。既存の投稿やファイルは上書きしません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check how relative links and attachments work at the publishing destination. Existing posts and files are not overwritten."
+          }
+        }
+      }
     },
     "相対リンクは移動先の基準が異なるため、リンク先を付けずに文字だけ取り込みます。" : {
       "localizations" : {
@@ -7153,16 +8037,43 @@
       }
     },
     "競合あり" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conflicts"
+          }
+        }
+      }
     },
     "競合の解消を確定" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm Conflict Resolution"
+          }
+        }
+      }
     },
     "競合ファイル" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conflicting Files"
+          }
+        }
+      }
     },
     "競合版 %lld · %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conflicting Version %1$lld · %2$@"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -7172,13 +8083,34 @@
       }
     },
     "競合版あり" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conflicting Versions Available"
+          }
+        }
+      }
     },
     "競合版を採用" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adopt Conflicting Version"
+          }
+        }
+      }
     },
     "競合記号を解消し、保存してからステージしてください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resolve the conflict markers and save the file before staging it."
+          }
+        }
+      }
     },
     "等幅" : {
       "localizations" : {
@@ -7291,7 +8223,14 @@
       }
     },
     "絵文字ショートコードを補完" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Complete Emoji Shortcodes"
+          }
+        }
+      }
     },
     "継承" : {
       "localizations" : {
@@ -7344,7 +8283,14 @@
       }
     },
     "編集して保存した後、別の操作で解消済みとしてステージします。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After editing and saving, use a separate action to stage the file as resolved."
+          }
+        }
+      }
     },
     "編集できる単一行のプロパティはありません" : {
       "localizations" : {
@@ -7397,10 +8343,24 @@
       }
     },
     "編集中の文書が変わりました。更新してから再試行してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document being edited has changed. Refresh and try again."
+          }
+        }
+      }
     },
     "編集中の文書が変わりました。選択し直してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document being edited has changed. Select the text again."
+          }
+        }
+      }
     },
     "編集中以外のMarkdown記号を控えめに表示" : {
       "localizations" : {
@@ -7413,10 +8373,24 @@
       }
     },
     "編集画面で対象の文字列を選択してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select the text in the editor."
+          }
+        }
+      }
     },
     "編集画面で範囲を選んでからコメントを追加してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a range in the editor before adding a comment."
+          }
+        }
+      }
     },
     "編集表示で置換できます" : {
       "localizations" : {
@@ -7519,13 +8493,34 @@
       }
     },
     "翻訳" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translate"
+          }
+        }
+      }
     },
     "翻訳先の言語" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Target Language"
+          }
+        }
+      }
     },
     "翻訳先の言語を入力してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the target language."
+          }
+        }
+      }
     },
     "脚注" : {
       "localizations" : {
@@ -8254,16 +9249,44 @@
       }
     },
     "解決" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resolve"
+          }
+        }
+      }
     },
     "解決済み" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resolved"
+          }
+        }
+      }
     },
     "解消する競合版はありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no conflicting versions to resolve."
+          }
+        }
+      }
     },
     "解消済みとしてステージ" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stage as Resolved"
+          }
+        }
+      }
     },
     "解除" : {
       "localizations" : {
@@ -8326,7 +9349,14 @@
       }
     },
     "認証情報を入力してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter your credentials."
+          }
+        }
+      }
     },
     "語/分" : {
       "localizations" : {
@@ -8421,10 +9451,24 @@
       }
     },
     "近くのセッションを探す" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Nearby Sessions"
+          }
+        }
+      }
     },
     "返信" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply"
+          }
+        }
+      }
     },
     "追加" : {
       "localizations" : {
@@ -8437,22 +9481,63 @@
       }
     },
     "送信が完了しました。公開先で内容を確認してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending is complete. Check the content at the publishing destination."
+          }
+        }
+      }
     },
     "送信される本文" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Body to Be Sent"
+          }
+        }
+      }
     },
     "送信する本文" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Body to Send"
+          }
+        }
+      }
     },
     "送信はこのボタンを押した時だけ行います。提案は確認後に採用でき、通常の編集はオフラインで使えます。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text is sent only when you press this button. You can review suggestions before applying them, and normal editing works offline."
+          }
+        }
+      }
     },
     "送信中…" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        }
+      }
     },
     "送信先: %@ · モデル: %@" : {
       "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Destination: %1$@ · Model: %2$@"
+          }
+        },
         "ja" : {
           "stringUnit" : {
             "state" : "new",
@@ -8462,10 +9547,24 @@
       }
     },
     "送信内容を確認" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Content to Send"
+          }
+        }
+      }
     },
     "送信範囲: 選択中の%lld文字のみ。文書全体とファイル名は送信しません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the %lld selected characters will be sent. The full document and file name will not be sent."
+          }
+        }
+      }
     },
     "進む" : {
       "localizations" : {
@@ -8558,7 +9657,14 @@
       }
     },
     "選択した本文へのコメント" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comments on Selected Text"
+          }
+        }
+      }
     },
     "選択してください" : {
       "localizations" : {
@@ -8571,16 +9677,44 @@
       }
     },
     "選択テキスト.md" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected Text.md"
+          }
+        }
+      }
     },
     "選択テキストがありません。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No text is selected."
+          }
+        }
+      }
     },
     "選択をステージ" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stage Selected Files"
+          }
+        }
+      }
     },
     "選択を戻す" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unstage Selected Files"
+          }
+        }
+      }
     },
     "選択中: %lld書類" : {
       "localizations" : {
@@ -8633,10 +9767,24 @@
       }
     },
     "選択版がディスクに保存されるまで待ってから確定してください。" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wait until the selected version is saved to disk before confirming."
+          }
+        }
+      }
     },
     "選択版を編集中の文書に採用" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adopt Selected Version in the Document"
+          }
+        }
+      }
     },
     "選択範囲" : {
       "localizations" : {
@@ -8679,7 +9827,14 @@
       }
     },
     "選択範囲をAIで推敲・翻訳" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofread or Translate Selection with AI"
+          }
+        }
+      }
     },
     "選択範囲をすべて置換" : {
       "localizations" : {
@@ -8712,7 +9867,14 @@
       }
     },
     "選択範囲を送信して提案を取得" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Selection and Get Suggestion"
+          }
+        }
+      }
     },
     "選択範囲内" : {
       "localizations" : {
@@ -8875,7 +10037,14 @@
       }
     },
     "音声" : {
-
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
+          }
+        }
+      }
     },
     "音読速度: %lld %@" : {
       "localizations" : {

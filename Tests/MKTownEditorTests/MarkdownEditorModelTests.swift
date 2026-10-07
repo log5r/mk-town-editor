@@ -133,6 +133,118 @@ final class MarkdownEditorModelTests: XCTestCase {
         withExtendedLifetime(observation) {}
     }
 
+    func testSectionActionsUseCurrentSnapshotAndUndoEachSubtreeEdit() throws {
+        let source = "# A🙂\r\n## Child\r\nbody\r\n\r\n# B\r\nend"
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        defer { window.orderOut(nil) }
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let snapshot = DocumentSnapshot(source: source)
+
+        model.moveSection(at: 0, direction: .down, snapshot: snapshot, dialect: .extended)
+        XCTAssertEqual(view.string, "# B\r\nend\r\n\r\n# A🙂\r\n## Child\r\nbody")
+        XCTAssertEqual(view.selectedRange().location, (view.string as NSString).range(of: "# A🙂").location)
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+
+        model.changeSectionLevel(at: 0, by: 1, snapshot: snapshot, dialect: .extended)
+        XCTAssertEqual(view.string, "## A🙂\r\n### Child\r\nbody\r\n\r\n# B\r\nend")
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+    }
+
+    func testSectionActionsRejectMissingOrStaleSnapshotsWithoutEditing() {
+        let source = "# A\nbody\n# B\nend"
+        let view = ChangeCountingTextView()
+        view.string = source
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let stale = DocumentSnapshot(source: "# Old\n# B")
+        for snapshot in [nil, stale] {
+            model.moveSection(at: 0, direction: .down, snapshot: snapshot, dialect: .extended)
+            model.changeSectionLevel(at: 0, by: 1, snapshot: snapshot, dialect: .extended)
+        }
+        // The first command changes the text; its captured menu snapshot must
+        // become unusable immediately, even before SwiftUI rebuilds the menu.
+        let current = DocumentSnapshot(source: source)
+        model.moveSection(at: 0, direction: .down, snapshot: current, dialect: .extended)
+        let moved = view.string
+        XCTAssertNotEqual(moved, source)
+        XCTAssertEqual(view.changeRequests, 1)
+        model.changeSectionLevel(at: 0, by: 1, snapshot: current, dialect: .extended)
+        model.moveSection(at: 0, direction: .up, snapshot: current, dialect: .extended)
+        XCTAssertEqual(view.string, moved)
+        XCTAssertEqual(view.changeRequests, 1)
+    }
+
+    func testSectionActionsRejectPreviousBasicDialectOutlineInsideFrontMatter() throws {
+        let source = "---\n# Hidden\nkey: value\n---\n# Visible\nbody\n# Next\nend"
+        let previous = DocumentSnapshot(source: source, dialect: .basic)
+        let current = DocumentSnapshot(source: source, dialect: .extended)
+        let hidden = (source as NSString).range(of: "# Hidden").location
+        XCTAssertTrue(previous.outlineEntries.contains { $0.sourceRange.location == hidden })
+        XCTAssertFalse(current.outlineEntries.contains { $0.sourceRange.location == hidden })
+        for move in [true, false] {
+            let view = ChangeCountingTextView()
+            view.string = source
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            if move {
+                model.moveSection(at: hidden, direction: .down, snapshot: previous, dialect: .extended)
+            } else {
+                model.changeSectionLevel(at: hidden, by: 1, snapshot: previous, dialect: .extended)
+            }
+            XCTAssertEqual(view.string, source)
+            XCTAssertEqual(view.changeRequests, 0)
+        }
+    }
+
+    func testSectionActionsRejectPreviousExtendedDialectAndAcceptCurrentBasicSnapshot() {
+        let source = "# First\nbody\n# Next\nend"
+        let previous = DocumentSnapshot(source: source, dialect: .extended)
+        let current = DocumentSnapshot(source: source, dialect: .basic)
+        for move in [true, false] {
+            let view = ChangeCountingTextView()
+            view.string = source
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            if move {
+                model.moveSection(at: 0, direction: .down, snapshot: previous, dialect: .basic)
+            } else {
+                model.changeSectionLevel(at: 0, by: 1, snapshot: previous, dialect: .basic)
+            }
+            XCTAssertEqual(view.string, source)
+            XCTAssertEqual(view.changeRequests, 0)
+            if move {
+                model.moveSection(at: 0, direction: .down, snapshot: current, dialect: .basic)
+                XCTAssertEqual(view.string, "# Next\nend\n# First\nbody")
+            } else {
+                model.changeSectionLevel(at: 0, by: 1, snapshot: current, dialect: .basic)
+                XCTAssertEqual(view.string, "## First\nbody\n# Next\nend")
+            }
+            XCTAssertEqual(view.changeRequests, 1)
+        }
+    }
+
+    func testSectionActionsRespectReadOnlyAndMarkedTextGuards() {
+        let source = "# A\n# B"
+        let snapshot = DocumentSnapshot(source: source)
+        for view in [NSTextView(), MarkedTextView()] {
+            view.string = source
+            if !(view is MarkedTextView) { view.isEditable = false }
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            model.moveSection(at: 0, direction: .down, snapshot: snapshot, dialect: .extended)
+            model.changeSectionLevel(at: 0, by: 1, snapshot: snapshot, dialect: .extended)
+            XCTAssertEqual(view.string, source)
+        }
+    }
+
     func testSelectionExpandsThroughLinkParagraphAndSectionThenShrinks() {
         let source = "# Guide\n\nSee [site](https://example.com).\n\n# Next"
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
