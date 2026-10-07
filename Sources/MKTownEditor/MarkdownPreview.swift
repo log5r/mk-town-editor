@@ -150,7 +150,7 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            Text(AttributedString(MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+                                            Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
                                                 MarkdownRenderer.renderCallout(block, in: analysis,
                                                                                documentContext: renderContext)
                                             }))
@@ -244,7 +244,7 @@ struct MarkdownPreview: View {
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
-                                        Text(AttributedString(MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+                                        Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
                                             MarkdownRenderer.renderTableCell(note.content, in: analysis,
                                                                              documentContext: renderContext)
                                         }))
@@ -332,6 +332,7 @@ struct MarkdownPreview: View {
                 }
             } else {
                 MarkdownTextPreview(markdown: markdown, documentContext: renderContext,
+                                    imageRequester: renderCache.imageRequester,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
                                     remoteRevision: resourceRevision,
@@ -370,6 +371,10 @@ struct MarkdownPreview: View {
             for await _ in MarkdownCitationFileMonitor.changes(documentURL: watch.fileURL) {
                 await reloadCitations(documentURL: watch.fileURL)
             }
+        }
+        .onDisappear {
+            // 閉じたプレビューだけが待っていたローカル画像のデコードは取り消す。
+            LocalImageStore.shared.cancelRequests(from: renderCache.imageRequester)
         }
         .sheet(item: $inspectedImage) { item in
             ImageInspectionView(url: item.url)
@@ -624,6 +629,7 @@ enum PreviewAccessibility {
 private struct MarkdownTextPreview: NSViewRepresentable {
     let markdown: String
     let documentContext: DocumentContext
+    let imageRequester: LocalImageRequester
     let analysis: MarkdownAnalysis?
     let onOpenHeading: ((String) -> Void)?
     let onOpenDocument: ((URL) -> Void)?
@@ -730,7 +736,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
                 coordinator.renderedContext != documentContext ||
                 coordinator.renderedZoom != zoom ||
                 coordinator.renderedRemoteRevision != remoteRevision else { return }
-        let rendered = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+        let rendered = MarkdownRenderer.$localImageRequester.withValue(imageRequester) {
             analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
                 ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         }

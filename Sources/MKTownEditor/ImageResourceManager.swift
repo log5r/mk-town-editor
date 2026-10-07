@@ -244,17 +244,30 @@ final class LocalImageCache: @unchecked Sendable {
     }
 }
 
+/// ローカル画像のデコードを要求したプレビューを表す。参照の同一性だけを使う。
+final class LocalImageRequester: Sendable {}
+
 /// プレビューのローカル画像を背景でデコードし、完了したら `revision` を進めて再描画させる。
 @MainActor
 final class LocalImageStore: ObservableObject {
     static let shared = LocalImageStore()
     @Published private(set) var revision = 0
     let cache: LocalImageCache
-    private var inFlight = Set<LocalImageCache.Key>()
+    private let limiter: ImageDecodeLimiter
+    private struct Job {
+        let id: Int
+        let task: Task<Void, Never>
+        var owners: Set<ObjectIdentifier>
+        /// 要求元を指定しない要求があれば、取り消さない。
+        var isShared: Bool
+    }
+    private var jobs: [LocalImageCache.Key: Job] = [:]
+    private var nextJobID = 0
     private var publishScheduled = false
 
-    init(cache: LocalImageCache = .shared) {
+    init(cache: LocalImageCache = .shared, limiter: ImageDecodeLimiter = .local) {
         self.cache = cache
+        self.limiter = limiter
     }
 
     enum Lookup {
@@ -263,28 +276,53 @@ final class LocalImageStore: ObservableObject {
         case loading
     }
 
-    func lookup(_ fileURL: URL) -> Lookup {
+    /// 画像を返すか、背景でのデコードを要求する。`requester` が閉じたら `cancelRequests(from:)`
+    /// で、その要求元だけが待っていたデコードを取り消せる。
+    func lookup(_ fileURL: URL, requester: LocalImageRequester? = nil) -> Lookup {
         guard let key = LocalImageCache.key(for: fileURL) else { return .unavailable }
         if let cached = cache.cachedImage(for: key) {
             return cached.map(Lookup.image) ?? .unavailable
         }
-        if inFlight.insert(key).inserted {
-            let cache = cache
-            Task.detached(priority: .userInitiated) { [weak self] in
-                let limiter = ImageDecodeLimiter.local
-                await limiter.acquire()
-                cache.decode(key: key, fileURL: fileURL)
-                await limiter.release()
-                await self?.finish(key)
-            }
+        let owner = requester.map(ObjectIdentifier.init)
+        if var job = jobs[key] {
+            if let owner { job.owners.insert(owner) } else { job.isShared = true }
+            jobs[key] = job
+            return .loading
         }
+        let cache = cache
+        let limiter = limiter
+        nextJobID += 1
+        let id = nextJobID
+        let task = Task.detached(priority: .userInitiated) { [weak self] in
+            await limiter.acquire()
+            // 順番待ちの間に要求元がすべて閉じていれば、読み込まずに終える。
+            if !Task.isCancelled { cache.decode(key: key, fileURL: fileURL) }
+            await limiter.release()
+            await self?.finish(key, job: id)
+        }
+        jobs[key] = Job(id: id, task: task, owners: owner.map { [$0] } ?? [], isShared: owner == nil)
         return .loading
     }
 
-    var hasPendingDecodes: Bool { !inFlight.isEmpty }
+    /// 要求元が閉じた時に呼ぶ。ほかに待っている要求元のないデコードを取り消す。
+    func cancelRequests(from requester: LocalImageRequester) {
+        let owner = ObjectIdentifier(requester)
+        for (key, var job) in jobs where job.owners.contains(owner) {
+            job.owners.remove(owner)
+            if job.owners.isEmpty && !job.isShared {
+                job.task.cancel()
+                jobs[key] = nil
+            } else {
+                jobs[key] = job
+            }
+        }
+    }
 
-    private func finish(_ key: LocalImageCache.Key) {
-        inFlight.remove(key)
+    var hasPendingDecodes: Bool { !jobs.isEmpty }
+
+    private func finish(_ key: LocalImageCache.Key, job id: Int) {
+        // 取り消した要求の後に同じ画像の要求が入っていれば、その記録は残す。
+        if jobs[key]?.id == id { jobs[key] = nil }
         guard !publishScheduled, cache.contains(key) else { return }
         // 同時に終わったデコードをまとめ、プレビューの再描画を1回にする。
         publishScheduled = true

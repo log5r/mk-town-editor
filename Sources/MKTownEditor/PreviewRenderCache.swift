@@ -118,6 +118,8 @@ final class PreviewRenderCache: ObservableObject {
     private var formulaValidity: [String: Bool] = [:]
     private(set) var renderCount = 0
     private(set) var signatureComputationCount = 0
+    /// このプレビューが要求したローカル画像のデコードの要求元。
+    let imageRequester = LocalImageRequester()
 
     init(capacity: Int = 4_000) {
         self.capacity = capacity
@@ -143,7 +145,7 @@ final class PreviewRenderCache: ObservableObject {
             blocks[key] = cached
             return cached.value
         }
-        let leaf = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+        let leaf = MarkdownRenderer.$localImageRequester.withValue(imageRequester) {
             MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: showsTaskPrefix,
                                         documentContext: context)
         }
@@ -168,7 +170,7 @@ final class PreviewRenderCache: ObservableObject {
             cells[key] = cached
             return cached.value
         }
-        let cell = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+        let cell = MarkdownRenderer.$localImageRequester.withValue(imageRequester) {
             MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context)
         }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(cell, by: zoom),

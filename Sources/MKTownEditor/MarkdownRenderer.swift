@@ -4,8 +4,9 @@ import Foundation
 @MainActor
 enum MarkdownRenderer {
     /// プレビューではローカル画像を背景でデコードし、完了まで読み込み中の表示にする。
-    /// 書き出し・印刷では既定のまま同期的にデコードし、画像を欠かさない。
-    @TaskLocal nonisolated static var decodesLocalImagesInBackground = false
+    /// 値は要求元のプレビューで、閉じた時に待機中のデコードを取り消すために使う。
+    /// 書き出し・印刷では既定の `nil` のまま同期的にデコードし、画像を欠かさない。
+    @TaskLocal nonisolated static var localImageRequester: LocalImageRequester?
 
     nonisolated private static let referencePattern = try! NSRegularExpression(
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
@@ -346,7 +347,9 @@ enum MarkdownRenderer {
             let replacement: NSAttributedString
             let localFile = url.scheme == nil ? context.resolveLocalResource(url.relativeString) : nil
             let localLookup: LocalImageStore.Lookup? = localFile.map { fileURL in
-                if decodesLocalImagesInBackground { return LocalImageStore.shared.lookup(fileURL) }
+                if let requester = localImageRequester {
+                    return LocalImageStore.shared.lookup(fileURL, requester: requester)
+                }
                 return LocalImageCache.shared.image(at: fileURL).map(LocalImageStore.Lookup.image) ?? .unavailable
             }
             if let fileURL = localFile, case let .image(cached)? = localLookup {

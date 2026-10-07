@@ -232,8 +232,9 @@ final class LocalImagePreviewTests: XCTestCase {
         let store = LocalImageStore.shared
         let revision = store.revision
         let decodes = store.cache.decodeCount
+        let requester = LocalImageRequester()
 
-        let pending = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+        let pending = MarkdownRenderer.$localImageRequester.withValue(requester) {
             MarkdownRenderer.render("![写真](photo.png)", documentContext: context)
         }
         XCTAssertEqual(pending.string, "画像を読み込み中: 写真")
@@ -243,7 +244,7 @@ final class LocalImagePreviewTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNotEqual(store.revision, revision)
-        let loaded = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+        let loaded = MarkdownRenderer.$localImageRequester.withValue(requester) {
             MarkdownRenderer.render("![写真](photo.png)", documentContext: context)
         }
         let location = (loaded.string as NSString).range(of: "\u{FFFC}").location
@@ -332,6 +333,29 @@ final class LocalImagePreviewTests: XCTestCase {
         inOrder.decode(key: new, fileURL: url)
         XCTAssertTrue(inOrder.contains(new))
         XCTAssertFalse(inOrder.contains(old))
+    }
+
+    func testClosingThePreviewCancelsDecodesOnlyItWasWaitingFor() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
+        for url in urls { try png.write(to: url) }
+        let limiter = ImageDecodeLimiter(limit: 1)
+        let store = LocalImageStore(cache: LocalImageCache(), limiter: limiter)
+        let closing = LocalImageRequester()
+        let staying = LocalImageRequester()
+        // 枠を先に埋め、要求を順番待ちにする。
+        await limiter.acquire()
+        for url in urls { _ = store.lookup(url, requester: closing) }
+        _ = store.lookup(urls[2], requester: staying)
+        store.cancelRequests(from: closing)
+        await limiter.release()
+        let deadline = Date().addingTimeInterval(5)
+        while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.cache.decodeCount, 1, "Only the image another preview still waits for is decoded")
+        XCTAssertTrue(store.cache.contains(try XCTUnwrap(LocalImageCache.key(for: urls[2]))))
+        XCTAssertFalse(store.cache.contains(try XCTUnwrap(LocalImageCache.key(for: urls[0]))))
     }
 
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
