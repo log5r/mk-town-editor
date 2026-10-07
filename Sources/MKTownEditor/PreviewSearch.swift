@@ -18,6 +18,8 @@ enum PreviewSearch {
         var results: [PreviewSearchMatch] = []
         var start = 0
         while start < source.length {
+            // 検索語が変わって取り消された検索は、文書の末尾まで走査せずに終える。
+            if Task.isCancelled { return results }
             let found = source.range(of: query, options: options,
                                      range: NSRange(location: start, length: source.length - start))
             if found.location == NSNotFound { break }

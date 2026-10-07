@@ -158,8 +158,13 @@ struct GitDiffView: View {
     let placeholder: String
     /// 追加・削除行を色分けする。過去の版の本文を表示する場合は `false` にする。
     var highlightsChanges = true
-    @State private var showsAll = false
+    /// 全体表示を選んだ時の差分。別の差分に変わったら、全体表示は引き継がない。
+    @State private var expandedDiff: String?
     @State private var cache = DerivedValueCache<DiffKey, GitDiffPresentation>()
+
+    static func lineLimit(diff: String, expandedDiff: String?) -> Int? {
+        expandedDiff == diff ? nil : GitDiffPresentation.defaultLineLimit
+    }
 
     private struct DiffKey: Equatable {
         let diff: String
@@ -167,7 +172,8 @@ struct GitDiffView: View {
     }
 
     var body: some View {
-        let presentation = cache.value(for: DiffKey(diff: diff, showsAll: showsAll)) {
+        let lineLimit = Self.lineLimit(diff: diff, expandedDiff: expandedDiff)
+        let presentation = cache.value(for: DiffKey(diff: diff, showsAll: lineLimit == nil)) {
             GitDiffPresentation($0.diff, lineLimit: $0.showsAll ? nil : GitDiffPresentation.defaultLineLimit,
                                 highlightsChanges: highlightsChanges)
         }
@@ -185,12 +191,12 @@ struct GitDiffView: View {
                         Text("先頭の\(presentation.shownLines)行を表示しています（全\(presentation.totalLines)行）")
                             .font(.caption).foregroundStyle(.secondary)
                         Spacer()
-                        Button("差分全体を表示") { showsAll = true }
+                        Button("差分全体を表示") { expandedDiff = diff }
                     }
                 }
             }
         }
-        .onChange(of: diff) { _, _ in showsAll = false }
+        .onChange(of: diff) { _, _ in expandedDiff = nil }
     }
 }
 

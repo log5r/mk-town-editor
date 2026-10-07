@@ -106,7 +106,7 @@ struct RegexSearchSheet: View {
             lineNumbers = []
             let query = Query(source: source, pattern: pattern, caseSensitive: caseSensitive,
                               scope: activeScope)
-            let result = await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 do {
                     let found = try RegexSearch.matches(in: query.source,
                         pattern: query.pattern, caseSensitive: query.caseSensitive,
@@ -118,7 +118,9 @@ struct RegexSearchSheet: View {
                 } catch {
                     return SearchResult(matches: [], message: error.localizedDescription)
                 }
-            }.value
+            }
+            // パターンや本文が変わるとこのタスクが取り消されるため、背景の検索にも伝える。
+            let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
             guard !Task.isCancelled else { return }
             matches = result.matches
             lineNumbers = result.lineNumbers

@@ -90,10 +90,12 @@ struct PreviewSearchSheet: View {
         }
         isSearching = true
         do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-        let found = await Task.detached(priority: .userInitiated) {
+        let worker = Task.detached(priority: .userInitiated) {
             PreviewSearch.matches(in: request.source, query: request.query,
                                   caseSensitive: request.caseSensitive)
-        }.value
+        }
+        // 検索語が変わるとこのタスクが取り消されるため、背景の検索にも取り消しを伝える。
+        let found = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
         guard !Task.isCancelled else { return }
         matches = found
         isSearching = false
@@ -105,9 +107,17 @@ struct PreviewSearchSheet: View {
     }
 
     private func move(backwards: Bool) {
-        if let match = PreviewSearch.next(in: matches, after: selectedLocation,
+        if let match = PreviewSearch.next(in: matches,
+                                          after: Self.navigationOrigin(query: query, text: text,
+                                                                       selectedLocation: selectedLocation),
                                           backwards: backwards) {
             navigate(to: match)
         }
+    }
+
+    /// 移動の起点。入力中の検索語が呼び出し元の検索語と異なる間、選択中の位置は前の検索語の
+    /// 一致なので使わず、新しい検索語の先頭（または末尾）から探す。
+    static func navigationOrigin(query: String, text: String, selectedLocation: Int?) -> Int? {
+        query == text ? selectedLocation : nil
     }
 }

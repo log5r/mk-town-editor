@@ -72,4 +72,48 @@ final class SheetDerivedValueTests: XCTestCase {
         return (NSRange(location: 0, length: end),
                 text.substring(with: NSRange(location: starts[1], length: starts[closing] - starts[1])))
     }
+
+    func testPreviewSearchNavigationIgnoresTheOldQueryLocationWhileEditing() {
+        let source = "a match, b match, c match"
+        let matches = PreviewSearch.matches(in: source, query: "match")
+        let previous = matches[1].range.location
+        // 呼び出し元の検索語と入力中の検索語が違う間は、前の検索語の一致位置から進まない。
+        let origin = PreviewSearchSheet.navigationOrigin(query: "old", text: "match", selectedLocation: previous)
+        XCTAssertNil(origin)
+        XCTAssertEqual(PreviewSearch.next(in: matches, after: origin)?.range, matches[0].range)
+        XCTAssertEqual(PreviewSearch.next(in: matches, after: origin, backwards: true)?.range, matches[2].range)
+        XCTAssertEqual(PreviewSearchSheet.navigationOrigin(query: "match", text: "match",
+                                                           selectedLocation: previous), previous)
+    }
+
+    func testCancelledSearchesStopBeforeScanningTheWholeDocument() async throws {
+        let source = String(repeating: "word ", count: 200_000)
+        let preview = Task.detached { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return PreviewSearch.matches(in: source, query: "word").count
+        }
+        preview.cancel()
+        let previewCount = await preview.value
+        XCTAssertEqual(previewCount, 0)
+
+        let regex = Task.detached { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return try RegexSearch.matches(in: source, pattern: "w(o)rd").count
+        }
+        regex.cancel()
+        let regexCount = try await regex.value
+        XCTAssertLessThan(regexCount, 200_000)
+        XCTAssertEqual(try RegexSearch.matches(in: "word word", pattern: "w(o)rd"),
+                       [NSRange(location: 0, length: 4), NSRange(location: 5, length: 4)])
+    }
+
+    func testFullDiffDisplayDoesNotCarryOverToANewDiff() {
+        let first = "+a\n-b"
+        let second = "+c\n-d"
+        XCTAssertEqual(GitDiffView.lineLimit(diff: first, expandedDiff: nil), GitDiffPresentation.defaultLineLimit)
+        XCTAssertNil(GitDiffView.lineLimit(diff: first, expandedDiff: first))
+        XCTAssertEqual(GitDiffView.lineLimit(diff: second, expandedDiff: first),
+                       GitDiffPresentation.defaultLineLimit,
+                       "A refreshed or different revision starts truncated again")
+    }
 }
