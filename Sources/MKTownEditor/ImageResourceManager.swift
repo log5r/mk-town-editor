@@ -132,9 +132,9 @@ final class RemoteImageStore: ObservableObject {
 /// 描画のたびにディスクから再デコードしないためのキャッシュ。表示を確実に保つため、
 /// 破棄はメモリ圧ではなく総コストの上限を超えたときに古い順で行う。
 ///
-/// 直近に使った画像は通常の上限では追い出さない。1回の描画で使う画像が上限を超える文書で、
-/// 使ったばかりの画像を互いに追い出し、読み直しと再描画を繰り返すことを防ぐ。
-/// 直近の画像も含めて絶対上限を超えた時だけ、古い順に追い出す。
+/// 直近に使った画像は上限を超えても追い出さない。表示中の画像は描画結果も同じ画像データを
+/// 保持しているため、追い出してもメモリは減らず、読み直しと再描画を繰り返すだけになる。
+/// 上限を超えた分は、しばらく使われていない画像から古い順に追い出す。
 final class LocalImageCache: @unchecked Sendable {
     static let shared = LocalImageCache()
 
@@ -153,20 +153,16 @@ final class LocalImageCache: @unchecked Sendable {
 
     private let lock = NSLock()
     private let costLimit: Int
-    private let hardLimit: Int
     private let protectionInterval: TimeInterval
     private let now: @Sendable () -> Date
     private var entries: [Key: Entry] = [:]
     private var totalCost = 0
     private var clock: UInt64 = 0
-    /// 絶対上限で追い出した画像。読み直しても再描画を通知せず、繰り返しを防ぐ。
-    private var evicted: Set<Key> = []
     private(set) var decodeCount = 0
 
-    init(costLimit: Int = 64_000_000, hardLimit: Int = 512_000_000,
-         protectionInterval: TimeInterval = 5, now: @escaping @Sendable () -> Date = { Date() }) {
+    init(costLimit: Int = 64_000_000, protectionInterval: TimeInterval = 5,
+         now: @escaping @Sendable () -> Date = { Date() }) {
         self.costLimit = costLimit
-        self.hardLimit = max(costLimit, hardLimit)
         self.protectionInterval = protectionInterval
         self.now = now
     }
@@ -212,7 +208,6 @@ final class LocalImageCache: @unchecked Sendable {
         defer { lock.unlock() }
         decodeCount += 1
         clock += 1
-        evicted.remove(key)
         if let previous = entries.removeValue(forKey: key) { totalCost -= previous.cost }
         // 同じファイルの古い版は表示されないため、更新時にまとめて除く。
         for (staleKey, stale) in entries where staleKey.path == key.path {
@@ -224,22 +219,12 @@ final class LocalImageCache: @unchecked Sendable {
         totalCost += cost
         let protectedSince = date.addingTimeInterval(-protectionInterval)
         while totalCost > costLimit, entries.count > 1 {
-            let candidates = entries.filter { $0.key != key }
-            let unprotected = candidates.filter { $0.value.lastUseDate < protectedSince }
-            let pool = !unprotected.isEmpty ? unprotected : (totalCost > hardLimit ? candidates : [:])
-            guard let oldest = pool.min(by: { $0.value.lastUse < $1.value.lastUse }) else { break }
+            guard let oldest = entries.filter({ $0.key != key && $0.value.lastUseDate < protectedSince })
+                .min(by: { $0.value.lastUse < $1.value.lastUse }) else { break }
             entries[oldest.key] = nil
             totalCost -= oldest.value.cost
-            if evicted.count >= 1_024 { evicted.removeAll() }
-            evicted.insert(oldest.key)
         }
         return image
-    }
-
-    func wasEvicted(_ key: Key) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return evicted.contains(key)
     }
 
     func contains(_ key: Key) -> Bool {
@@ -280,9 +265,6 @@ final class LocalImageStore: ObservableObject {
         if let cached = cache.cachedImage(for: key) {
             return cached.map(Lookup.image) ?? .unavailable
         }
-        // 絶対上限で追い出された画像も背景で読み直すが、その完了では再描画を通知しない。
-        // 通知すると再描画が別の画像を追い出し、読み込みが終わらなくなる。
-        let publishes = !cache.wasEvicted(key)
         if inFlight.insert(key).inserted {
             let cache = cache
             Task.detached(priority: .userInitiated) { [weak self] in
@@ -290,7 +272,7 @@ final class LocalImageStore: ObservableObject {
                 await limiter.acquire()
                 cache.decode(key: key, fileURL: fileURL)
                 await limiter.release()
-                await self?.finish(key, publishes: publishes)
+                await self?.finish(key)
             }
         }
         return .loading
@@ -298,9 +280,9 @@ final class LocalImageStore: ObservableObject {
 
     var hasPendingDecodes: Bool { !inFlight.isEmpty }
 
-    private func finish(_ key: LocalImageCache.Key, publishes: Bool) {
+    private func finish(_ key: LocalImageCache.Key) {
         inFlight.remove(key)
-        guard publishes, !publishScheduled, cache.contains(key) else { return }
+        guard !publishScheduled, cache.contains(key) else { return }
         // 同時に終わったデコードをまとめ、プレビューの再描画を1回にする。
         publishScheduled = true
         Task { @MainActor [weak self] in

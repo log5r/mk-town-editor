@@ -210,15 +210,17 @@ final class LocalImagePreviewTests: XCTestCase {
         let key = try XCTUnwrap(LocalImageCache.key(for: first))
         XCTAssertFalse(small.contains(key), "The least recently used image is evicted")
 
-        // 直近に使った画像は通常の上限では追い出さず、絶対上限を超えた時だけ追い出す。
-        let protected = LocalImageCache(costLimit: 4, hardLimit: 1_000)
+        // 直近に使った画像は上限を超えても追い出さず、しばらく使われなくなってから追い出す。
+        let clock = TestClock()
+        let protected = LocalImageCache(costLimit: 4, protectionInterval: 5, now: { clock.now })
         XCTAssertNotNil(protected.image(at: first))
         XCTAssertNotNil(protected.image(at: second))
-        XCTAssertTrue(protected.contains(key))
-        let bounded = LocalImageCache(costLimit: 4, hardLimit: 4)
-        XCTAssertNotNil(bounded.image(at: first))
-        XCTAssertNotNil(bounded.image(at: second))
-        XCTAssertFalse(bounded.contains(key))
+        XCTAssertTrue(protected.contains(key), "An image used moments ago is not evicted")
+        clock.advance(by: 10)
+        let third = root.appendingPathComponent("third.png")
+        try png.write(to: third)
+        XCTAssertNotNil(protected.image(at: third))
+        XCTAssertFalse(protected.contains(key), "Images unused beyond the protection interval are evicted")
     }
 
     func testPreviewDecodesLocalImagesInBackgroundAndRendersAfterRevision() async throws {
@@ -280,27 +282,31 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertLessThanOrEqual(maximumRunning, 4, "Local decodes are bounded")
     }
 
-    func testImagesEvictedBeyondTheHardLimitReloadInBackgroundWithoutRepublishing() async throws {
+    func testReloadedImagesPublishSoPlaceholdersAreReplaced() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
-        for url in urls { try png.write(to: url) }
-        let store = LocalImageStore(cache: LocalImageCache(costLimit: 4, hardLimit: 4))
-        for url in urls { _ = store.lookup(url) }
+        let image = root.appendingPathComponent("photo.png")
+        try png.write(to: image)
+        let clock = TestClock()
+        let store = LocalImageStore(cache: LocalImageCache(costLimit: 4, protectionInterval: 5,
+                                                           now: { clock.now }))
+        _ = store.lookup(image)
         let deadline = Date().addingTimeInterval(5)
         while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
         try await Task.sleep(for: .milliseconds(20))
+        // 長く使われず追い出された画像も、読み直しが終われば再描画を通知して表示を置き換える。
+        clock.advance(by: 10)
+        let other = root.appendingPathComponent("other.png")
+        try png.write(to: other)
+        _ = store.cache.image(at: other)
+        XCTAssertFalse(store.cache.contains(try XCTUnwrap(LocalImageCache.key(for: image))))
         let revision = store.revision
-        let evicted = try XCTUnwrap(urls.first { url in
-            !store.cache.contains(LocalImageCache.key(for: url)!)
-        })
-        guard case .loading = store.lookup(evicted) else {
-            return XCTFail("An evicted image is reloaded in the background, not on the main actor")
-        }
+        guard case .loading = store.lookup(image) else { return XCTFail("the evicted image reloads in background") }
         while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        try await Task.sleep(for: .milliseconds(20))
-        XCTAssertEqual(store.revision, revision, "Reloading an evicted image must not start another render pass")
+        for _ in 0..<50 where store.revision == revision { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNotEqual(store.revision, revision)
+        guard case .image = store.lookup(image) else { return XCTFail("the reloaded image is displayed") }
     }
 
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
@@ -377,4 +383,13 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertTrue(taskText.string.contains("\u{FFFC}"))
         XCTAssertEqual(cellText.string, "\u{FFFC}")
     }
+}
+
+private final class TestClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = Date(timeIntervalSince1970: 1_000_000)
+
+    var now: Date { lock.withLock { value } }
+
+    func advance(by seconds: TimeInterval) { lock.withLock { value.addTimeInterval(seconds) } }
 }
