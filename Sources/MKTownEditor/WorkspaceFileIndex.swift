@@ -89,29 +89,48 @@ enum WorkspaceFileIndex {
     }
 }
 
-/// One recursive event stream per workspace; no periodic tree scans.
+/// One recursive event stream per workspace. Poll only if event monitoring cannot start.
 final class WorkspaceDirectoryMonitor: @unchecked Sendable {
     private var stream: FSEventStreamRef?
+    private var fallbackTimer: DispatchSourceTimer?
     private let changed: @MainActor @Sendable () -> Void
 
-    init(root: URL, changed: @escaping @MainActor @Sendable () -> Void) {
+    init(root: URL, fallbackInterval: TimeInterval = 3,
+         createStream: (URL, inout FSEventStreamContext) -> FSEventStreamRef? = WorkspaceDirectoryMonitor.createStream,
+         startStream: (FSEventStreamRef) -> Bool = FSEventStreamStart,
+         changed: @escaping @MainActor @Sendable () -> Void) {
         self.changed = changed
         var context = FSEventStreamContext(version: 0,
             info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
-        stream = FSEventStreamCreate(nil, { _, info, _, _, _, _ in
+        stream = createStream(root, &context)
+        if let stream {
+            FSEventStreamSetDispatchQueue(stream, .main)
+            if startStream(stream) { return }
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+        }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        let interval = max(0.01, fallbackInterval)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { Task { @MainActor in changed() } }
+        fallbackTimer = timer
+        timer.resume()
+    }
+
+    static func createStream(_ root: URL, _ context: inout FSEventStreamContext) -> FSEventStreamRef? {
+        FSEventStreamCreate(nil, { _, info, _, _, _, _ in
             guard let info else { return }
             let monitor = Unmanaged<WorkspaceDirectoryMonitor>.fromOpaque(info).takeUnretainedValue()
             let changed = monitor.changed
             Task { @MainActor in changed() }
         }, &context, [root.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5,
             FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot))
-        if let stream {
-            FSEventStreamSetDispatchQueue(stream, .main)
-            FSEventStreamStart(stream)
-        }
     }
 
     func stop() {
+        fallbackTimer?.cancel()
+        fallbackTimer = nil
         guard let stream else { return }
         FSEventStreamStop(stream)
         FSEventStreamInvalidate(stream)

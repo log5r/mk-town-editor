@@ -4,6 +4,39 @@ import XCTest
 
 @MainActor
 final class WorkspaceFileIndexTests: XCTestCase {
+    func testMonitorCreationAndStartupFailuresFallBackToPollingAndStopCleanly() async throws {
+        for creationFails in [true, false] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let document = root.appendingPathComponent("external.md")
+            var scannedNames: [String] = []
+            var callbacks = 0
+            let monitor = WorkspaceDirectoryMonitor(root: root, fallbackInterval: 0.02,
+                createStream: { root, context in
+                    creationFails ? nil : WorkspaceDirectoryMonitor.createStream(root, &context)
+                }, startStream: { _ in false }, changed: {
+                    callbacks += 1
+                    scannedNames = WorkspaceFileIndex.scan(root: root).nodes.map(\.name)
+                })
+            defer { monitor.stop() }
+            try "external edit".write(to: document, atomically: true, encoding: .utf8)
+            for _ in 0..<200 where !scannedNames.contains("external.md") {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            XCTAssertEqual(scannedNames, ["external.md"], "fallback must detect external additions")
+            try FileManager.default.removeItem(at: document)
+            for _ in 0..<200 where !scannedNames.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertTrue(scannedNames.isEmpty, "fallback must detect external deletions")
+            monitor.stop()
+            // Allow an already queued callback to drain before checking timer teardown.
+            try await Task.sleep(for: .milliseconds(30))
+            let afterStop = callbacks
+            try await Task.sleep(for: .milliseconds(60))
+            XCTAssertEqual(callbacks, afterStop, "stopping must cancel the fallback timer")
+        }
+    }
+
     func testSwitchingRootClearsPublishedTreeAndDocumentIndexImmediately() async throws {
         let base = URL(fileURLWithPath: "/private/tmp/workspace-root-switch-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: base) }
