@@ -383,7 +383,7 @@ enum MarkdownHTMLExporter {
 
     private static func footnoteHTML(_ text: String, analysis: MarkdownAnalysis) -> String {
         let source = text as NSString
-        let expression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let expression = MarkdownFootnoteIndex.referenceExpression
         var output = ""
         var cursor = 0
         for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {

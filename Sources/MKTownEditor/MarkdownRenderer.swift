@@ -436,7 +436,7 @@ enum MarkdownRenderer {
 
     private static func applyFootnoteMarkers(to result: NSMutableAttributedString,
                                              footnotes: MarkdownFootnoteIndex) {
-        let expression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let expression = MarkdownFootnoteIndex.referenceExpression
         let source = result.string as NSString
         let matches = expression.matches(in: result.string,
             range: NSRange(location: 0, length: source.length))
@@ -529,10 +529,13 @@ struct MarkdownImageLayout {
     let widths: [CGFloat?]
     let standaloneCaption: String?
 
+    private static let widthExpression = try! NSRegularExpression(
+        pattern: #"^\{width=([1-9][0-9]{0,3})(?:px)?\}"#)
+
     static func parse(_ markdown: String) -> Self {
         let source = markdown as NSString
         let codeRanges = MarkdownInlineSyntax.codeSpanRanges(in: markdown)
-        let expression = try! NSRegularExpression(pattern: #"^\{width=([1-9][0-9]{0,3})(?:px)?\}"#)
+        let expression = widthExpression
         var widths: [CGFloat?] = []
         var removals: [NSRange] = []
         var caption: String?

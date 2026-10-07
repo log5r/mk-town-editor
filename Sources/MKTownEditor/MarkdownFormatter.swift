@@ -44,6 +44,21 @@ enum MarkdownInlineSyntax {
         }
         return ranges
     }
+
+    /// 位置順に並んだ重ならない範囲（`codeSpanRanges` の結果など）と交差するかを二分探索で判定する。
+    static func intersects(_ range: NSRange, sortedRanges: [NSRange]) -> Bool {
+        var low = 0
+        var high = sortedRanges.count
+        while low < high {
+            let middle = (low + high) / 2
+            if NSMaxRange(sortedRanges[middle]) <= range.location {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        return low < sortedRanges.count && NSIntersectionRange(sortedRanges[low], range).length > 0
+    }
 }
 
 enum MarkdownFormattingStyle {
@@ -106,6 +121,9 @@ struct MarkdownEdit: Equatable {
 }
 
 struct MarkdownSnippetPlan {
+    private static let placeholderExpression = try! NSRegularExpression(
+        pattern: #"\$\{([1-9][0-9]*):([^}]*)\}|\$0"#)
+
     let edit: MarkdownEdit
     let placeholders: [NSRange]
     let finalCaret: Int
@@ -131,7 +149,7 @@ struct MarkdownSnippetPlan {
                     length: triggerLength)
             }
         }
-        let pattern = try! NSRegularExpression(pattern: #"\$\{([1-9][0-9]*):([^}]*)\}|\$0"#)
+        let pattern = placeholderExpression
         let template = snippet.template as NSString
         let matches = pattern.matches(in: snippet.template,
             range: NSRange(location: 0, length: template.length))
@@ -323,8 +341,7 @@ enum MarkdownFormatter {
         let source = text as NSString
         let opening = "<\(tag)>"
         let closing = "</\(tag)>"
-        let pattern = try! NSRegularExpression(pattern:
-            "<\(tag)>([^<>\\r\\n]*)</\(tag)>")
+        let pattern = RegularExpressionCache.shared.expression("<\(tag)>([^<>\\r\\n]*)</\(tag)>")!
         for match in pattern.matches(in: text, range: NSRange(location: 0, length: source.length)) {
             let inner = match.range(at: 1)
             if selection.location >= inner.location && NSMaxRange(selection) <= NSMaxRange(inner) {
@@ -452,29 +469,30 @@ enum MarkdownFormatter {
         }
         var spans: [FormattingSpan] = []
         for marker in markers {
-            let escaped = NSRegularExpression.escapedPattern(for: marker)
-            let boundary = marker.count == 1 ? "(?<!\(escaped))" : ""
-            let after = marker.count == 1 ? "(?!\(escaped))" : ""
-            let pattern = try! NSRegularExpression(
-                pattern: boundary + escaped + after + #"([\s\S]+?)"# + boundary + escaped + after
-            )
+            let pattern = emphasisExpression(for: marker)
             spans += pattern.matches(in: text, range: NSRange(location: 0, length: source.length)).compactMap { match in
                 let inner = match.range(at: 1)
                 let endMarker = NSMaxRange(inner)
                 guard !isEscaped(in: source, at: match.range.location),
                       !isEscaped(in: source, at: endMarker),
-                      !codeSpans.contains(where: { code in
-                          NSIntersectionRange(code, NSRange(location: match.range.location,
-                                                            length: (marker as NSString).length)).length > 0 ||
-                              NSIntersectionRange(code, NSRange(location: endMarker,
-                                                                length: (marker as NSString).length)).length > 0
-                      })
+                      !MarkdownInlineSyntax.intersects(NSRange(location: match.range.location,
+                          length: (marker as NSString).length), sortedRanges: codeSpans),
+                      !MarkdownInlineSyntax.intersects(NSRange(location: endMarker,
+                          length: (marker as NSString).length), sortedRanges: codeSpans)
                 else { return nil }
                 return FormattingSpan(range: match.range, innerRange: inner,
                                       markerLength: (marker as NSString).length)
             }
         }
         return spans.sorted { $0.range.location < $1.range.location }
+    }
+
+    private static func emphasisExpression(for marker: String) -> NSRegularExpression {
+        let escaped = NSRegularExpression.escapedPattern(for: marker)
+        let boundary = marker.count == 1 ? "(?<!\(escaped))" : ""
+        let after = marker.count == 1 ? "(?!\(escaped))" : ""
+        return RegularExpressionCache.shared.expression(
+            boundary + escaped + after + #"([\s\S]+?)"# + boundary + escaped + after)!
     }
 
     private static func isEscaped(in source: NSString, at location: Int) -> Bool {
@@ -689,9 +707,8 @@ enum MarkdownFormatter {
             !codeRanges.contains { NSIntersectionRange($0, link.range).length > 0 } &&
                 !fencedCode.contains { NSIntersectionRange($0, link.range).length > 0 }
         }
-        let inlineSpans = ["**", "__", "~~", "*", "_", "`"].flatMap {
-            formattingSpans(in: text, markers: [$0]).map(\.range)
-        }.filter { span in !fencedCode.contains { NSIntersectionRange($0, span).length > 0 } }
+        let inlineSpans = (formattingSpans(in: text, markers: emphasisMarkers)
+            + formattingSpans(in: text, markers: ["`"])).map(\.range).filter { span in !fencedCode.contains { NSIntersectionRange($0, span).length > 0 } }
         let candidates = links.map(\.range) + inlineSpans
         let target: NSRange
         if let enclosing = candidates.filter({ range in
@@ -744,16 +761,43 @@ enum MarkdownFormatter {
         return result
     }
 
+    private static let emphasisMarkers = ["**", "__", "~~", "*", "_"]
+
     private static func strippingEmphasis(_ text: String) -> String {
         var fragment = text
-        let markers = ["**", "__", "~~", "*", "_", "`"]
+        // 1回の走査で得た入れ子または互いに素なスパンの記号をまとめて外す。
+        // 外した結果として新しいスパンが現れる場合に備え、スパンがなくなるまで繰り返す。
         for _ in 0..<max(1, fragment.count) {
-            let spans = markers.flatMap { formattingSpans(in: fragment, markers: [$0]) }
-            guard let span = spans.min(by: { $0.range.location < $1.range.location ||
-                ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }) else { break }
+            let spans = (formattingSpans(in: fragment, markers: emphasisMarkers)
+                + formattingSpans(in: fragment, markers: ["`"]))
+                .sorted { $0.range.location < $1.range.location ||
+                    ($0.range.location == $1.range.location && $0.range.length > $1.range.length) }
+            var removals: [NSRange] = []
+            var enclosing: [FormattingSpan] = []
+            for span in spans {
+                while let last = enclosing.last, NSMaxRange(last.range) <= span.range.location {
+                    enclosing.removeLast()
+                }
+                if let parent = enclosing.last,
+                   span.range.location < parent.innerRange.location ||
+                    NSMaxRange(span.range) > NSMaxRange(parent.innerRange) {
+                    // 交差するスパンは、手前のスパンを外した後の本文で改めて判定する。
+                    break
+                }
+                enclosing.append(span)
+                removals.append(NSRange(location: span.range.location, length: span.markerLength))
+                removals.append(NSRange(location: NSMaxRange(span.innerRange), length: span.markerLength))
+            }
+            guard !removals.isEmpty else { break }
             let current = fragment as NSString
-            fragment = current.replacingCharacters(in: span.range,
-                with: current.substring(with: span.innerRange))
+            var result = ""
+            var cursor = 0
+            for removal in removals.sorted(by: { $0.location < $1.location }) {
+                result += current.substring(with: NSRange(location: cursor, length: removal.location - cursor))
+                cursor = NSMaxRange(removal)
+            }
+            result += current.substring(from: cursor)
+            fragment = result
         }
         return fragment
     }

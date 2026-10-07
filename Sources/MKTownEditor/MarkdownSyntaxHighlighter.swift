@@ -18,6 +18,15 @@ struct MarkdownSyntaxSpan: Equatable, Sendable {
 }
 
 enum MarkdownSyntaxHighlighter {
+    private static let emphasisExpressions: [(String, NSRegularExpression)] =
+        ["**", "__", "~~", "*", "_"].map { marker in
+            let escaped = NSRegularExpression.escapedPattern(for: marker)
+            let boundary = marker.count == 1 ? "(?<!\(escaped))" : ""
+            let after = marker.count == 1 ? "(?!\(escaped))" : ""
+            return (marker, try! NSRegularExpression(
+                pattern: boundary + escaped + after + #"([^\n]+?)"# + boundary + escaped + after))
+        }
+
     private static let quoteExpression = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)+"#)
     private static let listExpression = try! NSRegularExpression(
         pattern: #"^(?:[ \t]*>[ \t]*)*[ \t]*([-+*]|[0-9]{1,9}[.)])(?=[ \t])"#
@@ -84,13 +93,7 @@ enum MarkdownSyntaxHighlighter {
                   !overlaps(match.range, any: codeBlocks + codeSpans) else { continue }
             result.append(MarkdownSyntaxSpan(range: match.range, role: .link))
         }
-        for marker in ["**", "__", "~~", "*", "_"] {
-            let escaped = NSRegularExpression.escapedPattern(for: marker)
-            let boundary = marker.count == 1 ? "(?<!\(escaped))" : ""
-            let after = marker.count == 1 ? "(?!\(escaped))" : ""
-            let expression = try! NSRegularExpression(
-                pattern: boundary + escaped + after + #"([^\n]+?)"# + boundary + escaped + after
-            )
+        for (marker, expression) in emphasisExpressions {
             for match in expression.matches(in: text, range: NSRange(location: 0, length: source.length)) {
                 let markerLength = (marker as NSString).length
                 let opening = NSRange(location: match.range.location, length: markerLength)

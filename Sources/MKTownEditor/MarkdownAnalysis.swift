@@ -100,6 +100,11 @@ struct MarkdownFrontMatter: Equatable, Sendable {
 }
 
 struct MarkdownFootnoteIndex: Sendable {
+    /// 脚注参照 `[^id]` の照合式。解析・描画・HTML書き出しで共有する。
+    static let referenceExpression = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+    private static let definitionExpression = try! NSRegularExpression(
+        pattern: #"^[ ]{0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$"#)
+
     let entries: [MarkdownFootnote]
     let definitionRanges: [NSRange]
 
@@ -111,7 +116,7 @@ struct MarkdownFootnoteIndex: Sendable {
         }
         let text = source as NSString
         let starts = MarkdownLineIndex(source).starts
-        let pattern = try! NSRegularExpression(pattern: #"^[ ]{0,3}\[\^([^\]\n]+)\]:[ \t]*(.*)$"#)
+        let pattern = Self.definitionExpression
         var definitions: [String: (content: String, range: NSRange)] = [:]
         var definitionRanges: [NSRange] = []
         var lineIndex = 0
@@ -149,7 +154,7 @@ struct MarkdownFootnoteIndex: Sendable {
             lineIndex = next
         }
         self.definitionRanges = definitionRanges
-        let referencePattern = try! NSRegularExpression(pattern: #"\[\^([^\]\n]+)\]"#)
+        let referencePattern = Self.referenceExpression
         let inlineCode = MarkdownInlineSyntax.codeSpanRanges(in: source)
         var ordered: [MarkdownFootnote] = []
         var seen = Set<String>()

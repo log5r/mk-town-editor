@@ -31,7 +31,7 @@ enum CodeSyntaxHighlighter {
     static func tokenRanges(in source: String, language name: String?) -> [(NSRange, Token)] {
         guard let language = language(named: name) else { return [] }
         let pattern = tokenPattern(for: language)
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        guard let regex = RegularExpressionCache.shared.expression(pattern) else { return [] }
         let text = source as NSString
         return regex.matches(in: source, range: NSRange(location: 0, length: text.length)).compactMap { match in
             let value = text.substring(with: match.range)
