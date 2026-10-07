@@ -66,6 +66,41 @@ final class MarkdownLineNumberRulerTests: XCTestCase {
         XCTAssertGreaterThan(labels[1].origin.y, labels[0].origin.y)
     }
 
+    func testDeletingAcrossDigitBoundaryInWrappedEditorDoesNotRetileDuringProcessEditing() async throws {
+        for lineCount in [12, 105] {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+            let view = EditorTextView(frame: scroll.bounds)
+            _ = view.layoutManager // TextKit 1, as in the app
+            scroll.documentView = view
+            EditorLayoutOptions(wrapsLines: true).apply(to: view, in: scroll)
+            let ruler = MarkdownLineNumberRulerView(scrollView: scroll, editor: view)
+            scroll.verticalRulerView = ruler
+            scroll.hasVerticalRuler = true
+            scroll.rulersVisible = true
+            let window = NSWindow(contentRect: scroll.frame, styleMask: [.titled, .resizable],
+                                  backing: .buffered, defer: false)
+            window.contentView = scroll
+            defer { window.orderOut(nil); window.contentView = nil }
+            view.string = (1...lineCount).map { "line \($0) with some wrapped text" }.joined(separator: "\n")
+            ruler.refresh()
+            scroll.layoutSubtreeIfNeeded()
+            view.layoutManager?.ensureLayout(for: try XCTUnwrap(view.textContainer))
+            let wide = ruler.ruleThickness
+
+            view.selectAll(nil)
+            view.deleteBackward(nil) // raised NSRangeException inside processEditing
+            XCTAssertEqual(view.string, "")
+            XCTAssertEqual(ruler.index.starts.count, 1)
+            for _ in 0..<50 where ruler.ruleThickness == wide { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertLessThan(ruler.ruleThickness, wide, "the gutter narrows once editing has finished")
+
+            view.insertText(String(repeating: "x\n", count: lineCount),
+                            replacementRange: NSRange(location: 0, length: 0))
+            for _ in 0..<50 where ruler.ruleThickness != wide { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertEqual(ruler.ruleThickness, wide)
+        }
+    }
+
     func testGutterWidthGrowsWithLineCount() {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         let view = NSTextView(frame: scrollView.bounds)

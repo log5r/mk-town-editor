@@ -86,7 +86,17 @@ private final class DiagramProcessControl: @unchecked Sendable {
         if hasLaunched && !running { lock.unlock(); return }
         if timeout { timedOut = true } else { cancelled = true }
         lock.unlock()
-        if running { _ = Darwin.kill(process.processIdentifier, SIGTERM) }
+        if running { terminate() }
+    }
+
+    /// Sends SIGTERM, then SIGKILL if the tool is still running 250 ms later, so a tool
+    /// that ignores SIGTERM cannot keep `waitUntilExit()` (and the diagram) waiting forever.
+    private func terminate() {
+        _ = Darwin.kill(process.processIdentifier, SIGTERM)
+        let process = process
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(250)) {
+            if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
+        }
     }
 
     var stopped: Bool {
@@ -102,7 +112,7 @@ private final class DiagramProcessControl: @unchecked Sendable {
     }
 
     func signalIfStopped() {
-        if stopped, process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGTERM) }
+        if stopped, process.isRunning { terminate() }
     }
 }
 

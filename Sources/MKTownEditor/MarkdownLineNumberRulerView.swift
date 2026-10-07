@@ -133,17 +133,29 @@ final class MarkdownLineNumberRulerView: NSRulerView {
               storage.editedMask.contains(.editedCharacters) else { return }
         index.update(in: storage.string as NSString, editedRange: storage.editedRange,
                      changeInLength: storage.changeInLength)
-        refresh()
+        needsDisplay = true
+        // This notification arrives inside -[NSTextStorage processEditing], before the layout
+        // managers know about the edit. Changing ruleThickness here retiles the scroll view and
+        // resizes the text view, which queries glyphs of the old, longer text and raises an
+        // NSRangeException (e.g. Select All + Delete across a digit boundary). Resize later.
+        guard thickness(for: index.starts.count) != ruleThickness else { return }
+        DispatchQueue.main.async { [weak self] in self?.refresh() }
     }
 
     func refresh() {
-        let digits = String(index.starts.count).count
+        let thickness = thickness(for: index.starts.count)
+        // Assigning the same value would still retile the scroll view on every keystroke.
+        if ruleThickness != thickness { ruleThickness = thickness }
+        needsDisplay = true
+    }
+
+    private func thickness(for lineCount: Int) -> CGFloat {
+        let digits = String(lineCount).count
         let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
                                                    weight: .regular)
         let width = (String(repeating: "8", count: digits) as NSString)
             .size(withAttributes: [.font: font]).width
-        ruleThickness = ceil(width) + 24
-        needsDisplay = true
+        return ceil(width) + 24
     }
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
