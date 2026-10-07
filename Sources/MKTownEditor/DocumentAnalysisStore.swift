@@ -15,6 +15,7 @@ struct DocumentSnapshot: Sendable {
     let blockPresentationIDs: [Int: String]
     let hoverLinks: [MarkdownHoverLink]
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
+    let inlineCodeRanges: [NSRange]
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         let parsed = MarkdownAnalysis(source, dialect: dialect)
@@ -30,6 +31,7 @@ struct DocumentSnapshot: Sendable {
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
         hoverLinks = MarkdownLinkHover.links(in: source, analysis: parsed)
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
+        inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
     }
 
     /// Source offsets and parsed structure are valid only for both inputs.

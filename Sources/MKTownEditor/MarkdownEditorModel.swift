@@ -508,6 +508,10 @@ final class MarkdownEditorModel: ObservableObject {
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1 else { return false }
         let source = textView.editorSource
         let selection = textView.selectedRange()
+        // Backslashes are literal inside an already opened backtick code span.
+        // The completion helper still rejects escaped new opening backticks.
+        guard typed == "`" || !MarkdownSymbolCompletion.isEscaped(source as NSString, at: selection.location)
+        else { return false }
         var edit: MarkdownEdit?
         var openingStart: Int?
         if selection.length == 0,
@@ -524,8 +528,10 @@ final class MarkdownEditorModel: ObservableObject {
                 return true
             }
         } else {
+            let snapshot = matchingSnapshot
             edit = MarkdownSymbolCompletion.edit(in: source, selection: selection, typed: typed,
-                analysis: matchingSnapshot?.analysis, allowsAnalysis: !usesSharedAnalysis)
+                analysis: snapshot?.analysis, inlineCodeRanges: snapshot?.inlineCodeRanges,
+                allowsAnalysis: !usesSharedAnalysis)
         }
         guard let edit else { return false }
         if perform(edit, in: textView, storage: storage, focusEditor: true) {
