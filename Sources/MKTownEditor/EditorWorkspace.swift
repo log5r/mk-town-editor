@@ -1795,7 +1795,7 @@ struct EditorWorkspace: View {
     private func navigate(to entry: MarkdownOutlineEntry) {
         guard let snapshot = currentAnalysisSnapshot,
               snapshot.outlineEntries.contains(entry) else { return }
-        navigate(to: entry.sourceRange.location, previewBlockID: entry.id)
+        navigate(to: entry.sourceRange.location)
     }
 
     private func goToLine(_ requestedLine: Int) {
@@ -2169,17 +2169,11 @@ struct EditorWorkspace: View {
         NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
     }
 
-    private func navigate(to location: Int, previewBlockID: Int? = nil) {
+    private func navigate(to location: Int) {
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
         navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
         editorModel.navigate(to: location)
-        if let previewBlockID {
-            navigationSequence += 1
-            previewNavigationTarget = PreviewNavigationTarget(blockID: previewBlockID,
-                                                              sequence: navigationSequence)
-        } else {
-            scrollPreview(to: location)
-        }
+        scrollPreview(to: location)
     }
 
     private func goBack() {
@@ -2197,11 +2191,9 @@ struct EditorWorkspace: View {
     }
 
     private func scrollPreview(to sourceLocation: Int) {
-        guard let snapshot = currentAnalysisSnapshot else { return }
-        guard let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
-                                                 in: snapshot.analysis) else { return }
         navigationSequence += 1
-        previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+        previewNavigationTarget = PreviewNavigationTarget(sourceLocation: sourceLocation,
+                                                          sequence: navigationSequence)
     }
 
     private func navigatePreviewSearch(backwards: Bool) {
@@ -2232,7 +2224,8 @@ struct EditorWorkspace: View {
               block.id != synchronizedBlockID else { return }
         synchronizedBlockID = block.id
         navigationSequence += 1
-        previewNavigationTarget = PreviewNavigationTarget(blockID: block.id, sequence: navigationSequence)
+        previewNavigationTarget = PreviewNavigationTarget(sourceLocation: block.sourceRange.location,
+                                                          sequence: navigationSequence)
     }
 
     private func synchronizeEditor(to blockID: Int) {

@@ -76,6 +76,24 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(currentIDs, DocumentSnapshot(source: "Inserted\n\n" + source).blockPresentationIDs)
     }
 
+    func testNavigationTargetResolvesBySourceLocationAfterBlocksShift() throws {
+        let source = "# First\n\nBody\n\n## Second\n\nTail"
+        let edited = "Inserted paragraph\n\n" + source
+        let before = DocumentSnapshot(source: source)
+        let after = DocumentSnapshot(source: edited)
+        let headingLocation = (edited as NSString).range(of: "## Second").location
+        let target = PreviewNavigationTarget(sourceLocation: headingLocation, sequence: 1)
+        let oldHeading = try XCTUnwrap(before.analysis.blocks.first { $0.kind == .heading(level: 2) })
+        XCTAssertEqual(target.presentationID(in: after.analysis, presentationIDs: after.blockPresentationIDs),
+                       before.blockPresentationIDs[oldHeading.id],
+                       "The same heading keeps its presentation identity and is found by location")
+        let inBody = PreviewNavigationTarget(sourceLocation: (edited as NSString).range(of: "Tail").location + 2,
+                                             sequence: 2)
+        let tail = try XCTUnwrap(after.analysis.blocks.last { $0.kind == .paragraph })
+        XCTAssertEqual(inBody.presentationID(in: after.analysis, presentationIDs: after.blockPresentationIDs),
+                       after.blockPresentationIDs[tail.id])
+    }
+
     func testAnalysisBoundaryNormalizesBridgedText() async throws {
         let text = NSMutableString(string: String(repeating: "日本語🙂\n", count: 100)) as String
         let store = DocumentAnalysisStore(analyze: { source in

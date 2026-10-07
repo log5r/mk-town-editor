@@ -2,9 +2,16 @@ import AppKit
 import QuickLookUI
 import SwiftUI
 
+/// プレビューの移動先。解析ごとに変わるブロック番号ではなく原文の位置で保持し、
+/// 表示中の解析結果に照らして移動先のブロックを決める。
 struct PreviewNavigationTarget: Equatable {
-    let blockID: Int
+    let sourceLocation: Int
     let sequence: Int
+
+    func presentationID(in analysis: MarkdownAnalysis, presentationIDs: [Int: String]) -> String? {
+        PreviewScrollSync.block(containingOrBefore: sourceLocation, in: analysis)
+            .flatMap { presentationIDs[$0.id] }
+    }
 }
 
 private struct PreviewBlockRow: Identifiable {
@@ -255,10 +262,14 @@ struct MarkdownPreview: View {
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
-                        if let navigationTarget, let id = presentationIDs[navigationTarget.blockID] { proxy.scrollTo(id, anchor: .top) }
+                        if let id = navigationTarget?.presentationID(in: analysis, presentationIDs: presentationIDs) {
+                            proxy.scrollTo(id, anchor: .top)
+                        }
                     }
                     .onChange(of: navigationTarget) { _, target in
-                        if let target, let id = presentationIDs[target.blockID] { proxy.scrollTo(id, anchor: .top) }
+                        if let id = target?.presentationID(in: analysis, presentationIDs: presentationIDs) {
+                            proxy.scrollTo(id, anchor: .top)
+                        }
                     }
                     .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
                         if let blockID = PreviewScrollSync.topBlockID(from: origins) {
