@@ -31,6 +31,21 @@ final class EditorViewportState: ObservableObject {
     }
 }
 
+/// エディタの選択範囲。カーソル移動のたびに変わるため、エディタモデル本体とは別に公開し、
+/// ステータスバーやアウトラインの現在位置など、選択範囲を表示するビューだけが監視する。
+@MainActor
+final class EditorSelectionState: ObservableObject {
+    @Published private(set) var selectedRange = NSRange(location: 0, length: 0)
+    @Published private(set) var selectedRanges = [NSRange(location: 0, length: 0)]
+
+    var hasSelection: Bool { selectedRange.length > 0 }
+
+    fileprivate func publish(selectedRange: NSRange, selectedRanges: [NSRange]) {
+        if self.selectedRange != selectedRange { self.selectedRange = selectedRange }
+        if self.selectedRanges != selectedRanges { self.selectedRanges = selectedRanges }
+    }
+}
+
 @MainActor
 final class MarkdownEditorModel: ObservableObject {
     private struct EditorState: Equatable {
@@ -39,7 +54,18 @@ final class MarkdownEditorModel: ObservableObject {
         var hasActiveEditor = false
     }
 
-    @Published private var editorState = EditorState()
+    /// 選択範囲の変更は `selectionState` だけが通知し、モデル本体の監視者は
+    /// エディタの接続状態が変わった時だけ更新される。
+    private var editorState = EditorState() {
+        willSet {
+            if newValue.hasActiveEditor != editorState.hasActiveEditor { objectWillChange.send() }
+        }
+        didSet {
+            selectionState.publish(selectedRange: editorState.selectedRange,
+                                   selectedRanges: editorState.selectedRanges)
+        }
+    }
+    let selectionState = EditorSelectionState()
     private var pendingEditorState: EditorState?
     private var publicationTask: Task<Void, Never>?
     private var viewUpdateDepth = 0

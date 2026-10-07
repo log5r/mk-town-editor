@@ -20,6 +20,7 @@ struct DocumentSnapshot: Sendable {
     let previewLayout: PreviewLayoutIndex
     let scrollIndex: PreviewScrollIndex
     let needsStructuredPreview: Bool
+    let containsDocumentEmbeds: Bool
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         self.init(source: source, dialect: dialect, checkCancellation: {})
@@ -60,6 +61,7 @@ struct DocumentSnapshot: Sendable {
         previewLayout = PreviewLayoutIndex(parsed)
         scrollIndex = PreviewScrollIndex(parsed)
         needsStructuredPreview = PreviewStructure.needsStructuredLayout(parsed, source: source)
+        containsDocumentEmbeds = source.contains("![[")
         try checkCancellation()
     }
 

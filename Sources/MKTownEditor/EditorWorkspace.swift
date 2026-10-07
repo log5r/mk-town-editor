@@ -39,7 +39,9 @@ struct EditorWorkspace: View {
     @State private var transientState = EditorWorkspaceTransientState()
     @State private var cloudMonitor: WorkspaceDirectoryMonitor?
     @StateObject private var analysisStore = DocumentAnalysisStore()
-    @StateObject private var statusStore = DocumentStatusStore()
+    /// 選択範囲・節の統計はステータスバーの子ビューだけが監視する。
+    @State private var statusStore = DocumentStatusStore()
+    @State private var inspectorItemsCache = DerivedValueCache<MarkdownAnalysis.Identity, [MarkdownContentItem]>()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @StateObject private var detachedPreview = DetachedPreviewWindowManager()
     @StateObject private var slideWindow = MarkdownSlideWindowManager()
@@ -181,8 +183,6 @@ struct EditorWorkspace: View {
         analysisStore.snapshot?.statistics ?? .empty
     }
 
-    private var selectionStatistics: DocumentStatistics? { statusStore.selection }
-
     private var wordCountMode: WordCountMode {
         settingsStore.app.wordCountMode ?? .whitespace
     }
@@ -229,8 +229,6 @@ struct EditorWorkspace: View {
                     }
                 })
     }
-
-    private var sectionStatistics: (title: String, value: DocumentStatistics)? { statusStore.section }
 
     private var documentContext: DocumentContext {
         DocumentContext(fileURL: fileURL,
@@ -369,16 +367,24 @@ struct EditorWorkspace: View {
                 }
             }
             ToolbarItem(id: "ai-suggestion", placement: .primaryAction) {
-                Button("選択範囲をAIで推敲・翻訳", systemImage: "text.badge.checkmark") {
-                    showingAISuggestion = true
+                let hasActiveEditor = editorModel.hasActiveEditor
+                EditorSelectionReader(selection: editorModel.selectionState) { selection in
+                    Button("選択範囲をAIで推敲・翻訳", systemImage: "text.badge.checkmark") {
+                        showingAISuggestion = true
+                    }
+                    .disabled(!hasActiveEditor || selection.length == 0)
                 }
-                .disabled(!editorModel.hasActiveEditor || editorModel.selectedRange.length == 0)
             }
         }
         .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
             isActive: focusMode.isActive, toggle: toggleFocusMode))
         .focusedSceneValue(\.markdownEditorModel, editorModel)
+        .background {
+            EditorSelectionReader(selection: editorModel.selectionState) { _ in
+                Color.clear.focusedSceneValue(\.editorSelectedRanges, editorModel.selectionState.selectedRanges)
+            }
+        }
         .focusedSceneValue(\.goToLineAction) { showingGoToLine = true }
         .focusedSceneValue(\.goToHeadingAction) { showingGoToHeading = true }
         .focusedSceneValue(\.navigationHistoryActions, NavigationHistoryActions(
@@ -1172,9 +1178,9 @@ struct EditorWorkspace: View {
             previewUpdates.resume()
         }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
-        .onChange(of: editorModel.selectedRanges) { _, _ in
+        .onReceive(editorModel.selectionState.$selectedRanges.dropFirst()) { selections in
             schedulePositionSave()
-            statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
+            statusStore.update(snapshot: currentAnalysisSnapshot, selections: selections)
         }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
@@ -1288,7 +1294,8 @@ struct EditorWorkspace: View {
             navigationTarget: previewUpdates.state.isPaused && !isCurrent ? nil : previewNavigationTarget,
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
-            workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
+            workspaceDocumentURLs: (presentation.snapshot?.containsDocumentEmbeds
+                ?? displayedSource.contains("![[")) ? workspaceStore.documentURLs : [],
             workspaceContentRevisions: workspaceStore.contentRevisions,
             workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
             workspaceIndex: workspaceStore.documentIndex,
@@ -1453,8 +1460,11 @@ struct EditorWorkspace: View {
 
     private var contentInspectorSidebar: some View {
         let isReady = currentAnalysisSnapshot != nil
+        // 項目の抽出は全文を走査するため、解析結果が変わった時だけ行う。
         let items = currentAnalysisSnapshot.map { snapshot in
-            MarkdownContentInspector.items(in: document.text, analysis: snapshot.analysis)
+            inspectorItemsCache.value(for: snapshot.analysis.identity) { _ in
+                MarkdownContentInspector.items(in: snapshot.source, analysis: snapshot.analysis)
+            }
         } ?? []
         return List {
             Section("文書プロパティ") {
@@ -1475,16 +1485,19 @@ struct EditorWorkspace: View {
                     workspaceStore.isDocumentLocked(fileURL))
             }
             Section("文書を整理") {
+                let splitUnavailable = !isReady || fileURL == nil || workspaceStore.rootURL == nil ||
+                    workspaceStore.isDocumentLocked(fileURL)
+                let entries = outlineEntries
+                EditorSelectionReader(selection: editorModel.selectionState) { selection in
                 Button("現在のセクションを分割…") {
                     guard currentAnalysisSnapshot != nil else { return }
                     splitHeadingLocation = MarkdownOutline.currentSection(
                         at: editorModel.selectedRange.location, in: outlineEntries)?.sourceRange.location
                     showingNoteSplit = splitHeadingLocation != nil
                 }
-                .disabled(!isReady || fileURL == nil || workspaceStore.rootURL == nil ||
-                    workspaceStore.isDocumentLocked(fileURL) ||
-                    MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
-                        in: outlineEntries) == nil)
+                .disabled(splitUnavailable ||
+                    MarkdownOutline.currentSection(at: selection.location, in: entries) == nil)
+                }
                 Button("書類を結合…") { showingNoteMerge = true }
                     .disabled(workspaceStore.rootURL == nil)
             }
@@ -1735,9 +1748,12 @@ struct EditorWorkspace: View {
         let snapshot = analysisStore.snapshot
         let entries = snapshot?.outlineEntries ?? []
         let isCurrent = currentAnalysisSnapshot != nil
+        // 現在の節の強調と編集可否は選択範囲に依存するため、選択範囲はこのリストだけが監視する。
+        return EditorSelectionReader(selection: editorModel.selectionState) { selection in
         let canEdit = isCurrent && editorModel.canExecuteCommand
-        let highlightedID = currentSectionID
-        return List(entries) { entry in
+        let highlightedID = isCurrent
+            ? MarkdownOutline.currentSection(at: selection.location, in: entries)?.id : nil
+        List(entries) { entry in
             let actions = snapshot?.sectionActions[entry.id]
             Button {
                 navigate(to: entry)
@@ -1775,6 +1791,7 @@ struct EditorWorkspace: View {
             .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
             .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
         }
+        }
         .listStyle(.sidebar)
         .navigationTitle("アウトライン")
         .overlay {
@@ -1782,12 +1799,6 @@ struct EditorWorkspace: View {
                 ContentUnavailableView("見出しがありません", systemImage: "list.bullet.indent")
             }
         }
-    }
-
-    private var currentSectionID: Int? {
-        guard currentAnalysisSnapshot != nil else { return nil }
-        return MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
-                                              in: outlineEntries)?.id
     }
 
     private func navigate(to entry: MarkdownOutlineEntry) {
@@ -2340,15 +2351,20 @@ struct EditorWorkspace: View {
             Text("\(statistics.lines) 行")
             Text("\(displayedWordCount) 語")
                 .help(wordCountMode.title)
-            if let selectionStatistics {
-                Text("選択 \(selectionStatistics.characters) 文字")
-            } else if let sectionStatistics {
-                Text("節 \(sectionStatistics.value.characters) 文字")
+            DocumentStatusReader(store: statusStore) { selection, section in
+                if let selection {
+                    Text("選択 \(selection.characters) 文字")
+                } else if let section {
+                    Text("節 \(section.value.characters) 文字")
+                }
             }
-            Button("\(statistics.characters) 文字") { showingStatistics = true }
-                .buttonStyle(.plain)
-                .help("文字数の内訳を表示")
-                .accessibilityLabel("\(statusAccessibilityLabel)。内訳を表示")
+            let documentLabel = statusAccessibilityLabel
+            DocumentStatusReader(store: statusStore) { selection, section in
+                Button("\(statistics.characters) 文字") { showingStatistics = true }
+                    .buttonStyle(.plain)
+                    .help("文字数の内訳を表示")
+                    .accessibilityLabel("\(Self.statusAccessibilityLabel(documentLabel, selection: selection, section: section))。内訳を表示")
+            }
                 .popover(isPresented: $showingStatistics, arrowEdge: .top) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("文字数の内訳").font(.headline)
@@ -2380,16 +2396,18 @@ struct EditorWorkspace: View {
                             .foregroundStyle(.secondary)
                         Divider()
                         statisticsRow(String(localized: "全文"), value: statistics)
-                        if let selectionStatistics {
-                            statisticsRow(String(localized: "選択範囲"), value: selectionStatistics)
-                        } else {
-                            Text("選択範囲なし")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let sectionStatistics {
-                            statisticsRow(String(localized: "セクション: \(sectionStatistics.title)"),
-                                          value: sectionStatistics.value)
+                        DocumentStatusReader(store: statusStore) { selection, section in
+                            if let selection {
+                                statisticsRow(String(localized: "選択範囲"), value: selection)
+                            } else {
+                                Text("選択範囲なし")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let section {
+                                statisticsRow(String(localized: "セクション: \(section.title)"),
+                                              value: section.value)
+                            }
                         }
                         Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
                             .font(.caption)
@@ -2413,11 +2431,16 @@ struct EditorWorkspace: View {
     }
 
     private var statusAccessibilityLabel: String {
-        var value = String(localized: "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字")
-        if let selectionStatistics {
-            value += String(localized: "、選択範囲 \(selectionStatistics.characters) 文字")
-        } else if let sectionStatistics {
-            value += String(localized: "、セクション \(sectionStatistics.value.characters) 文字")
+        String(localized: "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字")
+    }
+
+    private static func statusAccessibilityLabel(_ document: String, selection: DocumentStatistics?,
+                                                 section: (title: String, value: DocumentStatistics)?) -> String {
+        var value = document
+        if let selection {
+            value += String(localized: "、選択範囲 \(selection.characters) 文字")
+        } else if let section {
+            value += String(localized: "、セクション \(section.value.characters) 文字")
         }
         return value
     }
@@ -2485,13 +2508,16 @@ struct EditorWorkspace: View {
     }
 
     private func formatButton(_ command: EditorCommand) -> some View {
-        Button {
-            command.perform(on: editorModel)
-        } label: {
-            Label(command.title, systemImage: command.symbolName)
+        // 実行可否は選択範囲の数や内容に依存するため、選択範囲の変更でこのボタンだけを更新する。
+        EditorSelectionReader(selection: editorModel.selectionState) { _ in
+            Button {
+                command.perform(on: editorModel)
+            } label: {
+                Label(command.title, systemImage: command.symbolName)
+            }
+            .help(command.title)
+            .disabled(!command.canExecute(in: editorModel))
         }
-        .help(command.title)
-        .disabled(!command.canExecute(in: editorModel))
     }
 }
 
@@ -3069,3 +3095,21 @@ final class EditorWorkspaceTransientState {
     /// スクロール同期で最後に揃えたブロック。同じブロックへの重複した同期を省く。
     var synchronizedBlockID: Int?
 }
+
+/// 選択範囲だけを監視し、変更時はこのビューの内容だけを作り直す。
+/// カーソル移動でワークスペース全体を再評価しないために使う。
+struct EditorSelectionReader<Content: View>: View {
+    @ObservedObject var selection: EditorSelectionState
+    @ViewBuilder let content: (NSRange) -> Content
+
+    var body: some View { content(selection.selectedRange) }
+}
+
+/// 選択範囲・節の統計だけを監視する。ステータスバーの該当部分だけを更新する。
+private struct DocumentStatusReader<Content: View>: View {
+    @ObservedObject var store: DocumentStatusStore
+    @ViewBuilder let content: (DocumentStatistics?, (title: String, value: DocumentStatistics)?) -> Content
+
+    var body: some View { content(store.selection, store.section) }
+}
+
