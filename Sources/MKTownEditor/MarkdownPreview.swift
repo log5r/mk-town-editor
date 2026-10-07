@@ -23,6 +23,7 @@ struct MarkdownPreview: View {
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var workspaceDocumentURLs: [URL] = []
+    var workspaceContentRevision = 0
     var loadWorkspaceOpenBuffers: (() throws -> [URL: Data])?
     var onOpenEmbeddedDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
@@ -108,6 +109,7 @@ struct MarkdownPreview: View {
                                         WorkspaceEmbeddedDocumentView(reference: reference,
                                             documentURL: documentURL,
                                             documents: workspaceDocumentURLs,
+                                            contentRevision: workspaceContentRevision,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
@@ -852,10 +854,8 @@ private struct DetachedPreviewContent: View {
                                 markdownDialect: dialect),
                             snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
-                            workspaceDocumentURLs: workspaceStore.rootURL.map { root in
-                                WorkspaceQuickOpen.search(nodes: workspaceStore.nodes,
-                                    root: root, query: "", limit: Int.max).map(\.url)
-                            } ?? [],
+                            workspaceDocumentURLs: workspaceStore.documentURLs,
+                            workspaceContentRevision: workspaceStore.openBufferRevision,
                             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
                                 { try workspaceStore.openBufferSnapshots(under: root) }
                             },

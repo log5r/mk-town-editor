@@ -129,6 +129,10 @@ final class WorkspaceStore: ObservableObject {
         didSet { updateVisibleNodes() }
     }
     @Published private(set) var visibleNodes: [WorkspaceNode] = []
+    @Published private(set) var documentURLs: [URL] = []
+    @Published private(set) var openBufferRevision = 0
+
+    func openBufferDidChange() { openBufferRevision &+= 1 }
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var viewSettings = WorkspaceViewSettings() {
@@ -155,6 +159,7 @@ final class WorkspaceStore: ObservableObject {
     func registerOpenBuffer(id: UUID, url: URL, encodedData: @escaping () -> Data,
                             updateText: @escaping (String) -> Void) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
+        openBufferDidChange()
         openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(encodedData: encodedData,
                                                                   updateText: updateText)
     }
@@ -162,6 +167,7 @@ final class WorkspaceStore: ObservableObject {
     func unregisterOpenBuffer(id: UUID, url: URL) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
         openBuffers[key]?.removeValue(forKey: id)
+        openBufferDidChange()
         if openBuffers[key]?.isEmpty == true { openBuffers.removeValue(forKey: key) }
     }
 
@@ -305,6 +311,13 @@ final class WorkspaceStore: ObservableObject {
     func clearError() { errorMessage = nil }
 
     private func updateVisibleNodes() {
+        func documents(in nodes: [WorkspaceNode]) -> [URL] {
+            nodes.flatMap { node in
+                node.children.map { documents(in: $0) } ?? (node.isEditableDocument ? [node.url] : [])
+            }
+        }
+        let urls = documents(in: nodes)
+        if documentURLs != urls { documentURLs = urls }
         displayGeneration += 1
         let requested = displayGeneration
         displayTask?.cancel()

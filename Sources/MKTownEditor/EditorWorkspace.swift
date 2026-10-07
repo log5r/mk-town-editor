@@ -1121,6 +1121,7 @@ struct EditorWorkspace: View {
             receivePendingWorkspaceTask()
         }
         .onChange(of: document.text) { _, newText in
+            workspaceStore.openBufferDidChange()
             collaboration.localChange(newText)
             previewUpdates.sourceChanged()
             analysisStore.update(source: newText,
@@ -1259,11 +1260,8 @@ struct EditorWorkspace: View {
             navigationTarget: previewUpdates.state.isPaused && !isCurrent ? nil : previewNavigationTarget,
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
-            workspaceDocumentURLs: displayedSource.contains("![[")
-                ? workspaceStore.rootURL.map { root in
-                    WorkspaceQuickOpen.search(nodes: workspaceStore.nodes, root: root,
-                        query: "", limit: Int.max).map(\.url)
-                } ?? [] : [],
+            workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
+            workspaceContentRevision: workspaceStore.openBufferRevision,
             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
                 { try workspaceStore.openBufferSnapshots(under: root) }
             },
