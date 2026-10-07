@@ -118,11 +118,10 @@ enum ExternalDiagramRenderer {
                        timeout: TimeInterval = 8) async throws -> Data {
         try Task.checkCancellation()
         let tool = URL(fileURLWithPath: configuration.toolPath(for: kind))
-        var freshTool = tool
-        freshTool.removeAllCachedResourceValues()
-        let metadata = try? freshTool.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let metadata = try? WorkspaceFileMetadata(url: tool)
         let digest = SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
-        let key = "\(kind.rawValue):\(tool.path):\(metadata?.contentModificationDate?.timeIntervalSince1970 ?? 0):\(metadata?.fileSize ?? 0):\(digest)" as NSString
+        let generation = metadata?.generation?.map { String(format: "%02x", $0) }.joined() ?? ""
+        let key = "\(kind.rawValue):\(tool.path):\(metadata?.modified?.timeIntervalSince1970 ?? 0):\(metadata?.size ?? 0):\(generation):\(digest)" as NSString
         if let cached = cache.values.object(forKey: key) { return cached as Data }
         let control = DiagramProcessControl()
         let result = try await withTaskCancellationHandler {

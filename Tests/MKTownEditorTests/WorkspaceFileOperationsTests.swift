@@ -54,6 +54,96 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         XCTAssertEqual(plan.changedLinks, 1)
     }
 
+    /// Rewrites `url` in place with same-length content and pins its modification date, so the
+    /// size and date match the previous version exactly.
+    private func overwritePreservingMetadata(_ url: URL, with text: String) throws {
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: 0)
+        try handle.write(contentsOf: Data(text.utf8))
+        try handle.close()
+        try FileManager.default.setAttributes([.modificationDate: Self.pinnedDate], ofItemAtPath: url.path)
+    }
+
+    private static let pinnedDate = Date(timeIntervalSince1970: 1_700_000_000)
+
+    /// Simulates a volume without generation identifiers, such as exFAT or some network shares.
+    private static let readMetadataWithoutGeneration: WorkspaceFileMetadata.Reader = {
+        let metadata = try WorkspaceFileMetadata(url: $0)
+        return WorkspaceFileMetadata(modified: metadata.modified, size: metadata.size, generation: nil)
+    }
+
+    func testApplyRejectsSameSizeSameDateEditsWithAndWithoutGenerationIdentifiers() throws {
+        for reader in [WorkspaceFileMetadata.read, Self.readMetadataWithoutGeneration] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let source = root.appendingPathComponent("source.md")
+            let reference = root.appendingPathComponent("reference.md")
+            let destination = root.appendingPathComponent("moved.md")
+            try "source".write(to: source, atomically: true, encoding: .utf8)
+            try "".write(to: reference, atomically: true, encoding: .utf8)
+            try overwritePreservingMetadata(reference, with: "see [[other]]!")
+            let cache = WorkspaceLinkAnalysisCache(readMetadata: reader)
+            let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                             root: root, cache: cache)
+            XCTAssertEqual(plan.changedLinks, 0)
+
+            let before = try reader(reference)
+            try overwritePreservingMetadata(reference, with: "see [[source]]")
+            let after = try reader(reference)
+            XCTAssertEqual(after.size, before.size)
+            XCTAssertEqual(after.modified, before.modified)
+            XCTAssertEqual(after == before, !after.identifiesContent,
+                           "size and date alone must only look unchanged where no generation identifier exists")
+
+            XCTAssertThrowsError(try plan.apply()) { error in
+                guard case let .documentChanged(url)? = error as? WorkspaceFileOperationError else {
+                    return XCTFail("Unexpected error: \(error)")
+                }
+                XCTAssertEqual(url, reference.resolvingSymlinksInPath().standardizedFileURL)
+            }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+            XCTAssertEqual(try String(contentsOf: reference, encoding: .utf8), "see [[source]]")
+
+            let replanned = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+                                                                  root: root, cache: cache)
+            XCTAssertEqual(replanned.changedLinks, 1)
+            try replanned.apply()
+            XCTAssertFalse(try String(contentsOf: reference, encoding: .utf8).contains("[[source]]"))
+        }
+    }
+
+    func testAnalysisCacheDetectsSameSizeSameDateEditsAndKeepsAnalysisForUnchangedBytes() throws {
+        for reader in [WorkspaceFileMetadata.read, Self.readMetadataWithoutGeneration] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            let url = root.appendingPathComponent("doc.md")
+            try "".write(to: url, atomically: true, encoding: .utf8)
+            try overwritePreservingMetadata(url, with: "alpha [[one]]")
+            let cache = WorkspaceLinkAnalysisCache(readMetadata: reader)
+            let first = try cache.load(url, openData: nil)
+            XCTAssertEqual(first.document?.text, "alpha [[one]]")
+            XCTAssertEqual(try cache.load(url, openData: nil).digest, first.digest)
+            XCTAssertEqual(cache.analysisBuildCount, 1)
+
+            try overwritePreservingMetadata(url, with: "alpha [[two]]")
+            let edited = try cache.load(url, openData: nil)
+            XCTAssertEqual(edited.document?.text, "alpha [[two]]")
+            XCTAssertNotEqual(edited.digest, first.digest)
+            XCTAssertEqual(cache.analysisBuildCount, 2)
+
+            let touchedDate = Self.pinnedDate.addingTimeInterval(100)
+            try FileManager.default.setAttributes([.modificationDate: touchedDate], ofItemAtPath: url.path)
+            let touched = try cache.load(url, openData: nil)
+            XCTAssertEqual(touched.digest, edited.digest)
+            XCTAssertEqual(touched.metadata.modified, touchedDate)
+            XCTAssertEqual(touched.document?.text, "alpha [[two]]")
+            XCTAssertEqual(cache.analysisBuildCount, 2, "unchanged bytes under a new date reuse the analysis")
+        }
+    }
+
     func testMovePlanRebasesIncomingAndOutgoingLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

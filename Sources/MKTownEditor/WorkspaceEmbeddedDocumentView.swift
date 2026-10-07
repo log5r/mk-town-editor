@@ -120,34 +120,39 @@ struct WorkspaceEmbeddedDocumentView: View {
     }
 }
 
+/// Decoded dependency texts, reused while the file's metadata still identifies the same contents.
+/// Volumes without a generation identifier re-read on every refresh, since equal size and date
+/// do not prove the bytes are unchanged there.
 struct WorkspaceEmbedFileCache: Sendable {
     private struct Entry: Sendable {
-        let modified: Date?
-        let size: Int
+        let metadata: WorkspaceFileMetadata
         let text: String
     }
     private var entries: [URL: Entry] = [:]
     private(set) var readCount = 0
+    private let readMetadata: WorkspaceFileMetadata.Reader
+
+    init(readMetadata: @escaping WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read) {
+        self.readMetadata = readMetadata
+    }
 
     mutating func load(_ url: URL, openBuffers: [URL: Data]) -> String? {
         if let data = openBuffers[url] {
             guard data.count <= WorkspaceDocumentEmbed.maximumBytes else { return nil }
             return try? MarkdownDocument.decode(data)
         }
-        var freshURL = url
-        freshURL.removeAllCachedResourceValues()
-        guard let values = try? freshURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
-              let size = values.fileSize, size <= WorkspaceDocumentEmbed.maximumBytes else {
+        guard let metadata = try? readMetadata(url),
+              let size = metadata.size, size <= WorkspaceDocumentEmbed.maximumBytes else {
             entries.removeValue(forKey: url)
             return nil
         }
-        if let entry = entries[url], entry.modified == values.contentModificationDate, entry.size == size {
+        if let entry = entries[url], entry.metadata.matchesContent(of: metadata) {
             return entry.text
         }
         guard let data = try? Data(contentsOf: url),
               let text = try? MarkdownDocument.decode(data) else { return nil }
         readCount += 1
-        entries[url] = Entry(modified: values.contentModificationDate, size: size, text: text)
+        entries[url] = Entry(metadata: metadata, text: text)
         return text
     }
 }
