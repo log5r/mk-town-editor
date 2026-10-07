@@ -70,11 +70,11 @@ struct WorkspaceLinkGraph: Sendable {
                     omittingEmptySubsequences: false)[0])
                 add(path.isEmpty ? nil : context.resolveLocalResource(path))
             }
-            for wiki in WorkspaceWikiLinks.links(in: text) {
+            for wiki in WorkspaceWikiLinks.links(in: text, analysis: analysis) {
                 add(WorkspaceWikiLinks.resolve(wiki.target, from: sourceURL,
                     index: documentIndex))
             }
-            for embed in WorkspaceDocumentEmbed.links(in: text) {
+            for embed in WorkspaceDocumentEmbed.links(in: text, analysis: analysis) {
                 add(WorkspaceWikiLinks.resolve(embed.target, from: sourceURL,
                     index: documentIndex))
             }
