@@ -3,6 +3,65 @@ import XCTest
 
 @MainActor
 final class DocumentAnalysisStoreTests: XCTestCase {
+    func testRapidEditsStopSupersededSnapshotInsideWordCounting() async throws {
+        let gate = SnapshotWordCountGate()
+        defer { gate.release.signal() }
+        let obsolete = String(repeating: "word ", count: 1_200)
+        let store = DocumentAnalysisStore { source in
+            if source == obsolete {
+                return try DocumentSnapshot(source: source, dialect: .extended) {
+                    try Task.checkCancellation()
+                    if gate.recordCheck() == 20 {
+                        _ = gate.release.wait(timeout: .now() + 5)
+                    }
+                    try Task.checkCancellation()
+                }
+            }
+            return try DocumentSnapshot.observingCancellation(source: source)
+        }
+        store.update(source: obsolete)
+        for _ in 0..<200 where gate.checks < 20 { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(gate.checks, 20, "the scan must reach the tokenizer before being superseded")
+        for index in 0..<12 { store.update(source: "Latest \(index)") }
+        gate.release.signal()
+        for _ in 0..<200 where store.snapshot?.source != "Latest 11" {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertEqual(store.snapshot?.source, "Latest 11")
+        XCTAssertEqual(gate.checks, 20, "obsolete token scans must stop rather than visit all 1,200 words")
+        XCTAssertEqual(store.snapshot?.wordCounts, DocumentSnapshot(source: "Latest 11").wordCounts)
+    }
+
+    func testCancelledSnapshotStopsBeforeParsingInBothDialects() async throws {
+        for dialect in MarkdownDialect.allCases {
+            let task = Task.detached {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return try DocumentSnapshot.observingCancellation(source: "# Cancelled", dialect: dialect)
+            }
+            do { _ = try await task.value; XCTFail("Expected cancellation") }
+            catch is CancellationError { }
+        }
+    }
+
+    func testTokenizersStopWhenCancellationOccursDuringTraversal() async throws {
+        for mode in [WordCountMode.japanese, .english, .whitespace] {
+            let task = Task.detached {
+                var checks = 0
+                do {
+                    _ = try mode.count(in: String(repeating: "word 日本語 ", count: 1_000)) {
+                        checks += 1
+                        if checks == 3 { withUnsafeCurrentTask { $0?.cancel() } }
+                        try Task.checkCancellation()
+                    }
+                    XCTFail("Expected cancellation")
+                } catch is CancellationError { }
+                return checks
+            }
+            let checks = try await task.value
+            XCTAssertEqual(checks, 3)
+        }
+    }
+
     func testPresentationIDsMapCurrentSourceBlocksAfterInsertion() throws {
         let source = "# Heading\n\nParagraph\n\n# Heading"
         let before = MarkdownAnalysis(source)
@@ -250,5 +309,17 @@ private actor AnalysisExecutionProbe {
 
     func result() -> (count: Int, isMainThread: Bool) {
         (count, isMainThread)
+    }
+}
+
+private final class SnapshotWordCountGate: @unchecked Sendable {
+    let release = DispatchSemaphore(value: 0)
+    private let lock = NSLock()
+    private var count = 0
+    var checks: Int { lock.lock(); defer { lock.unlock() }; return count }
+    func recordCheck() -> Int {
+        lock.lock(); defer { lock.unlock() }
+        count += 1
+        return count
     }
 }

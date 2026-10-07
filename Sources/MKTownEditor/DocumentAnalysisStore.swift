@@ -18,20 +18,39 @@ struct DocumentSnapshot: Sendable {
     let inlineCodeRanges: [NSRange]
 
     init(source: String, dialect: MarkdownDialect = .extended) {
+        self.init(source: source, dialect: dialect, checkCancellation: {})
+    }
+
+    static func observingCancellation(source: String, dialect: MarkdownDialect = .extended) throws -> Self {
+        try Self(source: source, dialect: dialect, checkCancellation: { try Task.checkCancellation() })
+    }
+
+    init<Failure>(source: String, dialect: MarkdownDialect,
+                  checkCancellation: () throws(Failure) -> Void) throws(Failure) {
+        try checkCancellation()
         let parsed = MarkdownAnalysis(source, dialect: dialect)
+        try checkCancellation()
         self.source = source
         self.dialect = dialect
         analysis = parsed
         blockPresentationIDs = PreviewBlockIdentity.identifiers(in: parsed)
+        try checkCancellation()
         outlineEntries = MarkdownOutline.entries(in: parsed)
         sectionActions = MarkdownSectionActions.all(in: outlineEntries)
-        statistics = DocumentStatistics(text: source)
-        wordCounts = [.whitespace: statistics.words, .japanese: WordCountMode.japanese.count(in: source),
-                      .english: WordCountMode.english.count(in: source)]
+        try checkCancellation()
+        statistics = try DocumentStatistics.scan(source, checkCancellation: checkCancellation)
+        wordCounts = [.whitespace: statistics.words,
+                      .japanese: try WordCountMode.japanese.count(in: source, checkCancellation: checkCancellation),
+                      .english: try WordCountMode.english.count(in: source, checkCancellation: checkCancellation)]
+        try checkCancellation()
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
+        try checkCancellation()
         hoverLinks = MarkdownLinkHover.links(in: source, analysis: parsed)
+        try checkCancellation()
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
+        try checkCancellation()
         inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
+        try checkCancellation()
     }
 
     /// Source offsets and parsed structure are valid only for both inputs.
@@ -72,13 +91,13 @@ struct PreviewPresentation {
 @MainActor
 final class DocumentAnalysisStore: ObservableObject {
     @Published private(set) var snapshot: DocumentSnapshot?
-    private let analyze: @Sendable (String) async -> DocumentSnapshot
+    private let analyze: @Sendable (String) async throws -> DocumentSnapshot
     private var generation = 0
     private var task: Task<Void, Never>?
     private var requestedSource: String?
     private var requestedDialect: MarkdownDialect?
 
-    init(analyze: @escaping @Sendable (String) async -> DocumentSnapshot = { DocumentSnapshot(source: $0) }) {
+    init(analyze: @escaping @Sendable (String) async throws -> DocumentSnapshot = { try DocumentSnapshot.observingCancellation(source: $0) }) {
         self.analyze = analyze
     }
 
@@ -96,9 +115,13 @@ final class DocumentAnalysisStore: ObservableObject {
         requestedDialect = dialect
         task?.cancel()
         task = Task.detached(priority: .userInitiated) { [weak self, analyze] in
-            let result = dialect == .extended
-                ? await analyze(source) : DocumentSnapshot(source: source, dialect: dialect)
-            await self?.publish(result, generation: requestedGeneration)
+            do {
+                try Task.checkCancellation()
+                let result = dialect == .extended
+                    ? try await analyze(source) : try DocumentSnapshot.observingCancellation(source: source, dialect: dialect)
+                try Task.checkCancellation()
+                await self?.publish(result, generation: requestedGeneration)
+            } catch { /* Superseded analysis never publishes a partial snapshot. */ }
         }
     }
 
