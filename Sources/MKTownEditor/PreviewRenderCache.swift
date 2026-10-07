@@ -1,7 +1,8 @@
 import AppKit
 import Combine
+import SwiftMath
 
-struct PreviewLayoutIndex {
+struct PreviewLayoutIndex: Sendable {
     let visibleBlocks: [MarkdownBlock]
     private let quoteDepths: [Int: Int]
 
@@ -32,6 +33,20 @@ struct PreviewLayoutIndex {
     }
 
     func quoteDepth(for blockID: Int) -> Int { quoteDepths[blockID] ?? 0 }
+}
+
+/// 本文と解析結果だけで決まる、構造化プレビューが必要かどうかの判定。
+/// 背景のスナップショット生成時に一度だけ求める。
+enum PreviewStructure {
+    static func needsStructuredLayout(_ analysis: MarkdownAnalysis, source: String) -> Bool {
+        PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
+            analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
+            source.contains("![[") ||
+            analysis.blocks.contains(where: { MarkdownMedia($0, dialect: analysis.dialect) != nil }) ||
+            !analysis.crossReferences.targets.isEmpty ||
+            (analysis.dialect == .extended && source.contains("$")) ||
+            !analysis.footnotes.entries.isEmpty
+    }
 }
 
 @MainActor
@@ -77,33 +92,64 @@ final class PreviewRenderCache: ObservableObject {
         let content: String
     }
 
-    private var blocks: [BlockSignature: NSAttributedString] = [:]
-    private var cells: [String: NSAttributedString] = [:]
+    private struct CellKey: Hashable {
+        let markdown: String
+        let resourceRevision: Int?
+    }
+
+    private struct Entry {
+        let value: NSAttributedString
+        var lastUse: UInt64
+    }
+
+    /// 上限を超えたら、最近使っていない項目から `trimTarget` 件になるまで除く。
+    let capacity: Int
+    private var trimTarget: Int { capacity * 3 / 4 }
+    private var blocks: [BlockKey: Entry] = [:]
+    private var cells: [CellKey: Entry] = [:]
+    private var clock: UInt64 = 0
+    private var analysisIdentity: MarkdownAnalysis.Identity?
     private var references: [String: ReferenceSignature]?
     private var footnotes: [FootnoteSignature]?
     private var crossReferences: MarkdownCrossReferences?
     private var context: DocumentContext?
     private var zoom: Double?
-    private var remoteRevision: Int?
     private var theme: PreviewTheme?
+    private var formulaValidity: [String: Bool] = [:]
     private(set) var renderCount = 0
+    private(set) var signatureComputationCount = 0
+
+    init(capacity: Int = 4_000) {
+        self.capacity = capacity
+    }
+
+    private struct BlockKey: Hashable {
+        let block: BlockSignature
+        let resourceRevision: Int?
+    }
 
     func render(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
                 context: DocumentContext, zoom: Double,
                 showsTaskPrefix: Bool = true, remoteRevision: Int = 0,
                 theme: PreviewTheme = .system) -> NSAttributedString {
-        prepare(references: analysis.references, footnotes: analysis.footnotes,
-                crossReferences: analysis.crossReferences,
-                context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
-        let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
-        if let cached = blocks[signature] { return cached }
+        prepare(analysis, context: context, zoom: zoom, theme: theme)
+        // 画像の読み込み状況は画像を含み得るブロックの表示だけに影響する。
+        let key = BlockKey(block: BlockSignature(block, showsTaskPrefix: showsTaskPrefix),
+                           resourceRevision: Self.mayContainImage(block.content) ||
+                            block.table.map { Self.mayContainImage($0) } == true ? remoteRevision : nil)
+        clock += 1
+        if var cached = blocks[key] {
+            cached.lastUse = clock
+            blocks[key] = cached
+            return cached.value
+        }
         let leaf = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
             MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: showsTaskPrefix,
                                         documentContext: context)
         }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(leaf, by: zoom),
             kind: block.kind, theme: theme)
-        blocks[signature] = rendered
+        blocks[key] = Entry(value: rendered, lastUse: clock)
         renderCount += 1
         trimIfNeeded()
         return rendered
@@ -113,51 +159,81 @@ final class PreviewRenderCache: ObservableObject {
                     in analysis: MarkdownAnalysis, context: DocumentContext,
                     zoom: Double, remoteRevision: Int = 0,
                     theme: PreviewTheme = .system) -> NSAttributedString {
-        prepare(references: analysis.references, footnotes: analysis.footnotes,
-                crossReferences: analysis.crossReferences,
-                context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
-        if let cached = cells[markdown] { return cached }
+        prepare(analysis, context: context, zoom: zoom, theme: theme)
+        let key = CellKey(markdown: markdown,
+                          resourceRevision: Self.mayContainImage(markdown) ? remoteRevision : nil)
+        clock += 1
+        if var cached = cells[key] {
+            cached.lastUse = clock
+            cells[key] = cached
+            return cached.value
+        }
         let cell = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
             MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context)
         }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(cell, by: zoom),
             kind: nil, theme: theme)
-        cells[markdown] = rendered
+        cells[key] = Entry(value: rendered, lastUse: clock)
         renderCount += 1
         trimIfNeeded()
         return rendered
     }
 
-    private func prepare(references newReferences: [String: MarkdownReference],
-                         footnotes newFootnotes: MarkdownFootnoteIndex,
-                         crossReferences newCrossReferences: MarkdownCrossReferences,
-                         context newContext: DocumentContext, zoom newZoom: Double,
-                         remoteRevision newRemoteRevision: Int, theme newTheme: PreviewTheme) {
-        let signatures = newReferences.mapValues {
-            ReferenceSignature(destination: $0.destination, title: $0.title)
+    /// 表示用の数式として描画できるかを、同じLaTeXについて一度だけ判定する。
+    func canRenderDisplayFormula(_ formula: MarkdownMath.Formula) -> Bool {
+        if let cached = formulaValidity[formula.latex] { return cached }
+        var error: NSError?
+        let valid = MTMathListBuilder.build(fromString: formula.latex, error: &error) != nil && error == nil
+        if formulaValidity.count >= capacity { formulaValidity.removeAll(keepingCapacity: true) }
+        formulaValidity[formula.latex] = valid
+        return valid
+    }
+
+    var cachedEntryCount: Int { blocks.count + cells.count }
+
+    private static func mayContainImage(_ markdown: String) -> Bool { markdown.contains("![") }
+
+    private static func mayContainImage(_ table: MarkdownTable) -> Bool {
+        table.header.contains(where: mayContainImage) || table.rows.contains { $0.contains(where: mayContainImage) }
+    }
+
+    private func prepare(_ analysis: MarkdownAnalysis, context newContext: DocumentContext,
+                         zoom newZoom: Double, theme newTheme: PreviewTheme) {
+        if analysisIdentity !== analysis.identity {
+            // 参照・脚注の署名は解析結果ごとに一度だけ求める。
+            analysisIdentity = analysis.identity
+            signatureComputationCount += 1
+            let signatures = analysis.references.mapValues {
+                ReferenceSignature(destination: $0.destination, title: $0.title)
+            }
+            let noteSignatures = analysis.footnotes.entries.map {
+                FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
+            }
+            if references != signatures || footnotes != noteSignatures ||
+                crossReferences != analysis.crossReferences {
+                removeAll()
+                references = signatures
+                footnotes = noteSignatures
+                crossReferences = analysis.crossReferences
+            }
         }
-        let noteSignatures = newFootnotes.entries.map {
-            FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
-        }
-        guard references != signatures || footnotes != noteSignatures ||
-              crossReferences != newCrossReferences ||
-              context != newContext || zoom != newZoom ||
-              remoteRevision != newRemoteRevision || theme != newTheme else { return }
-        blocks.removeAll()
-        cells.removeAll()
-        references = signatures
-        footnotes = noteSignatures
-        crossReferences = newCrossReferences
+        guard context != newContext || zoom != newZoom || theme != newTheme else { return }
+        removeAll()
         context = newContext
         zoom = newZoom
-        remoteRevision = newRemoteRevision
         theme = newTheme
     }
 
+    private func removeAll() {
+        blocks.removeAll(keepingCapacity: true)
+        cells.removeAll(keepingCapacity: true)
+    }
+
     private func trimIfNeeded() {
-        if blocks.count + cells.count > 4_000 {
-            blocks.removeAll(keepingCapacity: true)
-            cells.removeAll(keepingCapacity: true)
-        }
+        guard blocks.count + cells.count > capacity else { return }
+        let uses = (blocks.values.map(\.lastUse) + cells.values.map(\.lastUse)).sorted(by: >)
+        let threshold = uses[min(trimTarget, uses.count) - 1]
+        blocks = blocks.filter { $0.value.lastUse >= threshold }
+        cells = cells.filter { $0.value.lastUse >= threshold }
     }
 }

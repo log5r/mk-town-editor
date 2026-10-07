@@ -17,6 +17,8 @@ struct DocumentSnapshot: Sendable {
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
     let inlineCodeRanges: [NSRange]
     let remoteImageURLs: Set<URL>
+    let previewLayout: PreviewLayoutIndex
+    let needsStructuredPreview: Bool
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         self.init(source: source, dialect: dialect, checkCancellation: {})
@@ -53,6 +55,9 @@ struct DocumentSnapshot: Sendable {
         inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
         try checkCancellation()
         remoteImageURLs = RemoteImageStore.referencedURLs(in: source, analysis: parsed)
+        try checkCancellation()
+        previewLayout = PreviewLayoutIndex(parsed)
+        needsStructuredPreview = PreviewStructure.needsStructuredLayout(parsed, source: source)
         try checkCancellation()
     }
 

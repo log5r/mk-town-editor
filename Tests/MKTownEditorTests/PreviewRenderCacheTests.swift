@@ -103,4 +103,93 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertEqual(layout.visibleBlocks.count, 1)
         XCTAssertEqual(layout.visibleBlocks.first?.calloutKind, .note)
     }
+
+    func testLeastRecentlyUsedEntriesAreTrimmedInsteadOfClearingEverything() throws {
+        let analysis = MarkdownAnalysis((1...6).map { "Paragraph \($0)" }.joined(separator: "\n\n"))
+        let paragraphs = analysis.blocks.filter { $0.kind == .paragraph }
+        let cache = PreviewRenderCache(capacity: 4)
+        let context = DocumentContext(fileURL: nil)
+        let first = cache.render(paragraphs[0], in: analysis, context: context, zoom: 1)
+        for block in paragraphs[1...3] { _ = cache.render(block, in: analysis, context: context, zoom: 1) }
+        XCTAssertTrue(cache.render(paragraphs[0], in: analysis, context: context, zoom: 1) === first)
+        _ = cache.render(paragraphs[4], in: analysis, context: context, zoom: 1)
+        XCTAssertLessThanOrEqual(cache.cachedEntryCount, 4)
+        XCTAssertGreaterThan(cache.cachedEntryCount, 0)
+        let count = cache.renderCount
+        XCTAssertTrue(cache.render(paragraphs[0], in: analysis, context: context, zoom: 1) === first,
+                      "A recently used block survives trimming")
+        XCTAssertEqual(cache.renderCount, count)
+        _ = cache.render(paragraphs[1], in: analysis, context: context, zoom: 1)
+        XCTAssertEqual(cache.renderCount, count + 1, "The least recently used block was trimmed")
+    }
+
+    func testDocumentLargerThanCapacityKeepsHittingItsWorkingSet() throws {
+        let analysis = MarkdownAnalysis((1...50).map { "Row \($0)" }.joined(separator: "\n\n"))
+        let paragraphs = analysis.blocks.filter { $0.kind == .paragraph }
+        let cache = PreviewRenderCache(capacity: 20)
+        let context = DocumentContext(fileURL: nil)
+        for block in paragraphs { _ = cache.render(block, in: analysis, context: context, zoom: 1) }
+        let count = cache.renderCount
+        for _ in 0..<5 {
+            for block in paragraphs.suffix(10) { _ = cache.render(block, in: analysis, context: context, zoom: 1) }
+        }
+        XCTAssertEqual(cache.renderCount, count)
+    }
+
+    func testReferenceSignaturesAreComputedOncePerAnalysis() throws {
+        let markdown = (1...200).map { "[link \($0)][r\($0)] text[^n\($0)]" }.joined(separator: "\n\n") + "\n\n" +
+            (1...200).map { "[r\($0)]: /p\($0)\n[^n\($0)]: note \($0)" }.joined(separator: "\n")
+        let analysis = MarkdownAnalysis(markdown)
+        let cache = PreviewRenderCache()
+        let context = DocumentContext(fileURL: nil)
+        for block in analysis.blocks where block.kind == .paragraph {
+            _ = cache.render(block, in: analysis, context: context, zoom: 1)
+            _ = cache.renderCell(block.content, in: analysis, context: context, zoom: 1)
+        }
+        XCTAssertEqual(cache.signatureComputationCount, 1)
+        let reparsed = MarkdownAnalysis(markdown)
+        let first = try XCTUnwrap(analysis.blocks.first { $0.kind == .paragraph })
+        let rendered = cache.render(first, in: analysis, context: context, zoom: 1)
+        XCTAssertTrue(cache.render(try XCTUnwrap(reparsed.blocks.first { $0.kind == .paragraph }),
+                                   in: reparsed, context: context, zoom: 1) === rendered)
+        XCTAssertEqual(cache.signatureComputationCount, 2)
+    }
+
+    func testResourceRevisionOnlyRerendersBlocksThatMayContainImages() throws {
+        let analysis = MarkdownAnalysis("Plain text\n\n![photo](photo.png)\n\n| a |\n|---|\n| ![i](i.png) |")
+        let plain = try XCTUnwrap(analysis.blocks.first { $0.content == "Plain text" })
+        let image = try XCTUnwrap(analysis.blocks.first { $0.content.hasPrefix("![photo]") })
+        let cache = PreviewRenderCache()
+        let context = DocumentContext(fileURL: nil)
+        let plainRender = cache.render(plain, in: analysis, context: context, zoom: 1, remoteRevision: 1)
+        let imageRender = cache.render(image, in: analysis, context: context, zoom: 1, remoteRevision: 1)
+        let cell = cache.renderCell("![i](i.png)", in: analysis, context: context, zoom: 1, remoteRevision: 1)
+        XCTAssertTrue(cache.render(plain, in: analysis, context: context, zoom: 1, remoteRevision: 2) === plainRender)
+        XCTAssertFalse(cache.render(image, in: analysis, context: context, zoom: 1, remoteRevision: 2) === imageRender)
+        XCTAssertFalse(cache.renderCell("![i](i.png)", in: analysis, context: context, zoom: 1,
+                                        remoteRevision: 2) === cell)
+    }
+
+    func testDisplayFormulaValidityIsCachedAndMatchesLabelParsing() throws {
+        let cache = PreviewRenderCache()
+        let valid = try XCTUnwrap(MarkdownMath.displayFormula("$$\nx^2+y^2\n$$"))
+        let invalid = try XCTUnwrap(MarkdownMath.displayFormula("$$\n\\frac{\n$$"))
+        XCTAssertEqual(cache.canRenderDisplayFormula(valid), MarkdownMathRenderer.label(valid) != nil)
+        XCTAssertEqual(cache.canRenderDisplayFormula(invalid), MarkdownMathRenderer.label(invalid) != nil)
+        XCTAssertTrue(cache.canRenderDisplayFormula(valid))
+        XCTAssertFalse(cache.canRenderDisplayFormula(invalid))
+    }
+
+    func testSnapshotPrecomputesPreviewLayoutAndStructureFlag() {
+        for source in ["plain", "# Heading", "```\ncode\n```", "text $x$", "![[Note]]", "a[^1]\n\n[^1]: n"] {
+            let snapshot = DocumentSnapshot(source: source)
+            XCTAssertEqual(snapshot.needsStructuredPreview,
+                           PreviewStructure.needsStructuredLayout(snapshot.analysis, source: source), source)
+            XCTAssertEqual(snapshot.previewLayout.visibleBlocks.map(\.id),
+                           PreviewLayoutIndex(snapshot.analysis).visibleBlocks.map(\.id))
+        }
+        XCTAssertFalse(DocumentSnapshot(source: "plain").needsStructuredPreview)
+        XCTAssertTrue(DocumentSnapshot(source: "# Heading").needsStructuredPreview)
+    }
 }
+

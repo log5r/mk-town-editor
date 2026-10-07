@@ -87,19 +87,13 @@ struct MarkdownPreview: View {
         } else {
             let analysis = snapshot?.analysis ?? MarkdownAnalysis(markdown,
                 dialect: documentContext.markdownDialect)
-            if PreviewAccessibility.requiresStructuredView(analysis.blocks) ||
-                analysis.blocks.contains(where: { $0.kind == .codeBlock }) ||
-                onVisibleBlockChange != nil || onRevealSource != nil ||
-                markdown.contains("![[") ||
-                analysis.blocks.contains(where: {
-                    MarkdownMedia($0, dialect: analysis.dialect) != nil
-                }) ||
-                !analysis.crossReferences.targets.isEmpty ||
-                (documentContext.markdownDialect == .extended && markdown.contains("$")) ||
-                !analysis.footnotes.entries.isEmpty ||
+            let matchingSnapshot = snapshot.flatMap { $0.analysis.identity === analysis.identity ? $0 : nil }
+            if onVisibleBlockChange != nil || onRevealSource != nil ||
                 theme != .system || bodyWidth != 900 ||
-                (showsFrontMatter && analysis.frontMatter != nil) {
-                let layout = PreviewLayoutIndex(analysis)
+                (showsFrontMatter && analysis.frontMatter != nil) ||
+                (matchingSnapshot?.needsStructuredPreview
+                    ?? PreviewStructure.needsStructuredLayout(analysis, source: markdown)) {
+                let layout = matchingSnapshot?.previewLayout ?? PreviewLayoutIndex(analysis)
                 let presentationIDs = snapshot?.blockPresentationIDs ?? PreviewBlockIdentity.identifiers(in: analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
@@ -160,7 +154,7 @@ struct MarkdownPreview: View {
                                     } else if documentContext.markdownDialect == .extended,
                                               block.kind == .paragraph,
                                               let formula = MarkdownMath.displayFormula(block.content),
-                                              MarkdownMathRenderer.label(formula) != nil {
+                                              renderCache.canRenderDisplayFormula(formula) {
                                         HStack {
                                             MarkdownMathView(formula: formula)
                                                 .accessibilityLabel(formula.latex)

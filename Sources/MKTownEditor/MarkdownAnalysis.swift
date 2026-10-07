@@ -230,6 +230,10 @@ struct MarkdownBlock: Equatable, Sendable {
 
 /// One snapshot of a document. Every block refers to the unchanged source text.
 struct MarkdownAnalysis: Sendable {
+    /// 解析結果ごとに一意な識別子。同じ解析結果に由来する値かを比較なしで判定するために使う。
+    final class Identity: Sendable {}
+
+    let identity = Identity()
     let dialect: MarkdownDialect
     let blocks: [MarkdownBlock]
     let references: [String: MarkdownReference]
