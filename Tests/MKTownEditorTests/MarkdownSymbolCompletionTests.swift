@@ -53,6 +53,34 @@ final class MarkdownSymbolCompletionTests: XCTestCase {
 
 @MainActor
 final class MarkdownSymbolCompletionEditorTests: XCTestCase {
+    func testTypingCompleteMarkdownConsumesOnlyAutomaticClosers() {
+        for (input, expected) in [("**bold**", "**bold**"), ("`code`", "`code`"), ("(x)", "(x)"),
+                                  ("[x]", "[x]"), ("((x))", "((x))"), ("__日本語🙂__", "__日本語🙂__")] {
+            let view = EditorTextView()
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            view.commandModel = model
+            for character in input {
+                view.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
+            }
+            XCTAssertEqual(view.string, expected, input)
+            XCTAssertEqual(view.selectedRange().location, expected.utf16.count)
+        }
+    }
+
+    func testExistingManualCloserIsNotSkippedAndReplacementClearsTracking() {
+        let view = EditorTextView()
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.insertText("(", replacementRange: NSRange(location: NSNotFound, length: 0))
+        view.string = "()"
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+        view.insertText(")", replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertEqual(view.string, "())")
+        XCTAssertNil(MarkdownSymbolCompletion.edit(in: "*", selection: NSRange(location: 0, length: 0), typed: "*"))
+    }
+
     func testTypedBracketIsUndoableAndPlacesCaretBetweenPair() {
         let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.allowsUndo = true

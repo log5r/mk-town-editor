@@ -484,6 +484,8 @@ extension NSTextView {
 
 final class EditorTextView: NSTextView {
     private var cachedSource: String?
+    private var observesSourceEdits = false
+    private var pendingCharacterEdit: (range: NSRange, delta: Int)?
     private(set) var sourceRevision = 0
     private(set) var sourceReadCount = 0
 
@@ -514,13 +516,27 @@ final class EditorTextView: NSTextView {
     }
 
     private func observeSourceEdits() {
+        guard !observesSourceEdits else { return }
+        observesSourceEdits = true
         NotificationCenter.default.addObserver(self, selector: #selector(sourceStorageDidChange(_:)),
             name: NSTextStorage.didProcessEditingNotification, object: textStorage)
+    }
+
+    override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        let allowed = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
+        if allowed, let replacementString {
+            pendingCharacterEdit = (affectedCharRange, replacementString.utf16.count - affectedCharRange.length)
+        }
+        return allowed
     }
 
     @objc private func sourceStorageDidChange(_ notification: Notification) {
         guard let storage = notification.object as? NSTextStorage,
               storage.editedMask.contains(.editedCharacters) else { return }
+        let expected = pendingCharacterEdit
+        pendingCharacterEdit = nil
+        commandModel?.sourceStorageDidChange(range: expected?.range ?? NSRange(location: 0, length: 0), delta: expected?.delta ?? 0,
+            undoing: expected == nil || undoManager?.isUndoing == true || undoManager?.isRedoing == true)
         cachedSource = nil
         sourceRevision += 1
     }

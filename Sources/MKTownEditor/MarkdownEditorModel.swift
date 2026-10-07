@@ -86,9 +86,16 @@ final class MarkdownEditorModel: ObservableObject {
         var finalCaret: Int
     }
     private var snippetSession: SnippetSession?
+    private var automaticClosers = MarkdownAutomaticClosers()
+
+    func sourceStorageDidChange(range: NSRange, delta: Int, undoing: Bool) {
+        if undoing { automaticClosers.clear() }
+        else { automaticClosers.edited(range: range, delta: delta) }
+    }
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        automaticClosers.clear()
         transitionSelections = nil
         hasActiveEditor = true
         let length = (textView.editorSource as NSString).length
@@ -447,11 +454,31 @@ final class MarkdownEditorModel: ObservableObject {
     func completeSymbol(_ typed: String, replacementRange: NSRange) -> Bool {
         guard replacementRange.location == NSNotFound,
               let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownSymbolCompletion.edit(in: textView.editorSource,
-                                                       selection: textView.selectedRange(),
-                                                       typed: typed) else { return false }
-        perform(edit, in: textView, storage: storage, focusEditor: true)
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1 else { return false }
+        let source = textView.editorSource
+        let selection = textView.selectedRange()
+        var edit: MarkdownEdit?
+        var openingStart: Int?
+        if selection.length == 0,
+           let closer = automaticClosers.closer(at: selection.location, typed: typed, source: source) {
+            if automaticClosers.extendsOpening(closer, at: selection.location, source: source) {
+                openingStart = closer.openingStart
+                edit = MarkdownEdit(range: selection, replacement: typed + typed,
+                    selection: NSRange(location: selection.location + 1, length: 0))
+            } else {
+                automaticClosers.consume(at: selection.location)
+                let next = NSRange(location: selection.location + 1, length: 0)
+                textView.setSelectedRange(next)
+                selectionDidChange([next])
+                return true
+            }
+        } else {
+            edit = MarkdownSymbolCompletion.edit(in: source, selection: selection, typed: typed)
+        }
+        guard let edit else { return false }
+        if perform(edit, in: textView, storage: storage, focusEditor: true) {
+            automaticClosers.register(edit: edit, typed: typed, openingStart: openingStart)
+        }
         return true
     }
 
