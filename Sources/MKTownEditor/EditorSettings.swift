@@ -333,6 +333,8 @@ struct DocumentDisplayState: Codable, Equatable {
     var sidebarVisible: Bool? = nil
     var writingGoal: Int? = nil
     var sessionBaselineCharacters: Int? = nil
+    /// 最後に書き込んだ日時。保持件数の上限を超えたとき、古いものから削除する。
+    var lastUsed: Date? = nil
 }
 
 private struct StoredEditorSettings: Codable, Equatable {
@@ -343,20 +345,56 @@ private struct StoredEditorSettings: Codable, Equatable {
 }
 
 /// Persists shared settings while keeping document display state separate from Markdown source.
+///
+/// 書類ごとの表示状態は共有設定とは別のキーに保存し、件数に上限を設ける。表示位置の保存は
+/// 画面に反映される値を変えないため、変更通知を送らず全ウインドウを再描画しない。
 @MainActor
 final class EditorSettingsStore: ObservableObject {
-    @Published private var values: StoredEditorSettings
-    private let defaults: UserDefaults
-    private static let storageKey = "MKTownEditor.editorSettings.v1"
+    static let documentStateLimit = 200
 
-    init(defaults: UserDefaults = .standard) {
+    private var values: StoredEditorSettings {
+        willSet { objectWillChange.send() }
+    }
+    private var documents: [String: DocumentDisplayState]
+    private let defaults: UserDefaults
+    private var savedSettingsData: Data?
+    private var savedDocumentsData: Data?
+    private(set) var settingsWriteCount = 0
+    private(set) var documentWriteCount = 0
+    private static let storageKey = "MKTownEditor.editorSettings.v1"
+    private static let documentStorageKey = "MKTownEditor.documentDisplayStates.v1"
+    /// 内容が同じなら同じバイト列になるようにし、変更のない保存を省けるようにする。
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return encoder
+    }()
+
+    init(defaults: UserDefaults = .standard, prunesMissingDocuments: Bool = true) {
         self.defaults = defaults
-        if let data = defaults.data(forKey: Self.storageKey),
-           let decoded = try? JSONDecoder().decode(StoredEditorSettings.self, from: data) {
-            values = decoded
+        let storedData = defaults.data(forKey: Self.storageKey)
+        var stored = storedData.flatMap { try? JSONDecoder().decode(StoredEditorSettings.self, from: $0) }
+            ?? StoredEditorSettings()
+        let documentData = defaults.data(forKey: Self.documentStorageKey)
+        if let documentData,
+           let decoded = try? JSONDecoder().decode([String: DocumentDisplayState].self, from: documentData) {
+            documents = decoded
         } else {
-            values = StoredEditorSettings()
+            // 以前の版は共有設定と同じ値に書類の状態を含めていた。
+            documents = stored.documents
         }
+        let migrates = !stored.documents.isEmpty
+        stored.documents = [:]
+        values = stored
+        savedSettingsData = migrates ? nil : storedData
+        savedDocumentsData = documentData
+        let loadedCount = documents.count
+        trimDocuments()
+        if migrates || documents.count != loadedCount {
+            save()
+            saveDocuments()
+        }
+        if prunesMissingDocuments { schedulePruningMissingDocuments() }
     }
 
     var app: AppEditorSettings { values.app }
@@ -417,7 +455,7 @@ final class EditorSettingsStore: ObservableObject {
     func mode(for documentURL: URL?) -> EditorMode {
         guard let documentURL else { return values.app.defaultMode }
         let path = Self.key(for: documentURL)
-        if let state = values.documents[path] { return state.mode }
+        if let state = documents[path] { return state.mode }
         return nearestFolderValue(for: documentURL, \.defaultMode) ?? values.app.defaultMode
     }
 
@@ -497,58 +535,53 @@ final class EditorSettingsStore: ObservableObject {
 
     func setMode(_ mode: EditorMode, for documentURL: URL) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: mode)
+        var state = documents[key] ?? DocumentDisplayState(mode: mode)
         state.mode = mode
-        values.documents[key] = state
-        save()
+        storeDocumentState(state, for: key)
     }
 
     func applyWorkspaceLayout(_ layout: WorkspaceNamedLayout, to documentURL: URL) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: layout.mode)
+        var state = documents[key] ?? DocumentDisplayState(mode: layout.mode)
         state.mode = layout.mode
         state.sidebarTab = layout.sidebarTab
         state.sidebarVisible = layout.sidebarVisible
         state.splitRatio = min(0.8, max(0.2, layout.splitRatio))
         state.splitOrientation = layout.splitOrientation
         state.previewFirst = layout.previewFirst
-        values.documents[key] = state
-        save()
+        storeDocumentState(state, for: key)
     }
 
     func displayState(for documentURL: URL) -> DocumentDisplayState? {
-        values.documents[Self.key(for: documentURL)]
+        documents[Self.key(for: documentURL)]
     }
 
     func setWritingGoal(_ goal: Int?, for documentURL: URL) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         state.writingGoal = goal.flatMap { $0 > 0 ? $0 : nil }
-        values.documents[key] = state
-        save()
+        storeDocumentState(state, for: key)
     }
 
     /// Capture the opening text before asynchronous analysis has produced statistics.
     func ensureWritingSession(for documentURL: URL, initialText: String) {
-        guard values.documents[Self.key(for: documentURL)]?.sessionBaselineCharacters == nil else { return }
+        guard documents[Self.key(for: documentURL)]?.sessionBaselineCharacters == nil else { return }
         ensureWritingSession(for: documentURL, baseline: WritingSessionBaseline(text: initialText))
     }
 
     func ensureWritingSession(for documentURL: URL, baseline: WritingSessionBaseline) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         guard state.sessionBaselineCharacters == nil else { return }
         state.sessionBaselineCharacters = baseline.characters
-        values.documents[key] = state
-        save()
+        storeDocumentState(state, for: key)
     }
 
     func resetWritingSession(for documentURL: URL, baseline: WritingSessionBaseline) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         state.sessionBaselineCharacters = baseline.characters
-        values.documents[key] = state
-        save()
+        storeDocumentState(state, for: key)
     }
 
     func savePosition(for documentURL: URL, selection: NSRange, scrollX: Double, scrollY: Double,
@@ -556,7 +589,7 @@ final class EditorSettingsStore: ObservableObject {
                       splitOrientation: EditorSplitOrientation = .sideBySide,
                       previewFirst: Bool = false) {
         let key = Self.key(for: documentURL)
-        var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         state.selectionLocation = max(0, selection.location)
         state.selectionLength = max(0, selection.length)
         state.scrollY = max(0, scrollY)
@@ -566,21 +599,23 @@ final class EditorSettingsStore: ObservableObject {
         state.previewFirst = previewFirst
         state.sidebarTab = sidebarTab
         state.sidebarVisible = sidebarVisible
-        guard values.documents[key] != state else { return }
-        values.documents[key] = state
-        save()
+        guard documents[key] != state else { return }
+        storeDocumentState(state, for: key, publishes: false)
     }
 
     func hasDocumentState(for documentURL: URL) -> Bool {
-        values.documents[Self.key(for: documentURL)] != nil
+        documents[Self.key(for: documentURL)] != nil
     }
 
     func moveDocumentState(from oldURL: URL, to newURL: URL) {
         let oldKey = Self.key(for: oldURL)
         let newKey = Self.key(for: newURL)
         guard oldKey != newKey else { return }
-        if let state = values.documents.removeValue(forKey: oldKey) {
-            values.documents[newKey] = state
+        if let state = documents[oldKey] {
+            objectWillChange.send()
+            documents[oldKey] = nil
+            documents[newKey] = state
+            saveDocuments()
         }
         values.bookmarks = (values.bookmarks ?? []).map { bookmark in
             guard Self.key(for: bookmark.documentURL) == oldKey else { return bookmark }
@@ -646,8 +681,73 @@ final class EditorSettingsStore: ObservableObject {
     private static func key(for url: URL) -> String { url.standardizedFileURL.path }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(values) else { return }
+        guard let data = try? Self.encoder.encode(values), data != savedSettingsData else { return }
         defaults.set(data, forKey: Self.storageKey)
+        savedSettingsData = data
+        settingsWriteCount += 1
+    }
+
+    private func saveDocuments() {
+        guard let data = try? Self.encoder.encode(documents), data != savedDocumentsData else { return }
+        defaults.set(data, forKey: Self.documentStorageKey)
+        savedDocumentsData = data
+        documentWriteCount += 1
+    }
+
+    /// 書類の状態を書き込み、上限を超えた分を古い順に除いて保存する。
+    private func storeDocumentState(_ state: DocumentDisplayState, for key: String, publishes: Bool = true) {
+        var state = state
+        state.lastUsed = Date()
+        if publishes { objectWillChange.send() }
+        documents[key] = state
+        trimDocuments()
+        saveDocuments()
+    }
+
+    private func trimDocuments() {
+        let excess = documents.count - Self.documentStateLimit
+        guard excess > 0 else { return }
+        let oldest = documents.sorted {
+            ($0.value.lastUsed ?? .distantPast, $0.key) < ($1.value.lastUsed ?? .distantPast, $1.key)
+        }.prefix(excess)
+        for (key, _) in oldest { documents[key] = nil }
+    }
+
+    var documentStateCount: Int { documents.count }
+
+    private func schedulePruningMissingDocuments() {
+        let paths = Array(documents.keys)
+        guard !paths.isEmpty else { return }
+        Task { [weak self] in
+            let missing = await Self.missingDocumentPaths(paths)
+            self?.removeDocumentStates(missing)
+        }
+    }
+
+    /// 存在しない書類の状態を探す。フォルダごと見つからない書類は、取り外したボリュームなどの
+    /// 一時的な不在の可能性があるため残す。
+    nonisolated static func missingDocumentPaths(_ paths: [String]) async -> Set<String> {
+        await Task.detached(priority: .utility) {
+            let manager = FileManager.default
+            return Set(paths.filter { path in
+                let folder = (path as NSString).deletingLastPathComponent
+                var isDirectory: ObjCBool = false
+                return manager.fileExists(atPath: folder, isDirectory: &isDirectory) && isDirectory.boolValue &&
+                    !manager.fileExists(atPath: path)
+            })
+        }.value
+    }
+
+    func pruneMissingDocuments() async {
+        removeDocumentStates(await Self.missingDocumentPaths(Array(documents.keys)))
+    }
+
+    private func removeDocumentStates(_ paths: Set<String>) {
+        let removable = paths.filter { documents[$0] != nil }
+        guard !removable.isEmpty else { return }
+        objectWillChange.send()
+        for path in removable { documents[path] = nil }
+        saveDocuments()
     }
 }
 
