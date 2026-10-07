@@ -132,6 +132,7 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
     private var webView: WKWebView?
     private var navigation: WKNavigation?
     private let script: String?
+    private let renderTimeout: Duration
     private var ready = false
     private struct Request {
         let id: UUID
@@ -151,8 +152,9 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
 
     override convenience init() { self.init(script: MermaidDiagram.bundledScript) }
 
-    init(script: String?) {
+    init(script: String?, renderTimeout: Duration = .seconds(10)) {
         self.script = script
+        self.renderTimeout = renderTimeout
         super.init()
         cache.totalCostLimit = 32_000_000
     }
@@ -264,8 +266,9 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         let token = requestID
         renderCount += 1
         timeout = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(10)) } catch { return }
-            self?.complete(.failure(MermaidRenderError(message: ExternalDiagramError.timedOut.localizedDescription, line: nil)), token: token)
+            do { try await Task.sleep(for: self?.renderTimeout ?? .seconds(10)) } catch { return }
+            self?.complete(.failure(MermaidRenderError(message: ExternalDiagramError.timedOut.localizedDescription, line: nil)),
+                           token: token, resetsRenderer: true)
         }
         let encoded = String(data: try! JSONSerialization.data(withJSONObject: [first.source, token]), encoding: .utf8)!
         webView.evaluateJavaScript("drawDiagram(...\(encoded)); 0") { [weak self] _, error in
@@ -299,7 +302,7 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
         }
     }
 
-    private func complete(_ result: Result<NSImage, Error>, token: Int) {
+    private func complete(_ result: Result<NSImage, Error>, token: Int, resetsRenderer: Bool = false) {
         guard token == requestID, let first = active.first else { return }
         timeout?.cancel()
         let requests = active + pending.filter { $0.source == first.source }
@@ -310,7 +313,12 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
                 cost: Int(image.size.width * image.size.height * 4))
         }
         requests.forEach { $0.continuation.resume(with: result) }
-        pump()
+        if resetsRenderer {
+            // A timeout does not stop Mermaid's internal promise queue. Discard
+            // that context before allowing the next source to start rendering.
+            requestID += 1
+            reloadRenderer()
+        } else { pump() }
     }
 }
 
