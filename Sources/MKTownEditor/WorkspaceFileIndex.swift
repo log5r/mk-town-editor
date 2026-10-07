@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
+import CoreServices
 
-struct WorkspaceNode: Identifiable, Sendable {
+struct WorkspaceNode: Identifiable, Sendable, Equatable {
     let url: URL
     let name: String
     let children: [WorkspaceNode]?
@@ -88,6 +89,39 @@ enum WorkspaceFileIndex {
     }
 }
 
+/// One recursive event stream per workspace; no periodic tree scans.
+final class WorkspaceDirectoryMonitor: @unchecked Sendable {
+    private var stream: FSEventStreamRef?
+    private let changed: @MainActor @Sendable () -> Void
+
+    init(root: URL, changed: @escaping @MainActor @Sendable () -> Void) {
+        self.changed = changed
+        var context = FSEventStreamContext(version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
+        stream = FSEventStreamCreate(nil, { _, info, _, _, _, _ in
+            guard let info else { return }
+            let monitor = Unmanaged<WorkspaceDirectoryMonitor>.fromOpaque(info).takeUnretainedValue()
+            let changed = monitor.changed
+            Task { @MainActor in changed() }
+        }, &context, [root.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5,
+            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot))
+        if let stream {
+            FSEventStreamSetDispatchQueue(stream, .main)
+            FSEventStreamStart(stream)
+        }
+    }
+
+    func stop() {
+        guard let stream else { return }
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
+        self.stream = nil
+    }
+
+    deinit { stop() }
+}
+
 @MainActor
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var rootURL: URL?
@@ -102,6 +136,8 @@ final class WorkspaceStore: ObservableObject {
     private var hasSecurityScope = false
     private var generation = 0
     private var isRefreshing = false
+    private var refreshPending = false
+    private var directoryMonitor: WorkspaceDirectoryMonitor?
     private var lastRefresh = Date.distantPast
     private var openDocuments: [URL: Int] = [:]
     private var openBuffers: [URL: [UUID: WorkspaceOpenBuffer]] = [:]
@@ -238,6 +274,8 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func setRoot(_ url: URL) {
+        directoryMonitor?.stop()
+        directoryMonitor = nil
         if hasSecurityScope { rootURL?.stopAccessingSecurityScopedResource() }
         hasSecurityScope = url.startAccessingSecurityScopedResource()
         rootURL = url
@@ -251,6 +289,8 @@ final class WorkspaceStore: ObservableObject {
         generation += 1
         isRefreshing = false
         lastRefresh = .distantPast
+        refreshPending = false
+        directoryMonitor = WorkspaceDirectoryMonitor(root: url) { [weak self] in self?.refresh(force: true) }
         refresh()
     }
 
@@ -308,8 +348,12 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func refresh(force: Bool = false) {
-        guard let rootURL, !isRefreshing,
-              force || Date().timeIntervalSince(lastRefresh) >= 2 else { return }
+        guard let rootURL else { return }
+        if isRefreshing {
+            if force { refreshPending = true }
+            return
+        }
+        guard force || Date().timeIntervalSince(lastRefresh) >= 2 else { return }
         isRefreshing = true
         lastRefresh = Date()
         let currentGeneration = generation
@@ -318,9 +362,13 @@ final class WorkspaceStore: ObservableObject {
                 WorkspaceFileIndex.scan(root: rootURL)
             }.value
             guard currentGeneration == generation else { return }
-            nodes = result.nodes
-            isTruncated = result.isTruncated
+            if nodes != result.nodes { nodes = result.nodes }
+            if isTruncated != result.isTruncated { isTruncated = result.isTruncated }
             isRefreshing = false
+            if refreshPending {
+                refreshPending = false
+                refresh(force: true)
+            }
         }
     }
 }

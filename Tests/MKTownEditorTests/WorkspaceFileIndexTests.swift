@@ -4,6 +4,29 @@ import XCTest
 
 @MainActor
 final class WorkspaceFileIndexTests: XCTestCase {
+    func testUnchangedRefreshDoesNotPublishAndNestedChangesAreObserved() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sub = root.appendingPathComponent("nested")
+        try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        let store = WorkspaceStore(defaults: defaults)
+        store.setRoot(root)
+        for _ in 0..<200 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+        var changes = 0
+        let observation = store.objectWillChange.sink { changes += 1 }
+        store.refresh(force: true)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(changes, 0)
+        try "new".write(to: sub.appendingPathComponent("new.md"), atomically: true, encoding: .utf8)
+        for _ in 0..<300 where store.nodes.first?.children?.isEmpty != false {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.nodes.first?.children?.first?.name, "new.md")
+        withExtendedLifetime(observation) {}
+    }
+
     func testScanBuildsTreeAndSkipsHiddenAndSymbolicLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
