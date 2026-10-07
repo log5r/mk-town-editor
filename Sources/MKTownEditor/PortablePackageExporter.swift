@@ -46,10 +46,25 @@ struct PortablePackagePlan: Sendable {
     let assets: [PortablePackageAsset]
 }
 
-@MainActor
 enum PortablePackagePlanner {
+    @MainActor
     static func plan(source: String, documentURL: URL,
                      dialect: MarkdownDialect = .extended) throws -> PortablePackagePlan {
+        try planPrepared(source: source, documentURL: documentURL, dialect: dialect,
+            renderedHTML: MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect))
+    }
+
+    @MainActor
+    static func planAsync(source: String, documentURL: URL,
+                          dialect: MarkdownDialect = .extended) async throws -> PortablePackagePlan {
+        let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: documentURL, dialect: dialect)
+        return try await DocumentWork.perform {
+            try planPrepared(source: source, documentURL: documentURL, dialect: dialect, renderedHTML: html)
+        }
+    }
+
+    private static func planPrepared(source: String, documentURL: URL,
+                                     dialect: MarkdownDialect, renderedHTML: String) throws -> PortablePackagePlan {
         let context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         guard context.directoryURL != nil else { throw PortablePackageError.unsavedDocument }
         let analysis = MarkdownAnalysis(source, dialect: dialect)
@@ -77,6 +92,7 @@ enum PortablePackagePlanner {
         }
 
         func packagedPath(for destination: String, image: Bool) throws -> String? {
+            try Task.checkCancellation()
             let (path, suffix) = localPathAndSuffix(destination)
             guard let url = context.resolveLocalResource(path) else {
                 if image { throw PortablePackageError.externalImage(destination) }
@@ -151,7 +167,6 @@ enum PortablePackagePlanner {
         for edit in changes.values.sorted(by: { $0.range.location > $1.range.location }) {
             rewritten.replaceCharacters(in: edit.range, with: edit.replacement)
         }
-        let renderedHTML = MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect)
         let html = rewriteHTMLAttachmentLinks(renderedHTML, context: context,
                                               destinations: destinations)
         return PortablePackagePlan(markdown: rewritten as String, html: html, assets: assets)
@@ -248,6 +263,7 @@ struct PortablePackageSheet: View {
     @State private var format: PortablePackageFormat = .markdown
     @State private var zip = false
     @State private var isWorking = false
+    @State private var operationTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var completedURL: URL?
 
@@ -272,7 +288,9 @@ struct PortablePackageSheet: View {
             if let completedURL { Text("保存しました: \(completedURL.path)").textSelection(.enabled) }
             HStack {
                 Spacer()
-                Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(isWorking ? "中止" : "閉じる") {
+                    if isWorking { operationTask?.cancel() } else { dismiss() }
+                }.keyboardShortcut(.cancelAction)
                 Button("保存先を選ぶ…") { chooseParent() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(isWorking || documentURL == nil)
@@ -281,6 +299,7 @@ struct PortablePackageSheet: View {
         .padding(20)
         .frame(width: 540)
         .interactiveDismissDisabled(isWorking)
+        .onDisappear { operationTask?.cancel() }
     }
 
     private func chooseParent() {
@@ -290,26 +309,26 @@ struct PortablePackageSheet: View {
         panel.canCreateDirectories = true
         panel.begin { response in
             guard response == .OK, let parent = panel.url, let documentURL else { return }
-            do {
-                let plan = try PortablePackagePlanner.plan(source: source,
-                    documentURL: documentURL, dialect: dialect)
-                isWorking = true
-                errorMessage = nil
-                completedURL = nil
-                let selectedName = name
-                let selectedFormat = format
-                let selectedZip = zip
-                Task {
-                    do {
-                        let result = try await Task.detached(priority: .userInitiated) {
-                            try PortablePackageExporter.export(plan, to: parent, name: selectedName,
-                                format: selectedFormat, zip: selectedZip)
-                        }.value
-                        completedURL = result
-                    } catch { errorMessage = error.localizedDescription }
-                    isWorking = false
-                }
-            } catch { errorMessage = error.localizedDescription }
+            isWorking = true
+            errorMessage = nil
+            completedURL = nil
+            let selectedName = name
+            let selectedFormat = format
+            let selectedZip = zip
+            operationTask = Task {
+                do {
+                    let plan = try await PortablePackagePlanner.planAsync(source: source,
+                        documentURL: documentURL, dialect: dialect)
+                    let result = try await DocumentWork.perform {
+                        try PortablePackageExporter.export(plan, to: parent, name: selectedName,
+                            format: selectedFormat, zip: selectedZip)
+                    }
+                    completedURL = result
+                } catch is CancellationError {
+                } catch { errorMessage = error.localizedDescription }
+                isWorking = false
+                operationTask = nil
+            }
         }
     }
 }

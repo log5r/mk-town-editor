@@ -1,7 +1,7 @@
 import Foundation
 
-struct MarkdownExportPreset: Codable, Equatable, Identifiable {
-    enum Font: String, Codable, CaseIterable {
+struct MarkdownExportPreset: Codable, Equatable, Identifiable, Sendable {
+    enum Font: String, Codable, CaseIterable, Sendable {
         case system
         case serif
         case monospaced

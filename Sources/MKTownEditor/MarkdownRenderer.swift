@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 enum MarkdownRenderer {
-    private static let referencePattern = try! NSRegularExpression(
+    nonisolated private static let referencePattern = try! NSRegularExpression(
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
     )
 
@@ -240,7 +240,7 @@ enum MarkdownRenderer {
         }
     }
 
-    static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
+    nonisolated static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
         let lines = (content ?? block.content).components(separatedBy: "\n")
         var result = ""
         for (index, line) in lines.enumerated() {
@@ -459,7 +459,7 @@ enum MarkdownRenderer {
         }
     }
 
-    static func resolveReferences(
+    nonisolated static func resolveReferences(
         in markdown: String, using references: [String: MarkdownReference]
     ) -> String {
         guard !references.isEmpty else { return markdown }

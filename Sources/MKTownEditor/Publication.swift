@@ -3,20 +3,20 @@ import Foundation
 import Security
 
 /// Only these adapters can send publication requests. Configuration and credentials stay local.
-enum PublicationProvider: String, CaseIterable, Identifiable {
+enum PublicationProvider: String, CaseIterable, Identifiable, Sendable {
     case wordpress
     case githubJekyll
     var id: String { rawValue }
     var title: String { self == .wordpress ? "WordPress" : "GitHub Pages (Jekyll)" }
 }
 
-enum PublicationMode: String, CaseIterable, Identifiable {
+enum PublicationMode: String, CaseIterable, Identifiable, Sendable {
     case draft, publish
     var id: String { rawValue }
     var title: String { self == .draft ? String(localized: "下書きを作成") : String(localized: "公開") }
 }
 
-struct PublicationConfiguration {
+struct PublicationConfiguration: Sendable, Equatable {
     var provider: PublicationProvider
     var endpoint: String // WordPress HTTPS site URL, or GitHub owner/repository
     var account: String // WordPress username, or GitHub branch
@@ -43,7 +43,7 @@ enum PublicationError: LocalizedError {
     }
 }
 
-struct PublicationPlan {
+struct PublicationPlan: Sendable {
     let destination: URL
     let preview: String
     let request: URLRequest
@@ -51,13 +51,29 @@ struct PublicationPlan {
     @MainActor
     static func make(_ config: PublicationConfiguration, markdown: String,
                      documentURL: URL?, credential: String, date: Date = Date()) throws -> Self {
+        let html = config.provider == .wordpress ? MarkdownHTMLExporter.render(markdown, documentURL: documentURL) : ""
+        return try makePrepared(config, markdown: markdown, html: html, credential: credential, date: date)
+    }
+
+    @MainActor
+    static func makeAsync(_ config: PublicationConfiguration, markdown: String,
+                          documentURL: URL?, credential: String, date: Date = Date()) async throws -> Self {
+        let html = config.provider == .wordpress
+            ? try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL) : ""
+        return try await DocumentWork.perform {
+            try makePrepared(config, markdown: markdown, html: html, credential: credential, date: date)
+        }
+    }
+
+    private static func makePrepared(_ config: PublicationConfiguration, markdown: String,
+                                     html: String, credential: String, date: Date) throws -> Self {
         guard !credential.isEmpty else { throw PublicationError.invalidCredential }
         guard !config.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               config.title.count <= 200 else { throw PublicationError.invalidConfiguration }
         guard validSlug(config.slug) else { throw PublicationError.invalidConfiguration }
         switch config.provider {
         case .wordpress:
-            return try wordpress(config, markdown: markdown, documentURL: documentURL,
+            return try wordpress(config, html: html,
                                  credential: credential)
         case .githubJekyll:
             return try github(config, markdown: markdown, credential: credential, date: date)
@@ -70,9 +86,8 @@ struct PublicationPlan {
         } && value.first != "-" && value.last != "-"
     }
 
-    @MainActor
-    private static func wordpress(_ config: PublicationConfiguration, markdown: String,
-                                  documentURL: URL?, credential: String) throws -> Self {
+    private static func wordpress(_ config: PublicationConfiguration, html: String,
+                                  credential: String) throws -> Self {
         guard let site = URLComponents(string: config.endpoint), site.scheme == "https",
               let host = site.host, !host.isEmpty, site.user == nil, site.password == nil,
               site.query == nil, site.fragment == nil,
@@ -80,7 +95,6 @@ struct PublicationPlan {
               !config.account.contains("\n") else { throw PublicationError.invalidConfiguration }
         let base = try URL(string: config.endpoint).unwrap(or: PublicationError.invalidConfiguration)
         let destination = base.appendingPathComponent("wp-json/wp/v2/posts")
-        let html = MarkdownHTMLExporter.render(markdown, documentURL: documentURL)
         guard let start = html.range(of: "<body>"),
               let end = html.range(of: "</body>", range: start.upperBound..<html.endIndex) else {
             throw PublicationError.invalidConfiguration

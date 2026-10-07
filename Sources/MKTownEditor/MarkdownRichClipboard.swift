@@ -26,9 +26,27 @@ enum MarkdownRichClipboard {
         return Payload(html: html, rtf: rtf, plainText: plainText)
     }
 
+    static func copyAsync(_ markdown: String, documentURL: URL?, to pasteboard: NSPasteboard,
+                          dialect: MarkdownDialect = .extended) async throws {
+        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL, dialect: dialect, images: .fileReferences)
+        let rendered = AttributedTransfer(try await DocumentWork.loadHTML(html))
+        let rtf = try await DocumentWork.perform {
+            try rendered.value.data(from: NSRange(location: 0, length: rendered.value.length),
+                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
+        }
+        try Task.checkCancellation()
+        var plain = rendered.value.string
+        if plain.hasSuffix("\n") { plain.removeLast() }
+        try write(Payload(html: html, rtf: rtf, plainText: plain), to: pasteboard)
+    }
+
     static func copy(_ markdown: String, documentURL: URL?, to pasteboard: NSPasteboard,
                      dialect: MarkdownDialect = .extended) throws {
         let data = try payload(for: markdown, documentURL: documentURL, dialect: dialect)
+        try write(data, to: pasteboard)
+    }
+
+    private static func write(_ data: Payload, to pasteboard: NSPasteboard) throws {
         pasteboard.declareTypes([.html, .rtf, .string], owner: nil)
         guard pasteboard.setString(data.html, forType: .html),
               pasteboard.setData(data.rtf, forType: .rtf),

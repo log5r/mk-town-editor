@@ -85,7 +85,8 @@ struct EditorWorkspace: View {
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
     @State private var pdfExportError: String?
-    @State private var isExportingPDF = false
+    @State private var documentOperation: Task<Void, Never>?
+    @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
     @State private var printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
     @State private var printSettings = MarkdownPrintSettings()
@@ -422,6 +423,17 @@ struct EditorWorkspace: View {
 
     private var sheetView: some View {
         navigationView
+            .overlay {
+                if documentOperationRunning {
+                    VStack(spacing: 12) {
+                        ProgressView("処理中…")
+                        Button("中止") { documentOperation?.cancel() }
+                    }
+                    .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityElement(children: .contain)
+                }
+            }
+            .onDisappear { documentOperation?.cancel() }
             // Use one system toolbar background across both editor panes.
             .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
             .toolbarBackground(.visible, for: .windowToolbar)
@@ -1969,26 +1981,40 @@ struct EditorWorkspace: View {
         exportFormat = .html
     }
 
+    private func startDocumentOperation(_ action: @escaping @MainActor () async throws -> Void,
+                                        onError: @escaping @MainActor (String) -> Void) {
+        guard !documentOperationRunning else { return }
+        documentOperationRunning = true
+        documentOperation = Task { @MainActor in
+            defer { documentOperationRunning = false; documentOperation = nil }
+            do { try await action() }
+            catch is CancellationError { }
+            catch { onError(error.localizedDescription) }
+        }
+    }
+
+    private func beginSavePanel(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: completion) }
+        else { panel.begin(completionHandler: completion) }
+    }
+
     private func saveHTML(preset: MarkdownExportPreset) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".html"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL,
-                                                   preset: preset,
-                                                   dialect: settingsStore.markdownDialect(for: fileURL))
-            do {
-                try html.write(to: destination, atomically: true, encoding: .utf8)
-            } catch {
-                htmlExportError = error.localizedDescription
-            }
+            let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset, dialect: dialect)
+                try await DocumentWork.perform { try Data(html.utf8).write(to: destination, options: .atomic) }
+            } onError: { htmlExportError = $0 }
         }
     }
 
     private func exportPDF() {
-        guard !isExportingPDF else { return }
+        guard !documentOperationRunning else { return }
         exportFormat = .pdf
     }
 
@@ -2039,41 +2065,27 @@ struct EditorWorkspace: View {
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "slides") + "-slides.pdf"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            do {
-                try MarkdownSlidePDFExporter.export(deck, documentURL: fileURL, to: destination,
-                    dialect: documentContext.markdownDialect)
-            } catch {
-                pdfExportError = error.localizedDescription
-            }
+            let url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
+            } onError: { pdfExportError = $0 }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
-        guard !isExportingPDF else { return }
-        isExportingPDF = true
+        guard !documentOperationRunning else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".pdf"
-        panel.begin { response in
-            guard response == .OK, let destination = panel.url else {
-                isExportingPDF = false
-                return
-            }
-            let source = document.text
-            let sourceURL = fileURL
-            Task { @MainActor in
-                defer { isExportingPDF = false }
-                do {
-                    try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination,
-                                                   preset: preset,
-                                                   dialect: settingsStore.markdownDialect(for: sourceURL))
-                } catch {
-                    pdfExportError = error.localizedDescription
-                }
-            }
+        beginSavePanel(panel) { response in
+            guard response == .OK, let destination = panel.url else { return }
+            let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
+            } onError: { pdfExportError = $0 }
         }
     }
 
@@ -2082,36 +2094,30 @@ struct EditorWorkspace: View {
     }
 
     private func printDocument() {
-        do {
-            let info = printInfo.copy() as! NSPrintInfo
+        let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+        let info = printInfo.copy() as! NSPrintInfo
+        let title = url?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
+        startDocumentOperation {
             try printSettings.apply(to: info)
-            let title = fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
-            let view = try MarkdownPDFExporter.printableView(document.text, documentURL: fileURL,
-                                                             printInfo: info, title: title,
-                                                             header: printSettings.header,
-                                                             footer: printSettings.footer,
-                                                             dialect: settingsStore.markdownDialect(for: fileURL))
+            let view = try await MarkdownPDFExporter.printableViewAsync(source, documentURL: url,
+                printInfo: info, title: title, header: printSettings.header, footer: printSettings.footer, dialect: dialect)
+            try Task.checkCancellation()
             let operation = NSPrintOperation(view: view, printInfo: info)
             operation.jobTitle = title
             operation.showsPrintPanel = true
-            _ = operation.run()
-        } catch {
-            printError = error.localizedDescription
-        }
+            _ = await MarkdownPDFExporter.run(operation)
+        } onError: { printError = $0 }
     }
 
     private func copyRichSelection() {
         guard let textView = editorModel.textView else { return }
-        let source = textView.string as NSString
+        let source = textView.editorSource as NSString
         let selection = textView.selectedRange()
         guard selection.length > 0, NSMaxRange(selection) <= source.length else { return }
-        do {
-            try MarkdownRichClipboard.copy(source.substring(with: selection), documentURL: fileURL,
-                                            to: .general,
-                                            dialect: settingsStore.markdownDialect(for: fileURL))
-        } catch {
-            richCopyError = error.localizedDescription
-        }
+        let selected = source.substring(with: selection), url = fileURL, dialect = documentContext.markdownDialect
+        startDocumentOperation {
+            try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect)
+        } onError: { richCopyError = $0 }
     }
 
     private func exportPlainText() {
@@ -2119,14 +2125,16 @@ struct EditorWorkspace: View {
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".txt"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            let text = MarkdownPlainTextExporter.render(document.text, options: plainOptions)
-            do {
-                try text.write(to: destination, atomically: true, encoding: .utf8)
-            } catch {
-                plainExportError = error.localizedDescription
-            }
+            let source = document.text, options = plainOptions
+            startDocumentOperation {
+                try await DocumentWork.perform {
+                    let text = MarkdownPlainTextExporter.render(source, options: options)
+                    try Task.checkCancellation()
+                    try Data(text.utf8).write(to: destination, options: .atomic)
+                }
+            } onError: { plainExportError = $0 }
         }
     }
 

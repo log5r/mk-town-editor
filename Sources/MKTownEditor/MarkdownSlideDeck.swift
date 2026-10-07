@@ -46,6 +46,24 @@ enum MarkdownSlidePDFError: LocalizedError {
 
 @MainActor
 enum MarkdownSlidePDFExporter {
+    static func exportAsync(_ deck: MarkdownSlideDeck, documentURL: URL?, to destination: URL,
+                            dialect: MarkdownDialect = .extended) async throws {
+        let output = PDFDocument()
+        for slide in deck.slides {
+            try Task.checkCancellation()
+            let html = try await MarkdownHTMLExporter.renderAsync(slide, documentURL: documentURL, dialect: dialect)
+            let attributed = try await DocumentWork.loadHTML(html)
+            let pageView = MarkdownSlidePDFPage(frame: NSRect(x: 0, y: 0, width: 842, height: 595), content: attributed)
+            guard let page = PDFDocument(data: pageView.dataWithPDF(inside: pageView.bounds))?.page(at: 0) else {
+                throw MarkdownSlidePDFError.invalidPage
+            }
+            output.insert(page, at: output.pageCount)
+            await Task.yield()
+        }
+        guard let data = output.dataRepresentation() else { throw MarkdownSlidePDFError.writeFailed }
+        try await DocumentWork.perform { try data.write(to: destination, options: .atomic) }
+    }
+
     static func export(_ deck: MarkdownSlideDeck, documentURL: URL?, to destination: URL,
                        dialect: MarkdownDialect = .extended) throws {
         let output = PDFDocument()
