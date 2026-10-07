@@ -49,6 +49,8 @@ struct WorkspaceReplaceSheet: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let plan {
+                if !plan.skippedDocuments.isEmpty { Text("読み込めなかった書類: \(plan.skippedDocuments.count)件") }
+                if plan.isTruncated { Text("確認結果は一部のみです。対象を絞って再実行してください。") }
                 Text("\(plan.changes.count)ファイル / \(plan.matchCount)箇所。変更するファイルを選んでください。")
                 List(plan.changes, id: \.url) { change in
                     VStack(alignment: .leading, spacing: 6) {

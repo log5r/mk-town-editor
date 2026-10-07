@@ -96,6 +96,11 @@ struct WorkspaceFileOperationSheet: View {
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             }
             if let plan {
+                if !plan.skippedDocuments.isEmpty {
+                    Text("リンク確認から除外: \(plan.skippedDocuments.count)件")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if plan.isTruncated { Text("ファイル一覧が上限を超えたため、確認結果は一部のみです。") }
                 if plan.changes.contains(where: { $0.openOriginalData != nil && $0.linkCount > 0 }) {
                     Text("開いている参照元書類の未保存内容も、リンク更新と一緒に保存されます。")
                         .font(.caption)
@@ -127,7 +132,7 @@ struct WorkspaceFileOperationSheet: View {
                 } else {
                     Button(actionIsTrash ? "ゴミ箱へ移動" : "適用") { apply() }
                         .keyboardShortcut(.defaultAction)
-                        .disabled(isWorking || inputIsEmpty || (actionIsTrash && plan == nil))
+                        .disabled(isWorking || inputIsEmpty)
                 }
             }
         }
@@ -245,8 +250,6 @@ struct WorkspaceFileOperationSheet: View {
                         guard let movePlan else { throw WorkspaceFileOperationError.workspaceChanged }
                         try movePlan.apply()
                     case let .trash(source):
-                        guard let movePlan else { throw WorkspaceFileOperationError.workspaceChanged }
-                        try movePlan.validateCurrentState()
                         _ = try WorkspaceFileOperations.moveToTrash(source, root: root)
                     }
                 }.value

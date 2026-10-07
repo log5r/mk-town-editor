@@ -23,6 +23,10 @@ struct WorkspaceAttachmentAuditSheet: View {
                 ContentUnavailableView("確認できませんでした", systemImage: "exclamationmark.triangle",
                     description: Text(errorMessage))
             } else if let result {
+                if !result.skippedDocuments.isEmpty { Text("読み込めなかった書類: \(result.skippedDocuments.count)件") }
+                if result.isTruncated || !result.skippedDocuments.isEmpty {
+                    Text("確認が一部のみのため、未使用の候補は表示しません。")
+                }
                 List {
                     Section("欠落している添付（\(result.missing.count)）") {
                         ForEach(result.missing) { entry in entryRow(entry) }

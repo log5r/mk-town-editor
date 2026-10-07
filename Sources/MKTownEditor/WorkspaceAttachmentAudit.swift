@@ -11,12 +11,14 @@ struct WorkspaceAttachmentAuditResult: Sendable {
     let missing: [WorkspaceAttachmentEntry]
     let unused: [WorkspaceAttachmentEntry]
     let used: [WorkspaceAttachmentEntry]
+    var skippedDocuments: [URL] = []
+    var isTruncated = false
 }
 
 enum WorkspaceAttachmentAudit {
     static func scan(root: URL, openDocuments: [URL: Data] = [:]) async throws -> WorkspaceAttachmentAuditResult {
         let index = WorkspaceFileIndex.scan(root: root)
-        guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
+        var skipped: [URL] = []
         var documents: [URL] = []
         var assets: [URL] = []
         func collect(_ nodes: [WorkspaceNode]) {
@@ -32,8 +34,11 @@ enum WorkspaceAttachmentAudit {
         for document in documents {
             try Task.checkCancellation()
             let key = document.resolvingSymlinksInPath().standardizedFileURL
-            let data = try openDocuments[key] ?? Data(contentsOf: document)
-            let markdown = try MarkdownDocument.decode(data)
+            guard let data = try? openDocuments[key] ?? Data(contentsOf: document),
+                  let markdown = try? MarkdownDocument.decode(data) else {
+                skipped.append(document)
+                continue
+            }
             let analysis = MarkdownAnalysis(markdown)
             let masked = NSMutableString(string: markdown)
             for block in analysis.blocks.filter({ $0.kind == .codeBlock })
@@ -68,8 +73,9 @@ enum WorkspaceAttachmentAudit {
         }
         let missing = entries(references.keys.filter { !FileManager.default.fileExists(atPath: $0.path) })
         let assetKeys = Set(assets.map { $0.resolvingSymlinksInPath().standardizedFileURL })
-        let unused = entries(assetKeys.filter { references[$0] == nil })
+        let unused = skipped.isEmpty && !index.isTruncated ? entries(assetKeys.filter { references[$0] == nil }) : []
         let used = entries(assetKeys.filter { references[$0] != nil })
-        return WorkspaceAttachmentAuditResult(missing: missing, unused: unused, used: used)
+        return WorkspaceAttachmentAuditResult(missing: missing, unused: unused, used: used,
+            skippedDocuments: skipped, isTruncated: index.isTruncated)
     }
 }

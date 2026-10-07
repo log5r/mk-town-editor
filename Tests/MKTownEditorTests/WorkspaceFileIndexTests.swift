@@ -47,6 +47,17 @@ final class WorkspaceFileIndexTests: XCTestCase {
         XCTAssertFalse(result.nodes[1].isEditableDocument)
     }
 
+    func testScanContinuesPastFormerTenThousandEntryLimit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for index in 0..<10_001 { try Data().write(to: root.appendingPathComponent("\(index).png")) }
+        let result = WorkspaceFileIndex.scan(root: root)
+        XCTAssertFalse(result.isTruncated)
+        XCTAssertEqual(result.nodes.count, 10_001)
+        XCTAssertTrue(WorkspaceFileIndex.scan(root: root, maximumEntries: 2).isTruncated)
+    }
+
     func testRescanDetectsExternalFileChanges() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
