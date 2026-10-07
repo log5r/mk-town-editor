@@ -149,6 +149,8 @@ final class LocalImageCache: @unchecked Sendable {
         let cost: Int
         var lastUse: UInt64
         var lastUseDate: Date
+        /// デコードを開始した順番。同じファイルの版の新旧はこの順で判定する。
+        let generation: UInt64
     }
 
     private let lock = NSLock()
@@ -158,6 +160,7 @@ final class LocalImageCache: @unchecked Sendable {
     private var entries: [Key: Entry] = [:]
     private var totalCost = 0
     private var clock: UInt64 = 0
+    private var nextGeneration: UInt64 = 0
     private(set) var decodeCount = 0
 
     init(costLimit: Int = 64_000_000, protectionInterval: TimeInterval = 5,
@@ -200,7 +203,24 @@ final class LocalImageCache: @unchecked Sendable {
 
     @discardableResult
     func decode(key: Key, fileURL: URL) -> NSImage? {
+        let generation = reserveGeneration()
         let image = ImageResourceManager().previewImage(at: fileURL, alt: "")
+        insert(image, for: key, generation: generation)
+        return image
+    }
+
+    /// デコードを始める前に順番を確保する。後から始めたデコードほど新しいファイルの内容を読む。
+    func reserveGeneration() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        nextGeneration += 1
+        return nextGeneration
+    }
+
+    /// デコード結果を保持する。同じファイルについて、後から始めたデコードの結果が既にあれば、
+    /// 遅れて終わったこの結果は保持しない。版の新旧はファイルの更新日時ではなく開始順で決める。
+    /// 古い日付のファイルに戻した場合も、後から始めたデコードが新しい版になる。
+    func insert(_ image: NSImage?, for key: Key, generation: UInt64) {
         let cost = image.map { image in
             image.representations.reduce(0) { $0 + $1.pixelsWide * $1.pixelsHigh * 4 }
         } ?? 0
@@ -208,17 +228,14 @@ final class LocalImageCache: @unchecked Sendable {
         defer { lock.unlock() }
         decodeCount += 1
         clock += 1
-        // 同じファイルのより新しい版が既にあれば、遅れて終わった古い版のデコードは保持しない。
-        let isOlder = { (lhs: Key, rhs: Key) in (lhs.modified ?? .distantPast) < (rhs.modified ?? .distantPast) }
-        if entries.keys.contains(where: { $0.path == key.path && isOlder(key, $0) }) { return image }
-        if let previous = entries.removeValue(forKey: key) { totalCost -= previous.cost }
-        // 同じファイルの古い版は表示されないため、更新時にまとめて除く。
-        for (staleKey, stale) in entries where staleKey.path == key.path && isOlder(staleKey, key) {
+        if entries.contains(where: { $0.key.path == key.path && $0.value.generation > generation }) { return }
+        // 同じファイルの以前の版は表示されないため、まとめて除く。
+        for (staleKey, stale) in entries where staleKey.path == key.path {
             entries[staleKey] = nil
             totalCost -= stale.cost
         }
         let date = now()
-        entries[key] = Entry(image: image, cost: cost, lastUse: clock, lastUseDate: date)
+        entries[key] = Entry(image: image, cost: cost, lastUse: clock, lastUseDate: date, generation: generation)
         totalCost += cost
         let protectedSince = date.addingTimeInterval(-protectionInterval)
         while totalCost > costLimit, entries.count > 1 {
@@ -227,7 +244,6 @@ final class LocalImageCache: @unchecked Sendable {
             entries[oldest.key] = nil
             totalCost -= oldest.value.cost
         }
-        return image
     }
 
     func contains(_ key: Key) -> Bool {

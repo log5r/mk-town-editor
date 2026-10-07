@@ -320,19 +320,32 @@ final class LocalImagePreviewTests: XCTestCase {
         let old = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 100), size: 1)
         let new = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 200), size: 2)
 
-        // 新しい版のデコードが先に終わり、古い版が遅れて終わる。
+        let image = NSImage(size: NSSize(width: 1, height: 1))
+
+        // 古い版のデコードを先に始め、後から始めた新しい版のデコードが先に終わる。
         let outOfOrder = LocalImageCache()
-        outOfOrder.decode(key: new, fileURL: url)
-        outOfOrder.decode(key: old, fileURL: url)
+        let oldGeneration = outOfOrder.reserveGeneration()
+        let newGeneration = outOfOrder.reserveGeneration()
+        outOfOrder.insert(image, for: new, generation: newGeneration)
+        outOfOrder.insert(image, for: old, generation: oldGeneration)
         XCTAssertTrue(outOfOrder.contains(new), "A late stale decode must not remove the newer version")
         XCTAssertFalse(outOfOrder.contains(old))
 
-        // 順に終わった場合は、古い版を除いて新しい版だけを残す。
-        let inOrder = LocalImageCache()
-        inOrder.decode(key: old, fileURL: url)
-        inOrder.decode(key: new, fileURL: url)
-        XCTAssertTrue(inOrder.contains(new))
-        XCTAssertFalse(inOrder.contains(old))
+        // 古い日付のファイルに戻した場合も、後から始めたデコードの結果を新しい版として保持する。
+        let restored = LocalImageCache()
+        restored.insert(image, for: new, generation: restored.reserveGeneration())
+        restored.insert(image, for: old, generation: restored.reserveGeneration())
+        XCTAssertTrue(restored.contains(old), "An older-dated file restored later is the current version")
+        XCTAssertFalse(restored.contains(new))
+
+        // 実際のデコードでも、古い日付に戻したファイルはキャッシュされる。
+        let past = Date(timeIntervalSinceNow: -86_400)
+        let cache = LocalImageCache()
+        XCTAssertNotNil(cache.image(at: url))
+        try FileManager.default.setAttributes([.modificationDate: past], ofItemAtPath: url.path)
+        let restoredKey = try XCTUnwrap(LocalImageCache.key(for: url))
+        XCTAssertNotNil(cache.image(at: url))
+        XCTAssertTrue(cache.contains(restoredKey))
     }
 
     func testClosingThePreviewCancelsDecodesOnlyItWasWaitingFor() async throws {
