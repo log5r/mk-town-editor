@@ -1401,7 +1401,7 @@ struct EditorWorkspace: View {
     }
 
     private var outlineEntries: [MarkdownOutlineEntry] {
-        analysisStore.snapshot.map { MarkdownOutline.entries(in: $0.analysis) } ?? []
+        analysisStore.snapshot?.outlineEntries ?? []
     }
 
     private var workspaceSidebar: some View {
@@ -1704,9 +1704,13 @@ struct EditorWorkspace: View {
     }
 
     private var outlineSidebar: some View {
-        let entries = outlineEntries
+        let snapshot = analysisStore.snapshot
+        let entries = snapshot?.outlineEntries ?? []
+        let isCurrent = snapshot?.source == document.text
+        let canEdit = isCurrent && editorModel.canExecuteCommand
         let highlightedID = currentSectionID
         return List(entries) { entry in
+            let actions = snapshot?.sectionActions[entry.id]
             Button {
                 navigate(to: entry)
             } label: {
@@ -1717,40 +1721,32 @@ struct EditorWorkspace: View {
             .buttonStyle(.plain)
             .contextMenu {
                 Button("セクションを上へ移動") {
-                    editorModel.moveSection(at: entry.sourceRange.location, direction: .up)
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .up, snapshot: snapshot)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionMove.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, direction: .up) == nil)
+                .disabled(!canEdit || actions?.canMoveUp != true)
                 Button("セクションを下へ移動") {
-                    editorModel.moveSection(at: entry.sourceRange.location, direction: .down)
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .down, snapshot: snapshot)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionMove.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, direction: .down) == nil)
+                .disabled(!canEdit || actions?.canMoveDown != true)
                 Divider()
                 Button("見出しと子見出しを昇格") {
-                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: -1)
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: -1, snapshot: snapshot)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionLevel.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, by: -1) == nil)
+                .disabled(!canEdit || actions?.canPromote != true)
                 Button("見出しと子見出しを降格") {
-                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: 1)
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: 1, snapshot: snapshot)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionLevel.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, by: 1) == nil)
+                .disabled(!canEdit || actions?.canDemote != true)
             }
             .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
-            .disabled(analysisStore.snapshot?.source != document.text)
+            .disabled(!isCurrent)
             .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
             .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
         }
         .listStyle(.sidebar)
         .navigationTitle("アウトライン")
         .overlay {
-            if outlineEntries.isEmpty {
+            if entries.isEmpty {
                 ContentUnavailableView("見出しがありません", systemImage: "list.bullet.indent")
             }
         }

@@ -33,47 +33,97 @@ enum MarkdownOutline {
 
 enum SectionMoveDirection { case up, down }
 
+/// Availability for one heading, computed without reading or editing the document.
+struct MarkdownSectionActions: Equatable, Sendable {
+    let canMoveUp: Bool
+    let canMoveDown: Bool
+    let canPromote: Bool
+    let canDemote: Bool
+
+    static func all(in entries: [MarkdownOutlineEntry]) -> [Int: MarkdownSectionActions] {
+        let structure = MarkdownSectionStructure(entries)
+        return Dictionary(uniqueKeysWithValues: entries.indices.map { index in
+            (entries[index].id, MarkdownSectionActions(
+                canMoveUp: structure.previousSiblings[index] != nil,
+                canMoveDown: structure.nextSiblings[index] != nil,
+                canPromote: entries[index].level > 1,
+                canDemote: structure.maximumLevels[index] < 6))
+        })
+    }
+}
+
+/// Build section boundaries, adjacent siblings and subtree level limits in O(headings).
+/// Moves exchange adjacent sections with the same parent and heading level.
+private struct MarkdownSectionStructure {
+    let endIndices: [Int]
+    let previousSiblings: [Int?]
+    let nextSiblings: [Int?]
+    let maximumLevels: [Int]
+
+    private struct SiblingKey: Hashable {
+        let parent: Int?
+        let level: Int
+    }
+
+    init(_ entries: [MarkdownOutlineEntry]) {
+        var ends = Array(repeating: entries.count, count: entries.count)
+        var parents = Array<Int?>(repeating: nil, count: entries.count)
+        var stack: [Int] = []
+        for index in entries.indices {
+            while let last = stack.last, entries[last].level >= entries[index].level {
+                ends[stack.removeLast()] = index
+            }
+            parents[index] = stack.last
+            stack.append(index)
+        }
+        var previous = Array<Int?>(repeating: nil, count: entries.count)
+        var next = previous
+        var lastSiblings: [SiblingKey: Int] = [:]
+        var maxima = entries.map(\.level)
+        for index in entries.indices {
+            let key = SiblingKey(parent: parents[index], level: entries[index].level)
+            if let last = lastSiblings[key], ends[last] == index {
+                previous[index] = last
+                next[last] = index
+            }
+            lastSiblings[key] = index
+        }
+        for index in entries.indices.reversed() {
+            if let parent = parents[index] {
+                maxima[parent] = max(maxima[parent], maxima[index])
+            }
+        }
+        endIndices = ends
+        previousSiblings = previous
+        nextSiblings = next
+        maximumLevels = maxima
+    }
+}
+
 enum MarkdownSectionMove {
     static func edit(in text: String, headingLocation: Int,
                      direction: SectionMoveDirection) -> MarkdownEdit? {
+        edit(in: text, entries: MarkdownOutline.entries(in: MarkdownAnalysis(text)),
+             headingLocation: headingLocation, direction: direction)
+    }
+
+    /// Entries must come from an analysis of this exact source.
+    static func edit(in text: String, entries: [MarkdownOutlineEntry], headingLocation: Int,
+                     direction: SectionMoveDirection) -> MarkdownEdit? {
         let source = text as NSString
-        let headings = MarkdownOutline.entries(in: MarkdownAnalysis(text))
-        guard let selected = headings.firstIndex(where: {
+        guard let selected = entries.firstIndex(where: {
             $0.sourceRange.location == headingLocation
         }) else { return nil }
-        var parents: [Int?] = []
-        var stack: [Int] = []
-        for index in headings.indices {
-            while let last = stack.last, headings[last].level >= headings[index].level {
-                stack.removeLast()
-            }
-            parents.append(stack.last)
-            stack.append(index)
-        }
-        let siblings = headings.indices.filter {
-            headings[$0].level == headings[selected].level && parents[$0] == parents[selected]
-        }
-        guard let position = siblings.firstIndex(of: selected) else { return nil }
-        let other: Int
-        switch direction {
-        case .up:
-            guard position > 0 else { return nil }
-            other = siblings[position - 1]
-        case .down:
-            guard position + 1 < siblings.count else { return nil }
-            other = siblings[position + 1]
-        }
-        func end(of index: Int) -> Int {
-            headings.dropFirst(index + 1).first {
-                $0.level <= headings[index].level
-            }?.sourceRange.location ?? source.length
-        }
+        let structure = MarkdownSectionStructure(entries)
+        let sibling = direction == .up ? structure.previousSiblings[selected] :
+            structure.nextSiblings[selected]
+        guard let other = sibling else { return nil }
         let first = min(selected, other)
         let second = max(selected, other)
-        let firstStart = headings[first].sourceRange.location
-        let secondStart = headings[second].sourceRange.location
-        let lastEnd = end(of: second)
-        guard end(of: first) == secondStart else { return nil }
+        let firstStart = entries[first].sourceRange.location
+        let secondStart = entries[second].sourceRange.location
+        let endIndex = structure.endIndices[second]
+        let lastEnd = endIndex < entries.count ? entries[endIndex].sourceRange.location : source.length
         let firstText = source.substring(with: NSRange(location: firstStart,
             length: secondStart - firstStart))
         let secondText = source.substring(with: NSRange(location: secondStart,
@@ -99,16 +149,22 @@ enum MarkdownSectionMove {
 
 enum MarkdownSectionLevel {
     static func edit(in text: String, headingLocation: Int, by delta: Int) -> MarkdownEdit? {
+        edit(in: text, entries: MarkdownOutline.entries(in: MarkdownAnalysis(text)),
+             headingLocation: headingLocation, by: delta)
+    }
+
+    /// Entries must come from an analysis of this exact source.
+    static func edit(in text: String, entries: [MarkdownOutlineEntry],
+                     headingLocation: Int, by delta: Int) -> MarkdownEdit? {
         guard delta == -1 || delta == 1 else { return nil }
         let source = text as NSString
-        let entries = MarkdownOutline.entries(in: MarkdownAnalysis(text))
         guard let index = entries.firstIndex(where: {
             $0.sourceRange.location == headingLocation
         }) else { return nil }
-        let end = entries.dropFirst(index + 1).first {
-            $0.level <= entries[index].level
-        }?.sourceRange.location ?? source.length
-        let selected = entries.dropFirst(index).prefix { $0.sourceRange.location < end }
+        let structure = MarkdownSectionStructure(entries)
+        let endIndex = structure.endIndices[index]
+        let end = endIndex < entries.count ? entries[endIndex].sourceRange.location : source.length
+        let selected = entries[index..<endIndex]
         guard selected.allSatisfy({ (1...6).contains($0.level + delta) }) else { return nil }
         let sectionStart = entries[index].sourceRange.location
         let range = NSRange(location: sectionStart, length: end - sectionStart)

@@ -107,6 +107,84 @@ final class MarkdownOutlineTests: XCTestCase {
         XCTAssertEqual(crlfEdit.applying(to: crlf), "# 親\r\n## 子\r\n本文")
     }
 
+    func testSectionActionsRespectSiblingParentAndSubtreeLevelBoundaries() throws {
+        let source = "# Parent\n### First\n###### Deep\n### Second\n## Other branch\n### Only\n# Next"
+        let entries = MarkdownOutline.entries(in: MarkdownAnalysis(source))
+        let actions = MarkdownSectionActions.all(in: entries)
+        let expected = [
+            MarkdownSectionActions(canMoveUp: false, canMoveDown: true, canPromote: false, canDemote: false),
+            MarkdownSectionActions(canMoveUp: false, canMoveDown: true, canPromote: true, canDemote: false),
+            MarkdownSectionActions(canMoveUp: false, canMoveDown: false, canPromote: true, canDemote: false),
+            MarkdownSectionActions(canMoveUp: true, canMoveDown: false, canPromote: true, canDemote: true),
+            MarkdownSectionActions(canMoveUp: false, canMoveDown: false, canPromote: true, canDemote: true),
+            MarkdownSectionActions(canMoveUp: false, canMoveDown: false, canPromote: true, canDemote: true),
+            MarkdownSectionActions(canMoveUp: true, canMoveDown: false, canPromote: false, canDemote: true)
+        ]
+        XCTAssertEqual(entries.map { actions[$0.id] }, expected.map(Optional.some))
+        XCTAssertTrue(MarkdownSectionActions.all(in: []).isEmpty)
+    }
+
+    func testCachedSectionActionsAgreeWithEditsAcrossHeadingLevelCombinations() throws {
+        // Cover skipped levels, roots without H1, parent changes, H1/H6 limits,
+        // Setext headings, CRLF and headings inside code fences.
+        var sources = ["Title\r\n=====\r\n## Child\r\n###### Deep\r\n# Next",
+                       "# A\n```md\n###### Code\n```\n# B\n",
+                       "# Same🙂\n## Same🙂\n# Same🙂"]
+        for first in 1...6 {
+            for second in 1...6 {
+                for third in 1...6 {
+                    sources.append([first, second, third].enumerated().map {
+                        String(repeating: "#", count: $0.element) + " Heading \($0.offset)\n本文🙂"
+                    }.joined(separator: "\n"))
+                }
+            }
+        }
+        for source in sources {
+            let entries = MarkdownOutline.entries(in: MarkdownAnalysis(source))
+            let actions = MarkdownSectionActions.all(in: entries)
+            for entry in entries {
+                let availability = try XCTUnwrap(actions[entry.id])
+                for (direction, available) in [(SectionMoveDirection.up, availability.canMoveUp),
+                                              (.down, availability.canMoveDown)] {
+                    let edit = MarkdownSectionMove.edit(in: source, entries: entries,
+                        headingLocation: entry.sourceRange.location, direction: direction)
+                    XCTAssertEqual(available, edit != nil, source)
+                    XCTAssertEqual(edit, MarkdownSectionMove.edit(in: source,
+                        headingLocation: entry.sourceRange.location, direction: direction))
+                }
+                for (delta, available) in [(-1, availability.canPromote), (1, availability.canDemote)] {
+                    let edit = MarkdownSectionLevel.edit(in: source, entries: entries,
+                        headingLocation: entry.sourceRange.location, by: delta)
+                    XCTAssertEqual(available, edit != nil, source)
+                    XCTAssertEqual(edit, MarkdownSectionLevel.edit(in: source,
+                        headingLocation: entry.sourceRange.location, by: delta))
+                }
+            }
+            XCTAssertNil(MarkdownSectionMove.edit(in: source, entries: entries,
+                headingLocation: -1, direction: .up))
+            XCTAssertNil(MarkdownSectionLevel.edit(in: source, entries: entries,
+                headingLocation: -1, by: 1))
+            XCTAssertNil(MarkdownSectionLevel.edit(in: source, entries: entries,
+                headingLocation: 0, by: 2))
+        }
+    }
+
+    func testFourHundredHeadingActionsNeedOnlyOutlineEntries() {
+        // No document text or parser is supplied to the availability calculation.
+        // Nonsequential IDs also guard against accidentally indexing by block ID.
+        let entries = (0..<400).map { index in
+            MarkdownOutlineEntry(id: index * 3, level: 2, title: "Heading \(index)",
+                sourceRange: NSRange(location: index * 1_600, length: 20))
+        }
+        let actions = MarkdownSectionActions.all(in: entries)
+        XCTAssertEqual(actions.count, 400)
+        for (index, entry) in entries.enumerated() {
+            XCTAssertEqual(actions[entry.id], MarkdownSectionActions(
+                canMoveUp: index > 0, canMoveDown: index < 399,
+                canPromote: true, canDemote: true))
+        }
+    }
+
     func testContentInspectorListsTasksLinksImagesAndSkipsCode() {
         let text = "- [ ] 未完了\n- [x] 完了\n\n[site](https://example.com) " +
             "![図](assets/a.png) [参照][id] ![参照画像][image]\n\n" +
