@@ -94,4 +94,18 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
         XCTAssertEqual(first.snapshotExcerpt, "line 10")
         XCTAssertTrue(rows.contains { $0.snapshotExcerpt == "（なし）" && $0.currentExcerpt == "inserted" })
     }
+
+    func testCancelledComparisonStopsWithoutBuildingRows() async {
+        let saved = (0..<50_000).map { "line \($0)" }.joined(separator: "\n")
+        let current = (0..<50_000).map { $0.isMultiple(of: 7) ? "changed \($0)" : "line \($0)" }
+            .joined(separator: "\n")
+        let worker = Task.detached { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return WorkspaceSnapshotDiff.rows(snapshot: saved, current: current).count
+        }
+        worker.cancel()
+        let count = await worker.value
+        XCTAssertEqual(count, 0)
+        XCTAssertFalse(WorkspaceSnapshotDiff.rows(snapshot: "a\nb", current: "a\nc").isEmpty)
+    }
 }

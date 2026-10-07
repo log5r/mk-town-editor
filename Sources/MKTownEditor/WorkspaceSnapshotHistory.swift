@@ -99,14 +99,23 @@ enum WorkspaceSnapshotDiff {
     }
 
     /// 行の配列を一度だけ作り、差分の区間と各区間の抜粋をまとめて求める。
+    /// 取り消された比較は、各段階の間で処理を打ち切って空の結果を返す。
+    /// 標準ライブラリの差分計算そのものは途中で止められないため、その前後で確認する。
     static func rows(snapshot: String, current: String) -> [WorkspaceSnapshotHunkRow] {
         let oldLines = snapshot.components(separatedBy: "\n")
+        guard !Task.isCancelled else { return [] }
         let newLines = current.components(separatedBy: "\n")
-        return hunks(oldLines: oldLines, newLines: newLines).map { hunk in
-            WorkspaceSnapshotHunkRow(hunk: hunk,
-                                     currentExcerpt: excerpt(newLines, lines: hunk.currentRange),
-                                     snapshotExcerpt: excerpt(oldLines, lines: hunk.snapshotRange))
+        guard !Task.isCancelled else { return [] }
+        let found = hunks(oldLines: oldLines, newLines: newLines)
+        var rows: [WorkspaceSnapshotHunkRow] = []
+        rows.reserveCapacity(found.count)
+        for hunk in found {
+            guard !Task.isCancelled else { return [] }
+            rows.append(WorkspaceSnapshotHunkRow(hunk: hunk,
+                                                 currentExcerpt: excerpt(newLines, lines: hunk.currentRange),
+                                                 snapshotExcerpt: excerpt(oldLines, lines: hunk.snapshotRange)))
         }
+        return rows
     }
 
     static func excerpt(_ lines: [String], lines range: Range<Int>) -> String {
@@ -116,6 +125,7 @@ enum WorkspaceSnapshotDiff {
 
     private static func hunks(oldLines: [String], newLines: [String]) -> [WorkspaceSnapshotHunk] {
         let difference = newLines.difference(from: oldLines)
+        guard !Task.isCancelled else { return [] }
         var removed = Set<Int>()
         var inserted = Set<Int>()
         for change in difference {
@@ -128,6 +138,7 @@ enum WorkspaceSnapshotDiff {
         var newIndex = 0
         var result: [WorkspaceSnapshotHunk] = []
         while oldIndex < oldLines.count || newIndex < newLines.count {
+            if (oldIndex + newIndex) % 4_096 == 0, Task.isCancelled { return [] }
             let oldChanged = removed.contains(oldIndex)
             let newChanged = inserted.contains(newIndex)
             if oldChanged || newChanged {
