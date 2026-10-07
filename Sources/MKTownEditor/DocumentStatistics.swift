@@ -89,12 +89,35 @@ struct DocumentStatistics: Equatable, Sendable {
     static let empty = DocumentStatistics(text: "")
 
     init(text: String) {
+        // The scan only throws while observing cancellation.
+        self = try! DocumentStatistics.scan(text, observingCancellation: false)
+    }
+
+    /// Scans `text` on the current task and throws `CancellationError` once the task is cancelled,
+    /// so superseded background scans stop early instead of traversing the whole text.
+    static func scanObservingCancellation(_ text: String) throws -> DocumentStatistics {
+        try scan(text, observingCancellation: true)
+    }
+
+    /// Characters scanned between cancellation checks.
+    static let cancellationCheckInterval = 4096
+
+    private static func scan(_ text: String, observingCancellation: Bool) throws -> DocumentStatistics {
         var characters = 0
         var nonWhitespace = 0
         var words = 0
         var lines = text.isEmpty ? 0 : 1
         var inWord = false
+        var untilCheck = cancellationCheckInterval
+        if observingCancellation { try Task.checkCancellation() }
         for character in text {
+            if observingCancellation {
+                untilCheck -= 1
+                if untilCheck == 0 {
+                    try Task.checkCancellation()
+                    untilCheck = cancellationCheckInterval
+                }
+            }
             characters += 1
             let whitespace = character.isWhitespace || character.isNewline
             if !whitespace {
@@ -106,21 +129,40 @@ struct DocumentStatistics: Equatable, Sendable {
                 lines += 1
             }
         }
-        self.characters = characters
-        nonWhitespaceCharacters = nonWhitespace
-        self.words = words
-        self.lines = lines
+        return DocumentStatistics(characters: characters, nonWhitespaceCharacters: nonWhitespace,
+                                  words: words, lines: lines)
     }
 
     static func selection(in text: String, range: NSRange) -> DocumentStatistics? {
-        let source = text as NSString
-        guard range.length > 0, range.location >= 0, range.location <= source.length,
-              range.length <= source.length - range.location else { return nil }
-        return DocumentStatistics(text: source.substring(with: range))
+        try! selection(in: text, range: range, observingCancellation: false)
     }
 
     static func selection(in text: String, ranges: [NSRange]) -> DocumentStatistics? {
-        let parts = ranges.compactMap { selection(in: text, range: $0) }
+        try! selection(in: text, ranges: ranges, observingCancellation: false)
+    }
+
+    /// Selection statistics that stop at the next cancellation check of the current task.
+    static func selectionObservingCancellation(in text: String, ranges: [NSRange]) throws -> DocumentStatistics? {
+        try selection(in: text, ranges: ranges, observingCancellation: true)
+    }
+
+    private static func selection(in text: String, range: NSRange,
+                                  observingCancellation: Bool) throws -> DocumentStatistics? {
+        let source = text as NSString
+        guard range.length > 0, range.location >= 0, range.location <= source.length,
+              range.length <= source.length - range.location else { return nil }
+        if observingCancellation { try Task.checkCancellation() }
+        return try scan(source.substring(with: range), observingCancellation: observingCancellation)
+    }
+
+    private static func selection(in text: String, ranges: [NSRange],
+                                  observingCancellation: Bool) throws -> DocumentStatistics? {
+        var parts: [DocumentStatistics] = []
+        for range in ranges {
+            if let part = try selection(in: text, range: range, observingCancellation: observingCancellation) {
+                parts.append(part)
+            }
+        }
         guard !parts.isEmpty else { return nil }
         return DocumentStatistics(characters: parts.reduce(0) { $0 + $1.characters },
                                   nonWhitespaceCharacters: parts.reduce(0) { $0 + $1.nonWhitespaceCharacters },
@@ -130,7 +172,11 @@ struct DocumentStatistics: Equatable, Sendable {
 
     static func sectionRange(at location: Int, in analysis: MarkdownAnalysis,
                              documentLength: Int) -> NSRange? {
-        let entries = MarkdownOutline.entries(in: analysis)
+        sectionRange(at: location, in: MarkdownOutline.entries(in: analysis), documentLength: documentLength)
+    }
+
+    static func sectionRange(at location: Int, in entries: [MarkdownOutlineEntry],
+                             documentLength: Int) -> NSRange? {
         guard let current = entries.last(where: { $0.sourceRange.location <= location }),
               let index = entries.firstIndex(where: { $0.id == current.id }) else { return nil }
         let end = entries.dropFirst(index + 1).first { $0.level <= current.level }?
@@ -141,6 +187,8 @@ struct DocumentStatistics: Equatable, Sendable {
 }
 
 /// Selection and section scans run only when the source snapshot or selection changes.
+/// Section statistics are cached per section range, so moving the caret inside a section publishes
+/// synchronously, and superseded background scans stop at their next cancellation check.
 @MainActor
 final class DocumentStatusStore: ObservableObject {
     @Published private(set) var selection: DocumentStatistics?
@@ -150,27 +198,62 @@ final class DocumentStatusStore: ObservableObject {
     private var source: String?
     private var dialect: MarkdownDialect?
     private var ranges: [NSRange] = []
+    private var sectionCache: [NSRange: DocumentStatistics] = [:]
 
     func update(snapshot: DocumentSnapshot?, selections: [NSRange]) {
-        guard let snapshot, source != snapshot.source || ranges != selections || dialect != snapshot.dialect else { return }
+        guard let snapshot else { return }
+        let sourceChanged = source != snapshot.source || dialect != snapshot.dialect
+        guard sourceChanged || ranges != selections else { return }
+        if sourceChanged { sectionCache.removeAll() }
         source = snapshot.source
         dialect = snapshot.dialect
         ranges = selections
         generation += 1
         let requested = generation
         task?.cancel()
-        task = Task.detached(priority: .utility) { [weak self] in
-            let selection = DocumentStatistics.selection(in: snapshot.source, ranges: selections)
-            let location = selections.first?.location ?? 0
-            let heading = MarkdownOutline.currentSection(at: location, in: snapshot.outlineEntries)
-            let range = DocumentStatistics.sectionRange(at: location, in: snapshot.analysis,
-                documentLength: snapshot.source.utf16.count)
-            let section = range.map {
-                DocumentStatistics(text: (snapshot.source as NSString).substring(with: $0))
-            }
-            guard !Task.isCancelled else { return }
-            await self?.publish(selection: selection, title: heading?.title, section: section, generation: requested)
+        task = nil
+
+        let location = selections.first?.location ?? 0
+        let title = MarkdownOutline.currentSection(at: location, in: snapshot.outlineEntries)?.title
+        let sectionRange = DocumentStatistics.sectionRange(at: location, in: snapshot.outlineEntries,
+                                                           documentLength: snapshot.source.utf16.count)
+        let cachedValue = sectionRange.flatMap { sectionCache[$0] }
+        let needsSelection = selections.contains { $0.length > 0 }
+        let needsSectionScan = sectionRange != nil && cachedValue == nil
+        if !needsSelection, !needsSectionScan {
+            publish(selection: nil, title: title, section: cachedValue, generation: requested)
+            return
         }
+
+        task = Task.detached(priority: .utility) { [weak self] in
+            do {
+                let selection = needsSelection
+                    ? try DocumentStatistics.selectionObservingCancellation(in: snapshot.source, ranges: selections)
+                    : nil
+                let section: DocumentStatistics?
+                if let cachedValue {
+                    section = cachedValue
+                } else if let sectionRange {
+                    try Task.checkCancellation()
+                    section = try DocumentStatistics.scanObservingCancellation(
+                        (snapshot.source as NSString).substring(with: sectionRange))
+                } else {
+                    section = nil
+                }
+                try Task.checkCancellation()
+                await self?.receive(selection: selection, title: title, sectionRange: sectionRange,
+                                    section: section, generation: requested)
+            } catch {
+                // Superseded by a newer update; its own task publishes the current state.
+            }
+        }
+    }
+
+    private func receive(selection: DocumentStatistics?, title: String?, sectionRange: NSRange?,
+                         section: DocumentStatistics?, generation: Int) {
+        guard self.generation == generation else { return }
+        if let sectionRange, let section { sectionCache[sectionRange] = section }
+        publish(selection: selection, title: title, section: section, generation: generation)
     }
 
     private func publish(selection: DocumentStatistics?, title: String?,
