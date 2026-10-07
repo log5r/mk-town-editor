@@ -627,6 +627,30 @@ final class EditorTextView: NSTextView {
         super.mouseDown(with: event)
     }
 
+    static let collaborativeReadinessNotification = Notification.Name("MKTownEditor.editorReadyForCollaborativeText")
+    private var readinessNotificationTask: Task<Void, Never>?
+
+    override var isEditable: Bool {
+        didSet {
+            if !isEditable { readinessNotificationTask?.cancel() }
+            else if !oldValue { notifyCollaborativeReadiness() }
+        }
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        notifyCollaborativeReadiness()
+    }
+
+    private func notifyCollaborativeReadiness() {
+        readinessNotificationTask?.cancel()
+        // Defer until updateNSView has finished changing the editor's state.
+        readinessNotificationTask = Task { @MainActor [weak self] in
+            guard !Task.isCancelled, let self, self.isEditable, !self.hasMarkedText() else { return }
+            NotificationCenter.default.post(name: Self.collaborativeReadinessNotification, object: self)
+        }
+    }
+
     override func didChangeText() {
         linkHover.cancel()
         super.didChangeText()
