@@ -5,6 +5,50 @@ import XCTest
 
 @MainActor
 final class MarkdownEditorModelTests: XCTestCase {
+    func testPendingAnalysisRecognizesCurrentFencedAndIndentedCodeLines() {
+        for source in ["```swift", "    code", "\tcode", "1. ```swift", "> ~~~swift"] {
+            XCTAssertTrue(MarkdownEditingContext.isInCode(at: source.utf16.count, source: source,
+                analysis: nil, allowsAnalysis: false), source)
+        }
+        XCTAssertFalse(MarkdownEditingContext.isInCode(at: 4, source: "text", analysis: nil, allowsAnalysis: false))
+    }
+
+    func testSharedAnalysisDrivesRepeatedTableValidationAndRejectsStaleDialect() {
+        let view = EditorTextView()
+        view.string = "| A |\n| --- |\n| B |"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.usesSharedAnalysis = true
+        model.sharedSnapshot = DocumentSnapshot(source: view.sourceText)
+        view.setSelectedRange(NSRange(location: 2, length: 0))
+        for _ in 0..<100 {
+            XCTAssertTrue(model.canEditTable(.insertRow))
+            XCTAssertTrue(model.canPresentTableGrid)
+            _ = model.selectedTableAlignment
+        }
+        model.markdownDialect = .basic
+        XCTAssertFalse(model.canEditTable(.insertRow))
+        XCTAssertFalse(model.moveTableCell(backwards: false))
+        model.markdownDialect = .extended
+        view.textStorage?.replaceCharacters(in: NSRange(location: 0, length: 0), with: "new\n")
+        XCTAssertFalse(model.canEditTable(.insertRow))
+    }
+
+    func testPendingAnalysisKeystrokesUseBoundedContextAndRespectCodeFences() {
+        let view = EditorTextView()
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.usesSharedAnalysis = true
+        for (source, expected) in [("- item", true), ("```\n- item", false)] {
+            view.string = source
+            view.setSelectedRange(NSRange(location: source.utf16.count, length: 0))
+            XCTAssertEqual(model.continueListOrQuote(), expected)
+        }
+        XCTAssertFalse(MarkdownEditingContext.isInCode(at: 3, source: "a\nb", analysis: nil, allowsAnalysis: false))
+        XCTAssertTrue(MarkdownEditingContext.isInCode(at: 9_000, source: String(repeating: "x\n", count: 5_000),
+            analysis: nil, allowsAnalysis: false))
+    }
+
     func testViewUpdateDefersAndCoalescesPublicationWithoutDelayingSessionState() async {
         let model = MarkdownEditorModel()
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))

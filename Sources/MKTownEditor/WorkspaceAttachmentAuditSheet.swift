@@ -23,6 +23,10 @@ struct WorkspaceAttachmentAuditSheet: View {
                 ContentUnavailableView("確認できませんでした", systemImage: "exclamationmark.triangle",
                     description: Text(errorMessage))
             } else if let result {
+                if !result.skippedDocuments.isEmpty { Text("読み込めなかった書類: \(result.skippedDocuments.count)件") }
+                if result.isTruncated || !result.skippedDocuments.isEmpty {
+                    Text("確認が一部のみのため、未使用の候補は表示しません。")
+                }
                 List {
                     Section("欠落している添付（\(result.missing.count)）") {
                         ForEach(result.missing) { entry in entryRow(entry) }
@@ -82,9 +86,13 @@ struct WorkspaceAttachmentAuditSheet: View {
     private func refresh() async {
         do {
             let snapshots = try workspaceStore.openBufferSnapshots(under: root)
-            result = try await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 try await WorkspaceAttachmentAudit.scan(root: root, openDocuments: snapshots)
-            }.value
+            }
+            let value = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
+            try Task.checkCancellation()
+            result = value
+        } catch is CancellationError {
         } catch {
             errorMessage = error.localizedDescription
         }

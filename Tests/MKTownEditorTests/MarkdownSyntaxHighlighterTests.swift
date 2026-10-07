@@ -5,6 +5,33 @@ import XCTest
 
 @MainActor
 final class MarkdownSyntaxHighlighterTests: XCTestCase {
+    func testSameSourceDialectSwitchRefreshesColorsAndRejectsPendingSnapshot() {
+        let source = "---\n    coode\n---\n\nnormal prose"
+        let location = (source as NSString).range(of: "coode").location
+        for usesSharedAnalysis in [true, false] {
+            let view = NSTextView()
+            view.string = source
+            let model = MarkdownEditorModel()
+            let coordinator = MarkdownTextEditor.Coordinator(text: .constant(source), model: model)
+            coordinator.textView = view
+            coordinator.usesSharedAnalysis = usesSharedAnalysis
+            for dialect in [MarkdownDialect.basic, .extended, .basic] {
+                model.markdownDialect = dialect
+                if usesSharedAnalysis {
+                    let previousColor = color(at: location, in: view)
+                    coordinator.refreshSyntax()
+                    XCTAssertEqual(color(at: location, in: view), previousColor,
+                                   "Pending mode analysis must preserve existing colors")
+                    coordinator.sharedSnapshot = DocumentSnapshot(source: source, dialect: dialect)
+                }
+                coordinator.refreshSyntax()
+                XCTAssertEqual(color(at: location, in: view),
+                               dialect == .basic ? .systemPurple : nil)
+                XCTAssertEqual(view.string, source)
+            }
+        }
+    }
+
     func testSharedAnalysisKeepsHeadingColorThroughoutPendingEdits() {
         let view = NSTextView()
         view.string = "# Heading\n\nbody"

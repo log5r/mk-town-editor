@@ -74,6 +74,7 @@ enum WorkspaceBatchExporter {
                 includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: [.skipsHiddenFiles])
                 .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
             for entry in entries {
+                try Task.checkCancellation()
                 let values = try entry.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
                 if values.isSymbolicLink == true { continue }
                 if excluded == entry.resolvingSymlinksInPath().standardizedFileURL.path { continue }
@@ -112,23 +113,27 @@ enum WorkspaceBatchExporter {
                 let directory = output.deletingLastPathComponent()
                 try manager.createDirectory(at: directory, withIntermediateDirectories: true)
                 let key = document.sourceURL.resolvingSymlinksInPath().standardizedFileURL
-                let data = try openBuffers[key] ?? Data(contentsOf: document.sourceURL)
-                let source = try MarkdownDocument.decode(data)
+                let buffer = openBuffers[key]
+                let (data, source) = try await DocumentWork.perform {
+                    let data = try buffer ?? Data(contentsOf: document.sourceURL)
+                    return (data, try MarkdownDocument.decode(data))
+                }
                 let temporary = directory.appendingPathComponent(".mktown-batch-\(UUID().uuidString).\(format.fileExtension)")
                 defer { try? manager.removeItem(at: temporary) }
                 switch format {
                 case .markdown:
-                    try data.write(to: temporary, options: .atomic)
+                    try await DocumentWork.perform { try data.write(to: temporary, options: .atomic) }
                 case .html:
-                    let rendered = MarkdownHTMLExporter.render(source, documentURL: document.sourceURL,
+                    let rendered = try await MarkdownHTMLExporter.renderAsync(source, documentURL: document.sourceURL,
                                                                 dialect: dialect(document.sourceURL))
-                    try Data(rendered.utf8).write(to: temporary, options: .atomic)
+                    try await DocumentWork.perform { try Data(rendered.utf8).write(to: temporary, options: .atomic) }
                 case .plainText:
-                    let rendered = MarkdownPlainTextExporter.render(source,
-                        options: MarkdownPlainTextOptions())
-                    try Data(rendered.utf8).write(to: temporary, options: .atomic)
+                    let rendered = try await DocumentWork.perform {
+                        MarkdownPlainTextExporter.render(source, options: MarkdownPlainTextOptions())
+                    }
+                    try await DocumentWork.perform { try Data(rendered.utf8).write(to: temporary, options: .atomic) }
                 case .pdf:
-                    try MarkdownPDFExporter.export(source, documentURL: document.sourceURL,
+                    try await MarkdownPDFExporter.exportAsync(source, documentURL: document.sourceURL,
                                                    to: temporary, dialect: dialect(document.sourceURL))
                 }
                 if Task<Never, Never>.isCancelled { report.cancelled = true; break }
@@ -137,6 +142,8 @@ enum WorkspaceBatchExporter {
                 }
                 try manager.moveItem(at: temporary, to: output)
                 report.exported += 1
+            } catch is CancellationError {
+                report.cancelled = true; break
             } catch {
                 report.failures.append(BatchExportFailure(source: document.relativePath,
                                                           reason: error.localizedDescription))
@@ -233,9 +240,9 @@ struct WorkspaceBatchExportSheet: View {
         let selectedFormat = format
         exportTask = Task {
             do {
-                let documents = try await Task.detached(priority: .userInitiated) {
+                let documents = try await DocumentWork.perform {
                     try WorkspaceBatchExporter.documents(in: source, excluding: destination)
-                }.value
+                }
                 let buffers = try workspaceStore.openBufferSnapshots(under: source)
                 total = documents.count
                 result = try await WorkspaceBatchExporter.export(documents: documents,

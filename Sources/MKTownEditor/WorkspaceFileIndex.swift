@@ -1,7 +1,8 @@
 import AppKit
 import Foundation
+import CoreServices
 
-struct WorkspaceNode: Identifiable, Sendable {
+struct WorkspaceNode: Identifiable, Sendable, Equatable {
     let url: URL
     let name: String
     let children: [WorkspaceNode]?
@@ -45,10 +46,10 @@ enum WorkspaceFileIndex {
         "md", "markdown", "txt", "png", "jpg", "jpeg", "gif", "webp",
         "heic", "tif", "tiff", "bmp", "pdf"
     ]
-    private static let maximumEntries = 10_000
+    static let maximumEntries = 50_000
     private static let maximumDepth = 16
 
-    static func scan(root: URL) -> WorkspaceScanResult {
+    static func scan(root: URL, maximumEntries: Int = maximumEntries) -> WorkspaceScanResult {
         var visited = 0
         var truncated = false
         let manager = FileManager.default
@@ -88,13 +89,98 @@ enum WorkspaceFileIndex {
     }
 }
 
+/// One recursive event stream per workspace. Poll only if event monitoring cannot start.
+final class WorkspaceDirectoryMonitor: @unchecked Sendable {
+    private var stream: FSEventStreamRef?
+    private var fallbackTimer: DispatchSourceTimer?
+    private let changed: @MainActor @Sendable () -> Void
+
+    init(root: URL, fallbackInterval: TimeInterval = 3,
+         createStream: (URL, inout FSEventStreamContext) -> FSEventStreamRef? = WorkspaceDirectoryMonitor.createStream,
+         startStream: (FSEventStreamRef) -> Bool = FSEventStreamStart,
+         changed: @escaping @MainActor @Sendable () -> Void) {
+        self.changed = changed
+        var context = FSEventStreamContext(version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(), retain: nil, release: nil, copyDescription: nil)
+        stream = createStream(root, &context)
+        if let stream {
+            FSEventStreamSetDispatchQueue(stream, .main)
+            if startStream(stream) { return }
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            self.stream = nil
+        }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        let interval = max(0.01, fallbackInterval)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { Task { @MainActor in changed() } }
+        fallbackTimer = timer
+        timer.resume()
+    }
+
+    static func createStream(_ root: URL, _ context: inout FSEventStreamContext) -> FSEventStreamRef? {
+        FSEventStreamCreate(nil, { _, info, _, _, _, _ in
+            guard let info else { return }
+            let monitor = Unmanaged<WorkspaceDirectoryMonitor>.fromOpaque(info).takeUnretainedValue()
+            let changed = monitor.changed
+            Task { @MainActor in changed() }
+        }, &context, [root.path] as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.5,
+            FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot))
+    }
+
+    func stop() {
+        fallbackTimer?.cancel()
+        fallbackTimer = nil
+        guard let stream else { return }
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
+        self.stream = nil
+    }
+
+    deinit { stop() }
+}
+
+/// Per-document revisions of open, possibly unsaved buffers. Kept out of `WorkspaceStore`'s
+/// published state because it changes on every keystroke: only views that read open-buffer
+/// contents (embedded documents) observe it, so typing does not re-evaluate every window that
+/// observes the workspace.
+@MainActor
+final class WorkspaceContentRevisions: ObservableObject {
+    @Published private(set) var values: [URL: Int] = [:]
+
+    /// A fixed instance for previews without a workspace; it never changes.
+    static let empty = WorkspaceContentRevisions()
+
+    func bump(_ key: URL) { values[key, default: 0] &+= 1 }
+}
+
 @MainActor
 final class WorkspaceStore: ObservableObject {
     @Published private(set) var rootURL: URL?
-    @Published private(set) var nodes: [WorkspaceNode] = []
+    @Published private(set) var nodes: [WorkspaceNode] = [] {
+        didSet { updateVisibleNodes() }
+    }
+    @Published private(set) var visibleNodes: [WorkspaceNode] = []
+    @Published private(set) var documentURLs: [URL] = []
+    @Published private(set) var documentIndex = WorkspaceDocumentIndex(documents: [])
+    @Published private(set) var fileSystemRevision = 0
+    /// Observed only by embedded document views; see `WorkspaceContentRevisions`.
+    let contentRevisions = WorkspaceContentRevisions()
+    var openBufferRevisions: [URL: Int] { contentRevisions.values }
+
+    func openBufferDidChange(for url: URL) {
+        // Registration resolves aliases once; typing must not perform filesystem I/O.
+        guard let key = openBufferKeys[url.standardizedFileURL] else { return }
+        contentRevisions.bump(key)
+    }
     @Published private(set) var isTruncated = false
     @Published private(set) var errorMessage: String?
-    @Published private(set) var viewSettings = WorkspaceViewSettings()
+    @Published private(set) var viewSettings = WorkspaceViewSettings() {
+        didSet { if viewSettings != oldValue { updateVisibleNodes() } }
+    }
+    private var displayGeneration = 0
+    private var displayTask: Task<Void, Never>?
     @Published private(set) var lockedDocumentPaths: Set<String> = []
 
     private let defaults: UserDefaults
@@ -102,9 +188,12 @@ final class WorkspaceStore: ObservableObject {
     private var hasSecurityScope = false
     private var generation = 0
     private var isRefreshing = false
+    private var refreshPending = false
+    private var directoryMonitor: WorkspaceDirectoryMonitor?
     private var lastRefresh = Date.distantPast
     private var openDocuments: [URL: Int] = [:]
     private var openBuffers: [URL: [UUID: WorkspaceOpenBuffer]] = [:]
+    private var openBufferKeys: [URL: URL] = [:]
     private var documentLocks: [UUID: Set<String>] = [:]
 
     var openDocumentURLs: [URL] { Array(openDocuments.keys) }
@@ -112,20 +201,27 @@ final class WorkspaceStore: ObservableObject {
     func registerOpenBuffer(id: UUID, url: URL, encodedData: @escaping () -> Data,
                             updateText: @escaping (String) -> Void) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
+        openBufferKeys[url.standardizedFileURL] = key
         openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(encodedData: encodedData,
                                                                   updateText: updateText)
+        openBufferDidChange(for: url)
     }
 
     func unregisterOpenBuffer(id: UUID, url: URL) {
-        let key = url.resolvingSymlinksInPath().standardizedFileURL
-        openBuffers[key]?.removeValue(forKey: id)
-        if openBuffers[key]?.isEmpty == true { openBuffers.removeValue(forKey: key) }
+        let key = openBufferKeys[url.standardizedFileURL] ?? url.resolvingSymlinksInPath().standardizedFileURL
+        guard openBuffers[key]?.removeValue(forKey: id) != nil else { return }
+        openBufferDidChange(for: url)
+        if openBuffers[key]?.isEmpty == true {
+            openBuffers.removeValue(forKey: key)
+            openBufferKeys = openBufferKeys.filter { $0.value != key }
+        }
     }
 
-    func openBufferSnapshots(under root: URL? = nil) throws -> [URL: Data] {
+    func openBufferSnapshots(under root: URL? = nil, including requested: Set<URL>? = nil) throws -> [URL: Data] {
         var result: [URL: Data] = [:]
         let rootPath = root?.resolvingSymlinksInPath().standardizedFileURL.path
         for (url, buffers) in openBuffers {
+            guard requested?.contains(url) != false else { continue }
             if let rootPath {
                 let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
                 guard url.path.hasPrefix(prefix) else { continue }
@@ -238,6 +334,9 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func setRoot(_ url: URL) {
+        let url = url.resolvingSymlinksInPath().standardizedFileURL
+        directoryMonitor?.stop()
+        directoryMonitor = nil
         if hasSecurityScope { rootURL?.stopAccessingSecurityScopedResource() }
         hasSecurityScope = url.startAccessingSecurityScopedResource()
         rootURL = url
@@ -248,17 +347,50 @@ final class WorkspaceStore: ObservableObject {
             viewSettings = WorkspaceViewSettings()
         }
         nodes = []
+        // Published caches belong to the previous root until their worker finishes.
+        // Clear them synchronously so the new workspace cannot expose old files.
+        visibleNodes = []
+        documentIndex = WorkspaceDocumentIndex(documents: [])
+        documentURLs = []
         generation += 1
         isRefreshing = false
         lastRefresh = .distantPast
+        refreshPending = false
+        fileSystemRevision &+= 1
+        directoryMonitor = WorkspaceDirectoryMonitor(root: url) { [weak self] in
+            self?.fileSystemRevision &+= 1
+            self?.refresh(force: true)
+        }
         refresh()
     }
 
     func clearError() { errorMessage = nil }
 
-    var visibleNodes: [WorkspaceNode] {
-        guard let rootURL else { return [] }
-        return viewSettings.display(nodes, root: rootURL)
+    private func updateVisibleNodes() {
+        func documents(in nodes: [WorkspaceNode]) -> [URL] {
+            nodes.flatMap { node in
+                node.children.map { documents(in: $0) } ?? (node.isEditableDocument ? [node.url] : [])
+            }
+        }
+        let urls = documents(in: nodes)
+        displayGeneration += 1
+        let requested = displayGeneration
+        displayTask?.cancel()
+        guard let rootURL else { return }
+        let nodes = nodes
+        let settings = viewSettings
+        let existingIndex = documentURLs == urls ? documentIndex : nil
+        displayTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                (settings.display(nodes, root: rootURL), existingIndex ?? WorkspaceDocumentIndex(documents: urls))
+            }.value
+            guard let self, !Task.isCancelled, self.displayGeneration == requested else { return }
+            if self.documentURLs != urls {
+                self.documentIndex = result.1
+                self.documentURLs = urls
+            }
+            if self.visibleNodes != result.0 { self.visibleNodes = result.0 }
+        }
     }
 
     var availableExtensions: [String] {
@@ -308,8 +440,12 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func refresh(force: Bool = false) {
-        guard let rootURL, !isRefreshing,
-              force || Date().timeIntervalSince(lastRefresh) >= 2 else { return }
+        guard let rootURL else { return }
+        if isRefreshing {
+            if force { refreshPending = true }
+            return
+        }
+        guard force || Date().timeIntervalSince(lastRefresh) >= 2 else { return }
         isRefreshing = true
         lastRefresh = Date()
         let currentGeneration = generation
@@ -318,9 +454,13 @@ final class WorkspaceStore: ObservableObject {
                 WorkspaceFileIndex.scan(root: rootURL)
             }.value
             guard currentGeneration == generation else { return }
-            nodes = result.nodes
-            isTruncated = result.isTruncated
+            if nodes != result.nodes { nodes = result.nodes }
+            if isTruncated != result.isTruncated { isTruncated = result.isTruncated }
             isRefreshing = false
+            if refreshPending {
+                refreshPending = false
+                refresh(force: true)
+            }
         }
     }
 }

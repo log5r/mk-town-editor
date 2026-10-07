@@ -17,6 +17,8 @@ struct PublicationSheet: View {
     @State private var result: URL?
     @State private var succeeded = false
     @State private var sending = false
+    @State private var preparing = false
+    @State private var prepareTask: Task<Void, Never>?
     @State private var sendTask: Task<Void, Never>?
 
     private var configuration: PublicationConfiguration {
@@ -61,7 +63,8 @@ struct PublicationSheet: View {
             .frame(height: 310)
             HStack {
                 Button("送信内容を確認") { prepare() }
-                    .disabled(sending)
+                    .disabled(sending || preparing)
+                if preparing { ProgressView(); Button("中止") { prepareTask?.cancel() } }
                 if let prepared {
                     Text(prepared.destination.absoluteString)
                         .font(.caption).textSelection(.enabled).lineLimit(2)
@@ -101,18 +104,26 @@ struct PublicationSheet: View {
         .onChange(of: title) { _, _ in prepared = nil }
         .onChange(of: slug) { _, _ in prepared = nil }
         .onChange(of: credential) { _, _ in prepared = nil }
-        .onDisappear { sendTask?.cancel() }
+        .onDisappear { sendTask?.cancel(); prepareTask?.cancel() }
     }
 
     private func prepare() {
-        do {
-            prepared = try PublicationPlan.make(configuration, markdown: source,
-                                                documentURL: documentURL, credential: credential)
-            preparedSource = source
-            error = nil
-            result = nil
-            succeeded = false
-        } catch { self.error = error.localizedDescription; prepared = nil }
+        prepareTask?.cancel()
+        let config = configuration, text = source, secret = credential
+        preparing = true
+        prepared = nil
+        prepareTask = Task {
+            defer { preparing = false; prepareTask = nil }
+            do {
+                let plan = try await PublicationPlan.makeAsync(config, markdown: text,
+                    documentURL: documentURL, credential: secret)
+                guard config == configuration, source == text, secret == credential else { return }
+                prepared = plan
+                preparedSource = text
+                error = nil; result = nil; succeeded = false
+            } catch is CancellationError { }
+            catch { self.error = error.localizedDescription }
+        }
     }
 
     private func publish() {

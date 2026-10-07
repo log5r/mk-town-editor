@@ -11,8 +11,10 @@ struct WorkspaceSearchSheet: View {
     @State private var results: [WorkspaceSearchResult] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
-    @State private var searchTask: Task<[WorkspaceSearchResult], Error>?
+    @State private var searchTask: Task<WorkspaceSearchReport, Error>?
     @State private var searchGeneration = 0
+    @State private var skippedCount = 0
+    @State private var isTruncated = false
 
     let onOpen: (WorkspaceSearchResult) -> Void
 
@@ -38,6 +40,8 @@ struct WorkspaceSearchSheet: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+            if skippedCount > 0 { Text("読み込めなかった書類: \(skippedCount)件") }
+            if isTruncated { Text("確認結果は一部のみです。対象を絞って再実行してください。") }
             List(results) { result in
                 Button {
                     dismiss()
@@ -85,14 +89,16 @@ struct WorkspaceSearchSheet: View {
             includePatterns: patterns(in: include).isEmpty ? ["*"] : patterns(in: include),
             excludePatterns: patterns(in: exclude), scope: scope)
         let worker = Task.detached(priority: .userInitiated) {
-            try WorkspaceSearch.search(root: root, options: options)
+            try WorkspaceSearch.report(root: root, options: options)
         }
         searchTask = worker
         Task {
             do {
                 let found = try await worker.value
                 guard generation == searchGeneration else { return }
-                results = found
+                results = found.results
+                skippedCount = found.skippedDocuments.count
+                isTruncated = found.isTruncated
             } catch is CancellationError {
                 // The user cancelled this search.
             } catch {

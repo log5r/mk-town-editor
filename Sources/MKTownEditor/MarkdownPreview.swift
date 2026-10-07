@@ -7,6 +7,11 @@ struct PreviewNavigationTarget: Equatable {
     let sequence: Int
 }
 
+private struct PreviewBlockRow: Identifiable {
+    let block: MarkdownBlock
+    let id: String
+}
+
 struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
@@ -23,7 +28,10 @@ struct MarkdownPreview: View {
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var workspaceDocumentURLs: [URL] = []
-    var loadWorkspaceOpenBuffers: (() throws -> [URL: Data])?
+    var workspaceContentRevisions: WorkspaceContentRevisions = .empty
+    var workspaceDiskRevision: Int?
+    var workspaceIndex: WorkspaceDocumentIndex?
+    var loadWorkspaceOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
     var onOpenEmbeddedDocument: ((URL) -> Void)?
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
@@ -64,6 +72,7 @@ struct MarkdownPreview: View {
                 theme != .system || bodyWidth != 900 ||
                 (showsFrontMatter && analysis.frontMatter != nil) {
                 let layout = PreviewLayoutIndex(analysis)
+                let presentationIDs = snapshot?.blockPresentationIDs ?? PreviewBlockIdentity.identifiers(in: analysis)
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
@@ -80,7 +89,10 @@ struct MarkdownPreview: View {
                                 .cornerRadius(8)
                                 .padding(.bottom, 16)
                             }
-                            ForEach(layout.visibleBlocks, id: \.id) { block in
+                            ForEach(layout.visibleBlocks.map { block in
+                                PreviewBlockRow(block: block, id: presentationIDs[block.id] ?? String(block.id))
+                            }) { row in
+                                let block = row.block
                                 HStack(alignment: .top, spacing: 8) {
                                     ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
                                         Rectangle()
@@ -108,6 +120,9 @@ struct MarkdownPreview: View {
                                         WorkspaceEmbeddedDocumentView(reference: reference,
                                             documentURL: documentURL,
                                             documents: workspaceDocumentURLs,
+                                            contentRevisions: workspaceContentRevisions,
+                                            diskRevision: workspaceDiskRevision,
+                                            documentIndex: workspaceIndex,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
@@ -161,7 +176,7 @@ struct MarkdownPreview: View {
                                 .background(searchRange.map {
                                     NSLocationInRange($0.location, block.sourceRange)
                                 } == true ? Color.accentColor.opacity(0.12) : Color.clear)
-                                .id(block.id)
+                                .id(row.id)
                                 .background(GeometryReader { geometry in
                                     Color.clear.preference(key: PreviewBlockOriginsKey.self,
                                         value: [block.id: geometry.frame(in: .named("markdownPreview")).minY])
@@ -188,8 +203,8 @@ struct MarkdownPreview: View {
                                             if let block = layout.visibleBlocks.first(where: {
                                                 NSLocationInRange(note.firstReferenceRange.location,
                                                                   $0.sourceRange)
-                                            }) {
-                                                proxy.scrollTo(block.id, anchor: .center)
+                                            }), let id = presentationIDs[block.id] {
+                                                proxy.scrollTo(id, anchor: .center)
                                             }
                                         }
                                         .labelStyle(.iconOnly)
@@ -215,10 +230,10 @@ struct MarkdownPreview: View {
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
                     .onAppear {
-                        if let navigationTarget { proxy.scrollTo(navigationTarget.blockID, anchor: .top) }
+                        if let navigationTarget, let id = presentationIDs[navigationTarget.blockID] { proxy.scrollTo(id, anchor: .top) }
                     }
                     .onChange(of: navigationTarget) { _, target in
-                        if let target { proxy.scrollTo(target.blockID, anchor: .top) }
+                        if let target, let id = presentationIDs[target.blockID] { proxy.scrollTo(id, anchor: .top) }
                     }
                     .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
                         if let blockID = PreviewScrollSync.topBlockID(from: origins) {
@@ -242,8 +257,8 @@ struct MarkdownPreview: View {
                         if url.scheme == "mktown-crossref",
                            let target = analysis.crossReferences.targets.first(where: {
                                $0.key == url.lastPathComponent
-                           }) {
-                            proxy.scrollTo(target.blockID, anchor: .center)
+                           }), let id = presentationIDs[target.blockID] {
+                            proxy.scrollTo(id, anchor: .center)
                             return .handled
                         }
                         if let fragment = MarkdownHeadingIndex.localFragment(in: url),
@@ -852,12 +867,12 @@ private struct DetachedPreviewContent: View {
                                 markdownDialect: dialect),
                             snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
-                            workspaceDocumentURLs: workspaceStore.rootURL.map { root in
-                                WorkspaceQuickOpen.search(nodes: workspaceStore.nodes,
-                                    root: root, query: "", limit: Int.max).map(\.url)
-                            } ?? [],
+                            workspaceDocumentURLs: workspaceStore.documentURLs,
+                            workspaceContentRevisions: workspaceStore.contentRevisions,
+                            workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
+                            workspaceIndex: workspaceStore.documentIndex,
                             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
-                                { try workspaceStore.openBufferSnapshots(under: root) }
+                                { requested in try workspaceStore.openBufferSnapshots(under: root, including: requested) }
                             },
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),

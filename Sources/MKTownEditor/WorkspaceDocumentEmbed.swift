@@ -1,6 +1,6 @@
 import Foundation
 
-struct WorkspaceEmbedReference: Equatable, Sendable {
+struct WorkspaceEmbedReference: Hashable, Sendable {
     let target: String
     let section: String?
 }
@@ -35,8 +35,8 @@ enum WorkspaceDocumentEmbed {
         return WorkspaceEmbedReference(target: target, section: section)
     }
 
-    static func links(in source: String) -> [WorkspaceEmbedLink] {
-        let analysis = MarkdownAnalysis(source)
+    static func links(in source: String, analysis: MarkdownAnalysis? = nil) -> [WorkspaceEmbedLink] {
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
             + (analysis.frontMatter.map { [$0.sourceRange] } ?? [])
         let text = source as NSString
@@ -61,18 +61,23 @@ enum WorkspaceDocumentEmbed {
 
     static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,
                        documents: [URL], load: (URL) -> String?) -> WorkspaceEmbedExpansion {
-        expand(reference, from: documentURL, documents: documents, load: load,
-            ancestors: [documentURL.resolvingSymlinksInPath().standardizedFileURL], depth: 0)
+        expand(reference, from: documentURL, index: WorkspaceDocumentIndex(documents: documents), load: load)
+    }
+
+    static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,
+                       index: WorkspaceDocumentIndex, load: (URL) -> String?) -> WorkspaceEmbedExpansion {
+        expand(reference, from: documentURL, index: index, load: load,
+            ancestors: [index.canonicalURL(documentURL)], depth: 0)
     }
 
     private static func expand(_ reference: WorkspaceEmbedReference, from documentURL: URL,
-                               documents: [URL], load: (URL) -> String?,
+                               index: WorkspaceDocumentIndex, load: (URL) -> String?,
                                ancestors: Set<URL>, depth: Int) -> WorkspaceEmbedExpansion {
         guard depth < maximumDepth else {
             return WorkspaceEmbedExpansion(text: "", issues: [String(localized: "埋め込みの展開深度を超えました")])
         }
         guard let target = WorkspaceWikiLinks.resolve(reference.target, from: documentURL,
-            documents: documents) else {
+            index: index) else {
             return WorkspaceEmbedExpansion(text: "", issues: [String(localized: "埋め込み先が見つかりません: \(reference.target)")])
         }
         guard !ancestors.contains(target) else {
@@ -105,11 +110,11 @@ enum WorkspaceDocumentEmbed {
             let range = NSRange(location: start, length: end - start)
             let line = text.substring(with: range)
             guard let child = Self.reference(in: line) else { continue }
-            let expanded = expand(child, from: target, documents: documents, load: load,
+            let expanded = expand(child, from: target, index: index, load: load,
                 ancestors: ancestors.union([target]), depth: depth + 1)
             issues += expanded.issues
             let childText = WorkspaceWikiLinks.resolve(child.target, from: target,
-                documents: documents).map {
+                index: index).map {
                     relocateLocalLinks(in: expanded.text, from: $0, to: target)
                 } ?? expanded.text
             replacements.append((range, childText + (line.hasSuffix("\n") ? "\n" : "")))

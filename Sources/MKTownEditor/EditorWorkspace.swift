@@ -35,7 +35,10 @@ struct EditorWorkspace: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
+    @State private var positionSaveTask: Task<Void, Never>?
+    @State private var cloudMonitor: WorkspaceDirectoryMonitor?
     @StateObject private var analysisStore = DocumentAnalysisStore()
+    @StateObject private var statusStore = DocumentStatusStore()
     @State private var previewTaskUndoTarget = PreviewTaskUndoTarget()
     @StateObject private var detachedPreview = DetachedPreviewWindowManager()
     @StateObject private var slideWindow = MarkdownSlideWindowManager()
@@ -82,7 +85,8 @@ struct EditorWorkspace: View {
     @State private var showingRegexSearch = false
     @State private var htmlExportError: String?
     @State private var pdfExportError: String?
-    @State private var isExportingPDF = false
+    @State private var documentOperation: Task<Void, Never>?
+    @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
     @State private var printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
     @State private var printSettings = MarkdownPrintSettings()
@@ -129,7 +133,7 @@ struct EditorWorkspace: View {
     @State private var previewSearchRange: NSRange?
     @State private var showingStatistics = false
     @State private var writingGoalInput = ""
-    @State private var unsavedSessionBaseline: Int?
+    @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var encodingImportError: String?
@@ -174,23 +178,17 @@ struct EditorWorkspace: View {
     }
 
     private var statistics: DocumentStatistics {
-        if let snapshot = analysisStore.snapshot, snapshot.source == document.text {
-            return snapshot.statistics
-        }
-        return DocumentStatistics(text: document.text)
+        analysisStore.snapshot?.statistics ?? .empty
     }
 
-    private var selectionStatistics: DocumentStatistics? {
-        DocumentStatistics.selection(in: document.text, ranges: editorModel.selectedRanges)
-    }
+    private var selectionStatistics: DocumentStatistics? { statusStore.selection }
 
     private var wordCountMode: WordCountMode {
         settingsStore.app.wordCountMode ?? .whitespace
     }
 
     private var displayedWordCount: Int {
-        if wordCountMode == .whitespace { return statistics.words }
-        return wordCountMode.count(in: document.text)
+        analysisStore.snapshot?.wordCounts[wordCountMode] ?? 0
     }
 
     private var wordCountBinding: Binding<WordCountMode> {
@@ -232,17 +230,7 @@ struct EditorWorkspace: View {
                 })
     }
 
-    private var sectionStatistics: (title: String, value: DocumentStatistics)? {
-        guard let snapshot = currentAnalysisSnapshot else { return nil }
-        let entries = MarkdownOutline.entries(in: snapshot.analysis)
-        guard let heading = MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
-                                                           in: entries),
-              let range = DocumentStatistics.sectionRange(
-                at: editorModel.selectedRange.location, in: snapshot.analysis,
-                documentLength: (document.text as NSString).length) else { return nil }
-        let section = (document.text as NSString).substring(with: range)
-        return (heading.title, DocumentStatistics(text: section))
-    }
+    private var sectionStatistics: (title: String, value: DocumentStatistics)? { statusStore.section }
 
     private var documentContext: DocumentContext {
         DocumentContext(fileURL: fileURL,
@@ -435,6 +423,17 @@ struct EditorWorkspace: View {
 
     private var sheetView: some View {
         navigationView
+            .overlay {
+                if documentOperationRunning {
+                    VStack(spacing: 12) {
+                        ProgressView("処理中…")
+                        Button("中止") { documentOperation?.cancel() }
+                    }
+                    .padding(24).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityElement(children: .contain)
+                }
+            }
+            .onDisappear { documentOperation?.cancel() }
             // Use one system toolbar background across both editor panes.
             .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
             .toolbarBackground(.visible, for: .windowToolbar)
@@ -1057,13 +1056,14 @@ struct EditorWorkspace: View {
                                  dialect: settingsStore.markdownDialect(for: fileURL))
             if let fileURL {
                 settingsStore.ensureWritingSession(for: fileURL,
-                    initialCharacters: statistics.characters)
+                    initialText: document.text)
             } else if unsavedSessionBaseline == nil {
-                unsavedSessionBaseline = statistics.characters
+                unsavedSessionBaseline = WritingSessionBaseline(text: document.text)
             }
             receivePendingDocumentLink()
             receivePendingSearchPosition()
             workspaceStore.refresh()
+            monitorCloudDocument(fileURL)
             refreshCloudStatus()
             if let fileURL {
                 settingsStore.migrateLegacyMode(legacyMode, for: fileURL)
@@ -1086,18 +1086,33 @@ struct EditorWorkspace: View {
                 workspaceViewActive = false
             }
         }
-        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
-            workspaceStore.refresh()
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshCloudStatus()
-            if let pendingCollaborativeText {
-                applyCollaborativeText(pendingCollaborativeText)
-            }
-            savePosition(for: fileURL)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSText.didChangeNotification)) { _ in
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: EditorTextView.collaborativeReadinessNotification)) { notification in
+            guard let textView = notification.object as? EditorTextView,
+                  textView === editorModel.textView else { return }
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: workspaceStore.isDocumentLocked(fileURL)) { _, isLocked in
+            if !isLocked, let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: editorModel.hasActiveEditor) { _, _ in
+            if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
+        }
+        .onChange(of: editorModel.viewport) { _, _ in schedulePositionSave() }
         .onChange(of: fileURL) { oldURL, newURL in
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
+            monitorCloudDocument(newURL)
             refreshCloudStatus()
             detachedPreview.updateDocumentURL(newURL)
+            // A pending save captured the old URL; it would recreate state under that path
+            // after moveDocumentState below. Save the latest position now instead.
+            positionSaveTask?.cancel()
+            positionSaveTask = nil
             savePosition(for: oldURL)
             if workspaceViewActive {
                 if let oldURL {
@@ -1122,7 +1137,7 @@ struct EditorWorkspace: View {
                     settingsStore.setMode(unsavedMode, for: newURL)
                 }
                 settingsStore.ensureWritingSession(for: newURL,
-                    initialCharacters: unsavedSessionBaseline ?? statistics.characters)
+                    baseline: unsavedSessionBaseline ?? WritingSessionBaseline(text: document.text))
             case let (oldURL?, nil):
                 unsavedMode = settingsStore.mode(for: oldURL)
             case (nil, nil):
@@ -1133,6 +1148,7 @@ struct EditorWorkspace: View {
             receivePendingWorkspaceTask()
         }
         .onChange(of: document.text) { _, newText in
+            if let fileURL { workspaceStore.openBufferDidChange(for: fileURL) }
             collaboration.localChange(newText)
             previewUpdates.sourceChanged()
             analysisStore.update(source: newText,
@@ -1158,8 +1174,15 @@ struct EditorWorkspace: View {
             previewUpdates.resume()
         }
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
+        .onChange(of: editorModel.selectedRanges) { _, _ in
+            schedulePositionSave()
+            statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
+        }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
+        // savePosition also records the sidebar; it used to be saved by a 3-second timer.
+        .onChange(of: sidebarTab) { _, _ in schedulePositionSave() }
+        .onChange(of: sidebarVisibility) { _, _ in schedulePositionSave() }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
             receiveCompletedAnalysis()
         }
@@ -1183,6 +1206,9 @@ struct EditorWorkspace: View {
             applyNamedLayoutState(layout)
         }
         .onDisappear {
+            positionSaveTask?.cancel()
+            cloudMonitor?.stop()
+            cloudMonitor = nil
             analysisStore.cancel()
         }
     }
@@ -1264,13 +1290,12 @@ struct EditorWorkspace: View {
             navigationTarget: previewUpdates.state.isPaused && !isCurrent ? nil : previewNavigationTarget,
             searchRange: isCurrent ? previewSearchRange : nil,
             onOpenHeading: headingAction, onOpenDocument: openLinkedDocument,
-            workspaceDocumentURLs: displayedSource.contains("![[")
-                ? workspaceStore.rootURL.map { root in
-                    WorkspaceQuickOpen.search(nodes: workspaceStore.nodes, root: root,
-                        query: "", limit: Int.max).map(\.url)
-                } ?? [] : [],
+            workspaceDocumentURLs: displayedSource.contains("![[") ? workspaceStore.documentURLs : [],
+            workspaceContentRevisions: workspaceStore.contentRevisions,
+            workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
+            workspaceIndex: workspaceStore.documentIndex,
             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in
-                { try workspaceStore.openBufferSnapshots(under: root) }
+                { requested in try workspaceStore.openBufferSnapshots(under: root, including: requested) }
             },
             onOpenEmbeddedDocument: { url in
                 Task {
@@ -1807,6 +1832,7 @@ struct EditorWorkspace: View {
 
     private func receiveCompletedAnalysis() {
         guard currentAnalysisSnapshot != nil else { return }
+        statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
         receivePendingDocumentLink()
         receivePendingWorkspaceTask()
         if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
@@ -1975,26 +2001,41 @@ struct EditorWorkspace: View {
         exportFormat = .html
     }
 
+    private func startDocumentOperation(_ action: @escaping @MainActor () async throws -> Void,
+                                        onError: @escaping @MainActor (String) -> Void) {
+        guard DocumentOperationGate.admit(running: documentOperationRunning, onError: onError) else { return }
+        documentOperationRunning = true
+        documentOperation = Task { @MainActor in
+            defer { documentOperationRunning = false; documentOperation = nil }
+            do { try await action() }
+            catch is CancellationError { }
+            catch { onError(error.localizedDescription) }
+        }
+    }
+
+    private func beginSavePanel(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: completion) }
+        else { panel.begin(completionHandler: completion) }
+    }
+
     private func saveHTML(preset: MarkdownExportPreset) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".html"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            let html = MarkdownHTMLExporter.render(document.text, documentURL: fileURL,
-                                                   preset: preset,
-                                                   dialect: settingsStore.markdownDialect(for: fileURL))
-            do {
-                try html.write(to: destination, atomically: true, encoding: .utf8)
-            } catch {
-                htmlExportError = error.localizedDescription
-            }
+            let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset, dialect: dialect)
+                try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
+            } onError: { htmlExportError = $0 }
         }
     }
 
     private func exportPDF() {
-        guard !isExportingPDF else { return }
+        guard DocumentOperationGate.admit(running: documentOperationRunning,
+                                          onError: { pdfExportError = $0 }) else { return }
         exportFormat = .pdf
     }
 
@@ -2002,6 +2043,21 @@ struct EditorWorkspace: View {
         let deck = MarkdownSlideDeck(document.text, dialect: documentContext.markdownDialect)
         slideWindow.show(deck: deck, context: documentContext) {
             saveSlidePDF(deck)
+        }
+    }
+
+    private func monitorCloudDocument(_ url: URL?) {
+        cloudMonitor?.stop()
+        cloudMonitor = url.map { url in
+            WorkspaceDirectoryMonitor(root: url.deletingLastPathComponent()) { refreshCloudStatus() }
+        }
+    }
+
+    private func schedulePositionSave() {
+        positionSaveTask?.cancel()
+        positionSaveTask = Task { @MainActor in
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            savePosition(for: fileURL)
         }
     }
 
@@ -2013,6 +2069,10 @@ struct EditorWorkspace: View {
     private func applyCollaborativeText(_ sharedText: String) {
         guard collaboration.isActive else { pendingCollaborativeText = nil; return }
         guard document.text != sharedText else { pendingCollaborativeText = nil; return }
+        guard !workspaceStore.isDocumentLocked(fileURL) else {
+            pendingCollaborativeText = sharedText
+            return
+        }
         if editorModel.hasActiveEditor {
             guard editorModel.applyCollaborativeText(sharedText,
                 expectedSource: document.text) else {
@@ -2030,41 +2090,28 @@ struct EditorWorkspace: View {
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "slides") + "-slides.pdf"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            do {
-                try MarkdownSlidePDFExporter.export(deck, documentURL: fileURL, to: destination,
-                    dialect: documentContext.markdownDialect)
-            } catch {
-                pdfExportError = error.localizedDescription
-            }
+            let url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
+            } onError: { pdfExportError = $0 }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
-        guard !isExportingPDF else { return }
-        isExportingPDF = true
+        guard DocumentOperationGate.admit(running: documentOperationRunning,
+                                          onError: { pdfExportError = $0 }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".pdf"
-        panel.begin { response in
-            guard response == .OK, let destination = panel.url else {
-                isExportingPDF = false
-                return
-            }
-            let source = document.text
-            let sourceURL = fileURL
-            Task { @MainActor in
-                defer { isExportingPDF = false }
-                do {
-                    try MarkdownPDFExporter.export(source, documentURL: sourceURL, to: destination,
-                                                   preset: preset,
-                                                   dialect: settingsStore.markdownDialect(for: sourceURL))
-                } catch {
-                    pdfExportError = error.localizedDescription
-                }
-            }
+        beginSavePanel(panel) { response in
+            guard response == .OK, let destination = panel.url else { return }
+            let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+            startDocumentOperation {
+                try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
+            } onError: { pdfExportError = $0 }
         }
     }
 
@@ -2073,36 +2120,32 @@ struct EditorWorkspace: View {
     }
 
     private func printDocument() {
-        do {
-            let info = printInfo.copy() as! NSPrintInfo
+        let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
+        let info = printInfo.copy() as! NSPrintInfo
+        let title = url?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
+        startDocumentOperation {
             try printSettings.apply(to: info)
-            let title = fileURL?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
-            let view = try MarkdownPDFExporter.printableView(document.text, documentURL: fileURL,
-                                                             printInfo: info, title: title,
-                                                             header: printSettings.header,
-                                                             footer: printSettings.footer,
-                                                             dialect: settingsStore.markdownDialect(for: fileURL))
+            let view = try await MarkdownPDFExporter.printableViewAsync(source, documentURL: url,
+                printInfo: info, title: title, header: printSettings.header, footer: printSettings.footer, dialect: dialect)
+            try Task.checkCancellation()
             let operation = NSPrintOperation(view: view, printInfo: info)
             operation.jobTitle = title
             operation.showsPrintPanel = true
-            _ = operation.run()
-        } catch {
-            printError = error.localizedDescription
-        }
+            _ = try await MarkdownPDFExporter.run(operation)
+        } onError: { printError = $0 }
     }
 
     private func copyRichSelection() {
         guard let textView = editorModel.textView else { return }
-        let source = textView.string as NSString
+        let source = textView.editorSource as NSString
         let selection = textView.selectedRange()
         guard selection.length > 0, NSMaxRange(selection) <= source.length else { return }
-        do {
-            try MarkdownRichClipboard.copy(source.substring(with: selection), documentURL: fileURL,
-                                            to: .general,
-                                            dialect: settingsStore.markdownDialect(for: fileURL))
-        } catch {
-            richCopyError = error.localizedDescription
-        }
+        let selected = source.substring(with: selection), url = fileURL, dialect = documentContext.markdownDialect
+        let changeCount = NSPasteboard.general.changeCount
+        startDocumentOperation {
+            try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
+                                                      startingChangeCount: changeCount)
+        } onError: { richCopyError = $0 }
     }
 
     private func exportPlainText() {
@@ -2110,14 +2153,15 @@ struct EditorWorkspace: View {
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = (fileURL?.deletingPathExtension().lastPathComponent ?? "document") + ".txt"
-        panel.begin { response in
+        beginSavePanel(panel) { response in
             guard response == .OK, let destination = panel.url else { return }
-            let text = MarkdownPlainTextExporter.render(document.text, options: plainOptions)
-            do {
-                try text.write(to: destination, atomically: true, encoding: .utf8)
-            } catch {
-                plainExportError = error.localizedDescription
-            }
+            let source = document.text, options = plainOptions
+            startDocumentOperation {
+                let text = try await DocumentWork.perform {
+                    MarkdownPlainTextExporter.render(source, options: options)
+                }
+                try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
+            } onError: { plainExportError = $0 }
         }
     }
 
@@ -2396,9 +2440,13 @@ struct EditorWorkspace: View {
     }
 
     private func estimatedTimeLabel(spoken: Bool) -> String {
-        guard let minutes = readingEstimate.estimatedMinutes(for: document.text, spoken: spoken) else {
+        let amount = readingEstimate.language == .japanese
+            ? statistics.nonWhitespaceCharacters : (analysisStore.snapshot?.wordCounts[.english] ?? 0)
+        let rate = max(1, spoken ? readingEstimate.speakingRate : readingEstimate.readingRate)
+        guard amount > 0 else {
             return "—"
         }
+        let minutes = (amount + rate - 1) / rate
         return String(localized: "約\(minutes) 分")
     }
 
@@ -2432,14 +2480,14 @@ struct EditorWorkspace: View {
                 Text("セッションの増減: \(change >= 0 ? "+" : "")\(change) 文字")
                 Button("セッションをここから開始") {
                     settingsStore.resetWritingSession(for: fileURL,
-                        currentCharacters: statistics.characters)
+                        baseline: WritingSessionBaseline(text: document.text))
                 }
                 .font(.caption)
             } else {
                 Text("目標を保存するには書類を保存してください。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                let change = statistics.characters - (unsavedSessionBaseline ?? statistics.characters)
+                let change = statistics.characters - (unsavedSessionBaseline?.characters ?? statistics.characters)
                 Text("このウインドウの増減: \(change >= 0 ? "+" : "")\(change) 文字")
             }
         }
@@ -2994,5 +3042,21 @@ private struct LinkEditorSheet: View {
             }
             isAttaching = false
         }
+    }
+}
+
+/// One export, print or rich copy runs at a time per window. A request made while another is
+/// running is reported instead of being dropped silently, so the user never assumes a file was
+/// written or the clipboard was replaced when nothing happened.
+enum DocumentOperationGate {
+    static var busyMessage: String {
+        String(localized: "別の書き出しまたはコピーを実行中です。完了してから、もう一度お試しください。")
+    }
+
+    @MainActor
+    static func admit(running: Bool, onError: (String) -> Void) -> Bool {
+        guard running else { return true }
+        onError(busyMessage)
+        return false
     }
 }

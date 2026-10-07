@@ -7,12 +7,37 @@ struct WorkspaceWikiLink: Equatable {
     let alias: String?
 }
 
+/// Canonicalize workspace documents once per scan, then resolve by path/title.
+struct WorkspaceDocumentIndex: Sendable {
+    let canonical: Set<URL>
+    let byTitle: [String: [URL]]
+    private let canonicalByPath: [String: URL]
+
+    init(documents: [URL], canonicalize: (URL) -> URL = { $0.resolvingSymlinksInPath().standardizedFileURL }) {
+        var paths: [String: URL] = [:]
+        var urls = Set<URL>()
+        for document in documents {
+            let url = canonicalize(document)
+            paths[document.standardizedFileURL.path] = url
+            paths[url.path] = url
+            urls.insert(url)
+        }
+        canonical = urls
+        canonicalByPath = paths
+        byTitle = Dictionary(grouping: urls, by: { $0.deletingPathExtension().lastPathComponent })
+    }
+
+    func canonicalURL(_ url: URL) -> URL {
+        canonicalByPath[url.standardizedFileURL.path] ?? url.resolvingSymlinksInPath().standardizedFileURL
+    }
+}
+
 enum WorkspaceWikiLinks {
     private static let pattern = try! NSRegularExpression(pattern: #"\[\[([^\]\n|]+)(?:\|([^\]\n]+))?\]\]"#)
 
-    static func links(in source: String) -> [WorkspaceWikiLink] {
+    static func links(in source: String, analysis: MarkdownAnalysis? = nil) -> [WorkspaceWikiLink] {
         let text = source as NSString
-        let analysis = MarkdownAnalysis(source)
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let excluded = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
             + MarkdownInlineSyntax.codeSpanRanges(in: source)
             + (analysis.frontMatter.map { [$0.sourceRange] } ?? [])
@@ -41,24 +66,28 @@ enum WorkspaceWikiLinks {
 
     /// A path is relative to the containing document. A bare title must be unique in the workspace.
     static func resolve(_ target: String, from documentURL: URL, documents: [URL]) -> URL? {
+        resolve(target, from: documentURL, index: WorkspaceDocumentIndex(documents: documents))
+    }
+
+    static func resolve(_ target: String, from documentURL: URL, index: WorkspaceDocumentIndex) -> URL? {
         guard !target.isEmpty, !target.hasPrefix("/"),
               !target.contains("\\"), !target.contains("#"), !target.contains("?") else { return nil }
-        let canonicalDocuments = Set(documents.map { $0.resolvingSymlinksInPath().standardizedFileURL })
         let path = URL(fileURLWithPath: target).pathExtension.isEmpty ? target + ".md" : target
-        let relative = documentURL.deletingLastPathComponent().appendingPathComponent(path)
-            .resolvingSymlinksInPath().standardizedFileURL
-        if canonicalDocuments.contains(relative) { return relative }
+        let relative = index.canonicalURL(documentURL.deletingLastPathComponent().appendingPathComponent(path))
+        if index.canonical.contains(relative) { return relative }
         guard !target.contains("/") else { return nil }
-        let matches = canonicalDocuments.filter { $0.deletingPathExtension().lastPathComponent ==
-            URL(fileURLWithPath: target).deletingPathExtension().lastPathComponent }
+        let title = URL(fileURLWithPath: target).deletingPathExtension().lastPathComponent
+        let matches = index.byTitle[title] ?? []
         return matches.count == 1 ? matches.first : nil
     }
 
-    static func target(for destination: URL, from documentURL: URL,
-                       documents: [URL]) -> String {
+    static func target(for destination: URL, from documentURL: URL, documents: [URL]) -> String {
+        target(for: destination, from: documentURL, index: WorkspaceDocumentIndex(documents: documents))
+    }
+
+    static func target(for destination: URL, from documentURL: URL, index: WorkspaceDocumentIndex) -> String {
         let title = destination.deletingPathExtension().lastPathComponent
-        if resolve(title, from: documentURL, documents: documents) ==
-            destination.resolvingSymlinksInPath().standardizedFileURL { return title }
+        if resolve(title, from: documentURL, index: index) == index.canonicalURL(destination) { return title }
         let path = relativePath(from: documentURL.deletingLastPathComponent(), to: destination)
         return path.hasSuffix(".md") ? String(path.dropLast(3)) : path
     }

@@ -528,19 +528,25 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
-    func ensureWritingSession(for documentURL: URL, initialCharacters: Int) {
+    /// Capture the opening text before asynchronous analysis has produced statistics.
+    func ensureWritingSession(for documentURL: URL, initialText: String) {
+        guard values.documents[Self.key(for: documentURL)]?.sessionBaselineCharacters == nil else { return }
+        ensureWritingSession(for: documentURL, baseline: WritingSessionBaseline(text: initialText))
+    }
+
+    func ensureWritingSession(for documentURL: URL, baseline: WritingSessionBaseline) {
         let key = Self.key(for: documentURL)
         var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         guard state.sessionBaselineCharacters == nil else { return }
-        state.sessionBaselineCharacters = max(0, initialCharacters)
+        state.sessionBaselineCharacters = baseline.characters
         values.documents[key] = state
         save()
     }
 
-    func resetWritingSession(for documentURL: URL, currentCharacters: Int) {
+    func resetWritingSession(for documentURL: URL, baseline: WritingSessionBaseline) {
         let key = Self.key(for: documentURL)
         var state = values.documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
-        state.sessionBaselineCharacters = max(0, currentCharacters)
+        state.sessionBaselineCharacters = baseline.characters
         values.documents[key] = state
         save()
     }
@@ -643,4 +649,13 @@ final class EditorSettingsStore: ObservableObject {
         guard let data = try? JSONEncoder().encode(values) else { return }
         defaults.set(data, forKey: Self.storageKey)
     }
+}
+
+/// The character count a writing session starts from. It can only be made from the document
+/// text itself: the background analysis snapshot is empty until it finishes, and recording
+/// that as the start would count the whole existing document as newly written.
+struct WritingSessionBaseline: Equatable, Sendable {
+    let characters: Int
+
+    init(text: String) { characters = text.count }
 }

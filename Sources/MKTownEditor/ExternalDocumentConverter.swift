@@ -100,7 +100,13 @@ struct ExternalDocumentConverter: Sendable {
         catch { throw ExternalConversionError.toolNotExecutable }
         while process.isRunning {
             if Task<Never, Never>.isCancelled {
+                // A converter blocked on I/O may ignore SIGTERM; do not let it pin the sheet.
                 process.terminate()
+                let deadline = ContinuousClock.now.advanced(by: .milliseconds(250))
+                while process.isRunning && ContinuousClock.now < deadline {
+                    Thread.sleep(forTimeInterval: 0.01)
+                }
+                if process.isRunning { _ = Darwin.kill(process.processIdentifier, SIGKILL) }
                 process.waitUntilExit()
                 throw ExternalConversionError.cancelled
             }

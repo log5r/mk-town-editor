@@ -11,12 +11,13 @@ enum MarkdownIndentation {
     private static let quotePattern = try! NSRegularExpression(pattern: #"^[ \t]*(?:>[ \t]*)+"#)
 
     static func edit(in text: String, selection: NSRange, direction: Direction,
-                     listIndentWidth: Int = 2, codeIndentWidth: Int = 4) -> MarkdownEdit? {
+                     listIndentWidth: Int = 2, codeIndentWidth: Int = 4,
+                     analysis: MarkdownAnalysis? = nil) -> MarkdownEdit? {
         guard (2...8).contains(listIndentWidth), (2...8).contains(codeIndentWidth) else { return nil }
         let source = text as NSString
         guard selection.location <= source.length,
               selection.length <= source.length - selection.location else { return nil }
-        let analysis = MarkdownAnalysis(text)
+        let analysis = analysis ?? MarkdownAnalysis(text)
         let selectedLines = lineStarts(in: source, range: selectedLineRange(in: source, selection: selection))
         let listBlocks = analysis.blocks.filter { block in
             guard isList(block.kind),

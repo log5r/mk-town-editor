@@ -4,6 +4,43 @@ import XCTest
 
 @MainActor
 final class MarkdownLineNumberRulerTests: XCTestCase {
+    func testIncrementalIndexMatchesRebuildForEveryEditBoundary() {
+        for text in ["", "a\r\nb\nc\r", "🙂a\r\n\r\nz", "a\nb"] {
+            let source = text as NSString
+            for location in 0...source.length {
+                for count in 0...(source.length - location) {
+                    for replacement in ["", "x", "\r", "\n", "🙂\r\n"] {
+                        // NSString offsets may split surrogate pairs; use valid Swift ranges.
+                        let range = NSRange(location: location, length: count)
+                        guard Range(range, in: text) != nil else { continue }
+                        let result = source.replacingCharacters(in: range, with: replacement)
+                        var index = MarkdownLineNumberIndex(text)
+                        index.update(in: result as NSString,
+                            editedRange: NSRange(location: location, length: replacement.utf16.count),
+                            changeInLength: replacement.utf16.count - count)
+                        XCTAssertEqual(index.starts, MarkdownLineNumberIndex(result).starts,
+                            "source=\(text.debugDescription) range=\(range) replacement=\(replacement.debugDescription)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testScrollingLabelsReuseIndexWithoutReadingEditorSource() {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 200, height: 200))
+        view.string = "one\ntwo\n"
+        let scroll = NSScrollView()
+        scroll.documentView = view
+        let ruler = MarkdownLineNumberRulerView(scrollView: scroll, editor: view)
+        view.textStorage?.replaceCharacters(in: NSRange(location: 1, length: 0), with: "\n")
+        let reads = view.sourceReadCount
+        for _ in 0..<10 {
+            _ = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds, cachedIndex: ruler.index)
+        }
+        XCTAssertEqual(view.sourceReadCount, reads)
+        XCTAssertEqual(ruler.index.starts, MarkdownLineNumberIndex(view.string).starts)
+    }
+
     func testLineStartsCountCRLFAndTrailingEmptyLineInUTF16() {
         let index = MarkdownLineNumberIndex("😀\r\nsecond\n")
 
@@ -27,6 +64,41 @@ final class MarkdownLineNumberRulerTests: XCTestCase {
 
         XCTAssertEqual(labels.map(\.number), [1, 2])
         XCTAssertGreaterThan(labels[1].origin.y, labels[0].origin.y)
+    }
+
+    func testDeletingAcrossDigitBoundaryInWrappedEditorDoesNotRetileDuringProcessEditing() async throws {
+        for lineCount in [12, 105] {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+            let view = EditorTextView(frame: scroll.bounds)
+            _ = view.layoutManager // TextKit 1, as in the app
+            scroll.documentView = view
+            EditorLayoutOptions(wrapsLines: true).apply(to: view, in: scroll)
+            let ruler = MarkdownLineNumberRulerView(scrollView: scroll, editor: view)
+            scroll.verticalRulerView = ruler
+            scroll.hasVerticalRuler = true
+            scroll.rulersVisible = true
+            let window = NSWindow(contentRect: scroll.frame, styleMask: [.titled, .resizable],
+                                  backing: .buffered, defer: false)
+            window.contentView = scroll
+            defer { window.orderOut(nil); window.contentView = nil }
+            view.string = (1...lineCount).map { "line \($0) with some wrapped text" }.joined(separator: "\n")
+            ruler.refresh()
+            scroll.layoutSubtreeIfNeeded()
+            view.layoutManager?.ensureLayout(for: try XCTUnwrap(view.textContainer))
+            let wide = ruler.ruleThickness
+
+            view.selectAll(nil)
+            view.deleteBackward(nil) // raised NSRangeException inside processEditing
+            XCTAssertEqual(view.string, "")
+            XCTAssertEqual(ruler.index.starts.count, 1)
+            for _ in 0..<50 where ruler.ruleThickness == wide { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertLessThan(ruler.ruleThickness, wide, "the gutter narrows once editing has finished")
+
+            view.insertText(String(repeating: "x\n", count: lineCount),
+                            replacementRange: NSRange(location: 0, length: 0))
+            for _ in 0..<50 where ruler.ruleThickness != wide { try await Task.sleep(for: .milliseconds(5)) }
+            XCTAssertEqual(ruler.ruleThickness, wide)
+        }
     }
 
     func testGutterWidthGrowsWithLineCount() {

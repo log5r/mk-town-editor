@@ -1,14 +1,14 @@
 import Foundation
 
-struct WorkspaceViewSettings: Codable, Equatable {
-    enum SortOrder: String, Codable, CaseIterable {
+struct WorkspaceViewSettings: Codable, Equatable, Sendable {
+    enum SortOrder: String, Codable, CaseIterable, Sendable {
         case name
         case modified
 
         var title: String { self == .name ? String(localized: "名前順") : String(localized: "更新日時順") }
     }
 
-    enum FileFilter: String, Codable, CaseIterable {
+    enum FileFilter: String, Codable, CaseIterable, Sendable {
         case all
         case documents
         case attachments
@@ -77,9 +77,12 @@ struct WorkspaceViewSettings: Codable, Equatable {
             case .attachments: return node.isEditableDocument ? nil : node
             }
         }
+        let pinned = pinnedPaths.isEmpty ? Set<URL>() : Set(filtered.compactMap { node in
+            isPinned(node.url, root: root) ? node.url : nil
+        })
         return filtered.sorted { left, right in
-            let leftPinned = isPinned(left.url, root: root)
-            let rightPinned = isPinned(right.url, root: root)
+            let leftPinned = pinned.contains(left.url)
+            let rightPinned = pinned.contains(right.url)
             if leftPinned != rightPinned { return leftPinned }
             if left.isDirectory != right.isDirectory { return left.isDirectory }
             if sortOrder == .modified, left.modifiedAt != right.modifiedAt {
@@ -90,8 +93,8 @@ struct WorkspaceViewSettings: Codable, Equatable {
     }
 
     private func relativePath(_ url: URL, root: URL) -> String {
-        let source = url.resolvingSymlinksInPath().standardizedFileURL.pathComponents
-        let base = root.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let source = url.standardizedFileURL.pathComponents
+        let base = root.standardizedFileURL.pathComponents
         guard source.starts(with: base) else { return url.lastPathComponent }
         return source.dropFirst(base.count).joined(separator: "/")
     }

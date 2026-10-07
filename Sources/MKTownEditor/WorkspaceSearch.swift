@@ -56,12 +56,23 @@ enum WorkspaceSearchScope: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+struct WorkspaceSearchReport: Sendable {
+    let results: [WorkspaceSearchResult]
+    let skippedDocuments: [URL]
+    let isTruncated: Bool
+}
+
 enum WorkspaceSearch {
     static func search(root: URL, options: WorkspaceSearchOptions,
                        maximumResults: Int = 2_000) throws -> [WorkspaceSearchResult] {
-        guard !options.query.isEmpty else { return [] }
+        try report(root: root, options: options, maximumResults: maximumResults).results
+    }
+
+    static func report(root: URL, options: WorkspaceSearchOptions,
+                       maximumResults: Int = 2_000) throws -> WorkspaceSearchReport {
+        guard !options.query.isEmpty else { return WorkspaceSearchReport(results: [], skippedDocuments: [], isTruncated: false) }
         let scan = WorkspaceFileIndex.scan(root: root)
-        guard !scan.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
+        var skipped: [URL] = []
         var results: [WorkspaceSearchResult] = []
         let rootPath = root.resolvingSymlinksInPath().standardizedFileURL.path
         let rootPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
@@ -73,8 +84,10 @@ enum WorkspaceSearch {
             let relative = String(path.dropFirst(rootPrefix.count))
             guard matches(relative, patterns: options.includePatterns),
                   !matches(relative, patterns: options.excludePatterns) else { continue }
-            let data = try Data(contentsOf: url)
-            let text = try MarkdownDocument.decode(data)
+            guard let data = try? Data(contentsOf: url), let text = try? MarkdownDocument.decode(data) else {
+                skipped.append(url)
+                continue
+            }
             let source = text as NSString
             let lineIndex = MarkdownLineIndex(text)
             let analysis = options.scope == .all ? nil : MarkdownAnalysis(text)
@@ -96,10 +109,12 @@ enum WorkspaceSearch {
                 results.append(WorkspaceSearchResult(url: url, relativePath: relative,
                                                       line: line, sourceRange: found,
                                                       excerpt: String(excerpt.prefix(240))))
-                if results.count >= maximumResults { return results }
+                if results.count >= maximumResults {
+                    return WorkspaceSearchReport(results: results, skippedDocuments: skipped, isTruncated: true)
+                }
             }
         }
-        return results
+        return WorkspaceSearchReport(results: results, skippedDocuments: skipped, isTruncated: scan.isTruncated)
     }
 
     private static func documentURLs(in nodes: [WorkspaceNode]) -> [URL] {
