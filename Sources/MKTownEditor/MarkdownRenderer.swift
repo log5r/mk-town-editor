@@ -398,6 +398,10 @@ enum MarkdownRenderer {
                                                       attributes: baseAttributes(font: baseFont, color: color,
                                                                                  paragraphSpacing: paragraphSpacing))
                 value.addAttribute(.link, value: url, range: NSRange(location: 0, length: value.length))
+                if case .loading? = localLookup {
+                    value.addAttribute(.pendingLocalImage, value: true,
+                                       range: NSRange(location: 0, length: value.length))
+                }
                 replacement = value
             }
             result.replaceCharacters(in: range, with: replacement)
@@ -594,5 +598,23 @@ final class MarkdownImageAttachment: NSTextAttachment {
         let availableWidth = max(1, lineFrag.maxX - position.x - 8)
         let scale = min(1, availableWidth / original.width)
         return CGRect(x: 0, y: 0, width: original.width * scale, height: original.height * scale)
+    }
+}
+
+extension NSAttributedString.Key {
+    /// 背景で読み込み中のローカル画像の仮表示。描画キャッシュはこの結果を保持しない。
+    static let pendingLocalImage = NSAttributedString.Key("MKTownPendingLocalImage")
+}
+
+extension NSAttributedString {
+    var containsPendingLocalImage: Bool {
+        var found = false
+        enumerateAttribute(.pendingLocalImage, in: NSRange(location: 0, length: length)) { value, _, stop in
+            if value != nil {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
     }
 }

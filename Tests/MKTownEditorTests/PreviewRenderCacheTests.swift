@@ -74,6 +74,34 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertEqual(cache.renderCount, 1)
     }
 
+    func testPendingImagePlaceholderIsNotCachedSoWithdrawnRequestsAreRetried() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let png = Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lGQAAAAASUVORK5CYII=")!
+        try png.write(to: root.appendingPathComponent("photo.png"))
+        let context = DocumentContext(fileURL: root.appendingPathComponent("doc.md"))
+        let analysis = MarkdownAnalysis("![写真](photo.png)")
+        let block = try XCTUnwrap(analysis.blocks.first { $0.kind == .paragraph })
+        let cache = PreviewRenderCache()
+        let store = LocalImageStore.shared
+        // 共有の同時実行枠を埋め、デコードを待機させたまま調べる。
+        for _ in 0..<4 { await ImageDecodeLimiter.local.acquire() }
+        let pending = cache.render(block, in: analysis, context: context, zoom: 1)
+        XCTAssertTrue(pending.containsPendingLocalImage)
+        XCTAssertFalse(store.pendingPaths(for: cache.imageRequester).isEmpty)
+
+        // 参照を消した編集で要求を取り下げ、同じ内容に戻して再描画する。
+        store.reconcileRequests(from: cache.imageRequester, keepingPaths: [])
+        XCTAssertTrue(store.pendingPaths(for: cache.imageRequester).isEmpty)
+        _ = cache.render(block, in: analysis, context: context, zoom: 1)
+        XCTAssertFalse(store.pendingPaths(for: cache.imageRequester).isEmpty,
+                       "A cached placeholder must not hide the image from a fresh request")
+        store.cancelRequests(from: cache.imageRequester)
+        for _ in 0..<4 { await ImageDecodeLimiter.local.release() }
+    }
+
     func testLayoutIndexPreservesNestedQuoteDepth() throws {
         let analysis = MarkdownAnalysis("> first\n> > nested\n\nregular")
         let layout = PreviewLayoutIndex(analysis)

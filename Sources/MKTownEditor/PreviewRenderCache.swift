@@ -151,6 +151,12 @@ final class PreviewRenderCache: ObservableObject {
         }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(leaf, by: zoom),
             kind: block.kind, theme: theme)
+        // 読み込み中の仮表示は保持しない。次の描画で問い合わせ直し、要求が取り下げられていても
+        // 読み込みをやり直せるようにする（読み込みが終わるまでの間だけ描画し直す）。
+        guard !rendered.containsPendingLocalImage else {
+            renderCount += 1
+            return rendered
+        }
         blocks[key] = Entry(value: rendered, lastUse: clock)
         renderCount += 1
         trimIfNeeded()
@@ -175,6 +181,10 @@ final class PreviewRenderCache: ObservableObject {
         }
         let rendered = PreviewTypography.themed(PreviewTypography.scaled(cell, by: zoom),
             kind: nil, theme: theme)
+        guard !rendered.containsPendingLocalImage else {
+            renderCount += 1
+            return rendered
+        }
         cells[key] = Entry(value: rendered, lastUse: clock)
         renderCount += 1
         trimIfNeeded()
