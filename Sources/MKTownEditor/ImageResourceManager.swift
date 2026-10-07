@@ -65,8 +65,10 @@ final class RemoteImageStore: ObservableObject {
     /// 本文の画像の参照先。コードブロックとインラインコードの中は除き、参照形式も解決する。
     nonisolated static func imageDestinations(in markdown: String,
                                               analysis providedAnalysis: MarkdownAnalysis? = nil) -> [String] {
-        guard markdown.contains("![") else { return [] }
+        guard markdown.contains("!["), !Task.isCancelled else { return [] }
         let analysis = providedAnalysis ?? MarkdownAnalysis(markdown)
+        // 取り消された走査は、解析・マスク・リンク抽出の各段階の間で打ち切る。
+        guard !Task.isCancelled else { return [] }
         let masked = NSMutableString(string: markdown)
         let codeBlocks = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
         for range in codeBlocks.sorted(by: { $0.location > $1.location }) {
@@ -76,8 +78,10 @@ final class RemoteImageStore: ObservableObject {
             .sorted(by: { $0.location > $1.location }) {
             masked.replaceCharacters(in: range, with: String(repeating: " ", count: range.length))
         }
+        guard !Task.isCancelled else { return [] }
         let resolved = MarkdownRenderer.resolveReferences(in: masked as String,
             using: analysis.references)
+        guard !Task.isCancelled else { return [] }
         return MarkdownLinkSyntax.inlineLinks(in: resolved).filter(\.isImage).map(\.destination)
     }
 

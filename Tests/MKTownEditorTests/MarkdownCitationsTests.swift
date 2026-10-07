@@ -216,6 +216,29 @@ final class MarkdownCitationsTests: XCTestCase {
         _ = try await counter.wait(above: afterReplace)
     }
 
+    func testChangesDuringTheInitialLoadAreDeliveredOnceIterationStarts() async throws {
+        let (directory, document) = try fixture()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let bib = directory.appendingPathComponent("references.bib")
+        // プレビューと同じく、監視を始めてから読み込み、その後で変更を受け取り始める。
+        let changes = MarkdownCitationFileMonitor.changes(documentURL: document)
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.count, 2)
+        try "@book{saved, title={Saved during load}}".write(to: bib, atomically: true, encoding: .utf8)
+        try await Task.sleep(for: .milliseconds(300))
+        let received = Task { () -> Bool in
+            for await _ in changes { return true }
+            return false
+        }
+        let timeout = Task {
+            try? await Task.sleep(for: .seconds(5))
+            received.cancel()
+        }
+        let delivered = await received.value
+        timeout.cancel()
+        XCTAssertTrue(delivered, "A save made while the catalog was loading must not be missed")
+        XCTAssertEqual(MarkdownCitationCatalog.load(documentURL: document)?.entries.map(\.key), ["saved"])
+    }
+
     private func fixture() throws -> (URL, URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

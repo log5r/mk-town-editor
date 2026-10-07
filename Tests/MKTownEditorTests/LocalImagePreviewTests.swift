@@ -499,6 +499,18 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertFalse(store.hasFailed(url), "A cancelled load is not a failure")
     }
 
+    func testCancelledRemoteURLScansStopWithoutResults() async {
+        let markdown = String(repeating: "![a](https://example.com/a.png) text\n\n", count: 20_000)
+        let worker = Task.detached { () -> Int in
+            while !Task.isCancelled { await Task.yield() }
+            return RemoteImageStore.referencedURLs(in: markdown).count
+        }
+        worker.cancel()
+        let count = await worker.value
+        XCTAssertEqual(count, 0)
+        XCTAssertEqual(RemoteImageStore.referencedURLs(in: "![a](https://example.com/a.png)").count, 1)
+    }
+
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

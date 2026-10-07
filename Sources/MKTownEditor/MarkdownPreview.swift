@@ -349,10 +349,14 @@ struct MarkdownPreview: View {
             guard work.isEnabled else { return }
             var urls = work.urls
             if urls == nil {
+                // スナップショットのない表示では本文を解析し直すため、入力が落ち着くまで待ち、
+                // 次の編集で取り消された走査は背景の処理ごと止める。
+                do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
                 let source = markdown
-                urls = await Task.detached(priority: .utility) {
+                let worker = Task.detached(priority: .utility) {
                     RemoteImageStore.referencedURLs(in: source)
-                }.value
+                }
+                urls = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
             }
             guard let urls, !Task.isCancelled else { return }
             await withTaskGroup(of: Void.self) { group in
@@ -367,8 +371,10 @@ struct MarkdownPreview: View {
                 if citationCatalog != .empty { citationCatalog = .empty }
                 return
             }
+            // 監視を読み込みより先に始め、読み込み中の保存も変更として受け取る。
+            let changes = MarkdownCitationFileMonitor.changes(documentURL: watch.fileURL)
             await reloadCitations(documentURL: watch.fileURL)
-            for await _ in MarkdownCitationFileMonitor.changes(documentURL: watch.fileURL) {
+            for await _ in changes {
                 await reloadCitations(documentURL: watch.fileURL)
             }
         }
