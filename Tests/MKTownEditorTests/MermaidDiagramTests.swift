@@ -4,6 +4,104 @@ import XCTest
 
 @MainActor
 final class MermaidDiagramTests: XCTestCase {
+    private static let controlledScript = """
+    globalThis.mermaid = {
+      initialize() {},
+      async render(id, source) {
+        if (source.startsWith('blocked')) return await new Promise(() => {});
+        return {svg: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>'};
+      }
+    };
+    """
+
+    private func waitForRequests(_ renderer: MermaidRenderService, active: Int, pending: Int) async throws {
+        for _ in 0..<200 {
+            if renderer.activeRequestCount == active, renderer.pendingRequestCount == pending { return }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTFail("Expected active=\(active), pending=\(pending); got \(renderer.activeRequestCount), \(renderer.pendingRequestCount)")
+    }
+
+    func testCancellingAbandonedRequestsRemovesBacklogAndLetsLatestSourceRender() async throws {
+        let renderer = MermaidRenderService(script: Self.controlledScript)
+        let activeCancelled = expectation(description: "Active abandoned render cancelled immediately")
+        let active = Task {
+            do { _ = try await renderer.render("blocked-active"); XCTFail("Expected cancellation") }
+            catch is CancellationError { activeCancelled.fulfill() }
+            catch { XCTFail("Unexpected error: \(error)") }
+        }
+        try await waitForRequests(renderer, active: 1, pending: 0)
+        let pendingCancelled = expectation(description: "Every queued abandoned source cancelled immediately")
+        pendingCancelled.expectedFulfillmentCount = 20
+        let abandoned = (0..<20).map { index in
+            Task {
+                do { _ = try await renderer.render("blocked-\(index)"); XCTFail("Expected cancellation") }
+                catch is CancellationError { pendingCancelled.fulfill() }
+                catch { XCTFail("Unexpected error: \(error)") }
+            }
+        }
+        try await waitForRequests(renderer, active: 1, pending: 20)
+        abandoned.forEach { $0.cancel() }
+        await fulfillment(of: [pendingCancelled], timeout: 2)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+        XCTAssertEqual(renderer.renderCount, 1)
+        active.cancel()
+        await fulfillment(of: [activeCancelled], timeout: 2)
+        XCTAssertEqual(renderer.activeRequestCount, 0)
+        let latestRendered = expectation(description: "Latest source renders without waiting for obsolete timeouts")
+        let latest = Task {
+            do {
+                let image = try await renderer.render("latest")
+                XCTAssertGreaterThan(image.size.height, 0)
+                latestRendered.fulfill()
+            } catch { XCTFail("Latest render failed: \(error)") }
+        }
+        await fulfillment(of: [latestRendered], timeout: 3)
+        latest.cancel()
+        XCTAssertEqual(renderer.renderCount, 2)
+        XCTAssertEqual(renderer.webViewCreationCount, 1)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+        XCTAssertEqual(renderer.activeRequestCount, 0)
+    }
+
+    func testCancellingOneCoalescedRequestKeepsOtherWaiterAndCancellingLastStopsRender() async throws {
+        let renderer = MermaidRenderService(script: Self.controlledScript)
+        let firstCancelled = expectation(description: "First waiter cancelled")
+        let first = Task {
+            do { _ = try await renderer.render("blocked-shared"); XCTFail("Expected cancellation") }
+            catch is CancellationError { firstCancelled.fulfill() }
+            catch { XCTFail("Unexpected error: \(error)") }
+        }
+        try await waitForRequests(renderer, active: 1, pending: 0)
+        let secondCancelled = expectation(description: "Last waiter cancelled")
+        let second = Task {
+            do { _ = try await renderer.render("blocked-shared"); XCTFail("Expected cancellation") }
+            catch is CancellationError { secondCancelled.fulfill() }
+            catch { XCTFail("Unexpected error: \(error)") }
+        }
+        try await waitForRequests(renderer, active: 1, pending: 1)
+        first.cancel()
+        await fulfillment(of: [firstCancelled], timeout: 2)
+        XCTAssertEqual(renderer.activeRequestCount, 1)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+        XCTAssertEqual(renderer.renderCount, 1)
+        second.cancel()
+        await fulfillment(of: [secondCancelled], timeout: 2)
+        XCTAssertEqual(renderer.activeRequestCount, 0)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+    }
+
+    func testAlreadyCancelledRequestDoesNotStartRenderer() async {
+        let renderer = MermaidRenderService(script: Self.controlledScript)
+        let cancelled = Task { try await renderer.render("unused") }
+        cancelled.cancel()
+        do { _ = try await cancelled.value; XCTFail("Expected cancellation") }
+        catch is CancellationError { }
+        catch { XCTFail("Unexpected error: \(error)") }
+        XCTAssertEqual(renderer.webViewCreationCount, 0)
+        XCTAssertEqual(renderer.pendingRequestCount, 0)
+    }
+
     func testSharedRendererKeepsEntireTallDiagram() async throws {
         let source = "graph TD\n" + (0..<65).map { "Node\($0)-->Node\($0 + 1)" }.joined(separator: "\n")
         let image = try await MermaidRenderService.shared.render(source)
