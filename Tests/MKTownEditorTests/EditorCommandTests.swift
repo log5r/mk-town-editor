@@ -65,6 +65,9 @@ final class EditorCommandTests: XCTestCase {
 
     func testContextMenuUsesSharedCommandDefinitions() {
         let view = EditorTextView()
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        view.imagePasteboard = pasteboard
         view.string = "abc"
         let model = MarkdownEditorModel()
         model.connect(view)
