@@ -42,11 +42,20 @@ struct MarkdownPreview: View {
     var theme: PreviewTheme = .system
     var bodyWidth = 900
 
-    private var remoteImageTaskID: Int {
-        var hasher = Hasher()
-        hasher.combine(markdown)
-        hasher.combine(loadsRemoteImages)
-        return hasher.finalize()
+    /// 外部画像の読み込み条件。スナップショットがあれば背景で抽出済みのURL集合を使い、
+    /// 入力でURLが変わらない限りタスクを再起動しない。
+    private struct RemoteImageWork: Equatable {
+        let isEnabled: Bool
+        let urls: Set<URL>?
+        let sourceHash: Int
+    }
+
+    private var remoteImageWork: RemoteImageWork {
+        guard loadsRemoteImages else { return RemoteImageWork(isEnabled: false, urls: [], sourceHash: 0) }
+        if let snapshot, snapshot.source == markdown {
+            return RemoteImageWork(isEnabled: true, urls: snapshot.remoteImageURLs, sourceHash: 0)
+        }
+        return RemoteImageWork(isEnabled: true, urls: nil, sourceHash: markdown.hashValue)
     }
 
     private var resourceRevision: Int { remoteImages.revision }
@@ -303,10 +312,18 @@ struct MarkdownPreview: View {
         }
         .environment(\.colorScheme, theme.colorScheme ?? colorScheme)
         .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
-        .task(id: remoteImageTaskID) {
-            remoteImages.setEnabled(loadsRemoteImages)
-            guard loadsRemoteImages else { return }
-            let urls = RemoteImageStore.referencedURLs(in: markdown)
+        .task(id: remoteImageWork) {
+            let work = remoteImageWork
+            remoteImages.setEnabled(work.isEnabled)
+            guard work.isEnabled else { return }
+            var urls = work.urls
+            if urls == nil {
+                let source = markdown
+                urls = await Task.detached(priority: .utility) {
+                    RemoteImageStore.referencedURLs(in: source)
+                }.value
+            }
+            guard let urls, !Task.isCancelled else { return }
             await withTaskGroup(of: Void.self) { group in
                 for url in urls {
                     group.addTask { await remoteImages.load(url) }

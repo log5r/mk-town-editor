@@ -16,6 +16,7 @@ struct DocumentSnapshot: Sendable {
     let hoverLinks: [MarkdownHoverLink]
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
     let inlineCodeRanges: [NSRange]
+    let remoteImageURLs: Set<URL>
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         self.init(source: source, dialect: dialect, checkCancellation: {})
@@ -50,6 +51,8 @@ struct DocumentSnapshot: Sendable {
         proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
         try checkCancellation()
         inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
+        try checkCancellation()
+        remoteImageURLs = RemoteImageStore.referencedURLs(in: source, analysis: parsed)
         try checkCancellation()
     }
 

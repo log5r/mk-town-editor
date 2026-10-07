@@ -167,6 +167,20 @@ final class LocalImagePreviewTests: XCTestCase {
             [URL(string: "https://example.com/a.png")!])
     }
 
+    func testRemoteImageReferencesReuseProvidedAnalysisAndSnapshot() {
+        let markdown = "![shown][pic]\n\n[pic]: https://example.com/a.png\n\n![inline](https://example.com/b.png)"
+        let expected: Set<URL> = [URL(string: "https://example.com/a.png")!,
+                                  URL(string: "https://example.com/b.png")!]
+        XCTAssertEqual(DocumentSnapshot(source: markdown).remoteImageURLs, expected)
+        XCTAssertEqual(DocumentSnapshot(source: "![local](a.png)").remoteImageURLs, [])
+
+        // 渡した解析結果の参照定義を使うことで、本文を再解析していないことを確かめる。
+        let definitions = MarkdownAnalysis("[pic]: https://example.com/from-analysis.png")
+        XCTAssertEqual(RemoteImageStore.referencedURLs(in: "![x][pic] http", analysis: definitions),
+                       [URL(string: "https://example.com/from-analysis.png")!])
+        XCTAssertEqual(RemoteImageStore.referencedURLs(in: "![x][pic] http"), [])
+    }
+
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

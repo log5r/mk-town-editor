@@ -53,8 +53,11 @@ final class RemoteImageStore: ObservableObject {
 
     func hasFailed(_ url: URL) -> Bool { isEnabled && failed.contains(url) }
 
-    static func referencedURLs(in markdown: String) -> Set<URL> {
-        let analysis = MarkdownAnalysis(markdown)
+    /// 本文から外部画像のURLを集める。解析済みの結果を渡せば本文を再解析しない。
+    nonisolated static func referencedURLs(in markdown: String,
+                                           analysis providedAnalysis: MarkdownAnalysis? = nil) -> Set<URL> {
+        guard markdown.range(of: "http", options: .caseInsensitive) != nil else { return [] }
+        let analysis = providedAnalysis ?? MarkdownAnalysis(markdown)
         let masked = NSMutableString(string: markdown)
         let codeBlocks = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
         for range in codeBlocks.sorted(by: { $0.location > $1.location }) {
