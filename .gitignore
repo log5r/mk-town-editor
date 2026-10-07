@@ -3,4 +3,6 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+.claude/
+.swiftpm/
 /docs/
