@@ -66,6 +66,38 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         }
         XCTAssertFalse(store.snapshot?.analysis.blocks.contains { $0.kind == .table } == true)
     }
+    func testSnapshotValidityRequiresBothSourceAndDialect() {
+        let source = "# Heading"
+        for dialect in [MarkdownDialect.basic, .extended] {
+            let snapshot = DocumentSnapshot(source: source, dialect: dialect)
+            XCTAssertTrue(snapshot.matches(source: source, dialect: dialect))
+            XCTAssertFalse(snapshot.matches(source: "# Changed", dialect: dialect))
+            let other: MarkdownDialect = dialect == .basic ? .extended : .basic
+            XCTAssertFalse(snapshot.matches(source: source, dialect: other))
+        }
+    }
+
+    func testDialectSwitchRejectsPreviousOutlineUntilMatchingSnapshotArrives() async throws {
+        let source = "---\n# Hidden\nkey: value\n---\n# Visible\nbody\n# Next\nend"
+        let store = DocumentAnalysisStore()
+        for dialect in [MarkdownDialect.basic, .extended, .basic] {
+            let previous = store.snapshot
+            store.update(source: source, dialect: dialect)
+            // No main-actor suspension: the same-source, old-dialect snapshot
+            // remains published, but must not enable outline actions/navigation.
+            if let previous {
+                XCTAssertEqual(store.snapshot?.dialect, previous.dialect)
+                XCTAssertFalse(previous.matches(source: source, dialect: dialect))
+            }
+            for _ in 0..<100 where store.snapshot?.dialect != dialect {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            let snapshot = try XCTUnwrap(store.snapshot)
+            XCTAssertTrue(snapshot.matches(source: source, dialect: dialect))
+            XCTAssertEqual(snapshot.outlineEntries.contains { $0.title == "Hidden" }, dialect == .basic)
+        }
+    }
+
     func testSnapshotSharesSourceAcrossAnalysisStatisticsAndHighlighting() {
         let source = "# 見出し\n\n- [x] 完了"
         let snapshot = DocumentSnapshot(source: source)
@@ -77,6 +109,39 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         XCTAssertEqual(snapshot.syntaxSpans, MarkdownSyntaxHighlighter.spans(in: source))
         XCTAssertEqual(MarkdownRenderer.render(snapshot.analysis).string,
                        MarkdownRenderer.render(source).string)
+    }
+
+    func testLargeOutlineReusesBackgroundSnapshotActionsDuringRepeatedRequests() async throws {
+        let source = (0..<400).map { index in
+            "## Heading \(index)\n" + String(repeating: "本文🙂 content ", count: 60)
+        }.joined(separator: "\n\n")
+        let probe = AnalysisExecutionProbe()
+        let store = DocumentAnalysisStore { source in
+            await probe.record(isMainThread: isExecutingOnMainThread())
+            return DocumentSnapshot(source: source)
+        }
+        store.update(source: source)
+        for _ in 0..<1_000 where store.snapshot == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let snapshot = try XCTUnwrap(store.snapshot)
+        XCTAssertEqual(snapshot.outlineEntries.count, 400)
+        XCTAssertEqual(snapshot.sectionActions.count, 400)
+        // Selection/scroll-driven rebuilds read the same snapshot. Four lookups
+        // per row replace the old four full-document edits/analyses per row.
+        for _ in 0..<10 {
+            store.update(source: source)
+            for (index, entry) in snapshot.outlineEntries.enumerated() {
+                let actions = try XCTUnwrap(store.snapshot?.sectionActions[entry.id])
+                XCTAssertEqual(actions.canMoveUp, index > 0)
+                XCTAssertEqual(actions.canMoveDown, index < 399)
+                XCTAssertTrue(actions.canPromote)
+                XCTAssertTrue(actions.canDemote)
+            }
+        }
+        let result = await probe.result()
+        XCTAssertEqual(result.count, 1)
+        XCTAssertFalse(result.isMainThread)
     }
 
     func testLateResultFromOldGenerationCannotReplaceNewerSnapshot() async throws {

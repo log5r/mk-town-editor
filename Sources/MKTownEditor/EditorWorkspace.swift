@@ -233,7 +233,7 @@ struct EditorWorkspace: View {
     }
 
     private var sectionStatistics: (title: String, value: DocumentStatistics)? {
-        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return nil }
+        guard let snapshot = currentAnalysisSnapshot else { return nil }
         let entries = MarkdownOutline.entries(in: snapshot.analysis)
         guard let heading = MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
                                                            in: entries),
@@ -612,7 +612,7 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(isPresented: $showingGoToHeading) {
-            GoToHeadingSheet(entries: analysisStore.snapshot?.source == document.text ? outlineEntries : []) {
+            GoToHeadingSheet(entries: currentAnalysisSnapshot?.outlineEntries ?? []) {
                 navigate(to: $0)
             }
         }
@@ -978,8 +978,7 @@ struct EditorWorkspace: View {
         }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
-                            analysis: analysisStore.snapshot?.source == document.text
-                                ? analysisStore.snapshot?.analysis : nil,
+                            analysis: currentAnalysisSnapshot?.analysis,
                             onSave: { label, destination, title in
                                 editorModel.commitLink(label: label, destination: destination, title: title)
                             }, onSaveReference: { label, referenceID in
@@ -1162,9 +1161,10 @@ struct EditorWorkspace: View {
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
         .onChange(of: analysisStore.snapshot?.source) { _, _ in
-            receivePendingDocumentLink()
-            receivePendingWorkspaceTask()
-            if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
+            receiveCompletedAnalysis()
+        }
+        .onChange(of: analysisStore.snapshot?.dialect) { _, _ in
+            receiveCompletedAnalysis()
         }
         .onChange(of: documentLinkNavigation.pending) { _, _ in
             receivePendingDocumentLink()
@@ -1396,12 +1396,18 @@ struct EditorWorkspace: View {
     }
 
     private var previewTaskAction: ((Int) -> Void)? {
-        guard analysisStore.snapshot?.source == document.text else { return nil }
+        guard currentAnalysisSnapshot != nil else { return nil }
         return { toggleTask(at: $0) }
     }
 
+    private var currentAnalysisSnapshot: DocumentSnapshot? {
+        guard let snapshot = analysisStore.snapshot,
+              snapshot.matches(source: document.text, dialect: documentContext.markdownDialect) else { return nil }
+        return snapshot
+    }
+
     private var outlineEntries: [MarkdownOutlineEntry] {
-        analysisStore.snapshot.map { MarkdownOutline.entries(in: $0.analysis) } ?? []
+        analysisStore.snapshot?.outlineEntries ?? []
     }
 
     private var workspaceSidebar: some View {
@@ -1423,11 +1429,9 @@ struct EditorWorkspace: View {
     }
 
     private var contentInspectorSidebar: some View {
-        let isReady = analysisStore.snapshot?.source == document.text
-        let items = analysisStore.snapshot.flatMap { snapshot in
-            snapshot.source == document.text
-                ? MarkdownContentInspector.items(in: document.text, analysis: snapshot.analysis)
-                : nil
+        let isReady = currentAnalysisSnapshot != nil
+        let items = currentAnalysisSnapshot.map { snapshot in
+            MarkdownContentInspector.items(in: document.text, analysis: snapshot.analysis)
         } ?? []
         return List {
             Section("文書プロパティ") {
@@ -1449,11 +1453,12 @@ struct EditorWorkspace: View {
             }
             Section("文書を整理") {
                 Button("現在のセクションを分割…") {
+                    guard currentAnalysisSnapshot != nil else { return }
                     splitHeadingLocation = MarkdownOutline.currentSection(
                         at: editorModel.selectedRange.location, in: outlineEntries)?.sourceRange.location
                     showingNoteSplit = splitHeadingLocation != nil
                 }
-                .disabled(fileURL == nil || workspaceStore.rootURL == nil ||
+                .disabled(!isReady || fileURL == nil || workspaceStore.rootURL == nil ||
                     workspaceStore.isDocumentLocked(fileURL) ||
                     MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
                         in: outlineEntries) == nil)
@@ -1704,9 +1709,13 @@ struct EditorWorkspace: View {
     }
 
     private var outlineSidebar: some View {
-        let entries = outlineEntries
+        let snapshot = analysisStore.snapshot
+        let entries = snapshot?.outlineEntries ?? []
+        let isCurrent = currentAnalysisSnapshot != nil
+        let canEdit = isCurrent && editorModel.canExecuteCommand
         let highlightedID = currentSectionID
         return List(entries) { entry in
+            let actions = snapshot?.sectionActions[entry.id]
             Button {
                 navigate(to: entry)
             } label: {
@@ -1717,53 +1726,50 @@ struct EditorWorkspace: View {
             .buttonStyle(.plain)
             .contextMenu {
                 Button("セクションを上へ移動") {
-                    editorModel.moveSection(at: entry.sourceRange.location, direction: .up)
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .up, snapshot: snapshot,
+                        dialect: documentContext.markdownDialect)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionMove.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, direction: .up) == nil)
+                .disabled(!canEdit || actions?.canMoveUp != true)
                 Button("セクションを下へ移動") {
-                    editorModel.moveSection(at: entry.sourceRange.location, direction: .down)
+                    editorModel.moveSection(at: entry.sourceRange.location, direction: .down, snapshot: snapshot,
+                        dialect: documentContext.markdownDialect)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionMove.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, direction: .down) == nil)
+                .disabled(!canEdit || actions?.canMoveDown != true)
                 Divider()
                 Button("見出しと子見出しを昇格") {
-                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: -1)
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: -1, snapshot: snapshot,
+                        dialect: documentContext.markdownDialect)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionLevel.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, by: -1) == nil)
+                .disabled(!canEdit || actions?.canPromote != true)
                 Button("見出しと子見出しを降格") {
-                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: 1)
+                    editorModel.changeSectionLevel(at: entry.sourceRange.location, by: 1, snapshot: snapshot,
+                        dialect: documentContext.markdownDialect)
                 }
-                .disabled(editorModel.textView == nil ||
-                    MarkdownSectionLevel.edit(in: document.text,
-                        headingLocation: entry.sourceRange.location, by: 1) == nil)
+                .disabled(!canEdit || actions?.canDemote != true)
             }
             .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
-            .disabled(analysisStore.snapshot?.source != document.text)
+            .disabled(!isCurrent)
             .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
             .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
         }
         .listStyle(.sidebar)
         .navigationTitle("アウトライン")
         .overlay {
-            if outlineEntries.isEmpty {
+            if entries.isEmpty {
                 ContentUnavailableView("見出しがありません", systemImage: "list.bullet.indent")
             }
         }
     }
 
     private var currentSectionID: Int? {
-        guard analysisStore.snapshot?.source == document.text else { return nil }
+        guard currentAnalysisSnapshot != nil else { return nil }
         return MarkdownOutline.currentSection(at: editorModel.selectedRange.location,
                                               in: outlineEntries)?.id
     }
 
     private func navigate(to entry: MarkdownOutlineEntry) {
-        guard analysisStore.snapshot?.source == document.text else { return }
+        guard let snapshot = currentAnalysisSnapshot,
+              snapshot.outlineEntries.contains(entry) else { return }
         navigate(to: entry.sourceRange.location, previewBlockID: entry.id)
     }
 
@@ -1774,7 +1780,7 @@ struct EditorWorkspace: View {
     }
 
     private func navigateToHeading(_ fragment: String) {
-        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return }
+        guard let snapshot = currentAnalysisSnapshot else { return }
         guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
             missingHeading = fragment
             return
@@ -1799,8 +1805,15 @@ struct EditorWorkspace: View {
         }
     }
 
+    private func receiveCompletedAnalysis() {
+        guard currentAnalysisSnapshot != nil else { return }
+        receivePendingDocumentLink()
+        receivePendingWorkspaceTask()
+        if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
+    }
+
     private func receivePendingDocumentLink() {
-        guard let fileURL, analysisStore.snapshot?.source == document.text,
+        guard let fileURL, currentAnalysisSnapshot != nil,
               let fragment = documentLinkNavigation.take(for: fileURL) else { return }
         navigateToHeading(fragment)
     }
@@ -1836,7 +1849,7 @@ struct EditorWorkspace: View {
     }
 
     private func receivePendingWorkspaceTask() {
-        guard analysisStore.snapshot?.source == document.text,
+        guard currentAnalysisSnapshot != nil,
               let fileURL,
               let task = documentLinkNavigation.takeTaskToggle(for: fileURL) else { return }
         applyWorkspaceTask(task)
@@ -2140,7 +2153,7 @@ struct EditorWorkspace: View {
     }
 
     private func scrollPreview(to sourceLocation: Int) {
-        guard let snapshot = analysisStore.snapshot, snapshot.source == document.text else { return }
+        guard let snapshot = currentAnalysisSnapshot else { return }
         guard let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
                                                  in: snapshot.analysis) else { return }
         navigationSequence += 1
@@ -2169,7 +2182,7 @@ struct EditorWorkspace: View {
 
     private func synchronizePreview(to sourceLocation: Int) {
         guard mode.wrappedValue == .split,
-              let snapshot = analysisStore.snapshot, snapshot.source == document.text,
+              let snapshot = currentAnalysisSnapshot,
               let block = PreviewScrollSync.block(containingOrBefore: sourceLocation,
                                                   in: snapshot.analysis),
               block.id != synchronizedBlockID else { return }
@@ -2180,14 +2193,14 @@ struct EditorWorkspace: View {
 
     private func synchronizeEditor(to blockID: Int) {
         guard mode.wrappedValue == .split, blockID != synchronizedBlockID,
-              let snapshot = analysisStore.snapshot, snapshot.source == document.text,
+              let snapshot = currentAnalysisSnapshot,
               let block = snapshot.analysis.blocks.first(where: { $0.id == blockID }) else { return }
         synchronizedBlockID = blockID
         editorModel.scrollToTop(sourceLocation: block.sourceRange.location)
     }
 
     private func revealSource(_ range: NSRange) {
-        guard analysisStore.snapshot?.source == document.text else { return }
+        guard currentAnalysisSnapshot != nil else { return }
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: range.location)
         navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
         if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
