@@ -19,11 +19,18 @@ final class WorkspaceFileIndexTests: XCTestCase {
         store.refresh(force: true)
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertEqual(changes, 0)
+        let previousRevision = store.fileSystemRevision
         try "new".write(to: sub.appendingPathComponent("new.md"), atomically: true, encoding: .utf8)
         for _ in 0..<300 where store.nodes.first?.children?.isEmpty != false {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(store.nodes.first?.children?.first?.name, "new.md")
+        for _ in 0..<100 where store.documentURLs.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.documentIndex.canonical, Set(store.documentURLs.map { $0.resolvingSymlinksInPath().standardizedFileURL }))
+        XCTAssertGreaterThan(store.fileSystemRevision, previousRevision)
+        let reference = WorkspaceEmbedReference(target: "new", section: nil)
+        let expansion = WorkspaceDocumentEmbed.expand(reference, from: root.appendingPathComponent("host.md"), index: store.documentIndex) { _ in "embedded" }
+        XCTAssertEqual(expansion.text, "embedded")
         withExtendedLifetime(observation) {}
     }
 

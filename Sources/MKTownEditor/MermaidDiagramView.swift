@@ -232,9 +232,17 @@ final class MermaidRenderService: NSObject, WKNavigationDelegate, WKScriptMessag
                 line: MermaidDiagram.errorLine(error, explicitLine: body["line"] as? Int))), token: token)
             return
         }
-        let height = max(40, min((body["height"] as? Double) ?? 120, 3_000))
+        let measured = (body["height"] as? Double) ?? 120
+        guard measured.isFinite, measured <= 32_768 else {
+            complete(.failure(ExternalDiagramError.sourceTooLarge), token: token)
+            return
+        }
+        let height = max(40, measured)
+        webView.frame.size.height = height
         let configuration = WKSnapshotConfiguration()
         configuration.rect = NSRect(x: 0, y: 0, width: 900, height: height)
+        // Preserve tall diagrams without clipping while bounding bitmap memory.
+        configuration.snapshotWidth = NSNumber(value: min(900, sqrt(4_000_000 * 900 / height)))
         webView.takeSnapshot(with: configuration) { [weak self] image, error in
             guard let self else { return }
             if let image { self.complete(.success(image), token: token) }
