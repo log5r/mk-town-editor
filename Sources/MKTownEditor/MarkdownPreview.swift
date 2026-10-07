@@ -28,7 +28,7 @@ struct MarkdownPreview: View {
     var onOpenHeading: ((String) -> Void)?
     var onOpenDocument: ((URL) -> Void)?
     var workspaceDocumentURLs: [URL] = []
-    var workspaceContentRevisions: [URL: Int] = [:]
+    var workspaceContentRevisions: WorkspaceContentRevisions = .empty
     var workspaceDiskRevision: Int?
     var workspaceIndex: WorkspaceDocumentIndex?
     var loadWorkspaceOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
@@ -868,7 +868,7 @@ private struct DetachedPreviewContent: View {
                             snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
                             workspaceDocumentURLs: workspaceStore.documentURLs,
-                            workspaceContentRevisions: workspaceStore.openBufferRevisions,
+                            workspaceContentRevisions: workspaceStore.contentRevisions,
                             workspaceDiskRevision: workspaceStore.rootURL == nil ? nil : workspaceStore.fileSystemRevision,
                             workspaceIndex: workspaceStore.documentIndex,
                             loadWorkspaceOpenBuffers: workspaceStore.rootURL.map { root in

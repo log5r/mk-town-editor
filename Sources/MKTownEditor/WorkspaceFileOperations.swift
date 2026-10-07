@@ -185,6 +185,16 @@ struct WorkspaceMovePlan: Sendable {
         guard !manager.fileExists(atPath: destinationURL.path) else {
             throw WorkspaceFileOperationError.destinationExists
         }
+        // A document that could not be read while planning (offline cloud file, permissions)
+        // may now hold links to the moved item. Its links were never examined, so stop and
+        // ask for a new plan once it becomes readable.
+        let inspectedPaths = Set(inspectedDocuments.map(\.url.path))
+        for skipped in skippedDocuments where !inspectedPaths.contains(skipped.path) {
+            try Task.checkCancellation()
+            if (try? Data(contentsOf: skipped)) != nil {
+                throw WorkspaceFileOperationError.documentChanged(skipped)
+            }
+        }
         let affected = Set(changes.map(\.oldURL))
         for snapshot in inspectedDocuments {
             try Task.checkCancellation()
@@ -209,14 +219,18 @@ struct WorkspaceMovePlan: Sendable {
         try validateCurrentState()
         try Task.checkCancellation()
         try manager.moveItem(at: sourceURL, to: destinationURL)
+        var written: [WorkspaceDocumentChange] = []
         do {
             for change in changes where change.linkCount > 0 {
                 try Task.checkCancellation()
+                written.append(change)
                 try change.updatedData.write(to: change.newURL, options: .atomic)
             }
         } catch {
+            // Documents not yet written keep their bytes and metadata, so a later plan
+            // can still trust them; only the ones already rewritten are restored.
             var restored = true
-            for change in changes where change.linkCount > 0 {
+            for change in written.reversed() {
                 do { try change.originalData.write(to: change.newURL, options: .atomic) }
                 catch { restored = false }
             }

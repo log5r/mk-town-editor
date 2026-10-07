@@ -81,7 +81,7 @@ final class EditorScrollClippingTests: XCTestCase {
         func preview(_ isA: Bool) -> MarkdownPreview {
             MarkdownPreview(markdown: isA ? "![[parent]]" : "![[other]]",
                 documentContext: DocumentContext(fileURL: isA ? hostA : hostB),
-                workspaceDocumentURLs: documents, workspaceContentRevisions: store.openBufferRevisions,
+                workspaceDocumentURLs: documents, workspaceContentRevisions: store.contentRevisions,
                 workspaceDiskRevision: 0, workspaceIndex: index, loadWorkspaceOpenBuffers: { requested in
                     if isA { requestsA.append(requested) } else { requestsB.append(requested) }
                     return try store.openBufferSnapshots(including: requested)
@@ -144,6 +144,69 @@ final class EditorScrollClippingTests: XCTestCase {
         XCTAssertGreaterThan(requestsA.count, beforeCloseA)
         XCTAssertGreaterThan(requestsB.count, beforeCloseB)
         XCTAssertNil(encodes[unrelated])
+    }
+
+    private struct WorkspaceObserverProbe: View {
+        @ObservedObject var store: WorkspaceStore
+        let evaluated: () -> Void
+        var body: some View {
+            evaluated()
+            return Text(store.rootURL?.lastPathComponent ?? "workspace")
+        }
+    }
+
+    func testTypingDoesNotReevaluateWorkspaceObserversButEmbedsStillRefresh() async throws {
+        let root = URL(fileURLWithPath: "/private/tmp/embed-observation-\(UUID().uuidString)")
+        let host = root.appendingPathComponent("host.md"), child = root.appendingPathComponent("child.md")
+        let unrelated = root.appendingPathComponent("unrelated.md")
+        let documents = [host, child, unrelated]
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        var text = "Child"
+        var encodes = 0
+        store.registerOpenBuffer(id: UUID(), url: child, encodedData: {
+            encodes += 1; return Data(text.utf8)
+        }, updateText: { _ in })
+        store.registerOpenBuffer(id: UUID(), url: unrelated, encodedData: { Data("U".utf8) }, updateText: { _ in })
+
+        var probeBodies = 0
+        let probe = NSHostingView(rootView: WorkspaceObserverProbe(store: store) { probeBodies += 1 })
+        // The preview is built once and never rebuilt: the embed must observe revisions itself.
+        let preview = NSHostingView(rootView: MarkdownPreview(markdown: "![[child]]",
+            documentContext: DocumentContext(fileURL: host), workspaceDocumentURLs: documents,
+            workspaceContentRevisions: store.contentRevisions, workspaceDiskRevision: 0,
+            workspaceIndex: WorkspaceDocumentIndex(documents: documents),
+            loadWorkspaceOpenBuffers: { try store.openBufferSnapshots(including: $0) }))
+        let windows = [probe, preview].map { view in
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+                                  styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = view; view.layoutSubtreeIfNeeded()
+            return window
+        }
+        defer { for window in windows { window.orderOut(nil); window.contentView = nil } }
+        for _ in 0..<100 where encodes == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(encodes, 1)
+
+        var storeChanges = 0
+        let observation = store.objectWillChange.sink { storeChanges += 1 }
+        defer { observation.cancel() }
+        let bodiesBefore = probeBodies
+        for _ in 0..<20 {
+            store.openBufferDidChange(for: unrelated)
+            probe.layoutSubtreeIfNeeded(); preview.layoutSubtreeIfNeeded()
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(storeChanges, 0, "keystrokes must not publish workspace-wide changes")
+        XCTAssertEqual(probeBodies, bodiesBefore, "views observing the workspace must not re-evaluate on typing")
+        XCTAssertEqual(encodes, 1)
+
+        text = "Edited child"
+        store.openBufferDidChange(for: child)
+        for _ in 0..<100 where encodes == 1 {
+            preview.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(encodes, 2, "the embed refreshes from the observed revision without a rebuilt root view")
+        XCTAssertEqual(probeBodies, bodiesBefore)
     }
 
     private func checkClipping<V: View>(

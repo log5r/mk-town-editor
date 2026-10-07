@@ -127,22 +127,20 @@ final class DocumentStatisticsTests: XCTestCase {
         let body = String(repeating: "lorem ipsum dolor sit amet\n", count: 20_000)
         let text = "# Large\n" + body
         let snapshot = DocumentSnapshot(source: text)
-        let clock = ContinuousClock()
-        let fullScan = clock.measure { _ = DocumentStatistics(text: body) }
         let store = DocumentStatusStore()
-        let updates = 40 * ProcessInfo.processInfo.activeProcessorCount
+        let updates = 320
         let length = text.utf16.count
-        let elapsed = try await clock.measure {
-            for step in 0..<updates {
-                store.update(snapshot: snapshot, selections: [NSRange(location: 8, length: length - 8 - step)])
-            }
-            for _ in 0..<2000 where store.selection == nil { try await Task.sleep(for: .milliseconds(5)) }
+        for step in 0..<updates {
+            store.update(snapshot: snapshot, selections: [NSRange(location: 8, length: length - 8 - step)])
         }
+        for _ in 0..<2000 where store.selection == nil { try await Task.sleep(for: .milliseconds(5)) }
         XCTAssertEqual(store.selection?.characters, (text as NSString).substring(
             with: NSRange(location: 8, length: length - 7 - updates)).count)
         XCTAssertEqual(store.section?.title, "Large")
-        // Superseded scans used to run to completion: this took over 15 s (350x a single scan).
-        XCTAssertLessThan(elapsed, max(fullScan * 20, .seconds(1)))
+        // Counting completed scans instead of timing them keeps this independent of machine
+        // load. Superseded scans used to run to completion: all 320 of them.
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertLessThanOrEqual(store.scanCounter.completed, 4)
     }
 
     func testCountsCharactersWordsAndLines() {

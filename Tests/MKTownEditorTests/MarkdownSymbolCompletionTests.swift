@@ -118,6 +118,31 @@ final class MarkdownSymbolCompletionEditorTests: XCTestCase {
         }
     }
 
+    func testBackspaceInsideAutomaticPairDoesNotLeaveStrayMarker() {
+        for marker in ["*", "_", "`"] {
+            let view = EditorTextView()
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            view.commandModel = model
+            func type(_ text: String) {
+                for character in text {
+                    view.insertText(String(character), replacementRange: NSRange(location: NSNotFound, length: 0))
+                }
+            }
+            type(marker + marker)
+            XCTAssertEqual(view.string, String(repeating: marker, count: 4))
+            view.deleteBackward(nil)
+            XCTAssertEqual(view.string, String(repeating: marker, count: 3))
+            type(marker)
+            XCTAssertEqual(view.string, String(repeating: marker, count: 4),
+                           "typing the marker again restores the balanced pair")
+            XCTAssertEqual(view.selectedRange().location, 2)
+            type("x" + marker + marker)
+            XCTAssertEqual(view.string, marker + marker + "x" + marker + marker, marker)
+            XCTAssertEqual(view.selectedRange().location, 5)
+        }
+    }
+
     func testExistingManualCloserIsNotSkippedAndReplacementClearsTracking() {
         let view = EditorTextView()
         let model = MarkdownEditorModel()

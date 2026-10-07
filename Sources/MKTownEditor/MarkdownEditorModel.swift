@@ -556,11 +556,14 @@ final class MarkdownEditorModel: ObservableObject {
         var openingStart: Int?
         if selection.length == 0,
            let closer = automaticClosers.closer(at: selection.location, typed: typed, source: source) {
-            if automaticClosers.extendsOpening(closer, at: selection.location, source: source) {
+            switch automaticClosers.match(closer, at: selection.location, source: source) {
+            case .extendsOpening:
                 openingStart = closer.openingStart
                 edit = MarkdownEdit(range: selection, replacement: typed + typed,
                     selection: NSRange(location: selection.location + 1, length: 0))
-            } else {
+            case .exceedsOpening:
+                return false
+            case .closes:
                 automaticClosers.consume(at: selection.location)
                 let next = NSRange(location: selection.location + 1, length: 0)
                 textView.setSelectedRange(next)

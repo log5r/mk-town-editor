@@ -287,17 +287,22 @@ struct WorkspaceFileOperationSheet: View {
                 dismiss()
                 onComplete()
             } catch {
+                // A stop requested by the user is not an error to display. Restored
+                // documents carry new metadata, so the plan is confirmed again before reuse.
+                let cancelled = error is CancellationError
                 if appliedMove, let movePlan {
                     do {
                         try await Task.detached(priority: .userInitiated) {
                             try movePlan.rollback()
                         }.value
-                        errorMessage = error.localizedDescription
+                        errorMessage = cancelled ? nil : error.localizedDescription
                     } catch {
                         errorMessage = WorkspaceFileOperationError.rollbackFailed.localizedDescription
                     }
-                } else {
+                    plan = nil
+                } else if !cancelled {
                     errorMessage = error.localizedDescription
+                    if movePlan != nil, needsPlan, error is WorkspaceFileOperationError { plan = nil }
                 }
             }
             if let lockID { workspaceStore.unlockOpenDocuments(lockID) }
