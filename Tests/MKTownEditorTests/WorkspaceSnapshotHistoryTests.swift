@@ -95,4 +95,3 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
         XCTAssertTrue(rows.contains { $0.snapshotExcerpt == "（なし）" && $0.currentExcerpt == "inserted" })
     }
 }
-

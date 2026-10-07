@@ -192,4 +192,3 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertTrue(DocumentSnapshot(source: "# Heading").needsStructuredPreview)
     }
 }
-

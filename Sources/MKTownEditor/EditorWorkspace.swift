@@ -3120,4 +3120,3 @@ private struct DocumentStatusReader<Content: View>: View {
 
     var body: some View { content(store.selection, store.section) }
 }
-

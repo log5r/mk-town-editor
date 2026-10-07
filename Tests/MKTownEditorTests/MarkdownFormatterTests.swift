@@ -720,4 +720,3 @@ final class MarkdownFormatterTests: XCTestCase {
         XCTAssertLessThanOrEqual(cache.count, count + 2)
     }
 }
-

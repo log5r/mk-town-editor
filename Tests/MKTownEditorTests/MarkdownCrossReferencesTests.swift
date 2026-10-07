@@ -106,4 +106,3 @@ final class MarkdownCrossReferencesTests: XCTestCase {
         XCTAssertEqual(replaced, String(repeating: "本文 図1 と @unknown ", count: 20_000))
     }
 }
-

@@ -152,4 +152,3 @@ final class CollaborativeDocumentTests: XCTestCase {
         XCTAssertTrue(document.edit(to: text).isEmpty)
     }
 }
-
