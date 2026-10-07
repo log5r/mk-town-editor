@@ -211,3 +211,13 @@ $$
 ```sh
 swift test
 ```
+
+GitHub Actionsの[CI](.github/workflows/ci.yml)は、push・Pull Request・手動実行時にmacOS 15 / Xcode 16.4で全ユニットテストとReleaseビルドを実行します。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
+
+CIと同じチェックをローカルで実行するには、次のコマンドを使用します。Python 3が必要です。
+
+```sh
+bash Tools/ci.sh
+```
+
+Swiftの全ユニットテストに加えて、`Tools/test_*.py`のスクリプトテストも実行します。依存ライブラリは`Package.resolved`の固定バージョンを使用し、テスト失敗時はReleaseビルドへ進みません。
