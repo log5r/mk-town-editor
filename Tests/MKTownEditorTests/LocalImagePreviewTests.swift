@@ -181,6 +181,68 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertEqual(RemoteImageStore.referencedURLs(in: "![x][pic] http"), [])
     }
 
+    func testLocalImageCacheDecodesOncePerFileVersionAndEvictsOldestBeyondLimit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let first = root.appendingPathComponent("first.png")
+        let second = root.appendingPathComponent("second.png")
+        try png.write(to: first)
+        try png.write(to: second)
+        let cache = LocalImageCache()
+
+        for _ in 0..<10 { XCTAssertNotNil(cache.image(at: first)) }
+        XCTAssertEqual(cache.decodeCount, 1)
+        XCTAssertNil(cache.image(at: root.appendingPathComponent("missing.png")))
+
+        let larger = try XCTUnwrap(NSImage(size: NSSize(width: 8, height: 8), flipped: false) { rect in
+            NSColor.red.setFill()
+            rect.fill()
+            return true
+        }.tiffRepresentation)
+        try larger.write(to: first)
+        XCTAssertNotNil(cache.image(at: first))
+        XCTAssertEqual(cache.decodeCount, 2, "A changed file must be decoded again")
+
+        let small = LocalImageCache(costLimit: 4)
+        XCTAssertNotNil(small.image(at: first))
+        XCTAssertNotNil(small.image(at: second))
+        let key = try XCTUnwrap(LocalImageCache.key(for: first))
+        XCTAssertNil(small.cachedImage(for: key), "The least recently used image is evicted")
+    }
+
+    func testPreviewDecodesLocalImagesInBackgroundAndRendersAfterRevision() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try png.write(to: root.appendingPathComponent("photo.png"))
+        let context = DocumentContext(fileURL: root.appendingPathComponent("README.md"))
+        let store = LocalImageStore.shared
+        let revision = store.revision
+        let decodes = store.cache.decodeCount
+
+        let pending = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+            MarkdownRenderer.render("![写真](photo.png)", documentContext: context)
+        }
+        XCTAssertEqual(pending.string, "画像を読み込み中: 写真")
+
+        let deadline = Date().addingTimeInterval(5)
+        while store.revision == revision, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotEqual(store.revision, revision)
+        let loaded = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+            MarkdownRenderer.render("![写真](photo.png)", documentContext: context)
+        }
+        let location = (loaded.string as NSString).range(of: "\u{FFFC}").location
+        XCTAssertNotEqual(location, NSNotFound)
+        let attachment = try XCTUnwrap(loaded.attribute(.attachment, at: location,
+                                                         effectiveRange: nil) as? NSTextAttachment)
+        XCTAssertEqual(attachment.image?.accessibilityDescription, "写真")
+        _ = MarkdownRenderer.render("![別名](photo.png)", documentContext: context)
+        XCTAssertEqual(store.cache.decodeCount, decodes + 1)
+    }
+
     func testImagePreviewIsBoundedWithoutEnlargingSmallImages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

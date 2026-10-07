@@ -83,14 +83,22 @@ final class RemoteImageStore: ObservableObject {
         defer { inFlight.remove(url) }
         do {
             let data = try await fetch(url)
-            guard isEnabled, !Task.isCancelled, data.count <= 10_000_000,
-                  let source = CGImageSourceCreateWithData(data as CFData, nil),
-                  CGImageSourceGetType(source) != nil,
-                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            guard isEnabled, !Task.isCancelled, data.count <= 10_000_000 else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            // デコードはメインアクターの外で行う。
+            let decoded = await Task.detached(priority: .utility) { () -> CGImage? in
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      CGImageSourceGetType(source) != nil else { return nil }
+                return CGImageSourceCreateThumbnailAtIndex(source, 0, [
                     kCGImageSourceCreateThumbnailFromImageAlways: true,
                     kCGImageSourceCreateThumbnailWithTransform: true,
                     kCGImageSourceThumbnailMaxPixelSize: 960
-                  ] as CFDictionary) else { throw URLError(.cannotDecodeContentData) }
+                ] as CFDictionary)
+            }.value
+            guard isEnabled, !Task.isCancelled, let thumbnail = decoded else {
+                throw URLError(.cannotDecodeContentData)
+            }
             let scale = min(1, 480 / CGFloat(thumbnail.width), 320 / CGFloat(thumbnail.height))
             let image = NSImage(cgImage: thumbnail,
                 size: NSSize(width: CGFloat(thumbnail.width) * scale,
@@ -103,6 +111,150 @@ final class RemoteImageStore: ObservableObject {
             guard isEnabled, !Task.isCancelled else { return }
             failed.insert(url)
             revision += 1
+        }
+    }
+}
+
+/// ローカル画像のプレビュー用縮小画像を、パス・更新日時・大きさごとに保持する。
+///
+/// 描画のたびにディスクから再デコードしないためのキャッシュ。表示を確実に保つため、
+/// 破棄はメモリ圧ではなく総コストの上限を超えたときに古い順で行う。
+final class LocalImageCache: @unchecked Sendable {
+    static let shared = LocalImageCache()
+
+    struct Key: Hashable, Sendable {
+        let path: String
+        let modified: Date?
+        let size: Int?
+    }
+
+    private struct Entry {
+        let image: NSImage?
+        let cost: Int
+        var lastUse: UInt64
+    }
+
+    private let lock = NSLock()
+    private let costLimit: Int
+    private var entries: [Key: Entry] = [:]
+    private var totalCost = 0
+    private var clock: UInt64 = 0
+    private(set) var decodeCount = 0
+
+    init(costLimit: Int = 64_000_000) {
+        self.costLimit = costLimit
+    }
+
+    static func key(for fileURL: URL) -> Key? {
+        guard fileURL.isFileURL else { return nil }
+        // URLは取得済みの属性を保持するため、更新を見落とさないよう毎回読み直す。
+        var fileURL = fileURL
+        fileURL.removeAllCachedResourceValues()
+        guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey,
+                                                                 .contentModificationDateKey, .fileSizeKey]),
+              values.isRegularFile == true else { return nil }
+        return Key(path: fileURL.standardizedFileURL.path, modified: values.contentModificationDate,
+                   size: values.fileSize)
+    }
+
+    /// キャッシュ済みなら `.some`（デコードできなかった画像は `.some(nil)`）、未読込なら `nil` を返す。
+    func cachedImage(for key: Key) -> NSImage?? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard var entry = entries[key] else { return nil }
+        clock += 1
+        entry.lastUse = clock
+        entries[key] = entry
+        return .some(entry.image)
+    }
+
+    /// キャッシュになければその場でデコードする。書き出しなど同期的に画像が必要な処理で使う。
+    func image(at fileURL: URL) -> NSImage? {
+        guard let key = Self.key(for: fileURL) else { return nil }
+        if let cached = cachedImage(for: key) { return cached }
+        return decode(key: key, fileURL: fileURL)
+    }
+
+    @discardableResult
+    func decode(key: Key, fileURL: URL) -> NSImage? {
+        let image = ImageResourceManager().previewImage(at: fileURL, alt: "")
+        let cost = image.map { image in
+            image.representations.reduce(0) { $0 + $1.pixelsWide * $1.pixelsHigh * 4 }
+        } ?? 0
+        lock.lock()
+        defer { lock.unlock() }
+        decodeCount += 1
+        clock += 1
+        if let previous = entries.removeValue(forKey: key) { totalCost -= previous.cost }
+        // 同じファイルの古い版は表示されないため、更新時にまとめて除く。
+        for (staleKey, stale) in entries where staleKey.path == key.path {
+            entries[staleKey] = nil
+            totalCost -= stale.cost
+        }
+        entries[key] = Entry(image: image, cost: cost, lastUse: clock)
+        totalCost += cost
+        while totalCost > costLimit, entries.count > 1,
+              let oldest = entries.filter({ $0.key != key }).min(by: { $0.value.lastUse < $1.value.lastUse }) {
+            entries[oldest.key] = nil
+            totalCost -= oldest.value.cost
+        }
+        return image
+    }
+
+    func removeAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeAll()
+        totalCost = 0
+    }
+}
+
+/// プレビューのローカル画像を背景でデコードし、完了したら `revision` を進めて再描画させる。
+@MainActor
+final class LocalImageStore: ObservableObject {
+    static let shared = LocalImageStore()
+    @Published private(set) var revision = 0
+    let cache: LocalImageCache
+    private var inFlight = Set<LocalImageCache.Key>()
+    private var publishScheduled = false
+
+    init(cache: LocalImageCache = .shared) {
+        self.cache = cache
+    }
+
+    enum Lookup {
+        case image(NSImage)
+        case unavailable
+        case loading
+    }
+
+    func lookup(_ fileURL: URL) -> Lookup {
+        guard let key = LocalImageCache.key(for: fileURL) else { return .unavailable }
+        if let cached = cache.cachedImage(for: key) {
+            return cached.map(Lookup.image) ?? .unavailable
+        }
+        if inFlight.insert(key).inserted {
+            let cache = cache
+            Task.detached(priority: .userInitiated) { [weak self] in
+                cache.decode(key: key, fileURL: fileURL)
+                await self?.finish(key)
+            }
+        }
+        return .loading
+    }
+
+    var hasPendingDecodes: Bool { !inFlight.isEmpty }
+
+    private func finish(_ key: LocalImageCache.Key) {
+        inFlight.remove(key)
+        guard !publishScheduled else { return }
+        // 同時に終わったデコードをまとめ、プレビューの再描画を1回にする。
+        publishScheduled = true
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            self.publishScheduled = false
+            self.revision &+= 1
         }
     }
 }

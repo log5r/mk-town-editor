@@ -97,9 +97,11 @@ final class PreviewRenderCache: ObservableObject {
                 context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         let signature = BlockSignature(block, showsTaskPrefix: showsTaskPrefix)
         if let cached = blocks[signature] { return cached }
-        let rendered = PreviewTypography.themed(PreviewTypography.scaled(
+        let leaf = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
             MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: showsTaskPrefix,
-                                        documentContext: context), by: zoom),
+                                        documentContext: context)
+        }
+        let rendered = PreviewTypography.themed(PreviewTypography.scaled(leaf, by: zoom),
             kind: block.kind, theme: theme)
         blocks[signature] = rendered
         renderCount += 1
@@ -115,9 +117,11 @@ final class PreviewRenderCache: ObservableObject {
                 crossReferences: analysis.crossReferences,
                 context: context, zoom: zoom, remoteRevision: remoteRevision, theme: theme)
         if let cached = cells[markdown] { return cached }
-        let rendered = PreviewTypography.themed(PreviewTypography.scaled(
-            MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context),
-            by: zoom), kind: nil, theme: theme)
+        let cell = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+            MarkdownRenderer.renderTableCell(markdown, in: analysis, documentContext: context)
+        }
+        let rendered = PreviewTypography.themed(PreviewTypography.scaled(cell, by: zoom),
+            kind: nil, theme: theme)
         cells[markdown] = rendered
         renderCount += 1
         trimIfNeeded()

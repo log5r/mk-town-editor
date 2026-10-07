@@ -16,6 +16,7 @@ struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
+    @ObservedObject private var localImages = LocalImageStore.shared
     @State private var citationCatalog = MarkdownCitationCatalog.empty
     @State private var inspectedImage: ImageInspectionItem?
     let markdown: String
@@ -58,7 +59,7 @@ struct MarkdownPreview: View {
         return RemoteImageWork(isEnabled: true, urls: nil, sourceHash: markdown.hashValue)
     }
 
-    private var resourceRevision: Int { remoteImages.revision }
+    private var resourceRevision: Int { remoteImages.revision &+ localImages.revision }
 
     /// 描画に渡す文脈。参考文献は背景で読み込んだものを使い、描画中にディスクを読まない。
     private var renderContext: DocumentContext {
@@ -131,8 +132,10 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            Text(AttributedString(MarkdownRenderer.renderCallout(block,
-                                                in: analysis, documentContext: renderContext)))
+                                            Text(AttributedString(MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+                                                MarkdownRenderer.renderCallout(block, in: analysis,
+                                                                               documentContext: renderContext)
+                                            }))
                                                 .textSelection(.enabled)
                                         }
                                         .padding(12)
@@ -223,8 +226,10 @@ struct MarkdownPreview: View {
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
-                                        Text(AttributedString(MarkdownRenderer.renderTableCell(note.content,
-                                            in: analysis, documentContext: renderContext)))
+                                        Text(AttributedString(MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+                                            MarkdownRenderer.renderTableCell(note.content, in: analysis,
+                                                                             documentContext: renderContext)
+                                        }))
                                             .textSelection(.enabled)
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
@@ -686,8 +691,10 @@ private struct MarkdownTextPreview: NSViewRepresentable {
                 coordinator.renderedContext != documentContext ||
                 coordinator.renderedZoom != zoom ||
                 coordinator.renderedRemoteRevision != remoteRevision else { return }
-        let rendered = analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
-            ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
+        let rendered = MarkdownRenderer.$decodesLocalImagesInBackground.withValue(true) {
+            analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
+                ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
+        }
         textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext
