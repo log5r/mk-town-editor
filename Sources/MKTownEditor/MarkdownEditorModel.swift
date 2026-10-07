@@ -67,6 +67,55 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     weak var textView: NSTextView?
+    var sharedSnapshot: DocumentSnapshot?
+    var usesSharedAnalysis = false
+    var markdownDialect: MarkdownDialect = .extended
+    var matchingSnapshot: DocumentSnapshot? {
+        guard let textView, let sharedSnapshot,
+              sharedSnapshot.matches(source: textView.editorSource, dialect: markdownDialect) else { return nil }
+        return sharedSnapshot
+    }
+    private var structuralAnalysisAvailable: Bool { !usesSharedAnalysis || matchingSnapshot != nil }
+    private var availabilitySource: String?
+    private var availabilitySelection: NSRange?
+    private var availabilityDialect: MarkdownDialect?
+    private var tableAvailability: [MarkdownTableOperation: Bool] = [:]
+    private var gridAvailability: Bool?
+    private var alignmentComputed = false
+    private var cachedAlignment: MarkdownTable.Alignment?
+    private var commandAvailability: [EditorCommand: Bool] = [:]
+
+    private func refreshAvailabilityCache() {
+        let source = textView?.editorSource
+        let selection = textView?.selectedRange()
+        if source != availabilitySource || selection != availabilitySelection || availabilityDialect != markdownDialect {
+            availabilitySource = source; availabilitySelection = selection; availabilityDialect = markdownDialect
+            tableAvailability.removeAll(); commandAvailability.removeAll()
+            gridAvailability = nil; alignmentComputed = false; cachedAlignment = nil
+        }
+    }
+
+    func canExecuteStructuralCommand(_ command: EditorCommand) -> Bool {
+        guard canExecuteCommand, structuralAnalysisAvailable, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = commandAvailability[command] { return value }
+        let source = textView.editorSource
+        let selection = textView.selectedRange()
+        let analysis = matchingSnapshot?.analysis
+        let result: Bool
+        switch command {
+        case .indentList, .outdentList:
+            result = MarkdownIndentation.edit(in: source, selection: selection,
+                direction: command == .indentList ? .indent : .outdent,
+                listIndentWidth: listIndentWidth, codeIndentWidth: codeIndentWidth, analysis: analysis) != nil
+        case .convertLinkForm:
+            result = MarkdownReferenceConversion.edit(in: source, selection: selection, analysis: analysis) != nil
+        default: result = false
+        }
+        commandAvailability[command] = result
+        return result
+    }
+
     private var transitionSelections: [NSRange]?
     private(set) var scrollOrigin = NSPoint.zero
     private(set) var shouldRestoreFocus = false
@@ -433,20 +482,22 @@ final class MarkdownEditorModel: ObservableObject {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownLineContinuation.edit(in: textView.editorSource,
-                                                       selection: textView.selectedRange()) else { return false }
+                                                       selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis,
+                                                       allowsAnalysis: !usesSharedAnalysis) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
     }
 
     @discardableResult
     func changeIndentation(_ direction: MarkdownIndentation.Direction) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let edit = MarkdownIndentation.edit(in: textView.editorSource,
                                                   selection: textView.selectedRange(),
                                                   direction: direction,
                                                   listIndentWidth: listIndentWidth,
-                                                  codeIndentWidth: codeIndentWidth) else { return false }
+                                                  codeIndentWidth: codeIndentWidth, analysis: matchingSnapshot?.analysis) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
     }
@@ -473,7 +524,8 @@ final class MarkdownEditorModel: ObservableObject {
                 return true
             }
         } else {
-            edit = MarkdownSymbolCompletion.edit(in: source, selection: selection, typed: typed)
+            edit = MarkdownSymbolCompletion.edit(in: source, selection: selection, typed: typed,
+                analysis: matchingSnapshot?.analysis, allowsAnalysis: !usesSharedAnalysis)
         }
         guard let edit else { return false }
         if perform(edit, in: textView, storage: storage, focusEditor: true) {
@@ -496,9 +548,10 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func convertLinkForm() {
+        guard structuralAnalysisAvailable else { return }
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
               let edit = MarkdownReferenceConversion.edit(in: textView.editorSource,
-                  selection: textView.selectedRange()) else { return }
+                  selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis) else { return }
         _ = perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
@@ -576,15 +629,21 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     var canPresentTableGrid: Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard canExecuteCommand, let textView else { return false }
-        return MarkdownTableEditing.gridDraft(in: textView.editorSource,
-                                               selection: textView.selectedRange()) != nil
+        refreshAvailabilityCache()
+        if let gridAvailability { return gridAvailability }
+        let value = MarkdownTableEditing.gridDraft(in: textView.editorSource,
+                                               selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis) != nil
+        gridAvailability = value
+        return value
     }
 
     func presentTableGrid() {
+        guard structuralAnalysisAvailable else { return }
         guard canExecuteCommand, let textView else { return }
         tableGridDraft = MarkdownTableEditing.gridDraft(in: textView.editorSource,
-                                                        selection: textView.selectedRange())
+                                                        selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis)
     }
 
     func commitTableGrid(header: [String], rows: [[String]],
@@ -606,34 +665,44 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func canEditTable(_ operation: MarkdownTableOperation) -> Bool {
-        guard canExecuteCommand, let textView else { return false }
-        return MarkdownTableEditing.edit(in: textView.editorSource,
-                                         selection: textView.selectedRange(),
-                                         operation: operation) != nil
+        guard canExecuteCommand, structuralAnalysisAvailable, let textView else { return false }
+        refreshAvailabilityCache()
+        if let value = tableAvailability[operation] { return value }
+        let value = MarkdownTableEditing.edit(in: textView.editorSource,
+            selection: textView.selectedRange(), operation: operation, analysis: matchingSnapshot?.analysis) != nil
+        tableAvailability[operation] = value
+        return value
     }
 
     var selectedTableAlignment: MarkdownTable.Alignment? {
+        guard structuralAnalysisAvailable else { return nil }
         guard let textView else { return nil }
-        return MarkdownTableEditing.alignment(in: textView.editorSource,
-                                              selection: textView.selectedRange())
+        refreshAvailabilityCache()
+        if alignmentComputed { return cachedAlignment }
+        cachedAlignment = MarkdownTableEditing.alignment(in: textView.editorSource,
+                                              selection: textView.selectedRange(), analysis: matchingSnapshot?.analysis)
+        alignmentComputed = true
+        return cachedAlignment
     }
 
     @discardableResult
     func editTable(_ operation: MarkdownTableOperation) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
               let edit = MarkdownTableEditing.edit(in: textView.editorSource,
                                                     selection: textView.selectedRange(),
-                                                    operation: operation) else { return false }
+                                                    operation: operation, analysis: matchingSnapshot?.analysis) else { return false }
         return perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
     func moveTableCell(backwards: Bool) -> Bool {
+        guard structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
               let action = MarkdownTableEditing.tabAction(in: textView.editorSource,
                   selection: textView.selectedRange(), backwards: backwards,
-                  addsRowAtEnd: tableAddsRowOnTab) else { return false }
+                  addsRowAtEnd: tableAddsRowOnTab, analysis: matchingSnapshot?.analysis) else { return false }
         switch action {
         case let .select(range):
             textView.setSelectedRange(range)

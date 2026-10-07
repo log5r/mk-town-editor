@@ -334,10 +334,10 @@ enum MarkdownReferenceConversion {
     private static let reference = try! NSRegularExpression(
         pattern: #"(?<!!)\[((?:\\.|[^\\\]\n])+)\](?:\[((?:\\.|[^\\\]\n])*)\])?"#)
 
-    static func edit(in text: String, selection: NSRange) -> MarkdownEdit? {
+    static func edit(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownEdit? {
         let source = text as NSString
         guard selection.location >= 0, NSMaxRange(selection) <= source.length else { return nil }
-        let analysis = MarkdownAnalysis(text)
+        let analysis = analysis ?? MarkdownAnalysis(text)
         let code = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange) +
             MarkdownInlineSyntax.codeSpanRanges(in: text)
         func contains(_ range: NSRange) -> Bool {

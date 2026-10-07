@@ -1,7 +1,8 @@
 import Foundation
 
 enum MarkdownSymbolCompletion {
-    static func edit(in text: String, selection: NSRange, typed: String) -> MarkdownEdit? {
+    static func edit(in text: String, selection: NSRange, typed: String,
+                     analysis: MarkdownAnalysis? = nil, allowsAnalysis: Bool = true) -> MarkdownEdit? {
         let source = text as NSString
         guard selection.location <= source.length,
               selection.length <= source.length - selection.location,
@@ -10,11 +11,11 @@ enum MarkdownSymbolCompletion {
         if isEscaped(source, at: position) { return nil }
         let isMarkdownMarker = typed == "`" || typed == "*" || typed == "_"
         if isMarkdownMarker {
-            let inCodeBlock = MarkdownAnalysis(text).blocks.contains {
-                $0.kind == .codeBlock && NSLocationInRange(position, $0.sourceRange)
-            }
-            let inCodeSpan = MarkdownInlineSyntax.codeSpanRanges(in: text).contains {
-                position > $0.location && position < NSMaxRange($0)
+            let inCodeBlock = MarkdownEditingContext.isInCode(at: position, source: text,
+                analysis: analysis, allowsAnalysis: allowsAnalysis)
+            let line = source.lineRange(for: NSRange(location: position, length: 0))
+            let inCodeSpan = MarkdownInlineSyntax.codeSpanRanges(in: source.substring(with: line)).contains {
+                position > line.location + $0.location && position < line.location + NSMaxRange($0)
             }
             if inCodeBlock || inCodeSpan { return nil }
         }

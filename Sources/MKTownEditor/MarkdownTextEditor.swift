@@ -104,6 +104,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
+        model.markdownDialect = documentContext.markdownDialect
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         if textView.whitespaceOptions != whitespaceOptions ||
@@ -171,6 +172,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             textView.loadsExternalLinkPreviews != loadsExternalLinkPreviews {
             textView.cancelLinkHover()
         }
+        model.markdownDialect = documentContext.markdownDialect
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         context.coordinator.sharedSnapshot = sharedSnapshot
@@ -225,6 +227,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         let model: MarkdownEditorModel
@@ -233,8 +236,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
         weak var lineNumberRuler: MarkdownLineNumberRulerView?
         var appliedTextStyle: EditorTextStyle?
         var appliedLayoutOptions: EditorLayoutOptions?
-        var sharedSnapshot: DocumentSnapshot?
-        var usesSharedAnalysis = false
+        var sharedSnapshot: DocumentSnapshot? {
+            didSet { model.sharedSnapshot = sharedSnapshot }
+        }
+        var usesSharedAnalysis = false {
+            didSet { model.usesSharedAnalysis = usesSharedAnalysis }
+        }
         var usesInlineLivePresentation = false
         var usesTypewriterMode = false
         private var lastManualScroll = Date.distantPast
@@ -575,7 +582,10 @@ final class EditorTextView: NSTextView {
         super.mouseMoved(with: event)
         let point = convert(event.locationInWindow, from: nil)
         let source = sourceText
-        if hoverRevision != sourceRevision {
+        if commandModel?.usesSharedAnalysis == true {
+            guard let snapshot = commandModel?.matchingSnapshot else { linkHover.cancel(); return }
+            hoverLinks = snapshot.hoverLinks
+        } else if hoverRevision != sourceRevision {
             hoverRevision = sourceRevision
             hoverLinks = MarkdownLinkHover.links(in: source)
         }
