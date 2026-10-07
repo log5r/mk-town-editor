@@ -21,14 +21,7 @@ struct DocumentSnapshot: Sendable {
         self.source = source
         self.dialect = dialect
         analysis = parsed
-        var occurrences: [String: Int] = [:]
-        blockPresentationIDs = Dictionary(uniqueKeysWithValues: parsed.blocks.map { block in
-            let key = "\(block.kind):\(block.codeLanguage ?? ""):\(block.content)"
-            let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
-            let occurrence = occurrences[digest, default: 0]
-            occurrences[digest] = occurrence + 1
-            return (block.id, "\(digest):\(occurrence)")
-        })
+        blockPresentationIDs = PreviewBlockIdentity.identifiers(in: parsed)
         outlineEntries = MarkdownOutline.entries(in: parsed)
         sectionActions = MarkdownSectionActions.all(in: outlineEntries)
         statistics = DocumentStatistics(text: source)
@@ -42,6 +35,20 @@ struct DocumentSnapshot: Sendable {
     /// Source offsets and parsed structure are valid only for both inputs.
     func matches(source: String, dialect: MarkdownDialect) -> Bool {
         self.dialect == dialect && self.source == source
+    }
+}
+
+/// Stable SwiftUI identities, also used by previews without a shared snapshot.
+enum PreviewBlockIdentity {
+    static func identifiers(in analysis: MarkdownAnalysis) -> [Int: String] {
+        var occurrences: [String: Int] = [:]
+        return Dictionary(uniqueKeysWithValues: analysis.blocks.map { block in
+            let key = "\(block.kind):\(block.codeLanguage ?? ""):\(block.content)"
+            let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+            let occurrence = occurrences[digest, default: 0]
+            occurrences[digest] = occurrence + 1
+            return (block.id, "\(digest):\(occurrence)")
+        })
     }
 }
 

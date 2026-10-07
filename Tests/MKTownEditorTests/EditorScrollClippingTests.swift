@@ -27,6 +27,39 @@ final class EditorScrollClippingTests: XCTestCase {
         }
     }
 
+    func testStructuredPreviewRetainsEmbeddedStateAfterUpstreamInsertion() async throws {
+        // Exercise the actual row subtree: recreating it reruns the embed's task.
+        for sharedAnalysis in [false, true] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            let document = root.appendingPathComponent("main.md")
+            let embedded = root.appendingPathComponent("note.md")
+            var loads = 0
+            func preview(_ source: String) -> MarkdownPreview {
+                MarkdownPreview(markdown: source, documentContext: DocumentContext(fileURL: document),
+                    snapshot: sharedAnalysis ? DocumentSnapshot(source: source) : nil,
+                    usesSharedAnalysis: sharedAnalysis, workspaceDocumentURLs: [document, embedded],
+                    workspaceDiskRevision: 0, loadWorkspaceOpenBuffers: {
+                        loads += 1
+                        return [embedded: Data("Embedded body".utf8)]
+                    })
+            }
+            let host = NSHostingView(rootView: preview("![[note]]"))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+                styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = host
+            host.layoutSubtreeIfNeeded()
+            for _ in 0..<100 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+            XCTAssertEqual(loads, 1)
+            try await Task.sleep(for: .milliseconds(100))
+            host.rootView = preview("Inserted paragraph\n\n![[note]]")
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(200))
+            XCTAssertEqual(loads, 1, "An unchanged embed must retain state despite a changed parser block ID")
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+    }
+
     private func checkClipping<V: View>(
         in host: NSHostingView<V>, inspect: (NSScrollView) throws -> Void
     ) throws {
