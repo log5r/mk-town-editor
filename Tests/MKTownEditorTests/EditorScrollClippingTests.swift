@@ -38,7 +38,7 @@ final class EditorScrollClippingTests: XCTestCase {
                 MarkdownPreview(markdown: source, documentContext: DocumentContext(fileURL: document),
                     snapshot: sharedAnalysis ? DocumentSnapshot(source: source) : nil,
                     usesSharedAnalysis: sharedAnalysis, workspaceDocumentURLs: [document, embedded],
-                    workspaceDiskRevision: 0, loadWorkspaceOpenBuffers: {
+                    workspaceDiskRevision: 0, loadWorkspaceOpenBuffers: { _ in
                         loads += 1
                         return [embedded: Data("Embedded body".utf8)]
                     })
@@ -58,6 +58,92 @@ final class EditorScrollClippingTests: XCTestCase {
             window.orderOut(nil)
             window.contentView = nil
         }
+    }
+
+    func testEmbedsInSeparateWindowsRefreshOnlyChangedDependencies() async throws {
+        let root = URL(fileURLWithPath: "/private/tmp/embed-windows-\(UUID().uuidString)")
+        let hostA = root.appendingPathComponent("host-a.md"), hostB = root.appendingPathComponent("host-b.md")
+        let parent = root.appendingPathComponent("parent.md"), child = root.appendingPathComponent("child.md")
+        let other = root.appendingPathComponent("other.md"), unrelated = root.appendingPathComponent("unrelated.md")
+        let documents = [hostA, hostB, parent, child, other, unrelated]
+        let index = WorkspaceDocumentIndex(documents: documents)
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        var encodes: [URL: Int] = [:]
+        var text = [parent: "Parent\n![[child]]", child: "Child", other: "Other", unrelated: "Unrelated"]
+        let otherID = UUID()
+        for url in documents {
+            store.registerOpenBuffer(id: url == other ? otherID : UUID(), url: url, encodedData: {
+                encodes[url, default: 0] += 1
+                return Data((text[url] ?? "Host").utf8)
+            }, updateText: { _ in })
+        }
+        var requestsA: [Set<URL>] = [], requestsB: [Set<URL>] = []
+        func preview(_ isA: Bool) -> MarkdownPreview {
+            MarkdownPreview(markdown: isA ? "![[parent]]" : "![[other]]",
+                documentContext: DocumentContext(fileURL: isA ? hostA : hostB),
+                workspaceDocumentURLs: documents, workspaceContentRevisions: store.openBufferRevisions,
+                workspaceDiskRevision: 0, workspaceIndex: index, loadWorkspaceOpenBuffers: { requested in
+                    if isA { requestsA.append(requested) } else { requestsB.append(requested) }
+                    return try store.openBufferSnapshots(including: requested)
+                })
+        }
+        let first = NSHostingView(rootView: preview(true)), second = NSHostingView(rootView: preview(false))
+        let windows = [first, second].map { host in
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 500),
+                styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = host; host.layoutSubtreeIfNeeded()
+            return window
+        }
+        defer { for window in windows { window.orderOut(nil); window.contentView = nil } }
+        func updateHosts() {
+            first.rootView = preview(true); second.rootView = preview(false)
+            first.layoutSubtreeIfNeeded(); second.layoutSubtreeIfNeeded()
+        }
+        for _ in 0..<100 where encodes[child] == nil || encodes[other] == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(encodes[parent], 1)
+        XCTAssertEqual(encodes[child], 1)
+        XCTAssertEqual(encodes[other], 1)
+        XCTAssertNil(encodes[hostA]); XCTAssertNil(encodes[hostB]); XCTAssertNil(encodes[unrelated])
+        let initialA = requestsA.count, initialB = requestsB.count
+        for _ in 0..<20 { store.openBufferDidChange(for: unrelated); updateHosts() }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(requestsA.count, initialA); XCTAssertEqual(requestsB.count, initialB)
+        XCTAssertNil(encodes[unrelated])
+
+        text[child] = "Edited child"
+        store.openBufferDidChange(for: child); updateHosts()
+        for _ in 0..<100 where encodes[child] == 1 { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(encodes[child], 2)
+        XCTAssertEqual(requestsB.count, initialB, "Other window must not refresh for an unrelated nested dependency")
+
+        text[parent] = "Parent\n![[other]]"
+        store.openBufferDidChange(for: parent); updateHosts()
+        for _ in 0..<100 where encodes[other] == 1 { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+        let changedA = requestsA.count
+        store.openBufferDidChange(for: child); updateHosts()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(requestsA.count, changedA, "Removed dependencies must stop triggering refreshes")
+
+        let previousOther = encodes[other]!
+        text[other] = "Updated shared dependency"
+        store.openBufferDidChange(for: other); updateHosts()
+        for _ in 0..<100 where encodes[other] != previousOther + 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(encodes[other], previousOther + 2, "Both dependent windows must refresh")
+        let beforeCloseA = requestsA.count, beforeCloseB = requestsB.count
+        store.unregisterOpenBuffer(id: otherID, url: other); updateHosts()
+        for _ in 0..<100 where requestsA.count == beforeCloseA || requestsB.count == beforeCloseB {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertGreaterThan(requestsA.count, beforeCloseA)
+        XCTAssertGreaterThan(requestsB.count, beforeCloseB)
+        XCTAssertNil(encodes[unrelated])
     }
 
     private func checkClipping<V: View>(

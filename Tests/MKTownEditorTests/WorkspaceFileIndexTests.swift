@@ -4,6 +4,41 @@ import XCTest
 
 @MainActor
 final class WorkspaceFileIndexTests: XCTestCase {
+    func testOpenBufferRevisionsAndSnapshotsAreScopedToRequestedDocuments() throws {
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        let root = URL(fileURLWithPath: "/private/tmp/buffer-scope-\(UUID().uuidString)")
+        let a = root.appendingPathComponent("a.md"), b = root.appendingPathComponent("b.md")
+        let conflict = root.appendingPathComponent("conflict.md")
+        let aID = UUID(), bID = UUID()
+        var aEncodes = 0, bEncodes = 0, conflictEncodes = 0
+        store.registerOpenBuffer(id: aID, url: a, encodedData: {
+            aEncodes += 1; return Data("A".utf8)
+        }, updateText: { _ in })
+        store.registerOpenBuffer(id: bID, url: b, encodedData: {
+            bEncodes += 1; return Data("B".utf8)
+        }, updateText: { _ in })
+        for text in ["first", "second"] {
+            store.registerOpenBuffer(id: UUID(), url: conflict, encodedData: {
+                conflictEncodes += 1; return Data(text.utf8)
+            }, updateText: { _ in })
+        }
+        let before = store.openBufferRevisions
+        store.openBufferDidChange(for: a)
+        XCTAssertEqual(store.openBufferRevisions[a], before[a]! + 1)
+        XCTAssertEqual(store.openBufferRevisions[b], before[b])
+        XCTAssertEqual(aEncodes + bEncodes + conflictEncodes, 0)
+        XCTAssertEqual(try store.openBufferSnapshots(under: root, including: [a]), [a: Data("A".utf8)])
+        XCTAssertEqual(aEncodes, 1)
+        XCTAssertEqual(bEncodes, 0)
+        XCTAssertEqual(conflictEncodes, 0)
+        XCTAssertThrowsError(try store.openBufferSnapshots(under: root, including: [conflict]))
+        let revision = store.openBufferRevisions[a]!
+        store.unregisterOpenBuffer(id: aID, url: a)
+        XCTAssertEqual(store.openBufferRevisions[a], revision + 1)
+        XCTAssertTrue(try store.openBufferSnapshots(including: [a]).isEmpty)
+        XCTAssertEqual(store.openBufferRevisions[b], before[b])
+    }
+
     func testUnchangedRefreshDoesNotPublishAndNestedChangesAreObserved() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
