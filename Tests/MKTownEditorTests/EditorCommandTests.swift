@@ -1,9 +1,63 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
 @MainActor
+private final class PaletteVisibilityProbe {
+    var commands: [EditorCommand] = []
+}
+
+@MainActor
 final class EditorCommandTests: XCTestCase {
+    func testOccurrenceAvailabilityCacheTracksAllSelections() {
+        let view = NSTextView()
+        view.string = "word word word"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let ranges = [0, 5, 10].map { NSValue(range: NSRange(location: $0, length: 4)) }
+        view.setSelectedRange(ranges[0].rangeValue)
+        XCTAssertTrue(model.canAddNextOccurrence)
+        view.setSelectedRanges(ranges, affinity: .upstream, stillSelecting: false)
+        XCTAssertFalse(model.canAddNextOccurrence,
+                       "Adding other selections must invalidate the cache even if the first is unchanged")
+        view.setSelectedRanges(Array(ranges.prefix(2)), affinity: .upstream, stillSelecting: false)
+        XCTAssertTrue(model.canAddNextOccurrence)
+    }
+
+    func testOpenPaletteAddsStructuralCommandsWhenPendingAnalysisCompletes() async throws {
+        let view = NSTextView()
+        view.string = "- item"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.usesSharedAnalysis = true
+        let visible = PaletteVisibilityProbe()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        let host = NSHostingView(rootView: CommandPaletteView(model: model)
+            .environmentObject(EditorSettingsStore(defaults: defaults))
+            .onPreferenceChange(CommandPaletteMatchesKey.self) { commands in
+                Task { @MainActor in visible.commands = commands }
+            })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 420),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        defer { window.close() }
+        for _ in 0..<100 where visible.commands.isEmpty {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(visible.commands.contains(.indentList))
+        XCTAssertTrue(visible.commands.contains(.bold), "The palette must be loaded before publishing analysis")
+        model.sharedSnapshot = DocumentSnapshot(source: view.string)
+        for _ in 0..<100 where !visible.commands.contains(.indentList) {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(visible.commands.contains(.indentList),
+                      "Opening the palette during analysis must not permanently hide commands")
+    }
+
     func testCustomizableToolbarUsesUniqueStableCommandsAndSharedActions() {
         let identifiers = EditorCommand.toolbar.map(\.toolbarIdentifier)
         XCTAssertEqual(Set(identifiers).count, identifiers.count)

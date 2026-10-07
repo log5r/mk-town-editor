@@ -219,9 +219,9 @@ enum EditorCommand: Hashable {
 
     @MainActor
     static func paletteMatches(_ query: String, in model: MarkdownEditorModel?,
-                               shortcutLabel: (Self) -> String? = { $0.shortcutLabel }, availableCommands: [Self]? = nil) -> [Self] {
+                               shortcutLabel: (Self) -> String? = { $0.shortcutLabel }) -> [Self] {
         let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (availableCommands ?? palette.filter { $0.canExecute(in: model) }).filter { command in
+        return palette.filter { $0.canExecute(in: model) }.filter { command in
                 (term.isEmpty || command.title.localizedStandardContains(term) ||
                     shortcutLabel(command)?.localizedStandardContains(term) == true)
         }
@@ -243,9 +243,7 @@ enum EditorCommand: Hashable {
         case .indentList, .outdentList, .convertLinkForm:
             return model?.canExecuteStructuralCommand(self) == true
         case .comment:
-            guard let view = model?.textView else { return false }
-            return MarkdownFormatter.commentEdit(in: view.editorSource,
-                selection: view.selectedRange()) != nil
+            return model?.canComment == true
         case .snippet:
             return !(model?.snippets.isEmpty ?? true)
         default: return true
