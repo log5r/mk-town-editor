@@ -212,7 +212,7 @@ $$
 swift test
 ```
 
-GitHub Actionsの[CI](.github/workflows/ci.yml)は、push・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で全ユニットテストとReleaseビルドを実行します。実行ログはActionsの`ci-results`から7日間ダウンロードできます。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。
+GitHub Actionsの[CI](.github/workflows/ci.yml)は、push・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で全ユニットテストとReleaseビルドを実行します。実行ログはActionsの`ci-results`から7日間ダウンロードできます。使用する`xcode-27` runnerはGitHubで公開プレビュー扱いです。
 
 CIと同じチェックをローカルで実行するには、次のコマンドを使用します。Python 3が必要です。
 
