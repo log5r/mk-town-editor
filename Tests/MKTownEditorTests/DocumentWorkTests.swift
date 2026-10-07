@@ -52,6 +52,34 @@ final class DocumentWorkTests: XCTestCase {
         XCTAssertNotNil(board.data(forType: .rtf))
     }
 
+    func testAsyncClipboardImageSurvivesDeletingOriginal() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 2,
+            pixelsHigh: 2, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        let imageURL = root.appendingPathComponent("image.png")
+        try png.write(to: imageURL)
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        try await MarkdownRichClipboard.copyAsync("![image](image.png)",
+            documentURL: root.appendingPathComponent("note.md"), to: board)
+        try FileManager.default.removeItem(at: imageURL)
+        let html = try XCTUnwrap(board.string(forType: .html))
+        XCTAssertFalse(html.contains(imageURL.absoluteString))
+        let prefix = "data:image/png;base64,"
+        let start = try XCTUnwrap(html.range(of: prefix)).upperBound
+        let end = try XCTUnwrap(html[start...].firstIndex(of: "\""))
+        let embedded = try XCTUnwrap(Data(base64Encoded: String(html[start..<end])))
+        XCTAssertEqual(embedded, png)
+        XCTAssertNotNil(NSImage(data: embedded))
+        let pasted = try await DocumentWork.loadHTML(html)
+        XCTAssertTrue(pasted.string.contains("\u{FFFC}"), "HTML must still decode an image after deletion")
+        XCTAssertNotNil(board.data(forType: .rtf))
+    }
+
     func testAsyncPDFProducesReadableOutputAndCancelledExportPreservesDestination() async throws {
         _ = NSApplication.shared
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent("async-\(UUID().uuidString).pdf")

@@ -28,7 +28,7 @@ enum MarkdownRichClipboard {
 
     static func copyAsync(_ markdown: String, documentURL: URL?, to pasteboard: NSPasteboard,
                           dialect: MarkdownDialect = .extended) async throws {
-        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL, dialect: dialect, images: .fileReferences)
+        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL, dialect: dialect, images: .embedded)
         let rendered = AttributedTransfer(try await DocumentWork.loadHTML(html))
         let rtf = try await DocumentWork.perform {
             try rendered.value.data(from: NSRange(location: 0, length: rendered.value.length),
