@@ -200,7 +200,8 @@ enum PortablePackagePlanner {
 enum PortablePackageExporter {
     static func export(_ plan: PortablePackagePlan, to parent: URL, name: String,
                        format: PortablePackageFormat, zip: Bool,
-                       archiveExecutable: URL = URL(fileURLWithPath: "/usr/bin/ditto")) throws -> URL {
+                       archiveExecutable: URL = URL(fileURLWithPath: "/usr/bin/ditto"),
+                       copyAsset: @Sendable (URL, URL) throws -> Void = { try copyAsset(from: $0, to: $1) }) throws -> URL {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, cleanName != ".", cleanName != "..",
               !cleanName.contains("/"), !cleanName.contains(":") else {
@@ -228,7 +229,7 @@ enum PortablePackageExporter {
             totalSize += values.fileSize ?? 0
             guard totalSize <= 500_000_000 else { throw PortablePackageError.resourceTooLarge }
             let target = staging.appendingPathComponent(asset.relativePath)
-            try manager.copyItem(at: asset.sourceURL, to: target)
+            try copyAsset(asset.sourceURL, target)
         }
         let document = format == .markdown ? plan.markdown : plan.html
         try Data(document.utf8).write(to: staging.appendingPathComponent(format.fileName),
@@ -244,6 +245,52 @@ enum PortablePackageExporter {
             try manager.moveItem(at: staging, to: destination)
         }
         return destination
+    }
+
+    static let assetCopyChunkSize = 256 * 1_024
+
+    /// Use bounded native copy blocks and check cancellation after each write,
+    /// preserving macOS metadata (including resource forks) as well as file bytes.
+    static func copyAsset(from source: URL, to target: URL,
+                          didCopyChunk: @escaping (Int) -> Void = { _ in }) throws {
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        let reader = try FileHandle(forReadingFrom: source)
+        defer { try? reader.close() }
+        let descriptor = open(target.path, O_WRONLY | O_CREAT | O_EXCL, 0o666)
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        let writer = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        var completed = false
+        defer {
+            try? writer.close()
+            if !completed { try? FileManager.default.removeItem(at: target) }
+        }
+        guard let state = copyfile_state_alloc() else { throw POSIXError(.ENOMEM) }
+        defer { copyfile_state_free(state) }
+        let progress = AssetCopyProgress(didCopyChunk: didCopyChunk)
+        let callback: copyfile_callback_t = { what, stage, state, _, _, context in
+            if Task<Never, Never>.isCancelled { return COPYFILE_QUIT }
+            if what == COPYFILE_COPY_DATA, stage == COPYFILE_PROGRESS, let state, let context {
+                var copied: off_t = 0
+                if copyfile_state_get(state, UInt32(COPYFILE_STATE_COPIED), &copied) == 0 {
+                    Unmanaged<AssetCopyProgress>.fromOpaque(context).takeUnretainedValue().didCopyChunk(Int(copied))
+                }
+            }
+            return Task<Never, Never>.isCancelled ? COPYFILE_QUIT : COPYFILE_CONTINUE
+        }
+        var blockSize = UInt32(assetCopyChunkSize)
+        guard copyfile_state_set(state, UInt32(COPYFILE_STATE_BSIZE), &blockSize) == 0,
+              copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CTX), Unmanaged.passUnretained(progress).toOpaque()) == 0,
+              copyfile_state_set(state, UInt32(COPYFILE_STATE_STATUS_CB), unsafeBitCast(callback, to: UnsafeRawPointer.self)) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let result = withExtendedLifetime(progress) {
+            fcopyfile(reader.fileDescriptor, descriptor, state, copyfile_flags_t(COPYFILE_ALL))
+        }
+        let copyError = errno
+        if Task<Never, Never>.isCancelled { throw PortablePackageError.cancelled }
+        guard result == 0 else { throw POSIXError(POSIXErrorCode(rawValue: copyError) ?? .EIO) }
+        try writer.close()
+        completed = true
     }
 
     private static func createArchive(from staging: URL, to output: URL, executable: URL) throws {
@@ -283,6 +330,12 @@ enum PortablePackageExporter {
             throw PortablePackageError.archiveFailed(String(decoding: data, as: UTF8.self))
         }
     }
+}
+
+/// The native callback borrows this context only for the synchronous fcopyfile call.
+private final class AssetCopyProgress {
+    let didCopyChunk: (Int) -> Void
+    init(didCopyChunk: @escaping (Int) -> Void) { self.didCopyChunk = didCopyChunk }
 }
 
 struct PortablePackageSheet: View {
