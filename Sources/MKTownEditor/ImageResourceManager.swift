@@ -57,6 +57,15 @@ final class RemoteImageStore: ObservableObject {
     nonisolated static func referencedURLs(in markdown: String,
                                            analysis providedAnalysis: MarkdownAnalysis? = nil) -> Set<URL> {
         guard markdown.range(of: "http", options: .caseInsensitive) != nil else { return [] }
+        return Set(imageDestinations(in: markdown, analysis: providedAnalysis)
+            .compactMap { URL(string: $0) }
+            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
+    }
+
+    /// 本文の画像の参照先。コードブロックとインラインコードの中は除き、参照形式も解決する。
+    nonisolated static func imageDestinations(in markdown: String,
+                                              analysis providedAnalysis: MarkdownAnalysis? = nil) -> [String] {
+        guard markdown.contains("![") else { return [] }
         let analysis = providedAnalysis ?? MarkdownAnalysis(markdown)
         let masked = NSMutableString(string: markdown)
         let codeBlocks = analysis.blocks.filter { $0.kind == .codeBlock }.map(\.sourceRange)
@@ -69,10 +78,7 @@ final class RemoteImageStore: ObservableObject {
         }
         let resolved = MarkdownRenderer.resolveReferences(in: masked as String,
             using: analysis.references)
-        return Set(MarkdownLinkSyntax.inlineLinks(in: resolved)
-            .filter(\.isImage)
-            .compactMap { URL(string: $0.destination) }
-            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
+        return MarkdownLinkSyntax.inlineLinks(in: resolved).filter(\.isImage).map(\.destination)
     }
 
     func load(_ url: URL) async {
@@ -202,8 +208,8 @@ final class LocalImageCache: @unchecked Sendable {
     }
 
     @discardableResult
-    func decode(key: Key, fileURL: URL) -> NSImage? {
-        let generation = reserveGeneration()
+    func decode(key: Key, fileURL: URL, generation reserved: UInt64? = nil) -> NSImage? {
+        let generation = reserved ?? reserveGeneration()
         let image = ImageResourceManager().previewImage(at: fileURL, alt: "")
         insert(image, for: key, generation: generation)
         return image
@@ -309,10 +315,12 @@ final class LocalImageStore: ObservableObject {
         let limiter = limiter
         nextJobID += 1
         let id = nextJobID
+        // 版の新旧は問い合わせの順で決める。背景の処理は起動順に実行されるとは限らない。
+        let generation = cache.reserveGeneration()
         let task = Task.detached(priority: .userInitiated) { [weak self] in
             await limiter.acquire()
             // 順番待ちの間に要求元がすべて閉じていれば、読み込まずに終える。
-            if !Task.isCancelled { cache.decode(key: key, fileURL: fileURL) }
+            if !Task.isCancelled { cache.decode(key: key, fileURL: fileURL, generation: generation) }
             await limiter.release()
             await self?.finish(key, job: id)
         }
@@ -324,6 +332,34 @@ final class LocalImageStore: ObservableObject {
     func cancelRequests(from requester: LocalImageRequester) {
         let owner = ObjectIdentifier(requester)
         for (key, var job) in jobs where job.owners.contains(owner) {
+            job.owners.remove(owner)
+            if job.owners.isEmpty && !job.isShared {
+                job.task.cancel()
+                jobs[key] = nil
+            } else {
+                jobs[key] = job
+            }
+        }
+    }
+
+    /// 画像の参照先から、描画時にデコードを要求するローカル画像のパスを求める。
+    nonisolated static func localImagePaths(destinations: [String], context: DocumentContext) -> Set<String> {
+        Set(destinations.compactMap { destination in
+            let encoded = destination.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? destination
+            guard (URL(string: destination) ?? URL(string: encoded))?.scheme == nil else { return nil }
+            return context.resolveLocalResource(destination)?.path
+        })
+    }
+
+    func pendingPaths(for requester: LocalImageRequester) -> Set<String> {
+        let owner = ObjectIdentifier(requester)
+        return Set(jobs.filter { $0.value.owners.contains(owner) }.map(\.key.path))
+    }
+
+    /// 表示内容が変わった時に呼ぶ。要求元が待っているデコードのうち、`paths` にない画像の分を取り下げる。
+    func reconcileRequests(from requester: LocalImageRequester, keepingPaths paths: Set<String>) {
+        let owner = ObjectIdentifier(requester)
+        for (key, var job) in jobs where job.owners.contains(owner) && !paths.contains(key.path) {
             job.owners.remove(owner)
             if job.owners.isEmpty && !job.isShared {
                 job.task.cancel()

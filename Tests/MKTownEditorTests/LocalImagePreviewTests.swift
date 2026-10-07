@@ -371,6 +371,80 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertFalse(store.cache.contains(try XCTUnwrap(LocalImageCache.key(for: urls[0]))))
     }
 
+    func testReferencedPathsMatchTheImagesTheRendererRequests() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let assets = root.appendingPathComponent("assets")
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        for name in ["plain.png", "with space.png", "図.png", "ref.png", "titled.png", "sized.png"] {
+            try png.write(to: assets.appendingPathComponent(name))
+        }
+        let markdown = """
+        ![a](assets/plain.png) ![b](assets/with%20space.png) ![c](<assets/with space.png>)
+        ![d](assets/%E5%9B%B3.png) ![e][ref] ![f](assets/titled.png "title")
+        ![g](assets/sized.png){width=120} ![h](https://example.com/remote.png)
+        `![code](assets/code.png)`
+
+        [ref]: assets/ref.png
+        """
+        let context = DocumentContext(fileURL: root.appendingPathComponent("doc.md"))
+        let snapshot = DocumentSnapshot(source: markdown)
+        let expected = LocalImageStore.localImagePaths(destinations: snapshot.imageDestinations, context: context)
+        let requester = LocalImageRequester()
+        // 共有の同時実行枠を埋め、描画が要求したデコードを待機させたまま調べる。
+        for _ in 0..<4 { await ImageDecodeLimiter.local.acquire() }
+        _ = MarkdownRenderer.$localImageRequester.withValue(requester) {
+            MarkdownRenderer.render(snapshot.analysis, documentContext: context)
+        }
+        let requested = LocalImageStore.shared.pendingPaths(for: requester)
+        LocalImageStore.shared.cancelRequests(from: requester)
+        for _ in 0..<4 { await ImageDecodeLimiter.local.release() }
+        XCTAssertEqual(expected.count, 6)
+        // 描画が実際に要求した画像と、取り下げの判定に使う参照先が一致する。
+        XCTAssertEqual(requested, expected)
+        XCTAssertFalse(expected.contains { $0.hasSuffix("code.png") })
+    }
+
+    func testChangedContentWithdrawsOnlyImagesNoLongerReferenced() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let urls = (0..<3).map { root.appendingPathComponent("photo\($0).png") }
+        for url in urls { try png.write(to: url) }
+        let limiter = ImageDecodeLimiter(limit: 1)
+        let store = LocalImageStore(cache: LocalImageCache(), limiter: limiter)
+        let requester = LocalImageRequester()
+        await limiter.acquire()
+        for url in urls { _ = store.lookup(url, requester: requester) }
+        // 編集で photo0 と photo1 の参照が消え、photo2 だけが残った。
+        store.reconcileRequests(from: requester, keepingPaths: [urls[2].standardizedFileURL.path])
+        XCTAssertEqual(store.pendingPaths(for: requester), [urls[2].standardizedFileURL.path])
+        await limiter.release()
+        let deadline = Date().addingTimeInterval(5)
+        while store.hasPendingDecodes, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.cache.decodeCount, 1)
+        XCTAssertTrue(store.cache.contains(try XCTUnwrap(LocalImageCache.key(for: urls[2]))))
+    }
+
+    func testGenerationsFollowLookupOrderEvenIfWorkersStartOutOfOrder() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("photo.png")
+        try png.write(to: url)
+        let path = url.standardizedFileURL.path
+        let old = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 100), size: 1)
+        let new = LocalImageCache.Key(path: path, modified: Date(timeIntervalSince1970: 200), size: 2)
+        let cache = LocalImageCache()
+        // 問い合わせの順に番号を確保し、処理は新しい版から実行される。
+        let oldGeneration = cache.reserveGeneration()
+        let newGeneration = cache.reserveGeneration()
+        cache.decode(key: new, fileURL: url, generation: newGeneration)
+        cache.decode(key: old, fileURL: url, generation: oldGeneration)
+        XCTAssertTrue(cache.contains(new))
+        XCTAssertFalse(cache.contains(old))
+    }
+
     func testRemoteImageDecodesAreBoundedAndCancelledLoadsStoreNothing() async throws {
         let limiter = ImageDecodeLimiter(limit: 4)
         await withTaskGroup(of: Void.self) { group in

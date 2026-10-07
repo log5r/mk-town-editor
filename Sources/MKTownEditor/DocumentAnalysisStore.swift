@@ -17,6 +17,8 @@ struct DocumentSnapshot: Sendable {
     let proofingRanges: [MarkdownProofingContext.ProtectedRange]
     let inlineCodeRanges: [NSRange]
     let remoteImageURLs: Set<URL>
+    /// 本文の画像の参照先（コード内を除く）。
+    let imageDestinations: [String]
     let previewLayout: PreviewLayoutIndex
     let scrollIndex: PreviewScrollIndex
     let needsStructuredPreview: Bool
@@ -56,7 +58,9 @@ struct DocumentSnapshot: Sendable {
         try checkCancellation()
         inlineCodeRanges = MarkdownInlineSyntax.codeSpanRanges(in: source)
         try checkCancellation()
-        remoteImageURLs = RemoteImageStore.referencedURLs(in: source, analysis: parsed)
+        imageDestinations = RemoteImageStore.imageDestinations(in: source, analysis: parsed)
+        remoteImageURLs = Set(imageDestinations.compactMap { URL(string: $0) }
+            .filter { ["http", "https"].contains($0.scheme?.lowercased() ?? "") })
         try checkCancellation()
         previewLayout = PreviewLayoutIndex(parsed)
         scrollIndex = PreviewScrollIndex(parsed)

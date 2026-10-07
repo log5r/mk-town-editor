@@ -376,12 +376,23 @@ struct MarkdownPreview: View {
             // 閉じたプレビューだけが待っていたローカル画像のデコードは取り消す。
             LocalImageStore.shared.cancelRequests(from: renderCache.imageRequester)
         }
+        .onChange(of: localImagePaths) { _, paths in
+            // 編集や書類の切り替えで参照されなくなった画像の、待機中のデコードを取り下げる。
+            guard let paths else { return }
+            LocalImageStore.shared.reconcileRequests(from: renderCache.imageRequester, keepingPaths: paths)
+        }
         .sheet(item: $inspectedImage) { item in
             ImageInspectionView(url: item.url)
         }
     }
 
     private var displayedSource: String { snapshot?.source ?? markdown }
+
+    /// 表示中の本文が参照するローカル画像。スナップショットがない時は求めず、取り下げも行わない。
+    private var localImagePaths: Set<String>? {
+        guard let snapshot else { return nil }
+        return LocalImageStore.localImagePaths(destinations: snapshot.imageDestinations, context: documentContext)
+    }
 
     private func applyNavigation(_ target: PreviewNavigationTarget?, force: Bool, proxy: ScrollViewProxy,
                                  analysis: MarkdownAnalysis, presentationIDs: [Int: String],
