@@ -379,13 +379,23 @@ struct MarkdownTextEditor: NSViewRepresentable {
 
         @MainActor func applyProofing() {
             guard let textView else { return }
-            if proofingSource != textView.editorSource {
-                proofingSource = textView.editorSource
-                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: textView.editorSource)
+            let source = textView.editorSource
+            if usesSharedAnalysis {
+                if let snapshot = sharedSnapshot, snapshot.source == source {
+                    if proofingSource != source {
+                        proofingSource = source
+                        protectedProofingRanges = snapshot.proofingRanges
+                    }
+                }
+            } else if proofingSource != source {
+                proofingSource = source
+                protectedProofingRanges = MarkdownProofingContext.protectedRanges(in: source)
             }
             let location = textView.selectedRange().location
-            let protected = MarkdownProofingContext.isProtected(location,
-                in: protectedProofingRanges)
+            // Stale offsets cannot protect a newly inserted code/URL range. Until
+            // matching background analysis arrives, suppress automatic correction.
+            let protected = (usesSharedAnalysis && proofingSource != source) ||
+                MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
             textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
             textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
             if textView.window?.firstResponder === textView { applyProofingLanguage() }
@@ -420,15 +430,15 @@ struct MarkdownTextEditor: NSViewRepresentable {
 }
 
 enum MarkdownProofingContext {
-    struct ProtectedRange: Equatable {
+    struct ProtectedRange: Equatable, Sendable {
         let range: NSRange
         let includesEnd: Bool
     }
 
     private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s)<>\]]+"#)
 
-    static func protectedRanges(in source: String) -> [ProtectedRange] {
-        let analysis = MarkdownAnalysis(source)
+    static func protectedRanges(in source: String, analysis: MarkdownAnalysis? = nil) -> [ProtectedRange] {
+        let analysis = analysis ?? MarkdownAnalysis(source)
         let code = analysis.blocks.filter { $0.kind == .codeBlock }
             .map { ProtectedRange(range: $0.sourceRange, includesEnd: false) }
         let inline = MarkdownInlineSyntax.codeSpanRanges(in: source)

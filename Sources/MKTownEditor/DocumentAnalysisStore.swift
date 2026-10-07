@@ -10,6 +10,7 @@ struct DocumentSnapshot: Sendable {
     let outlineEntries: [MarkdownOutlineEntry]
     let sectionActions: [Int: MarkdownSectionActions]
     let syntaxSpans: [MarkdownSyntaxSpan]
+    let proofingRanges: [MarkdownProofingContext.ProtectedRange]
 
     init(source: String, dialect: MarkdownDialect = .extended) {
         let parsed = MarkdownAnalysis(source, dialect: dialect)
@@ -20,6 +21,7 @@ struct DocumentSnapshot: Sendable {
         sectionActions = MarkdownSectionActions.all(in: outlineEntries)
         statistics = DocumentStatistics(text: source)
         syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
+        proofingRanges = MarkdownProofingContext.protectedRanges(in: source, analysis: parsed)
     }
 
     /// Source offsets and parsed structure are valid only for both inputs.
