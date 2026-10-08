@@ -150,11 +150,10 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+                                            inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
                                                 MarkdownRenderer.renderCallout(block, in: analysis,
                                                                                documentContext: renderContext)
-                                            }))
-                                                .textSelection(.enabled)
+                                            })
                                         }
                                         .padding(12)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -244,11 +243,10 @@ struct MarkdownPreview: View {
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
                                         Text("\(note.number).")
-                                        Text(AttributedString(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+                                        inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
                                             MarkdownRenderer.renderTableCell(note.content, in: analysis,
                                                                              documentContext: renderContext)
-                                        }))
-                                            .textSelection(.enabled)
+                                        })
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
                                                 NSLocationInRange(note.firstReferenceRange.location,
@@ -421,30 +419,28 @@ struct MarkdownPreview: View {
     }
 
     @ViewBuilder
+    private func inlineText(_ rendered: NSAttributedString) -> some View {
+        // SwiftUI Text drops NSTextAttachment when bridging to AttributedString.
+        // Keep formula and image attachments in AppKit, including inside tables and notes.
+        if rendered.requiresAppKitText {
+            HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                          loadsExternalPages: loadsExternalLinkPreviews)
+        } else {
+            Text(AttributedString(rendered)).textSelection(.enabled)
+        }
+    }
+
+    @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: renderContext,
             zoom: zoom, remoteRevision: resourceRevision, theme: theme)
         if case let .heading(level) = block.kind {
-            Group {
-                if rendered.containsLink {
-                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                                  loadsExternalPages: loadsExternalLinkPreviews)
-                } else {
-                    Text(AttributedString(rendered)).textSelection(.enabled)
-                }
-            }
+            inlineText(rendered)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
             .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
         } else {
-            Group {
-                if rendered.containsLink {
-                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                                  loadsExternalPages: loadsExternalLinkPreviews)
-                } else {
-                    Text(AttributedString(rendered)).textSelection(.enabled)
-                }
-            }
+            inlineText(rendered)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -464,14 +460,7 @@ struct MarkdownPreview: View {
             let rendered = renderCache.render(block, in: analysis, context: renderContext,
                                               zoom: zoom, showsTaskPrefix: false,
                                               remoteRevision: resourceRevision, theme: theme)
-            Group {
-                if rendered.containsLink {
-                    HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                                  loadsExternalPages: loadsExternalLinkPreviews)
-                } else {
-                    Text(AttributedString(rendered)).textSelection(.enabled)
-                }
-            }
+            inlineText(rendered)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -505,14 +494,7 @@ struct MarkdownPreview: View {
                 let rendered = renderCache.renderCell(cells[column], in: analysis,
                     context: renderContext, zoom: zoom,
                     remoteRevision: resourceRevision, theme: theme)
-                Group {
-                    if rendered.containsLink {
-                        HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                                      loadsExternalPages: loadsExternalLinkPreviews)
-                    } else {
-                        Text(AttributedString(rendered)).textSelection(.enabled)
-                    }
-                }
+                inlineText(rendered)
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
@@ -543,10 +525,10 @@ private struct PreviewBlockOriginsKey: PreferenceKey {
 }
 
 private extension NSAttributedString {
-    var containsLink: Bool {
+    var requiresAppKitText: Bool {
         var found = false
-        enumerateAttribute(.link, in: NSRange(location: 0, length: length)) { value, _, stop in
-            if value != nil {
+        enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, _, stop in
+            if attributes[.link] != nil || attributes[.attachment] != nil {
                 found = true
                 stop.pointee = true
             }
