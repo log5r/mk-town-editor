@@ -18,6 +18,41 @@ struct EditorToolbarInstanceID: Equatable {
     }
 }
 
+/// ForEach cannot provide individually customizable toolbar items.
+/// Keep these declarations in the same order as EditorCommand.toolbar.
+struct EditorFormattingToolbar<Content: View>: CustomizableToolbarContent {
+    @ViewBuilder let button: (EditorCommand) -> Content
+
+    var body: some CustomizableToolbarContent {
+        Group {
+            item(.bold)
+            item(.italic)
+            item(.link)
+            item(.strikethrough)
+            item(.inlineCode)
+            item(.heading(level: 1))
+            item(.quote)
+            item(.unorderedList)
+        }
+        Group {
+            item(.orderedList)
+            item(.taskList)
+            item(.codeBlock(language: nil))
+            item(.horizontalRule)
+            item(.image)
+            item(.table)
+            item(.footnote)
+        }
+    }
+
+    private func item(_ command: EditorCommand) -> some CustomizableToolbarContent {
+        ToolbarItem(id: "command-\(command.toolbarIdentifier)", placement: .primaryAction,
+                    showsByDefault: EditorCommand.defaultToolbar.contains(command)) {
+            button(command)
+        }
+    }
+}
+
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
@@ -262,12 +297,15 @@ struct EditorWorkspace: View {
             }
         }
         // NavigationSplitView supplies the standard sidebar toggle.
-        .toolbar(id: toolbarInstanceID.rawValue) {
-            ForEach(EditorCommand.toolbar, id: \.self) { command in
-                ToolbarItem(id: "command-\(command.toolbarIdentifier)", placement: .primaryAction,
-                            showsByDefault: EditorCommand.defaultToolbar.contains(command)) {
-                    formatButton(command)
-                }
+        .toolbar(id: toolbarInstanceID.rawValue) { workspaceToolbar }
+        .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
+    }
+
+    @ToolbarContentBuilder
+    private var workspaceToolbar: some CustomizableToolbarContent {
+        Group {
+            EditorFormattingToolbar { command in
+                formatButton(command)
             }
 
             ToolbarItem(id: "link-diagnostics", placement: .primaryAction) {
@@ -330,6 +368,8 @@ struct EditorWorkspace: View {
                 }
                 .help("現在の書類のプレビューを別ウインドウで表示")
             }
+        }
+        Group {
             ToolbarItem(id: "slides", placement: .primaryAction) {
                 Button("スライド表示", systemImage: "play.rectangle") {
                     showSlidePresentation()
@@ -376,7 +416,11 @@ struct EditorWorkspace: View {
                 }
             }
         }
-        .toolbar(focusMode.isActive ? .hidden : .automatic, for: .windowToolbar)
+    }
+
+    // Opaque return types bound type-checking work for each modifier chain.
+    private var navigationActionsView: some View {
+        navigationView
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
             isActive: focusMode.isActive, toggle: toggleFocusMode))
         .focusedSceneValue(\.markdownEditorModel, editorModel)
@@ -396,6 +440,10 @@ struct EditorWorkspace: View {
             adjust: { surface, amount in settingsStore.adjustZoom(for: surface, by: amount) },
             reset: { surface in settingsStore.resetZoom(for: surface) }
         ))
+    }
+
+    private var documentActionsView: some View {
+        navigationActionsView
         .focusedSceneValue(\.regexSearchAction) {
             if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
             showingRegexSearch = true
@@ -428,7 +476,7 @@ struct EditorWorkspace: View {
     }
 
     private var sheetView: some View {
-        navigationView
+        documentActionsView
             .overlay {
                 if documentOperationRunning {
                     VStack(spacing: 12) {
@@ -1054,7 +1102,7 @@ struct EditorWorkspace: View {
         }
     }
 
-    var body: some View {
+    private var lifecycleView: some View {
         alertView
         .onAppear {
             if !workspaceViewActive {
@@ -1117,6 +1165,10 @@ struct EditorWorkspace: View {
             if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
         }
         .onReceive(editorModel.viewportState.$viewport.dropFirst()) { _ in schedulePositionSave() }
+    }
+
+    private var documentChangesView: some View {
+        lifecycleView
         .onChange(of: fileURL) { oldURL, newURL in
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
             monitorCloudDocument(newURL)
@@ -1185,6 +1237,10 @@ struct EditorWorkspace: View {
             analysisStore.update(source: document.text, dialect: dialect)
             previewUpdates.resume()
         }
+    }
+
+    var body: some View {
+        documentChangesView
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onReceive(editorModel.selectionState.$selectedRanges.dropFirst()) { selections in
             schedulePositionSave()

@@ -257,7 +257,14 @@ struct MarkdownCommands: Commands {
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
+    // CommandsBuilder accepts at most ten direct children per block.
     var body: some Commands {
+        documentCommands
+        editingCommands
+    }
+
+    @CommandsBuilder
+    private var documentCommands: some Commands {
         CommandGroup(replacing: .printItem) {
             Button("ページ設定…") { pageSetupAction?() }
                 .disabled(pageSetupAction == nil)
@@ -378,6 +385,10 @@ struct MarkdownCommands: Commands {
             Button("テキスト…") { exportPlainTextAction?() }
                 .disabled(exportPlainTextAction == nil)
         }
+    }
+
+    @CommandsBuilder
+    private var editingCommands: some Commands {
         CommandGroup(after: .textEditing) {
             Divider()
             if let previewSearchActions {

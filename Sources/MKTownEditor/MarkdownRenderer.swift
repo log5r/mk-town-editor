@@ -6,7 +6,8 @@ enum MarkdownRenderer {
     /// プレビューではローカル画像を背景でデコードし、完了まで読み込み中の表示にする。
     /// 値は要求元のプレビューで、閉じた時に待機中のデコードを取り消すために使う。
     /// 書き出し・印刷では既定の `nil` のまま同期的にデコードし、画像を欠かさない。
-    @TaskLocal nonisolated static var localImageRequester: LocalImageRequester?
+    // Keep the getter and macro-generated storage on the renderer’s main actor.
+    @TaskLocal static var localImageRequester: LocalImageRequester?
 
     nonisolated private static let referencePattern = try! NSRegularExpression(
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#
