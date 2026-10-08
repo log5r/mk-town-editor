@@ -10,6 +10,7 @@ struct WorkspaceBacklinksSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index: WorkspaceBacklinkIndex?
     @State private var selectedID: WorkspaceBacklink.ID?
+    @State private var didOpen = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceBacklinkIndex, Error>?
@@ -45,10 +46,10 @@ struct WorkspaceBacklinksSheet: View {
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(backlink.relativePath)、\(backlink.line)行、\(backlink.excerpt)")
-                    .activatesOnClick { onOpen(backlink) }
+                    .activatesOnClick { open(backlink) }
                 }
                 .activatesSelectionOnReturn(WorkspaceBacklink.ID.self) { id in
-                    if let backlink = index.backlinks.first(where: { $0.id == id }) { onOpen(backlink) }
+                    if let backlink = index.backlinks.first(where: { $0.id == id }) { open(backlink) }
                 }
             } else {
                 ContentUnavailableView("参照元は見つかりません", systemImage: "link")
@@ -76,6 +77,14 @@ struct WorkspaceBacklinksSheet: View {
             worker?.cancel()
             worker = nil
         }
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func open(_ backlink: WorkspaceBacklink) {
+        guard !didOpen else { return }
+        didOpen = true
+        onOpen(backlink)
     }
 
     private func load() {
