@@ -82,7 +82,15 @@ enum EditorCommand: Hashable {
         .deleteLines, .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
-    static let context: [Self] = [.bold, .italic, .strikethrough, .highlight, .superscript, .subscriptText, .inlineCode, .removeFormatting, .selectNextOccurrence, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    /// The editor's context menu stays short: inline formatting, links and images, and list
+    /// toggles. Everything else is in its "Markdown" submenu.
+    static let contextGroups: [[Self]] = [
+        [.bold, .italic, .strikethrough, .inlineCode],
+        [.link, .image],
+        [.unorderedList, .orderedList, .taskList]
+    ]
+    static let context: [Self] = contextGroups.flatMap { $0 }
+    static let contextMarkdown: [Self] = [.highlight, .superscript, .subscriptText, .removeFormatting, .selectNextOccurrence, .convertLinkForm, .footnote, .table, .quote, .plainBlock, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
