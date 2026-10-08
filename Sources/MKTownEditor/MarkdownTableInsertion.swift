@@ -239,7 +239,7 @@ enum MarkdownTableEditing {
 
     static func gridDraft(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTableGridDraft? {
         let source = text as NSString
-        guard let (block, table, location) = table(at: selection.location, in: source,
+        guard let (block, table, _) = table(at: selection.location, in: source,
                                                     analysis: analysis ?? MarkdownAnalysis(text))
         else { return nil }
         let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
@@ -396,7 +396,7 @@ enum MarkdownTableEditing {
 
     static func alignment(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTable.Alignment? {
         let source = text as NSString
-        guard let (block, table, location) = table(at: selection.location, in: source,
+        guard let (_, table, location) = table(at: selection.location, in: source,
                                                     analysis: analysis ?? MarkdownAnalysis(text))
         else { return nil }
         let lineRange = source.lineRange(for: NSRange(location: location, length: 0))
