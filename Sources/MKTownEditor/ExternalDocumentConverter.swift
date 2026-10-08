@@ -217,7 +217,7 @@ struct ExternalConversionSheet: View {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
-        panel.begin { response in
+        panel.beginAttached { response in
             if response == .OK, let url = panel.url { executablePath = url.path }
         }
     }
@@ -229,7 +229,7 @@ struct ExternalConversionSheet: View {
         }
         panel.nameFieldStringValue = (documentURL?.deletingPathExtension().lastPathComponent ?? "document")
             + ".\(format.rawValue)"
-        panel.begin { response in
+        panel.beginAttached { response in
             guard response == .OK, let destination = panel.url else { return }
             convert(to: destination)
         }

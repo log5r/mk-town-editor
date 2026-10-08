@@ -10716,6 +10716,16 @@
           }
         }
       }
+    },
+    "TSV・CSVを表に変換できません。区切り文字、引用符、行の内容を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't convert the TSV or CSV to a table. Check the delimiters, quotes, and rows."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

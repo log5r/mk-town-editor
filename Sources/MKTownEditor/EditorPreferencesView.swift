@@ -188,7 +188,13 @@ struct EditorPreferencesView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        panel.beginAttached { response in
+            guard response == .OK, let url = panel.url else { return }
+            loadExtension(from: url)
+        }
+    }
+
+    private func loadExtension(from url: URL) {
         do {
             let package = try DeclarativeExtension.load(from: url)
             var settings = settingsStore.app
@@ -217,7 +223,8 @@ struct EditorPreferencesView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let path = panel.url?.path {
+        panel.beginAttached { response in
+            guard response == .OK, let path = panel.url?.path else { return }
             if kind == .graphviz { graphvizPath = path }
             else { plantUMLPath = path }
         }

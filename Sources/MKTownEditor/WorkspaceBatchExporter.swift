@@ -226,7 +226,7 @@ struct WorkspaceBatchExportSheet: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.begin { response in
+        panel.beginAttached { response in
             guard response == .OK, let url = panel.url else { return }
             if sourceFolder { source = url } else { destination = url }
         }

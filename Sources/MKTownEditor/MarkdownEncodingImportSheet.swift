@@ -66,19 +66,28 @@ struct MarkdownEncodingImportSheet: View {
     }
 
     private func save() {
+        let converted: Data
         do {
-            let converted = try MarkdownEncodingConverter.convert(sourceData, from: sourceEncoding,
-                                                                  to: destinationEncoding)
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [MarkdownDocument.markdownType]
-            panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent +
-                "-converted.md"
-            guard panel.runModal() == .OK, let destination = panel.url else { return }
-            try converted.write(to: destination, options: .atomic)
-            dismiss()
-            if destinationEncoding == .utf8 { onSaved(destination) }
+            converted = try MarkdownEncodingConverter.convert(sourceData, from: sourceEncoding,
+                                                              to: destinationEncoding)
         } catch {
             errorMessage = error.localizedDescription
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [MarkdownDocument.markdownType]
+        panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent +
+            "-converted.md"
+        let encoding = destinationEncoding
+        panel.beginAttached { response in
+            guard response == .OK, let destination = panel.url else { return }
+            do {
+                try converted.write(to: destination, options: .atomic)
+                dismiss()
+                if encoding == .utf8 { onSaved(destination) }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
