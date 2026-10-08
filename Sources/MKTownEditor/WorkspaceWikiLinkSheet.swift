@@ -10,6 +10,7 @@ struct WorkspaceWikiLinkSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
     @State private var query = ""
+    @State private var selectedURL: URL?
     @State private var documentIndex = WorkspaceDocumentIndex(documents: [])
     @State private var indexedDocuments: [URL] = []
     @State private var existingCache = DerivedValueCache<ExistingLinkKey, WorkspaceWikiLink?>()
@@ -35,16 +36,20 @@ struct WorkspaceWikiLinkSheet: View {
             Text("Wikiリンク").font(.headline)
             Text("文書名が同じ場合は相対パスで指定します。")
                 .font(.caption).foregroundStyle(.secondary)
+            let ids = matches.map(\.url)
+            let listSelection = Binding(get: { ListKeyboardSelection.resolved(selectedURL, in: ids) },
+                                        set: { selectedURL = $0 })
             TextField("文書名またはパス", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
-                .onSubmit { if let first = matches.first { insert(first.url) } }
-            List(matches) { result in
-                Button { insert(result.url) } label: {
-                    Label(result.relativePath, systemImage: "doc.text")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
+                .movesListSelection(listSelection, in: ids)
+                .onSubmit { if let url = listSelection.wrappedValue { insert(url) } }
+            List(matches, selection: listSelection) { result in
+                Label(result.relativePath, systemImage: "doc.text")
+                    .activatesOnClick { insert(result.url) }
+            }
+            .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { urls in
+                if let url = urls.first { insert(url) }
             }
             .frame(height: 280)
             if matches.isEmpty {

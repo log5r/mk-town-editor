@@ -134,6 +134,8 @@ struct EditorWorkspace: View {
     @State private var exportFormat: MarkdownExportFormat?
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
+    @State private var selectedBookmarkID: DocumentBookmark.ID?
+    @State private var selectedFileURL: URL?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
     @State private var showingWorkspaceTasks = false
@@ -182,6 +184,15 @@ struct EditorWorkspace: View {
             case "ブックマーク": self = .bookmarks
             case "ファイル": self = .files
             default: self.init(rawValue: storedValue)
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .outline: "list.bullet.indent"
+            case .inspector: "info.circle"
+            case .bookmarks: "bookmark"
+            case .files: "folder"
             }
         }
 
@@ -1450,12 +1461,19 @@ struct EditorWorkspace: View {
 
     private var workspaceSidebar: some View {
         VStack(spacing: 0) {
+            // Icons keep the four segments readable in a narrow sidebar; the names stay
+            // available to VoiceOver and as the tooltip (#26).
             Picker("サイドバー", selection: $sidebarTab) {
                 ForEach(SidebarTab.allCases, id: \.self) { tab in
-                    Text(tab.title).tag(tab)
+                    Label(tab.title, systemImage: tab.symbolName)
+                        .labelStyle(.iconOnly)
+                        .help(tab.title)
+                        .tag(tab)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
+            .help(sidebarTab.title)
             .padding(8)
             switch sidebarTab {
             case .outline: outlineSidebar
@@ -1555,19 +1573,23 @@ struct EditorWorkspace: View {
                 .help("現在のカーソル位置をブックマーク")
             }
             .padding(12)
-            List(settingsStore.bookmarks) { bookmark in
-                Button { openBookmark(bookmark) } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(bookmark.title).lineLimit(1)
-                        Text(bookmark.documentURL.lastPathComponent)
-                            .font(.caption).foregroundStyle(.secondary)
+            List(settingsStore.bookmarks, selection: $selectedBookmarkID) { bookmark in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(bookmark.title).lineLimit(1)
+                    Text(bookmark.documentURL.lastPathComponent)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .activatesOnClick { openBookmark(bookmark) }
+            }
+            .contextMenu(forSelectionType: DocumentBookmark.ID.self) { ids in
+                if !ids.isEmpty {
+                    Button("ブックマークを削除", role: .destructive) {
+                        ids.forEach(settingsStore.removeBookmark)
                     }
                 }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button("ブックマークを削除", role: .destructive) {
-                        settingsStore.removeBookmark(bookmark.id)
-                    }
+            } primaryAction: { ids in
+                if let bookmark = settingsStore.bookmarks.first(where: { ids.contains($0.id) }) {
+                    openBookmark(bookmark)
                 }
             }
             .listStyle(.sidebar)
@@ -1729,33 +1751,32 @@ struct EditorWorkspace: View {
 
     private var workspaceFileList: some View {
         VStack(spacing: 0) {
-            List {
+            List(selection: Binding(get: { selectedFileURL ?? fileURL },
+                                    set: { selectedFileURL = $0 })) {
                 OutlineGroup(workspaceStore.visibleNodes, children: \.children) { node in
                     if node.isDirectory {
                         HStack {
                             Label(node.name, systemImage: "folder")
                             if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
-                            .contextMenu { fileContextActions(for: node) }
+                        .tag(node.url)
                     } else {
-                        Button {
-                            Task {
-                                if node.isEditableDocument {
-                                    do { try await openDocument(at: node.url) }
-                                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
-                                } else if !NSWorkspace.shared.open(node.url) {
-                                    presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
-                                }
-                            }
-                        } label: {
-                            HStack {
-                                Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
-                                if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
-                            }
+                        HStack {
+                            Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
+                            if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu { fileContextActions(for: node) }
+                        .activatesOnClick { openWorkspaceFile(node) }
+                        .tag(node.url)
                     }
+                }
+            }
+            .contextMenu(forSelectionType: URL.self) { urls in
+                if let url = urls.first, let node = workspaceNode(at: url) {
+                    fileContextActions(for: node)
+                }
+            } primaryAction: { urls in
+                if let url = urls.first, let node = workspaceNode(at: url), !node.isDirectory {
+                    openWorkspaceFile(node)
                 }
             }
             .listStyle(.sidebar)
@@ -1772,6 +1793,21 @@ struct EditorWorkspace: View {
                     .padding(8)
             }
         }
+    }
+
+    private func openWorkspaceFile(_ node: WorkspaceNode) {
+        Task {
+            if node.isEditableDocument {
+                do { try await openDocument(at: node.url) }
+                catch { presentedError = .workspaceOpen(error.localizedDescription) }
+            } else if !NSWorkspace.shared.open(node.url) {
+                presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
+            }
+        }
+    }
+
+    private func workspaceNode(at url: URL) -> WorkspaceNode? {
+        WorkspaceNode.first(at: url, in: workspaceStore.visibleNodes)
     }
 
     @ViewBuilder
@@ -1804,17 +1840,23 @@ struct EditorWorkspace: View {
         let canEdit = isCurrent && editorModel.canExecuteCommand
         let highlightedID = isCurrent
             ? MarkdownOutline.currentSection(at: selection.location, in: entries)?.id : nil
-        List(entries) { entry in
-            let actions = snapshot?.sectionActions[entry.id]
-            Button {
-                navigate(to: entry)
-            } label: {
-                Text(entry.title)
-                    .lineLimit(1)
-                    .padding(.leading, CGFloat(entry.level - 1) * 12)
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
+        // The selection follows the caret's section. Arrow keys move through the headings and
+        // reveal each one while the list keeps the focus; a click or Return moves into the editor.
+        List(entries, selection: Binding(get: { highlightedID }, set: { id in
+            guard let entry = entries.first(where: { $0.id == id }),
+                  !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
+            navigate(to: entry, focusesEditor: false)
+        })) { entry in
+            Text(entry.title)
+                .lineLimit(1)
+                .padding(.leading, CGFloat(entry.level - 1) * 12)
+                .activatesOnClick { navigate(to: entry) }
+                .disabled(!isCurrent)
+                .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
+        }
+        .contextMenu(forSelectionType: MarkdownOutlineEntry.ID.self) { ids in
+            if let entry = entries.first(where: { ids.contains($0.id) }) {
+                let actions = snapshot?.sectionActions[entry.id]
                 Button("セクションを上へ移動") {
                     editorModel.moveSection(at: entry.sourceRange.location, direction: .up, snapshot: snapshot,
                         dialect: documentContext.markdownDialect)
@@ -1837,10 +1879,8 @@ struct EditorWorkspace: View {
                 }
                 .disabled(!canEdit || actions?.canDemote != true)
             }
-            .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
-            .disabled(!isCurrent)
-            .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
-            .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
+        } primaryAction: { ids in
+            if let entry = entries.first(where: { ids.contains($0.id) }) { navigate(to: entry) }
         }
         }
         .listStyle(.sidebar)
@@ -1852,10 +1892,10 @@ struct EditorWorkspace: View {
         }
     }
 
-    private func navigate(to entry: MarkdownOutlineEntry) {
+    private func navigate(to entry: MarkdownOutlineEntry, focusesEditor: Bool = true) {
         guard let snapshot = currentAnalysisSnapshot,
               snapshot.outlineEntries.contains(entry) else { return }
-        navigate(to: entry.sourceRange.location)
+        navigate(to: entry.sourceRange.location, focusesEditor: focusesEditor)
     }
 
     private func goToLine(_ requestedLine: Int) {
@@ -2236,10 +2276,10 @@ struct EditorWorkspace: View {
         NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
     }
 
-    private func navigate(to location: Int) {
+    private func navigate(to location: Int, focusesEditor: Bool = true) {
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
         navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
-        editorModel.navigate(to: location)
+        editorModel.navigate(to: location, focusesEditor: focusesEditor)
         scrollPreview(to: location)
     }
 

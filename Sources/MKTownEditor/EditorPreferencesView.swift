@@ -409,25 +409,41 @@ struct SnippetPickerView: View {
     @Environment(\.dismiss) private var dismiss
     let snippets: [EditorSnippet]
     let onSelect: (EditorSnippet) -> Void
+    @State private var selectedID: UUID?
+
+    private func insert(_ snippet: EditorSnippet) {
+        onSelect(snippet)
+        dismiss()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("スニペットを挿入").font(.headline)
-            List(snippets) { snippet in
-                Button {
-                    onSelect(snippet)
-                    dismiss()
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(snippet.trigger.isEmpty ? "定型文" : snippet.trigger)
-                        Text(snippet.template).lineLimit(2).font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            let available = snippets.filter { !$0.template.isEmpty }
+            List(available, selection: Binding(
+                get: { ListKeyboardSelection.resolved(selectedID, in: available.map(\.id)) },
+                set: { selectedID = $0 })) { snippet in
+                VStack(alignment: .leading) {
+                    Text(snippet.trigger.isEmpty ? "定型文" : snippet.trigger)
+                    Text(snippet.template).lineLimit(2).font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .disabled(snippet.template.isEmpty)
+                .activatesOnClick { insert(snippet) }
             }
-            Button("キャンセル") { dismiss() }
-                .keyboardShortcut(.cancelAction)
+            .contextMenu(forSelectionType: UUID.self) { _ in } primaryAction: { ids in
+                if let snippet = available.first(where: { ids.contains($0.id) }) { insert(snippet) }
+            }
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("挿入") {
+                    let id = ListKeyboardSelection.resolved(selectedID, in: available.map(\.id))
+                    if let snippet = available.first(where: { $0.id == id }) { insert(snippet) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(available.isEmpty)
+            }
         }
         .padding()
         .frame(width: 420, height: 320)
@@ -444,6 +460,7 @@ struct CommandPaletteView: View {
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
+    @State private var selectedCommand: EditorCommand?
 
     private var matches: [EditorCommand] {
         EditorCommand.paletteMatches(query, in: model,
@@ -451,20 +468,26 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
+        let matches = matches
+        let selection = Binding(get: { ListKeyboardSelection.resolved(selectedCommand, in: matches) },
+                                set: { selectedCommand = $0 })
         VStack(spacing: 10) {
             TextField("コマンド名またはショートカット", text: $query)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit { if let first = matches.first { execute(first) } }
-            List(matches, id: \.self) { command in
-                Button { execute(command) } label: {
-                    HStack {
-                        Label(command.title, systemImage: command.symbolName)
-                        Spacer()
-                        if let shortcut = settingsStore.shortcut(for: command)?.label {
-                            Text(shortcut).font(.caption).foregroundStyle(.secondary)
-                        }
+                .movesListSelection(selection, in: matches)
+                .onSubmit { if let command = selection.wrappedValue { execute(command) } }
+            List(matches, id: \.self, selection: selection) { command in
+                HStack {
+                    Label(command.title, systemImage: command.symbolName)
+                    Spacer()
+                    if let shortcut = settingsStore.shortcut(for: command)?.label {
+                        Text(shortcut).font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                .activatesOnClick { execute(command) }
+            }
+            .contextMenu(forSelectionType: EditorCommand.self) { _ in } primaryAction: { commands in
+                if let command = commands.first { execute(command) }
             }
             if matches.isEmpty {
                 ContentUnavailableView.search(text: query)
