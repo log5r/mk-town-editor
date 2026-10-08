@@ -40,7 +40,8 @@ final class CollaborationSession: NSObject, ObservableObject {
     private var roomID: UUID?
     private var guestReady = false
     private var activeTitle = ""
-    private static let serviceType = "mktown-collab"
+    /// Bonjour type for Multipeer Connectivity; Support/Info.plist must list `_<type>._tcp` and `_<type>._udp`.
+    static let serviceType = "mktown-collab"
 
     var isActive: Bool { role != nil }
     var isHost: Bool { role == .host }
