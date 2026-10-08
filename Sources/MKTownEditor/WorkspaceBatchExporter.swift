@@ -182,8 +182,10 @@ struct WorkspaceBatchExportSheet: View {
             if running { ProgressView(value: Double(completed), total: Double(max(total, 1))) }
             if running || result != nil { Text("\(completed) / \(total) 件を確認") }
             if let result {
-                Text("成功 \(result.exported)件・失敗 \(result.failures.count)件" +
-                     (result.cancelled ? String(localized: "・中止しました") : ""))
+                // Concatenating strings would turn the text into an untranslated String.
+                Text(result.cancelled
+                     ? String(localized: "成功 \(result.exported)件・失敗 \(result.failures.count)件・中止しました")
+                     : String(localized: "成功 \(result.exported)件・失敗 \(result.failures.count)件"))
                 if !result.failures.isEmpty {
                     List(result.failures) { failure in
                         VStack(alignment: .leading) {

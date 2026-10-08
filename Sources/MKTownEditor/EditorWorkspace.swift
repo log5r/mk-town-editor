@@ -177,11 +177,22 @@ struct EditorWorkspace: View {
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
 
-    private enum SidebarTab: String, CaseIterable {
-        case outline = "アウトライン"
-        case inspector = "インスペクタ"
-        case bookmarks = "ブックマーク"
-        case files = "ファイル"
+    enum SidebarTab: String, CaseIterable {
+        case outline
+        case inspector
+        case bookmarks
+        case files
+
+        /// Earlier versions stored the Japanese titles as raw values.
+        init?(storedValue: String) {
+            switch storedValue {
+            case "アウトライン": self = .outline
+            case "インスペクタ": self = .inspector
+            case "ブックマーク": self = .bookmarks
+            case "ファイル": self = .files
+            default: self.init(rawValue: storedValue)
+            }
+        }
 
         var title: String {
             switch self {
@@ -1467,7 +1478,7 @@ struct EditorWorkspace: View {
             sidebarVisibility = focusMode.toggle(sidebarVisibility: sidebarVisibility)
         }
         mode.wrappedValue = layout.mode
-        sidebarTab = SidebarTab(rawValue: layout.sidebarTab) ?? .outline
+        sidebarTab = SidebarTab(storedValue: layout.sidebarTab) ?? .outline
         sidebarVisibility = layout.sidebarVisible ? .all : .detailOnly
         splitRatio = min(0.8, max(0.2, layout.splitRatio))
         splitOrientation = layout.splitOrientation
@@ -1491,7 +1502,7 @@ struct EditorWorkspace: View {
         if let ratio = state.splitRatio { splitRatio = ratio }
         if let orientation = state.splitOrientation { splitOrientation = orientation }
         if let first = state.previewFirst { previewFirst = first }
-        if let tab = state.sidebarTab.flatMap(SidebarTab.init(rawValue:)) { sidebarTab = tab }
+        if let tab = state.sidebarTab.flatMap(SidebarTab.init(storedValue:)) { sidebarTab = tab }
         if let visible = state.sidebarVisible { sidebarVisibility = visible ? .all : .detailOnly }
     }
 

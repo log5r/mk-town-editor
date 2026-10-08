@@ -15,6 +15,18 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         XCTAssertTrue(basic.contains("[^n]: Note"))
     }
 
+    func testHTMLLanguageComesFromFrontMatterOrTheAppLocalization() {
+        XCTAssertTrue(MarkdownHTMLExporter.render("---\nlang: en-GB\n---\n\nText").contains(#"<html lang="en-GB">"#))
+        XCTAssertTrue(MarkdownHTMLExporter.render("---\nlang: \"fr\"\n---\n\nText").contains(#"<html lang="fr">"#))
+        let fallback = Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
+            ?? Bundle.main.developmentLocalization ?? "ja"
+        for source in ["Text", "---\nlang: \"><script>\n---\n\nText", "---\ntitle: x\n---\n\nText"] {
+            let html = MarkdownHTMLExporter.render(source)
+            XCTAssertTrue(html.contains("<html lang=\"\(fallback)\">"), source)
+            XCTAssertFalse(html.contains("<script>"))
+        }
+    }
+
     func testLimitedRawHTMLUsesSafeSubsetInExport() {
         let html = MarkdownHTMLExporter.render(
             "<strong>Safe</strong><!-- hidden --><script>alert('bad')</script> done")
