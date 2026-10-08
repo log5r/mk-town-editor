@@ -49,7 +49,7 @@ struct RegexSearchSheet: View {
                 .font(.headline)
             Form {
                 TextField("検索パターン", text: $pattern)
-                    .movesListSelection(listSelection, in: Array(matches.indices))
+                    .movesListSelection(listSelection, in: Array(matches.indices), startsUnselected: true)
                 TextField("置換文字列（$1 などで参照）", text: $replacement)
                 Toggle("大文字小文字を区別", isOn: $caseSensitive)
                 Toggle("選択範囲内", isOn: $limitsToSelection)
@@ -77,9 +77,7 @@ struct RegexSearchSheet: View {
             .frame(minHeight: 180)
 
             HStack {
-                Button("次を検索") {
-                    if let match = nextMatch, let index = matches.firstIndex(of: match) { select(index) }
-                }
+                Button("次を検索") { selectNextMatch() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(matches.isEmpty || isSearching)
                 Button("1件置換") { replace(only: replacementTarget) }
@@ -143,6 +141,10 @@ struct RegexSearchSheet: View {
         guard matches.indices.contains(index) else { return }
         selectedIndex = index
         onSelect(matches[index])
+    }
+
+    private func selectNextMatch() {
+        if let match = nextMatch, let index = matches.firstIndex(of: match) { select(index) }
     }
 
     private var nextMatch: NSRange? {

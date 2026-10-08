@@ -69,6 +69,8 @@ struct WorkspaceTagsSheet: View {
         .frame(minWidth: 720, minHeight: 460)
         .padding(20)
         .onAppear(perform: load)
+        // A document selected under the previous tag is not in the new list.
+        .onChange(of: selectedTag) { _, _ in selectedDocumentID = nil }
         .onDisappear {
             worker?.cancel()
             worker = nil

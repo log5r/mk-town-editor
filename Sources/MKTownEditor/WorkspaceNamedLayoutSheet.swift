@@ -9,6 +9,7 @@ struct WorkspaceNamedLayoutSheet: View {
     @State private var layouts: [WorkspaceNamedLayout] = []
     @State private var pendingDeletion: WorkspaceNamedLayout?
     @State private var selectedID: WorkspaceNamedLayout.ID?
+    @State private var didApply = false
     private let store = WorkspaceNamedLayoutStore()
 
     var body: some View {
@@ -71,7 +72,10 @@ struct WorkspaceNamedLayoutSheet: View {
         }
     }
 
+    /// A second click or Return can reach the sheet while it closes, so only the first applies.
     private func apply(_ layout: WorkspaceNamedLayout) {
+        guard !didApply else { return }
+        didApply = true
         dismiss()
         onApply(layout)
     }

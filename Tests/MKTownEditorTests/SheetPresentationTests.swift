@@ -33,7 +33,8 @@ final class SheetPresentationTests: XCTestCase {
         XCTAssertFalse(workspace.contains("@State private var htmlExportError"))
         // The workspace store's failure goes through the same alert (#61).
         XCTAssertFalse(workspace.contains(".alert(\"フォルダを記憶できません\""))
-        XCTAssertTrue(workspace.contains("onChange(of: workspaceStore.errorMessage"))
+        XCTAssertTrue(workspace.contains(".modifier(WorkspaceStoreErrorReceiver(store: workspaceStore)"))
+        XCTAssertTrue(workspace.contains("onChange(of: store.errorMessage, initial: true)"))
         XCTAssertFalse(workspace.contains("presentedError = ."), "Failures go through errorQueue.present")
     }
 

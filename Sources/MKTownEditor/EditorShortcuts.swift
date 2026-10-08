@@ -226,14 +226,36 @@ final class ShortcutRecorderView: NSView {
 
     override func becomeFirstResponder() -> Bool {
         isRecording = true
+        heldModifiers = NSEvent.modifierFlags.intersection(Self.recordedModifiers)
         return true
     }
 
     override func resignFirstResponder() -> Bool {
         isRecording = false
+        discardPendingKeys()
+        return true
+    }
+
+    // The release of a modifier held while leaving the window never reaches this view, so a
+    // combination pressed before switching away is dropped instead of applied later.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if let window {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: window)
+        }
+        if let newWindow {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowDidResignKey),
+                                                   name: NSWindow.didResignKeyNotification, object: newWindow)
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        discardPendingKeys()
+    }
+
+    private func discardPendingKeys() {
         pendingChord = nil
         heldModifiers = []
-        return true
     }
 
     override func mouseDown(with event: NSEvent) {

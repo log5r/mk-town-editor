@@ -139,7 +139,6 @@ struct EditorWorkspace: View {
     @EnvironmentObject private var layoutActivation: WorkspaceLayoutActivation
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
-    @Environment(\.controlActiveState) private var controlActiveState
     @StateObject private var editorModel = MarkdownEditorModel()
     /// スクロール・選択のたびに書き換わる補助状態。変更でビュー全体を再評価しないよう参照型で保持する。
     @State private var transientState = EditorWorkspaceTransientState()
@@ -1122,13 +1121,6 @@ struct EditorWorkspace: View {
         DispatchQueue.main.async { errorQueue.advance() }
     }
 
-    private func takeWorkspaceStoreError() {
-        guard let error = WorkspaceErrorQueue.storeError(workspaceStore.errorMessage,
-                                                         isKeyWindow: controlActiveState == .key) else { return }
-        workspaceStore.clearError()
-        errorQueue.present(error)
-    }
-
     private var alertView: some View {
         sheetView
         // One alert for every failure, so two failures never compete for presentation (#29).
@@ -1137,15 +1129,13 @@ struct EditorWorkspace: View {
             get: { errorQueue.current != nil },
             set: { if !$0 { dismissPresentedError() } }
         ), presenting: errorQueue.current) { _ in
-            Button("OK") { dismissPresentedError() }
+            // Dismissing goes only through the binding, so one alert is never dismissed twice.
+            Button("OK") {}
                 .keyboardShortcut(.defaultAction)
         } message: { error in
             Text(error.message)
         }
-        // The workspace store is shared by every document window, so only the key window
-        // shows its failure. If no document window is key, it waits until one is.
-        .onChange(of: workspaceStore.errorMessage, initial: true) { _, _ in takeWorkspaceStoreError() }
-        .onChange(of: controlActiveState) { _, _ in takeWorkspaceStoreError() }
+        .modifier(WorkspaceStoreErrorReceiver(store: workspaceStore) { errorQueue.present($0) })
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
                             analysis: currentAnalysisSnapshot?.analysis,
@@ -3430,6 +3420,29 @@ enum WorkspacePresentedError: Identifiable, Equatable {
              let .workspaceBookmark(message):
             message
         }
+    }
+}
+
+/// Moves the shared workspace store's failure into the key window's alert. The store is shared
+/// by every document window, so only the key window takes it; if none is key, it waits until
+/// one is (#61). It reads the window state here so that switching windows does not
+/// re-evaluate the whole workspace.
+private struct WorkspaceStoreErrorReceiver: ViewModifier {
+    @ObservedObject var store: WorkspaceStore
+    let present: (WorkspacePresentedError) -> Void
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: store.errorMessage, initial: true) { _, _ in take() }
+            .onChange(of: controlActiveState) { _, _ in take() }
+    }
+
+    private func take() {
+        guard let error = WorkspaceErrorQueue.storeError(store.errorMessage,
+                                                         isKeyWindow: controlActiveState == .key) else { return }
+        store.clearError()
+        present(error)
     }
 }
 
