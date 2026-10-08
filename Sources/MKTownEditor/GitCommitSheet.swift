@@ -29,7 +29,7 @@ struct GitCommitSheet: View {
                 .disabled(busy)
                 Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            Text("保存済みファイルの変更を操作します。通信操作は行いません。")
+            Text("保存済みファイルの変更を操作します。通信操作は行いません。コミット時はリポジトリのフック（pre-commitなど）を実行します。")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             if busy { ProgressView() }
@@ -103,21 +103,25 @@ struct GitCommitSheet: View {
                 }
                 Text("ステージ済み \(staged.count) 件")
                     .font(.headline)
-                Text("コミット対象のステージ済みファイルをすべて選択してください。")
+                Text("ステージ済みの変更がすべてコミットされます。")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("コミットメッセージ", text: $message)
                     .textFieldStyle(.roundedBorder)
                 Button("ステージ済みの変更をコミット") {
                     Task { await commit() }
                 }
-                .disabled(staged.isEmpty || !conflicts.isEmpty ||
-                          selected != Set(staged.map(\.path)) ||
-                          message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+                .disabled(!Self.canCommit(entries: entries, message: message) || busy)
             }
         }
         .padding(20)
         .frame(minWidth: 980, minHeight: 620)
         .task { await refresh() }
+    }
+
+    /// The commit records the whole index, so the staged list itself is what gets committed.
+    static func canCommit(entries: [GitStatusEntry], message: String) -> Bool {
+        entries.contains(where: \.isStaged) && !entries.contains(where: \.isConflicted) &&
+            !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func refresh() async {
@@ -179,10 +183,6 @@ struct GitCommitSheet: View {
 
     private func commit() async {
         guard let snapshot else { return }
-        guard selected == Set(staged.map(\.path)) else {
-            error = GitRepositoryError.invalidSelection.localizedDescription
-            return
-        }
         let value = message
         await mutate {
             try GitRepository.commit(message: value, in: snapshot.rootURL)

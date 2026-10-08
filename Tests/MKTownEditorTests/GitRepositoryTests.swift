@@ -98,6 +98,47 @@ final class GitRepositoryTests: XCTestCase {
         XCTAssertEqual(try GitRepository.load(for: first).history.first?.subject, "Update first")
     }
 
+    func testCommitRunsRepositoryHooksAndReportsTheirRejection() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try git(["init", "--quiet"], in: folder)
+        try git(["config", "user.name", "Test"], in: folder)
+        try git(["config", "user.email", "test@example.invalid"], in: folder)
+        let hook = folder.appendingPathComponent(".git/hooks/pre-commit")
+        // Long output on standard error must not hide the hook's verdict.
+        try """
+        #!/bin/sh
+        yes noise | head -n 5000 >&2
+        if [ -e "$(git rev-parse --show-toplevel)/allow" ]; then exit 0; fi
+        echo "pre-commit: lint failed" >&2
+        exit 1
+        """.write(to: hook, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hook.path)
+        try "body".write(to: folder.appendingPathComponent("note.md"), atomically: true, encoding: .utf8)
+        try GitRepository.stage(["note.md"], in: folder)
+
+        XCTAssertThrowsError(try GitRepository.commit(message: "Add note", in: folder)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("pre-commit: lint failed"), "\(error)")
+        }
+        XCTAssertTrue(try GitRepository.statusEntries(in: folder).contains(where: \.isStaged))
+
+        FileManager.default.createFile(atPath: folder.appendingPathComponent("allow").path, contents: nil)
+        try GitRepository.commit(message: "Add note", in: folder)
+        XCTAssertEqual(try GitRepository.load(for: folder.appendingPathComponent("note.md")).history.first?.subject,
+                       "Add note")
+    }
+
+    func testStagedChangesCanBeCommittedWithoutSelectingThemAgain() {
+        let staged = GitStatusEntry(path: "a.md", indexStatus: "M", worktreeStatus: " ")
+        let unstaged = GitStatusEntry(path: "b.md", indexStatus: " ", worktreeStatus: "M")
+        let conflict = GitStatusEntry(path: "c.md", indexStatus: "U", worktreeStatus: "U")
+        XCTAssertTrue(GitCommitSheet.canCommit(entries: [staged, unstaged], message: "Update"))
+        XCTAssertFalse(GitCommitSheet.canCommit(entries: [staged], message: " \n"))
+        XCTAssertFalse(GitCommitSheet.canCommit(entries: [unstaged], message: "Update"))
+        XCTAssertFalse(GitCommitSheet.canCommit(entries: [staged, conflict], message: "Update"))
+    }
+
     func testConflictStatusIsSeparatedFromOrdinaryStage() {
         let entries = GitRepository.parseStatus("UU conflict.md\0 M normal.md\0")
         XCTAssertEqual(entries.count, 2)
