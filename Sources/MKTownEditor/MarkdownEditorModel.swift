@@ -840,8 +840,8 @@ final class MarkdownEditorModel: ObservableObject {
         let alert = NSAlert()
         alert.messageText = String(localized: "セル内改行を変換します")
         alert.informativeText = String(localized: "Markdown表ではセル内改行を直接表せないため、<br>に置き換えます。")
-        alert.addButton(withTitle: "変換")
-        alert.addButton(withTitle: "キャンセル")
+        alert.addButton(withTitle: String(localized: "変換"))
+        alert.addButton(withTitle: String(localized: "キャンセル"))
         alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn { applyConversion() }
         }

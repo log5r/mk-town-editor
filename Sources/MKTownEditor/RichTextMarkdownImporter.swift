@@ -213,11 +213,11 @@ enum RichTextMarkdownImporter {
         var output = ""
         content.enumerateAttributes(in: NSRange(location: 0, length: content.length)) { attrs, range, _ in
             if attrs[.attachment] != nil {
-                output += "[画像]"
+                output += "[\(String(localized: "画像"))]"
                 return
             }
             var text = (content.string as NSString).substring(with: range)
-                .replacingOccurrences(of: "\u{FFFC}", with: "[画像]")
+                .replacingOccurrences(of: "\u{FFFC}", with: "[\(String(localized: "画像"))]")
             text = text.replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "*", with: "\\*")
                 .replacingOccurrences(of: "[", with: "\\[")
@@ -257,12 +257,12 @@ enum RichTextMarkdownImporter {
             let altPattern = altAttributeExpression
             let altMatch = altPattern.firstMatch(in: tag,
                 range: NSRange(location: 0, length: (tag as NSString).length))
-            let alt = altMatch.map { (tag as NSString).substring(with: $0.range(at: 1)) } ?? "画像"
+            let alt = altMatch.map { (tag as NSString).substring(with: $0.range(at: 1)) } ?? String(localized: "画像")
             let safe = alt.replacingOccurrences(of: "&", with: "&amp;")
                 .replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: ">", with: "&gt;")
             result = (result as NSString).replacingCharacters(in: match.range,
-                with: "<span>[画像: \(safe)]</span>")
+                with: "<span>[\(String(localized: "画像: \(safe)"))]</span>")
         }
         let headings = headingTagExpression
         let headingMatches = headings.matches(in: result,

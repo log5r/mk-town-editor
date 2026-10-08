@@ -280,10 +280,29 @@ enum EditorZoomSurface: CaseIterable {
 }
 
 enum EditorSplitOrientation: String, Codable, CaseIterable {
-    case sideBySide = "左右"
-    case stacked = "上下"
+    case sideBySide
+    case stacked
 
     var title: String { self == .sideBySide ? String(localized: "左右") : String(localized: "上下") }
+
+    /// Earlier versions stored the Japanese titles as raw values.
+    init?(storedValue: String) {
+        switch storedValue {
+        case "左右": self = .sideBySide
+        case "上下": self = .stacked
+        default: self.init(rawValue: storedValue)
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        guard let orientation = Self(storedValue: value) else {
+            throw DecodingError.dataCorruptedError(in: container,
+                debugDescription: "Unknown split orientation \(value)")
+        }
+        self = orientation
+    }
 }
 
 struct FocusModeState {

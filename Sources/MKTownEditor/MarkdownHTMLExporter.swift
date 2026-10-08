@@ -129,37 +129,37 @@ enum MarkdownHTMLExporter {
             }
         }
         if !analysis.footnotes.entries.isEmpty {
-            body += "<section class=\"footnotes\"><h2>脚注</h2><ol>"
+            body += "<section class=\"footnotes\"><h2>\(escape(String(localized: "脚注")))</h2><ol>"
             for note in analysis.footnotes.entries {
                 body += "<li id=\"fn-\(note.number)\">" +
                     inline(note.content, analysis: analysis,
                            context: context) +
-                    " <a href=\"#fnref-\(note.number)\" aria-label=\"本文に戻る\">↩</a></li>"
+                    " <a href=\"#fnref-\(note.number)\" aria-label=\"\(escape(String(localized: "本文に戻る")))\">↩</a></li>"
             }
             body += "</ol></section>"
         }
         if dialect == .extended,
            let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
-            body += "<section class=\"bibliography\"><h2>参考文献</h2><ol>"
+            body += "<section class=\"bibliography\"><h2>\(escape(String(localized: "参考文献")))</h2><ol>"
             for entry in catalog.entries {
                 body += "<li>\(escape(entry.bibliographyText))</li>"
             }
             body += "</ol></section>"
         }
         let title = MarkdownOutline.entries(in: analysis).first.map { visibleText($0.title) }
-            ?? documentURL?.deletingPathExtension().lastPathComponent ?? "無題"
+            ?? documentURL?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
         let cover = preset.cover
             ? "<section class=\"cover\"><h1>\(escape(title))</h1></section>\n" +
                 (printLayout ? "<p>\(coverBreakMarker)</p>\n" : "") : ""
         let tableOfContents = preset.tableOfContents
-            ? "<nav aria-label=\"目次\"><h2>目次</h2><ol>" +
+            ? "<nav aria-label=\"\(escape(String(localized: "目次")))\"><h2>\(escape(String(localized: "目次")))</h2><ol>" +
                 MarkdownHeadingIndex(analysis: analysis).anchors.map {
                     "<li><a href=\"#\(escape($0.slug))\">\(escape(visibleText($0.entry.title)))</a></li>"
                 }.joined() + "</ol></nav>\n" : ""
         return """
         <!doctype html>
-        <html lang="ja">
+        <html lang="\(escape(documentLanguage(analysis)))">
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -268,7 +268,7 @@ enum MarkdownHTMLExporter {
                     guard let destination = mediaDestination(url) else { return "<p>\(label)</p>\n" }
                     return "<p><a href=\"\(escape(destination))\">\(label)</a></p>\n"
                 }
-                return "<p>\(label)（再生不可）</p>\n"
+                return "<p>\(escape(String(localized: "\(media.label)（再生不可）")))</p>\n"
             }
             if let definitions = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
                 let entries = definitions.entries.map { entry in
@@ -495,6 +495,20 @@ enum MarkdownHTMLExporter {
             return nil
         }
         return text
+    }
+
+    /// The front matter's `lang:` when it is a language tag, otherwise the app's localization,
+    /// which is the language of the generated headings such as the footnotes title.
+    static func documentLanguage(_ analysis: MarkdownAnalysis) -> String {
+        if let raw = analysis.frontMatter?.raw,
+           let value = FrontMatterProperties.items(in: raw)
+            .first(where: { $0.key.lowercased() == "lang" })?.value
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"' \t")),
+           value.range(of: #"^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"#, options: .regularExpression) != nil {
+            return value
+        }
+        return Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
+            ?? Bundle.main.developmentLocalization ?? "ja"
     }
 
     private static func escape(_ text: String) -> String {
