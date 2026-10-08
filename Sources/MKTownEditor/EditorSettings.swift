@@ -193,11 +193,13 @@ struct EditorTextStyle: Equatable {
 
 struct EditorLayoutOptions: Equatable {
     var wrapsLines = true
+    var showsLineNumbers = true
     var listIndentWidth = 2
     var codeIndentWidth = 4
 
     @MainActor
     func apply(to textView: NSTextView, in scrollView: NSScrollView) {
+        scrollView.rulersVisible = showsLineNumbers
         scrollView.hasHorizontalScroller = !wrapsLines
         textView.isHorizontallyResizable = !wrapsLines
         textView.autoresizingMask = wrapsLines ? [.width] : []
@@ -264,6 +266,7 @@ struct AppEditorSettings: Codable, Equatable {
     var previewBodyWidth: Int?
     var showsInvisibleCharacters: Bool?
     var showsIndentGuides: Bool?
+    var showsLineNumbers: Bool?
     var shortcutOverrides: [String: ShortcutChord]?
 
     var effectiveSnippets: [EditorSnippet] {
@@ -449,6 +452,13 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    /// Leaves the command without a shortcut, even one it has by default.
+    func clearShortcut(for command: EditorCommand) {
+        values.app.shortcutOverrides = values.app.shortcutOverrides ?? [:]
+        values.app.shortcutOverrides?[command.toolbarIdentifier] = ShortcutChord(key: "")
+        save()
+    }
+
     func resetShortcut(for command: EditorCommand) throws {
         var remaining = values.app.shortcutOverrides ?? [:]
         remaining[command.toolbarIdentifier] = nil
@@ -544,6 +554,7 @@ final class EditorSettingsStore: ObservableObject {
     func layoutOptions(for documentURL: URL? = nil) -> EditorLayoutOptions {
         EditorLayoutOptions(
             wrapsLines: values.app.wrapsLines,
+            showsLineNumbers: values.app.showsLineNumbers ?? true,
             listIndentWidth: min(8, max(2,
                 documentURL.flatMap { nearestFolderValue(for: $0, \.listIndentWidth) }
                     ?? values.app.listIndentWidth ?? 2)),
