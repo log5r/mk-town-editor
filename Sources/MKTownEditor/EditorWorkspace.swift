@@ -478,6 +478,18 @@ struct EditorWorkspace: View {
                 next: { navigatePreviewSearch(backwards: false) },
                 previous: { navigatePreviewSearch(backwards: true) }
             ) : nil)
+        .focusedSceneValue(\.previewUpdateActions, PreviewUpdateActions(
+                isPaused: previewUpdates.state.isPaused, isStale: previewUpdates.state.isStale,
+                togglePause: {
+                    previewUpdates.togglePause(source: document.text,
+                                               dialect: documentContext.markdownDialect,
+                                               preferredSnapshot: analysisStore.snapshot)
+                },
+                refresh: {
+                    previewUpdates.refresh(source: document.text,
+                                           dialect: documentContext.markdownDialect,
+                                           preferredSnapshot: analysisStore.snapshot)
+                }))
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,

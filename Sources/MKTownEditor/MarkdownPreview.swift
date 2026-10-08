@@ -1024,6 +1024,12 @@ final class PreviewUpdateController: ObservableObject {
         capture(source: source, dialect: dialect, preferredSnapshot: preferredSnapshot)
     }
 
+    func togglePause(source: String, dialect: MarkdownDialect = .extended,
+                     preferredSnapshot: DocumentSnapshot? = nil) {
+        if state.isPaused { resume() }
+        else { pause(source: source, dialect: dialect, preferredSnapshot: preferredSnapshot) }
+    }
+
     func resume() {
         state.resume()
         generation += 1
@@ -1055,40 +1061,44 @@ final class PreviewUpdateController: ObservableObject {
     }
 }
 
+/// Shown only while automatic preview updates are paused. Revision counters are internal and
+/// are described to the user as "up to date" or "changes not shown yet" instead (#24).
 struct PreviewUpdateControls: View {
     @ObservedObject var updates: PreviewUpdateController
     let source: String
     var preferredSnapshot: DocumentSnapshot?
     var dialect: MarkdownDialect = .extended
 
+    static func statusText(for state: PreviewUpdateState) -> String? {
+        guard state.isPaused else { return nil }
+        return state.isStale ? String(localized: "プレビューは一時停止中 — 未反映の変更あり")
+            : String(localized: "プレビューは一時停止中 — 最新")
+    }
+
     var body: some View {
-        HStack(spacing: 10) {
-            if updates.state.isPaused {
-                Text("表示世代 \(updates.state.displayedRevision ?? 1) / 原文世代 \(updates.state.currentRevision)")
+        if let status = Self.statusText(for: updates.state) {
+            HStack(spacing: 10) {
+                Label(status, systemImage: "pause.circle")
                     .foregroundStyle(updates.state.isStale ? .orange : .secondary)
                 Spacer()
-                Button("手動更新", systemImage: "arrow.clockwise") {
+                Button("更新", systemImage: "arrow.clockwise") {
                     updates.refresh(source: source, dialect: dialect,
                                     preferredSnapshot: preferredSnapshot)
                 }
-                Button("自動更新を再開", systemImage: "play.fill") {
+                .disabled(!updates.state.isStale)
+                .help("一時停止したまま最新の内容を表示")
+                Button("再開", systemImage: "play.fill") {
                     updates.resume()
                 }
-            } else {
-                Text("自動更新・世代 \(updates.state.currentRevision)")
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("自動更新を停止", systemImage: "pause.fill") {
-                    updates.pause(source: source, dialect: dialect,
-                                  preferredSnapshot: preferredSnapshot)
-                }
+                .help("プレビューの自動更新を再開")
             }
+            .font(.caption)
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .accessibilityElement(children: .contain)
         }
-        .font(.caption)
-        .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 }
 
