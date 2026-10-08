@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Security
+import UniformTypeIdentifiers
 
 /// Only these adapters can send publication requests. Configuration and credentials stay local.
 enum PublicationProvider: String, CaseIterable, Identifiable, Sendable {
@@ -31,50 +32,76 @@ enum PublicationError: LocalizedError {
     case response(Int, String)
     case invalidResponse
     case redirect
+    case upload(String, String)
 
     var errorDescription: String? {
         switch self {
         case .invalidConfiguration: String(localized: "公開先、タイトル、スラッグを確認してください。")
         case .invalidCredential: String(localized: "認証情報を入力してください。")
+        case .response(413, _):
+            String(localized: "送信サイズが公開先の上限を超えたため受け付けられませんでした（HTTP 413）。サーバーのアップロード上限を確認してください。")
         case .response(let code, let detail): String(localized: "公開先がHTTP \(code)を返しました: \(detail)")
         case .invalidResponse: String(localized: "公開先の応答を確認できません。")
         case .redirect: String(localized: "公開先が別のURLへ転送しました。公開先設定を確認してください。")
+        case let .upload(name, detail):
+            String(localized: "\(name)をWordPressのメディアライブラリへアップロードできませんでした: \(detail)")
         }
     }
+}
+
+/// A local image or media file that must reach the WordPress media library before the post.
+struct PublicationUpload: Sendable, Equatable {
+    let fileURL: URL
+    let fileName: String
+    let mimeType: String
+    /// Written into the body's `src`/`href` until the upload returns its `source_url`.
+    let placeholder: String
 }
 
 struct PublicationPlan: Sendable {
     let destination: URL
     let preview: String
     let request: URLRequest
+    /// WordPress only. Local files are uploaded instead of being embedded as `data:` URIs,
+    /// which made the post body exceed `post_max_size` (HTTP 413) or get stripped by KSES.
+    var uploads: [PublicationUpload] = []
 
     @MainActor
     static func make(_ config: PublicationConfiguration, markdown: String,
                      documentURL: URL?, credential: String, date: Date = Date()) throws -> Self {
-        let html = config.provider == .wordpress ? MarkdownHTMLExporter.render(markdown, documentURL: documentURL) : ""
-        return try makePrepared(config, markdown: markdown, html: html, credential: credential, date: date)
+        let collector = PublicationUploadCollector()
+        let html = config.provider == .wordpress
+            ? MarkdownHTMLExporter.render(markdown, documentURL: documentURL,
+                                          images: .resolver { collector.placeholder(for: $0) }) : ""
+        return try makePrepared(config, markdown: markdown, html: html, uploads: collector.uploads,
+                                credential: credential, date: date)
     }
 
     @MainActor
     static func makeAsync(_ config: PublicationConfiguration, markdown: String,
                           documentURL: URL?, credential: String, date: Date = Date()) async throws -> Self {
+        let collector = PublicationUploadCollector()
         let html = config.provider == .wordpress
-            ? try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL) : ""
+            ? try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL,
+                                                         images: .resolver { collector.placeholder(for: $0) }) : ""
+        let uploads = collector.uploads
         return try await DocumentWork.perform {
-            try makePrepared(config, markdown: markdown, html: html, credential: credential, date: date)
+            try makePrepared(config, markdown: markdown, html: html, uploads: uploads,
+                             credential: credential, date: date)
         }
     }
 
-    private static func makePrepared(_ config: PublicationConfiguration, markdown: String,
-                                     html: String, credential: String, date: Date) throws -> Self {
+    private static func makePrepared(_ config: PublicationConfiguration, markdown: String, html: String,
+                                     uploads: [PublicationUpload], credential: String, date: Date) throws -> Self {
         guard !credential.isEmpty else { throw PublicationError.invalidCredential }
         guard !config.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               config.title.count <= 200 else { throw PublicationError.invalidConfiguration }
         guard validSlug(config.slug) else { throw PublicationError.invalidConfiguration }
         switch config.provider {
         case .wordpress:
-            return try wordpress(config, html: html,
-                                 credential: credential)
+            var plan = try wordpress(config, html: html, credential: credential)
+            plan.uploads = uploads
+            return plan
         case .githubJekyll:
             return try github(config, markdown: markdown, credential: credential, date: date)
         }
@@ -144,6 +171,99 @@ struct PublicationPlan: Sendable {
         let content: String
         let branch: String
     }
+
+    /// Uploads `uploads` first, then sends the post with their `source_url`s in place of
+    /// the placeholders. `perform` is the network layer; tests replace it.
+    func publish(perform: @Sendable (URLRequest) async throws -> Data = PublicationTransport.perform) async throws -> URL? {
+        var sources: [String: String] = [:]
+        for upload in uploads {
+            try Task.checkCancellation()
+            do {
+                let data = try await perform(try await uploadRequest(upload))
+                guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let source = object["source_url"] as? String,
+                      let url = URL(string: source), ["https", "http"].contains(url.scheme?.lowercased() ?? "")
+                else { throw PublicationError.invalidResponse }
+                sources[upload.placeholder] = source
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                throw PublicationError.upload(upload.fileName, error.localizedDescription)
+            }
+        }
+        return PublicationTransport.link(in: try await perform(try postRequest(replacing: sources)))
+    }
+
+    func uploadRequest(_ upload: PublicationUpload) async throws -> URLRequest {
+        var request = URLRequest(url: destination.deletingLastPathComponent().appendingPathComponent("media"))
+        request.httpMethod = "POST"
+        request.setValue(upload.mimeType, forHTTPHeaderField: "Content-Type")
+        request.setValue("attachment; filename=\"\(upload.fileName)\"", forHTTPHeaderField: "Content-Disposition")
+        request.setValue(self.request.value(forHTTPHeaderField: "Authorization"), forHTTPHeaderField: "Authorization")
+        let fileURL = upload.fileURL
+        request.httpBody = try await DocumentWork.perform { try Data(contentsOf: fileURL) }
+        return request
+    }
+
+    /// Placeholders only appear inside attributes, where the exporter escapes every quote in
+    /// user text, so `"` + placeholder cannot match body text. A `#`/`?` suffix is kept.
+    func postRequest(replacing sources: [String: String]) throws -> URLRequest {
+        guard !sources.isEmpty, let body = request.httpBody,
+              var payload = try JSONSerialization.jsonObject(with: body) as? [String: String],
+              var content = payload["content"] else { return request }
+        for (placeholder, source) in sources {
+            let escaped = source.replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "\"", with: "&quot;")
+            content = content.replacingOccurrences(of: "\"" + placeholder, with: "\"" + escaped)
+        }
+        payload["content"] = content
+        var request = request
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        return request
+    }
+}
+
+/// Assigns one upload per local file while the WordPress body renders off the main actor.
+final class PublicationUploadCollector: @unchecked Sendable {
+    static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp"]
+    static let uploadableExtensions = imageExtensions
+        .union(MarkdownMedia.Kind.audio.extensions).union(MarkdownMedia.Kind.video.extensions)
+
+    private let lock = NSLock()
+    private var byURL: [URL: PublicationUpload] = [:]
+    private var ordered: [PublicationUpload] = []
+
+    var uploads: [PublicationUpload] { lock.withLock { ordered } }
+
+    /// Returns nil for missing files and types WordPress does not accept by default,
+    /// so the exporter falls back to alt text instead of a broken reference.
+    func placeholder(for fileURL: URL) -> String? {
+        let ext = fileURL.pathExtension.lowercased()
+        guard Self.uploadableExtensions.contains(ext),
+              (try? fileURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else { return nil }
+        return lock.withLock {
+            if let existing = byURL[fileURL] { return existing.placeholder }
+            let index = ordered.count + 1
+            let name = Self.fileName(for: fileURL, index: index)
+            let upload = PublicationUpload(fileURL: fileURL, fileName: name,
+                mimeType: UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream",
+                placeholder: "mktown-upload://\(index)/\(name)")
+            byURL[fileURL] = upload
+            ordered.append(upload)
+            return upload.placeholder
+        }
+    }
+
+    /// WordPress reads only an ASCII `filename=`, so other characters become hyphens.
+    static func fileName(for fileURL: URL, index: Int) -> String {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+        var stem = String.UnicodeScalarView()
+        for scalar in fileURL.deletingPathExtension().lastPathComponent.unicodeScalars {
+            stem.append(allowed.contains(scalar) ? scalar : "-")
+        }
+        let clean = String(stem).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return (clean.isEmpty ? "upload-\(index)" : clean) + "." + fileURL.pathExtension.lowercased()
+    }
 }
 
 private extension DateFormatter {
@@ -174,6 +294,10 @@ private final class PublicationNoRedirect: NSObject, URLSessionTaskDelegate {
 
 enum PublicationTransport {
     static func send(_ request: URLRequest) async throws -> URL? {
+        link(in: try await perform(request))
+    }
+
+    static func perform(_ request: URLRequest) async throws -> Data {
         let session = URLSession(configuration: .ephemeral, delegate: PublicationNoRedirect(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         let (data, response) = try await session.data(for: request)
@@ -183,6 +307,10 @@ enum PublicationTransport {
             let detail = String(decoding: data.prefix(500), as: UTF8.self)
             throw PublicationError.response(http.statusCode, detail)
         }
+        return data
+    }
+
+    static func link(in data: Data) -> URL? {
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             if let link = object["link"] as? String { return URL(string: link) }
             if let content = object["content"] as? [String: Any],
