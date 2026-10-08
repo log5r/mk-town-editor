@@ -70,6 +70,48 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         XCTAssertFalse(html.contains("href=\"javascript:"))
     }
 
+    // Issue #41: mapped exports must reference files instead of embedding base64 or file: URLs.
+    func testRelativeImageSourceReferencesMappedFilesWithoutEmbedding() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for name in ["photo.png", "unmapped.png", "voice.m4a", "guide.pdf"] {
+            try Data([137, 80, 78, 71]).write(to: directory.appendingPathComponent(name))
+        }
+        func key(_ name: String) -> URL {
+            directory.appendingPathComponent(name).resolvingSymlinksInPath().standardizedFileURL
+        }
+        let source = "![Photo](photo.png) ![Lost](unmapped.png) [guide](guide.pdf#page=2) [other](other.md)\n\n!audio[Voice](voice.m4a)"
+        let html = MarkdownHTMLExporter.render(source, documentURL: directory.appendingPathComponent("note.md"),
+            images: .relative(pathMap: [key("photo.png"): "assets/photo.png", key("voice.m4a"): "assets/voice.m4a",
+                                        key("guide.pdf"): "assets/guide.pdf"]))
+        XCTAssertTrue(html.contains("<img src=\"assets/photo.png\" alt=\"Photo\">"), html)
+        XCTAssertTrue(html.contains("Lost"))
+        XCTAssertFalse(html.contains("unmapped.png"), "unmapped images fall back to alt text")
+        XCTAssertTrue(html.contains("href=\"assets/guide.pdf#page=2\""), html)
+        XCTAssertTrue(html.contains("href=\"other.md\""), html)
+        XCTAssertTrue(html.contains("<a href=\"assets/voice.m4a\">音声: Voice</a>"), html)
+        XCTAssertFalse(html.contains("data:image/png"))
+        XCTAssertFalse(html.contains("file:"))
+    }
+
+    func testStandaloneExportLinksMediaRelativeToOutputLocation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let media = root.appendingPathComponent("notes/media")
+        try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data([0]).write(to: media.appendingPathComponent("a:b c.m4a"))
+        let document = root.appendingPathComponent("notes/note.md")
+        let source = "!audio[Voice](media/a:b%20c.m4a)"
+        let html = MarkdownHTMLExporter.render(source, documentURL: document,
+                                               outputURL: root.appendingPathComponent("site/out/note.html"))
+        XCTAssertTrue(html.contains("<a href=\"../../notes/media/a%3Ab%20c.m4a\">"), html)
+        XCTAssertFalse(html.contains("file:"))
+        XCTAssertFalse(html.contains(root.path))
+        XCTAssertTrue(MarkdownHTMLExporter.render(source, documentURL: document).contains("href=\"file:"),
+                      "without an output location, local uses keep the absolute file URL")
+    }
+
     func testReferenceLinkAndDuplicateHeadingAnchors() {
         let markdown = "# Same\n\n# Same\n\n[Read][doc]\n\n[doc]: https://example.com"
         let html = MarkdownHTMLExporter.render(markdown)

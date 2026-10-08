@@ -205,6 +205,31 @@ final class PortablePackageExporterTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("assets/guide.pdf")), Data([5]))
     }
 
+    // Issue #41: the HTML body used to embed base64 images that were also copied to assets/,
+    // and linked media through absolute file: URLs that broke once the package moved.
+    func testHTMLPackageReferencesCopiedAssetsInsteadOfEmbeddingThem() throws {
+        let root = try makeRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let image = Data(repeating: 0x89, count: 64 * 1_024)
+        try image.write(to: root.appendingPathComponent("my photo.png"))
+        try Data([7]).write(to: root.appendingPathComponent("voice.m4a"))
+        let source = "![photo](my%20photo.png)\n\n![again][ref]\n\n[ref]: my%20photo.png\n\n!audio[Voice](voice.m4a)"
+        let plan = try PortablePackagePlanner.plan(source: source,
+            documentURL: root.appendingPathComponent("README.md"))
+        XCTAssertEqual(Set(plan.assets.map(\.relativePath)), ["assets/my photo.png", "assets/voice.m4a"])
+        XCTAssertTrue(plan.html.contains("<img src=\"assets/my%20photo.png\" alt=\"photo\">"), plan.html)
+        XCTAssertTrue(plan.html.contains("<img src=\"assets/my%20photo.png\" alt=\"again\">"), plan.html)
+        XCTAssertTrue(plan.html.contains("<a href=\"assets/voice.m4a\">音声: Voice</a>"), plan.html)
+        XCTAssertFalse(plan.html.contains("data:image/png"))
+        XCTAssertFalse(plan.html.contains("file:"))
+        XCTAssertFalse(plan.html.contains(root.path))
+        let folder = try PortablePackageExporter.export(plan, to: root, name: "share",
+                                                       format: .html, zip: false)
+        let index = try Data(contentsOf: folder.appendingPathComponent("index.html"))
+        XCTAssertLessThan(index.count, image.count / 4, "index.html must not carry a second copy of the image")
+        XCTAssertEqual(try Data(contentsOf: folder.appendingPathComponent("assets/my photo.png")), image)
+    }
+
     func testExternalImageFailsInsteadOfProducingIncompletePackage() throws {
         let root = try makeRoot()
         defer { try? FileManager.default.removeItem(at: root) }

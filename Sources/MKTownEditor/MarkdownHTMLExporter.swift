@@ -5,27 +5,57 @@ import WebKit
 enum MarkdownHTMLExporter {
     static let coverBreakMarker = "\u{E000}"
 
-    enum ImagePolicy: Sendable { case embedded, fileReferences }
-    @TaskLocal private static var imagePolicy: ImagePolicy = .embedded
+    /// How local files referenced by images, media and links are written.
+    /// Map keys and resolver arguments are symlink-resolved, standardized file URLs;
+    /// values are written as-is into `src`/`href`, so they must already be valid URL text.
+    enum ImageSource: Sendable {
+        /// Embed local images as base64 `data:` URIs so the HTML stands alone.
+        case embedBase64
+        /// Reference mapped files instead of embedding them. Unmapped images fall back
+        /// to their alt text and unmapped links keep their original destination.
+        case relative(pathMap: [URL: String])
+        /// Like `relative`, but asks for each file while rendering (e.g. to collect uploads).
+        case resolver(@Sendable (URL) -> String?)
+
+        func destination(for fileURL: URL) -> String? {
+            let key = fileURL.resolvingSymlinksInPath().standardizedFileURL
+            switch self {
+            case .embedBase64: return nil
+            case let .relative(pathMap): return pathMap[key]
+            case let .resolver(resolve): return resolve(key)
+            }
+        }
+    }
+
+    @TaskLocal private static var activeImages: ImageSource = .embedBase64
+    @TaskLocal private static var activeOutputURL: URL?
     @TaskLocal private static var mathImages: [String: String] = [:]
 
+    /// `outputURL` is where the HTML will be saved. With `.embedBase64`, local media links are
+    /// written relative to it; without it they stay absolute `file:` URLs for local use.
     @MainActor
     static func render(_ markdown: String, documentURL: URL? = nil,
                        preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
-                       dialect: MarkdownDialect = .extended) -> String {
+                       dialect: MarkdownDialect = .extended, images: ImageSource = .embedBase64,
+                       outputURL: URL? = nil) -> String {
         let analysis = MarkdownAnalysis(markdown, dialect: dialect)
         let resources = formulas(in: analysis).reduce(into: [String: String]()) { values, item in
             values[item.key] = MarkdownMathRenderer.htmlImage(item.formula, fontSize: item.size)
         }
         return $mathImages.withValue(resources) {
-            renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+            $activeImages.withValue(images) {
+                $activeOutputURL.withValue(outputURL) {
+                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                }
+            }
         }
     }
 
     @MainActor
     static func renderAsync(_ markdown: String, documentURL: URL? = nil,
                             preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
-                            dialect: MarkdownDialect = .extended, images: ImagePolicy = .embedded) async throws -> String {
+                            dialect: MarkdownDialect = .extended, images: ImageSource = .embedBase64,
+                            outputURL: URL? = nil) async throws -> String {
         let analysis = try await DocumentWork.perform { MarkdownAnalysis(markdown, dialect: dialect) }
         let items = try await DocumentWork.perform { formulas(in: analysis) }
         var resources: [String: String] = [:]
@@ -37,8 +67,10 @@ enum MarkdownHTMLExporter {
         let prepared = resources
         return try await DocumentWork.perform {
             $mathImages.withValue(prepared) {
-                $imagePolicy.withValue(images) {
-                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                $activeImages.withValue(images) {
+                    $activeOutputURL.withValue(outputURL) {
+                        renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                    }
                 }
             }
         }
@@ -233,7 +265,8 @@ enum MarkdownHTMLExporter {
             if let media = MarkdownMedia(block, dialect: context.markdownDialect) {
                 let label = escape(media.label)
                 if let url = media.localURL(in: context) {
-                    return "<p><a href=\"\(escape(url.absoluteString))\">\(label)</a></p>\n"
+                    guard let destination = mediaDestination(url) else { return "<p>\(label)</p>\n" }
+                    return "<p><a href=\"\(escape(destination))\">\(label)</a></p>\n"
                 }
                 return "<p>\(label)（再生不可）</p>\n"
             }
@@ -365,7 +398,7 @@ enum MarkdownHTMLExporter {
             if intent?.contains(.strikethrough) == true { run = "<del>\(run)</del>" }
             if let link = attributes[.link],
                let destination = safeLink(link) {
-                run = "<a href=\"\(escape(destination))\">\(run)</a>"
+                run = "<a href=\"\(escape(linkDestination(destination, context: context)))\">\(run)</a>"
             }
             html += run
         }
@@ -408,7 +441,7 @@ enum MarkdownHTMLExporter {
         if url.scheme == "http" || url.scheme == "https" { return url.absoluteString }
         guard !Task<Never, Never>.isCancelled, url.scheme == nil,
               let fileURL = context.resolveLocalResource(url.relativeString) else { return nil }
-        if imagePolicy == .fileReferences { return fileURL.absoluteString }
+        guard case .embedBase64 = activeImages else { return activeImages.destination(for: fileURL) }
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let mime: String
         switch fileURL.pathExtension.lowercased() {
@@ -420,6 +453,40 @@ enum MarkdownHTMLExporter {
         }
         return "data:\(mime);base64,\(data.base64EncodedString())"
     }
+
+    private static func mediaDestination(_ fileURL: URL) -> String? {
+        guard case .embedBase64 = activeImages else { return activeImages.destination(for: fileURL) }
+        guard let outputURL = activeOutputURL else { return fileURL.absoluteString }
+        return relativePath(from: outputURL.deletingLastPathComponent(), to: fileURL)
+    }
+
+    /// Local attachment links follow the same mapping as images, keeping `#`/`?` suffixes.
+    private static func linkDestination(_ destination: String, context: DocumentContext) -> String {
+        if case .embedBase64 = activeImages { return destination }
+        let split = destination.firstIndex(where: { $0 == "#" || $0 == "?" })
+        let path = split.map { String(destination[..<$0]) } ?? destination
+        guard let fileURL = context.resolveLocalResource(path),
+              let mapped = activeImages.destination(for: fileURL) else { return destination }
+        return mapped + (split.map { String(destination[$0...]) } ?? "")
+    }
+
+    /// A percent-encoded relative URL path from `directory` to `fileURL`.
+    static func relativePath(from directory: URL, to fileURL: URL) -> String {
+        let base = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let target = fileURL.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        var common = 0
+        while common < base.count, common < target.count - 1, base[common] == target[common] { common += 1 }
+        return hrefPath(Array(repeating: "..", count: base.count - common) + target[common...])
+    }
+
+    /// Encodes each component so names containing `:`, `#`, `?` or spaces stay one relative path.
+    static func hrefPath<Components: Sequence<String>>(_ components: Components) -> String {
+        components.map { $0.addingPercentEncoding(withAllowedCharacters: hrefComponentAllowed) ?? $0 }
+            .joined(separator: "/")
+    }
+
+    private static let hrefComponentAllowed = CharacterSet.urlPathAllowed
+        .subtracting(CharacterSet(charactersIn: "/:;?#"))
 
     private static func safeLink(_ value: Any) -> String? {
         let text = (value as? URL)?.relativeString ?? value as? String

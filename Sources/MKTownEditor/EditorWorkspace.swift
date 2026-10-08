@@ -2148,7 +2148,8 @@ struct EditorWorkspace: View {
             guard response == .OK, let destination = panel.url else { return }
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
-                let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset, dialect: dialect)
+                let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset,
+                                                                      dialect: dialect, outputURL: destination)
                 try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
             } onError: { htmlExportError = $0 }
         }

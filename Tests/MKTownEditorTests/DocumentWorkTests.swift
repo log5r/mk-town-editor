@@ -74,9 +74,13 @@ final class DocumentWorkTests: XCTestCase {
         XCTAssertTrue(actual.contains("data:image/png;base64,"))
         XCTAssertTrue(actual.contains("math-block"))
         XCTAssertTrue(actual.contains("<strong>bold</strong>"))
-        let references = try await MarkdownHTMLExporter.renderAsync("![image](image.png)", documentURL: url, images: .fileReferences)
-        XCTAssertTrue(references.contains(root.appendingPathComponent("image.png").absoluteString))
+        let key = root.appendingPathComponent("image.png").resolvingSymlinksInPath().standardizedFileURL
+        let references = try await MarkdownHTMLExporter.renderAsync("![image](image.png)", documentURL: url,
+                                                                    images: .relative(pathMap: [key: "assets/image.png"]))
+        XCTAssertTrue(references.contains("src=\"assets/image.png\""))
         XCTAssertFalse(references.contains("data:image/png"))
+        XCTAssertEqual(references, MarkdownHTMLExporter.render("![image](image.png)", documentURL: url,
+                                                               images: .relative(pathMap: [key: "assets/image.png"])))
     }
 
     func testAsyncImportAndClipboardUseRenderedAttributes() async throws {
@@ -179,5 +183,7 @@ final class DocumentWorkTests: XCTestCase {
         let plan = try await PortablePackagePlanner.planAsync(source: "![image](image.png)", documentURL: root.appendingPathComponent("note.md"))
         XCTAssertEqual(plan.assets.map(\.relativePath), ["assets/image.png"])
         XCTAssertTrue(plan.markdown.contains("assets/image.png"))
+        XCTAssertTrue(plan.html.contains("src=\"assets/image.png\""), plan.html)
+        XCTAssertFalse(plan.html.contains("data:image/png"))
     }
 }

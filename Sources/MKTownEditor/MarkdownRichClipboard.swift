@@ -34,7 +34,7 @@ enum MarkdownRichClipboard {
                           dialect: MarkdownDialect = .extended,
                           startingChangeCount: Int? = nil) async throws {
         let expectedChangeCount = startingChangeCount ?? pasteboard.changeCount
-        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL, dialect: dialect, images: .embedded)
+        let html = try await MarkdownHTMLExporter.renderAsync(markdown, documentURL: documentURL, dialect: dialect, images: .embedBase64)
         let rendered = AttributedTransfer(try await DocumentWork.loadHTML(html))
         let rtf = try await DocumentWork.perform {
             try rendered.value.data(from: NSRange(location: 0, length: rendered.value.length),
