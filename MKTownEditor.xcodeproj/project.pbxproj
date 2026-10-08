@@ -86,6 +86,7 @@
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
 		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
 		A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* ExternalDocumentOpen.swift */; };
+		A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AC47 /* ApplicationActivation.swift */; };
 		A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* MarkdownSafeHTML.swift */; };
 		A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* MarkdownMultiSelection.swift */; };
 		A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000065 /* MarkdownLinkHover.swift */; };
@@ -230,6 +231,7 @@
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A20000000000000000000062 /* ExternalDocumentOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDocumentOpen.swift; sourceTree = "<group>"; };
+		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000063 /* MarkdownSafeHTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSafeHTML.swift; sourceTree = "<group>"; };
 		A20000000000000000000064 /* MarkdownMultiSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMultiSelection.swift; sourceTree = "<group>"; };
 		A20000000000000000000065 /* MarkdownLinkHover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkHover.swift; sourceTree = "<group>"; };
@@ -387,6 +389,7 @@
 				A20000000000000000000060 /* EditorShortcuts.swift */,
 				A20000000000000000000061 /* Localizable.xcstrings */,
 				A20000000000000000000062 /* ExternalDocumentOpen.swift */,
+				A2000000000000000000AC47 /* ApplicationActivation.swift */,
 				A20000000000000000000063 /* MarkdownSafeHTML.swift */,
 				A20000000000000000000064 /* MarkdownMultiSelection.swift */,
 				A20000000000000000000065 /* MarkdownLinkHover.swift */,
@@ -593,6 +596,7 @@
 				A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */,
 				A10000000000000000000060 /* EditorShortcuts.swift in Sources */,
 				A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */,
+				A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */,
 				A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */,
 				A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */,
 				A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */,
