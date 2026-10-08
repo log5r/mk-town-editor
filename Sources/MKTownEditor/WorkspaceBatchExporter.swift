@@ -125,7 +125,7 @@ enum WorkspaceBatchExporter {
                     try await DocumentWork.perform { try data.write(to: temporary, options: .atomic) }
                 case .html:
                     let rendered = try await MarkdownHTMLExporter.renderAsync(source, documentURL: document.sourceURL,
-                                                                dialect: dialect(document.sourceURL))
+                                                                dialect: dialect(document.sourceURL), outputURL: output)
                     try await DocumentWork.perform { try Data(rendered.utf8).write(to: temporary, options: .atomic) }
                 case .plainText:
                     let rendered = try await DocumentWork.perform {
