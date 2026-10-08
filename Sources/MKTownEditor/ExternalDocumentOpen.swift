@@ -42,9 +42,28 @@ struct ExternalDocumentOpenRequest: Equatable {
 @MainActor
 final class ExternalDocumentOpenAppDelegate: NSObject, NSApplicationDelegate {
     private let selectionService = MarkdownSelectionService()
+    private let activation = ApplicationActivation()
+    private let application: () -> ActivationPolicyControlling
+
+    /// `NSApplicationDelegateAdaptor` uses this initializer; the application is resolved lazily
+    /// because `NSApp` may not exist yet when the delegate is created.
+    override convenience init() {
+        self.init(application: { NSApplication.shared })
+    }
+
+    init(application: @escaping () -> ActivationPolicyControlling) {
+        self.application = application
+    }
+
+    var repairedActivationPolicy: Bool { activation.repairedPolicy }
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        activation.applicationWillFinishLaunching(application())
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = selectionService
+        activation.applicationDidFinishLaunching(application())
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
