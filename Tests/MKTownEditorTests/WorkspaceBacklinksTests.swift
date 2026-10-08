@@ -27,7 +27,7 @@ final class WorkspaceBacklinksTests: XCTestCase {
         [external](https://example.com/target.md)
         """
         try source.write(to: referring, atomically: true, encoding: .utf8)
-        let nodes = WorkspaceFileIndex.scan(root: root).nodes
+        let nodes = try WorkspaceFileIndex.scan(root: root).nodes
         let analysis = MarkdownAnalysis(source)
         XCTAssertNotNil(analysis.references["ref"])
         XCTAssertTrue(MarkdownContentInspector.items(in: source, analysis: analysis)
@@ -52,7 +52,7 @@ final class WorkspaceBacklinksTests: XCTestCase {
         let referring = nested.appendingPathComponent("referring.md")
         try "Target".write(to: target, atomically: true, encoding: .utf8)
         try "No links".write(to: referring, atomically: true, encoding: .utf8)
-        let nodes = WorkspaceFileIndex.scan(root: root).nodes
+        let nodes = try WorkspaceFileIndex.scan(root: root).nodes
         let edited = try XCTUnwrap("See [target](../target.md)".data(using: .utf8))
 
         let index = try WorkspaceBacklinkIndex.scan(root: root, targetURL: target,

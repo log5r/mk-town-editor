@@ -1149,6 +1149,11 @@ struct EditorWorkspace: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshCloudStatus()
+            workspaceStore.refreshIfRootUnavailable()
+        }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in
+            // 取り外したディスクが戻ったら、読めなかったワークスペースを読み直す。
+            workspaceStore.refreshIfRootUnavailable()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSText.didChangeNotification)) { _ in
             if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
@@ -1536,20 +1541,20 @@ struct EditorWorkspace: View {
             }
             Section("参照元") {
                 Button("バックリンクを表示…") { showingBacklinks = true }
-                    .disabled(fileURL == nil || workspaceStore.rootURL == nil)
+                    .disabled(fileURL == nil || !isWorkspaceReadable)
                 Button("文書リンクのグラフを表示…") { showingLinkGraph = true }
-                    .disabled(workspaceStore.rootURL == nil)
+                    .disabled(!isWorkspaceReadable)
             }
             Section("Wikiリンク") {
                 Button("Wikiリンクを挿入・編集…") {
                     wikiSelection = editorModel.selectedRange
                     showingWikiLinks = true
                 }
-                .disabled(fileURL == nil || workspaceStore.rootURL == nil ||
+                .disabled(fileURL == nil || !isWorkspaceReadable ||
                     workspaceStore.isDocumentLocked(fileURL))
             }
             Section("文書を整理") {
-                let splitUnavailable = !isReady || fileURL == nil || workspaceStore.rootURL == nil ||
+                let splitUnavailable = !isReady || fileURL == nil || !isWorkspaceReadable ||
                     workspaceStore.isDocumentLocked(fileURL)
                 let entries = outlineEntries
                 EditorSelectionReader(selection: editorModel.selectionState) { selection in
@@ -1563,7 +1568,7 @@ struct EditorWorkspace: View {
                     MarkdownOutline.currentSection(at: selection.location, in: entries) == nil)
                 }
                 Button("書類を結合…") { showingNoteMerge = true }
-                    .disabled(workspaceStore.rootURL == nil)
+                    .disabled(!isWorkspaceReadable)
             }
             Section("作業レイアウト") {
                 Button("名前付きレイアウト…") { showingNamedLayouts = true }
@@ -1673,19 +1678,19 @@ struct EditorWorkspace: View {
                     showingQuickOpen = true
                 }
                 .labelStyle(.iconOnly)
-                .disabled(workspaceStore.rootURL == nil)
+                .disabled(!isWorkspaceReadable)
                 .help("ファイル名で書類を探す")
                 Button("日付ノートを開く…", systemImage: "calendar") {
                     showingDailyNote = true
                 }
                 .labelStyle(.iconOnly)
-                .disabled(workspaceStore.rootURL == nil)
+                .disabled(!isWorkspaceReadable)
                 .help("日付ノートを開く")
                 Button("未完了のタスクを表示…", systemImage: "checklist") {
                     showingWorkspaceTasks = true
                 }
                 .labelStyle(.iconOnly)
-                .disabled(workspaceStore.rootURL == nil)
+                .disabled(!isWorkspaceReadable)
                 .help("未完了のタスクを表示")
                 if let root = workspaceStore.rootURL {
                     Button("フォルダの編集設定", systemImage: "gearshape") {
@@ -1699,6 +1704,7 @@ struct EditorWorkspace: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .disabled(workspaceStore.isRootUnavailable)
                     .help("ワークスペースに作成")
                     Menu {
                         Picker("並び順", selection: Binding(
@@ -1736,11 +1742,54 @@ struct EditorWorkspace: View {
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease")
                     }
+                    .disabled(workspaceStore.isRootUnavailable)
                     .help("並び順とフィルター")
                 }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            if let failure = workspaceStore.rootUnavailableError {
+                rootUnavailableView(failure)
+            } else {
+                workspaceFileList
+            }
+        }
+        .overlay {
+            if workspaceStore.rootURL == nil {
+                ContentUnavailableView("フォルダを開く", systemImage: "folder",
+                                       description: Text("Markdown書類と添付を一覧できます"))
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private var isWorkspaceReadable: Bool {
+        workspaceStore.rootURL != nil && !workspaceStore.isRootUnavailable
+    }
+
+    /// ルートを読めないときに空の一覧を出さず、理由と対処を示す。
+    private func rootUnavailableView(_ failure: WorkspaceRootUnavailableError) -> some View {
+        ContentUnavailableView {
+            Label("フォルダにアクセスできません", systemImage: "folder.badge.questionmark")
+        } description: {
+            VStack(spacing: 6) {
+                Text(failure.localizedDescription)
+                Text(verbatim: failure.rootURL.path(percentEncoded: false))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        } actions: {
+            Button("フォルダを選び直す…") { workspaceStore.chooseFolder() }
+            Button("再試行") { workspaceStore.refresh(force: true) }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private var workspaceFileList: some View {
+        VStack(spacing: 0) {
             List {
                 OutlineGroup(workspaceStore.visibleNodes, children: \.children) { node in
                     if node.isDirectory {
@@ -1777,12 +1826,11 @@ struct EditorWorkspace: View {
                     .foregroundStyle(.secondary)
                     .padding(8)
             }
-        }
-        .overlay {
-            if workspaceStore.rootURL == nil {
-                ContentUnavailableView("フォルダを開く", systemImage: "folder",
-                                       description: Text("Markdown書類と添付を一覧できます"))
-                    .allowsHitTesting(false)
+            if workspaceStore.skippedDirectoryCount > 0 {
+                Text("読み込めなかったフォルダ: \(workspaceStore.skippedDirectoryCount)件")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(8)
             }
         }
     }

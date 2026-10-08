@@ -17,7 +17,7 @@ final class WorkspaceFileIndexTests: XCTestCase {
                     creationFails ? nil : WorkspaceDirectoryMonitor.createStream(root, &context)
                 }, startStream: { _ in false }, changed: {
                     callbacks += 1
-                    scannedNames = WorkspaceFileIndex.scan(root: root).nodes.map(\.name)
+                    scannedNames = (try? WorkspaceFileIndex.scan(root: root))?.nodes.map(\.name) ?? []
                 })
             defer { monitor.stop() }
             try "external edit".write(to: document, atomically: true, encoding: .utf8)
@@ -150,7 +150,7 @@ final class WorkspaceFileIndexTests: XCTestCase {
         try "other".write(to: root.appendingPathComponent("ignored.swift"), atomically: true, encoding: .utf8)
         try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("loop"),
                                                     withDestinationURL: root)
-        let result = WorkspaceFileIndex.scan(root: root)
+        let result = try WorkspaceFileIndex.scan(root: root)
         XCTAssertFalse(result.isTruncated)
         XCTAssertEqual(result.nodes.map(\.name), ["章", "figure.png"])
         XCTAssertEqual(result.nodes[0].children?.map(\.name), ["日本語.md"])
@@ -158,27 +158,185 @@ final class WorkspaceFileIndexTests: XCTestCase {
         XCTAssertFalse(result.nodes[1].isEditableDocument)
     }
 
+    // Issue #36: ルートを読めないときは空の一覧ではなくエラーにする。
+    func testScanThrowsWhenRootCannotBeListedButSkipsUnreadableSubfolders() throws {
+        let manager = FileManager.default
+        let base = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try manager.createDirectory(at: base, withIntermediateDirectories: true)
+        let locked = base.appendingPathComponent("locked")
+        let readable = base.appendingPathComponent("readable")
+        let hidden = readable.appendingPathComponent("hidden")
+        defer {
+            for folder in [locked, hidden] {
+                try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path)
+            }
+            try? manager.removeItem(at: base)
+        }
+        func reason(of root: URL) -> WorkspaceRootUnavailableError.Reason? {
+            do { _ = try WorkspaceFileIndex.scan(root: root); return nil }
+            catch {
+                XCTAssertEqual(error.rootURL, root)
+                return error.reason
+            }
+        }
+        XCTAssertEqual(reason(of: base.appendingPathComponent("missing")), .missing)
+        let file = base.appendingPathComponent("file.md")
+        try "body".write(to: file, atomically: true, encoding: .utf8)
+        XCTAssertEqual(reason(of: file), .notDirectory)
+        try manager.createDirectory(at: locked, withIntermediateDirectories: true)
+        try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        XCTAssertEqual(reason(of: locked), .permissionDenied)
+
+        try manager.createDirectory(at: hidden, withIntermediateDirectories: true)
+        try "body".write(to: readable.appendingPathComponent("note.md"), atomically: true, encoding: .utf8)
+        try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: hidden.path)
+        let result = try WorkspaceFileIndex.scan(root: readable)
+        XCTAssertEqual(result.nodes.map(\.name), ["hidden", "note.md"])
+        XCTAssertEqual(result.nodes[0].children, [])
+        XCTAssertEqual(result.skippedDirectories, 1)
+    }
+
+    func testWorkspaceWideScansReportUnreadableRootInsteadOfEmptyResults() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        XCTAssertThrowsError(try WorkspaceSearch.report(root: root,
+                                                        options: WorkspaceSearchOptions(query: "word"))) {
+            XCTAssertEqual(($0 as? WorkspaceRootUnavailableError)?.reason, .missing)
+        }
+        do {
+            _ = try await WorkspaceAttachmentAudit.scan(root: root)
+            XCTFail("an unreadable root must not look like a workspace without attachments")
+        } catch {
+            XCTAssertEqual((error as? WorkspaceRootUnavailableError)?.reason, .missing)
+        }
+    }
+
+    func testStorePublishesUnavailableRootAndRecoversWhenFolderIsReadableAgain() async throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer {
+            try? manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+            try? manager.removeItem(at: root)
+        }
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        try "a".write(to: root.appendingPathComponent("a.md"), atomically: true, encoding: .utf8)
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        store.setRoot(root)
+        let expectedRoot = try XCTUnwrap(store.rootURL)
+        for _ in 0..<200 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.nodes.map(\.name), ["a.md"])
+        XCTAssertFalse(store.isRootUnavailable)
+
+        // 権限を失ったルート: 空の一覧ではなく利用不可の状態になり、ルートは保持する。
+        try manager.setAttributes([.posixPermissions: 0o000], ofItemAtPath: root.path)
+        store.refresh(force: true)
+        for _ in 0..<300 where !store.isRootUnavailable { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.rootUnavailableError?.reason, .permissionDenied)
+        XCTAssertEqual(store.rootURL, expectedRoot)
+        XCTAssertTrue(store.nodes.isEmpty)
+        for _ in 0..<200 where !store.visibleNodes.isEmpty { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertTrue(store.visibleNodes.isEmpty)
+
+        try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.path)
+        store.refreshIfRootUnavailable()
+        for _ in 0..<300 where store.isRootUnavailable { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNil(store.rootUnavailableError)
+        XCTAssertEqual(store.nodes.map(\.name), ["a.md"])
+
+        // 削除されたルート（取り外したボリュームと同じく存在しない）も、戻れば一覧に戻る。
+        try manager.removeItem(at: root)
+        store.refresh(force: true)
+        for _ in 0..<300 where !store.isRootUnavailable { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.rootUnavailableError?.reason, .missing)
+        XCTAssertEqual(store.rootURL, expectedRoot)
+        XCTAssertTrue(store.nodes.isEmpty)
+        try manager.createDirectory(at: root, withIntermediateDirectories: true)
+        try "b".write(to: root.appendingPathComponent("b.md"), atomically: true, encoding: .utf8)
+        store.refreshIfRootUnavailable()
+        for _ in 0..<300 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNil(store.rootUnavailableError)
+        XCTAssertEqual(store.nodes.map(\.name), ["b.md"])
+    }
+
+    func testStaleBookmarkOfMovedFolderOpensItAndIsSavedAgain() async throws {
+        let manager = FileManager.default
+        let base = URL(fileURLWithPath: "/private/tmp/workspace-bookmark-\(UUID().uuidString)")
+        defer { try? manager.removeItem(at: base) }
+        let original = base.appendingPathComponent("original")
+        let moved = base.appendingPathComponent("moved")
+        try manager.createDirectory(at: original, withIntermediateDirectories: true)
+        try "body".write(to: original.appendingPathComponent("note.md"), atomically: true, encoding: .utf8)
+        let bookmark = try original.bookmarkData(options: [], includingResourceValuesForKeys: nil,
+                                                 relativeTo: nil)
+        try manager.moveItem(at: original, to: moved)
+        let restored = try XCTUnwrap(WorkspaceStore.restoreBookmark(bookmark))
+        XCTAssertTrue(restored.isStale, "moving the folder must make the bookmark stale")
+
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        defaults.set(bookmark, forKey: "workspaceFolderBookmark")
+        let store = WorkspaceStore(defaults: defaults)
+        XCTAssertEqual(store.rootURL?.path, moved.resolvingSymlinksInPath().standardizedFileURL.path)
+        XCTAssertNil(store.errorMessage)
+        let saved = try XCTUnwrap(defaults.data(forKey: "workspaceFolderBookmark"))
+        XCTAssertNotEqual(saved, bookmark)
+        let refreshed = try XCTUnwrap(WorkspaceStore.restoreBookmark(saved))
+        XCTAssertFalse(refreshed.isStale)
+        XCTAssertEqual(refreshed.url.resolvingSymlinksInPath().standardizedFileURL.path,
+                       moved.resolvingSymlinksInPath().standardizedFileURL.path)
+        for _ in 0..<200 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.nodes.map(\.name), ["note.md"])
+    }
+
+    func testBookmarkOfDeletedFolderShowsUnavailableRootInsteadOfDiscardingIt() async throws {
+        let manager = FileManager.default
+        let base = URL(fileURLWithPath: "/private/tmp/workspace-bookmark-\(UUID().uuidString)")
+        defer { try? manager.removeItem(at: base) }
+        let folder = base.appendingPathComponent("removed")
+        try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let bookmark = try folder.bookmarkData(options: [], includingResourceValuesForKeys: nil,
+                                               relativeTo: nil)
+        try manager.removeItem(at: folder)
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString))
+        defaults.set(bookmark, forKey: "workspaceFolderBookmark")
+
+        let store = WorkspaceStore(defaults: defaults)
+        XCTAssertEqual(store.rootURL?.lastPathComponent, "removed")
+        XCTAssertEqual(store.rootURL?.deletingLastPathComponent().resolvingSymlinksInPath().path,
+                       base.resolvingSymlinksInPath().path)
+        for _ in 0..<300 where !store.isRootUnavailable { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.rootUnavailableError?.reason, .missing)
+        XCTAssertTrue(store.nodes.isEmpty)
+        XCTAssertEqual(defaults.data(forKey: "workspaceFolderBookmark"), bookmark,
+                       "the bookmark is kept so the folder can be restored when it comes back")
+
+        try manager.createDirectory(at: folder, withIntermediateDirectories: true)
+        try "body".write(to: folder.appendingPathComponent("back.md"), atomically: true, encoding: .utf8)
+        store.refreshIfRootUnavailable()
+        for _ in 0..<300 where store.nodes.isEmpty { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertNil(store.rootUnavailableError)
+        XCTAssertEqual(store.nodes.map(\.name), ["back.md"])
+    }
+
     func testScanContinuesPastFormerTenThousandEntryLimit() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         for index in 0..<10_001 { try Data().write(to: root.appendingPathComponent("\(index).png")) }
-        let result = WorkspaceFileIndex.scan(root: root)
+        let result = try WorkspaceFileIndex.scan(root: root)
         XCTAssertFalse(result.isTruncated)
         XCTAssertEqual(result.nodes.count, 10_001)
-        XCTAssertTrue(WorkspaceFileIndex.scan(root: root, maximumEntries: 2).isTruncated)
+        XCTAssertTrue(try WorkspaceFileIndex.scan(root: root, maximumEntries: 2).isTruncated)
     }
 
     func testRescanDetectsExternalFileChanges() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        XCTAssertTrue(WorkspaceFileIndex.scan(root: root).nodes.isEmpty)
+        XCTAssertTrue(try WorkspaceFileIndex.scan(root: root).nodes.isEmpty)
         let file = root.appendingPathComponent("new.markdown")
         try "new".write(to: file, atomically: true, encoding: .utf8)
-        XCTAssertEqual(WorkspaceFileIndex.scan(root: root).nodes.map(\.name), ["new.markdown"])
+        XCTAssertEqual(try WorkspaceFileIndex.scan(root: root).nodes.map(\.name), ["new.markdown"])
         try FileManager.default.removeItem(at: file)
-        XCTAssertTrue(WorkspaceFileIndex.scan(root: root).nodes.isEmpty)
+        XCTAssertTrue(try WorkspaceFileIndex.scan(root: root).nodes.isEmpty)
     }
 
     func testOpenDocumentRegistryCountsMultipleWindows() throws {

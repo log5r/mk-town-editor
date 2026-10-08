@@ -23,6 +23,58 @@ struct WorkspaceNode: Identifiable, Sendable, Equatable {
 struct WorkspaceScanResult: Sendable {
     let nodes: [WorkspaceNode]
     let isTruncated: Bool
+    /// 列挙できなかったサブフォルダの数。これらは空のフォルダとして一覧に残る。
+    let skippedDirectories: Int
+}
+
+/// ワークスペースのルート自体を列挙できなかったときのエラー。
+/// 空の一覧と区別するため、サブフォルダの失敗とは分けて `scan` から投げる。
+struct WorkspaceRootUnavailableError: LocalizedError, Equatable, Sendable {
+    enum Reason: Equatable, Sendable {
+        case missing
+        case permissionDenied
+        case notDirectory
+        case other(String)
+    }
+
+    let rootURL: URL
+    let reason: Reason
+
+    init(rootURL: URL, reason: Reason) {
+        self.rootURL = rootURL
+        self.reason = reason
+    }
+
+    init(rootURL: URL, underlying error: Error) {
+        let error = error as NSError
+        let posix = (error.userInfo[NSUnderlyingErrorKey] as? NSError)
+            .flatMap { $0.domain == NSPOSIXErrorDomain ? $0.code : nil }
+        let reason: Reason
+        if error.domain == NSCocoaErrorDomain, error.code == CocoaError.fileReadNoSuchFile.rawValue
+            || error.code == CocoaError.fileNoSuchFile.rawValue {
+            reason = .missing
+        } else if error.domain == NSCocoaErrorDomain, error.code == CocoaError.fileReadNoPermission.rawValue {
+            reason = .permissionDenied
+        } else if posix == Int(ENOTDIR) {
+            reason = .notDirectory
+        } else {
+            reason = .other(error.localizedDescription)
+        }
+        self.init(rootURL: rootURL, reason: reason)
+    }
+
+    var errorDescription: String? {
+        switch reason {
+        case .missing:
+            String(localized: "フォルダが見つかりません。削除または移動されたか、フォルダのあるディスクが取り外された可能性があります。")
+        case .permissionDenied:
+            String(localized: "このフォルダを読み込む権限がありません。フォルダを選び直してアクセスを許可してください。")
+        case .notDirectory:
+            String(localized: "この場所はフォルダではありません。")
+        case let .other(message):
+            message
+        }
+    }
 }
 
 private struct WorkspaceOpenBuffer {
@@ -49,18 +101,30 @@ enum WorkspaceFileIndex {
     static let maximumEntries = 50_000
     private static let maximumDepth = 16
 
-    static func scan(root: URL, maximumEntries: Int = maximumEntries) -> WorkspaceScanResult {
+    /// ルートを列挙できないときは `WorkspaceRootUnavailableError` を投げる。
+    /// 読めないサブフォルダは空として扱い、`skippedDirectories` に数える。
+    static func scan(root: URL, maximumEntries: Int = maximumEntries)
+        throws(WorkspaceRootUnavailableError) -> WorkspaceScanResult {
         var visited = 0
         var truncated = false
+        var skipped = 0
         let manager = FileManager.default
 
-        func descend(_ directory: URL, depth: Int) -> [WorkspaceNode] {
-            guard depth < maximumDepth else { truncated = true; return [] }
-            guard let urls = try? manager.contentsOfDirectory(
+        func contents(of directory: URL) throws -> [URL] {
+            try manager.contentsOfDirectory(
                 at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey,
                                                              .contentModificationDateKey],
                 options: [.skipsHiddenFiles]
-            ) else { return [] }
+            )
+        }
+
+        func descend(_ directory: URL, depth: Int) -> [WorkspaceNode] {
+            guard depth < maximumDepth else { truncated = true; return [] }
+            guard let urls = try? contents(of: directory) else { skipped += 1; return [] }
+            return nodes(for: urls, depth: depth)
+        }
+
+        func nodes(for urls: [URL], depth: Int) -> [WorkspaceNode] {
             var nodes: [WorkspaceNode] = []
             for url in urls {
                 guard visited < maximumEntries else { truncated = true; break }
@@ -85,7 +149,11 @@ enum WorkspaceFileIndex {
             return nodes
         }
 
-        return WorkspaceScanResult(nodes: descend(root, depth: 0), isTruncated: truncated)
+        let rootContents: [URL]
+        do { rootContents = try contents(of: root) }
+        catch { throw WorkspaceRootUnavailableError(rootURL: root, underlying: error) }
+        return WorkspaceScanResult(nodes: nodes(for: rootContents, depth: 0), isTruncated: truncated,
+                                   skippedDirectories: skipped)
     }
 }
 
@@ -191,6 +259,12 @@ final class WorkspaceStore: ObservableObject {
         contentRevisions.bump(key)
     }
     @Published private(set) var isTruncated = false
+    /// 列挙できなかったサブフォルダの数。
+    @Published private(set) var skippedDirectoryCount = 0
+    /// ルートを読めないときの理由。読めるようになると次の更新で nil に戻る。
+    /// ルートの URL は保持したままにして、どのフォルダが読めないのかを表示できるようにする。
+    @Published private(set) var rootUnavailableError: WorkspaceRootUnavailableError?
+    var isRootUnavailable: Bool { rootUnavailableError != nil }
     @Published private(set) var errorMessage: String?
     @Published private(set) var viewSettings = WorkspaceViewSettings() {
         didSet { if viewSettings != oldValue { updateVisibleNodes() } }
@@ -315,15 +389,33 @@ final class WorkspaceStore: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        guard let data = defaults.data(forKey: bookmarkKey) else { return }
-        var stale = false
-        let url = (try? URL(resolvingBookmarkData: data, options: [.withSecurityScope],
-                            relativeTo: nil, bookmarkDataIsStale: &stale))
-            ?? (try? URL(resolvingBookmarkData: data, options: [],
-                         relativeTo: nil, bookmarkDataIsStale: &stale))
-        if let url, !stale {
-            setRoot(url)
+        guard let data = defaults.data(forKey: bookmarkKey),
+              let restored = Self.restoreBookmark(data) else { return }
+        // 読めないフォルダも黙って捨てず、ルートとして開いて利用不可の状態を表示する。
+        setRoot(restored.url)
+        // 移動や名前変更で古くなったブックマークは、フォルダがあれば作り直す。
+        // 無い場合は元のブックマークを残し、ボリュームが戻った次回の起動で解決できるようにする。
+        if restored.isStale, FileManager.default.fileExists(atPath: restored.url.path) {
+            do { try saveBookmark(for: restored.url) }
+            catch { errorMessage = error.localizedDescription }
         }
+    }
+
+    /// 保存済みブックマークから開くフォルダを求める。解決できない（削除・取り外し）ときは
+    /// ブックマークに記録されたパスを返し、どのフォルダが読めないのかを示せるようにする。
+    static func restoreBookmark(_ data: Data) -> (url: URL, isStale: Bool)? {
+        var stale = false
+        if let url = (try? URL(resolvingBookmarkData: data, options: [.withSecurityScope],
+                               relativeTo: nil, bookmarkDataIsStale: &stale))
+            ?? (try? URL(resolvingBookmarkData: data, options: [],
+                         relativeTo: nil, bookmarkDataIsStale: &stale)) {
+            return (url, stale)
+        }
+        guard let path = URL.resourceValues(forKeys: [.pathKey], fromBookmarkData: data)?.path else {
+            return nil
+        }
+        // 作り直すとセキュリティスコープ付きの元のブックマークを失うため、古い扱いにしない。
+        return (URL(fileURLWithPath: path, isDirectory: true), false)
     }
 
     func chooseFolder() {
@@ -332,21 +424,28 @@ final class WorkspaceStore: ObservableObject {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.prompt = String(localized: "開く")
+        if let rootURL { panel.directoryURL = rootURL.deletingLastPathComponent() }
         panel.begin { [weak self] response in
-            guard response == .OK, let url = panel.url else { return }
-            self?.setRoot(url)
-            do {
-                let data = try? url.bookmarkData(options: [.withSecurityScope],
-                                                 includingResourceValuesForKeys: nil,
-                                                 relativeTo: nil)
-                let bookmark = try data ?? url.bookmarkData(options: [],
-                                                            includingResourceValuesForKeys: nil,
-                                                            relativeTo: nil)
-                self?.defaults.set(bookmark, forKey: self?.bookmarkKey ?? "workspaceFolderBookmark")
-            } catch {
-                self?.errorMessage = error.localizedDescription
-            }
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.setRoot(url)
+            do { try self.saveBookmark(for: url) }
+            catch { self.errorMessage = error.localizedDescription }
         }
+    }
+
+    private func saveBookmark(for url: URL) throws {
+        let data = try? url.bookmarkData(options: [.withSecurityScope],
+                                         includingResourceValuesForKeys: nil,
+                                         relativeTo: nil)
+        let bookmark = try data ?? url.bookmarkData(options: [],
+                                                    includingResourceValuesForKeys: nil,
+                                                    relativeTo: nil)
+        defaults.set(bookmark, forKey: bookmarkKey)
+    }
+
+    /// ルートが読めない間だけ読み直す。アプリが前面に戻ったときやボリュームのマウント時に呼ぶ。
+    func refreshIfRootUnavailable() {
+        if isRootUnavailable { refresh(force: true) }
     }
 
     func setRoot(_ url: URL) {
@@ -363,6 +462,8 @@ final class WorkspaceStore: ObservableObject {
             viewSettings = WorkspaceViewSettings()
         }
         nodes = []
+        rootUnavailableError = nil
+        skippedDirectoryCount = 0
         // Published caches belong to the previous root until their worker finishes.
         // Clear them synchronously so the new workspace cannot expose old files.
         visibleNodes = []
@@ -467,11 +568,26 @@ final class WorkspaceStore: ObservableObject {
         let currentGeneration = generation
         Task {
             let result = await Task.detached(priority: .utility) {
-                WorkspaceFileIndex.scan(root: rootURL)
+                Result { () throws(WorkspaceRootUnavailableError) -> WorkspaceScanResult in
+                    try WorkspaceFileIndex.scan(root: rootURL)
+                }
             }.value
             guard currentGeneration == generation else { return }
-            if nodes != result.nodes { nodes = result.nodes }
-            if isTruncated != result.isTruncated { isTruncated = result.isTruncated }
+            switch result {
+            case let .success(result):
+                if rootUnavailableError != nil { rootUnavailableError = nil }
+                if nodes != result.nodes { nodes = result.nodes }
+                if isTruncated != result.isTruncated { isTruncated = result.isTruncated }
+                if skippedDirectoryCount != result.skippedDirectories {
+                    skippedDirectoryCount = result.skippedDirectories
+                }
+            case let .failure(error):
+                // 以前の一覧は存在しないファイルを指しうるため残さない。
+                if rootUnavailableError != error { rootUnavailableError = error }
+                if !nodes.isEmpty { nodes = [] }
+                if isTruncated { isTruncated = false }
+                if skippedDirectoryCount != 0 { skippedDirectoryCount = 0 }
+            }
             isRefreshing = false
             if refreshPending {
                 refreshPending = false

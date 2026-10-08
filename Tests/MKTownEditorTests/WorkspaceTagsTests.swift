@@ -35,7 +35,7 @@ final class WorkspaceTagsTests: XCTestCase {
         let second = root.appendingPathComponent("second.md")
         try "#old".write(to: first, atomically: true, encoding: .utf8)
         try "#shared".write(to: second, atomically: true, encoding: .utf8)
-        let nodes = WorkspaceFileIndex.scan(root: root).nodes
+        let nodes = try WorkspaceFileIndex.scan(root: root).nodes
         let buffer = try XCTUnwrap("#shared #new".data(using: .utf8))
 
         let index = try WorkspaceTagIndex.scan(root: root, nodes: nodes,

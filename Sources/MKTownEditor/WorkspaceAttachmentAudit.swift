@@ -19,7 +19,7 @@ struct WorkspaceAttachmentAuditResult: Sendable {
 
 enum WorkspaceAttachmentAudit {
     static func scan(root: URL, openDocuments: [URL: Data] = [:]) async throws -> WorkspaceAttachmentAuditResult {
-        let index = WorkspaceFileIndex.scan(root: root)
+        let index = try WorkspaceFileIndex.scan(root: root)
         var skipped: [URL] = []
         var documents: [URL] = []
         var assets: [URL] = []
