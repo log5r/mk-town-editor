@@ -3,7 +3,7 @@ import XCTest
 @testable import MKTownEditor
 
 /// Settings use tabs, apply changes immediately, record shortcuts from key presses, and can hide
-/// line numbers (#52).
+/// line numbers (#52). Shortcuts are applied when their keys are released (#62).
 @MainActor
 final class SettingsWindowTests: XCTestCase {
     private func makeStore() -> EditorSettingsStore {
@@ -35,11 +35,16 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertNil(ShortcutChord(recordedKey: "", shifted: "", modifiers: .command))
     }
 
-    func testRecorderCapturesCommandKeysOnlyWhileFocused() throws {
+    private func makeRecorder() -> (NSWindow, ShortcutRecorderView) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 60),
                               styleMask: [.titled], backing: .buffered, defer: false)
         let recorder = ShortcutRecorderView(frame: NSRect(x: 0, y: 0, width: 120, height: 22))
         window.contentView?.addSubview(recorder)
+        return (window, recorder)
+    }
+
+    func testRecorderCapturesCommandKeysOnlyWhileFocused() throws {
+        let (window, recorder) = makeRecorder()
         var recorded: [ShortcutChord] = []
         var cleared = 0
         recorder.onRecord = { recorded.append($0) }
@@ -50,15 +55,95 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertTrue(window.makeFirstResponder(recorder))
         XCTAssertTrue(recorder.isRecording)
         XCTAssertTrue(recorder.performKeyEquivalent(with: commandK))
+        recorder.modifiersChanged([])
         XCTAssertEqual(recorded, [ShortcutChord(key: "k")])
         XCTAssertFalse(recorder.isRecording, "Recording ends once a key is applied")
 
         window.makeFirstResponder(recorder)
         recorder.keyDown(with: keyEvent("\u{1B}", unmodified: "\u{1B}", keyCode: 53, modifiers: []))
         XCTAssertEqual(recorded.count, 1, "Escape cancels")
+        XCTAssertFalse(recorder.isRecording)
         window.makeFirstResponder(recorder)
         recorder.keyDown(with: keyEvent("\u{7F}", unmodified: "\u{7F}", keyCode: 51, modifiers: []))
         XCTAssertEqual(cleared, 1, "Delete removes the shortcut")
+        XCTAssertFalse(recorder.isRecording)
+    }
+
+    /// A combination is applied when its keys are released, not when they are pressed (#62).
+    func testRecorderAppliesTheCombinationWhenTheModifiersAreReleased() throws {
+        let (window, recorder) = makeRecorder()
+        var recorded: [ShortcutChord] = []
+        recorder.onRecord = { recorded.append($0) }
+        XCTAssertTrue(window.makeFirstResponder(recorder))
+
+        recorder.modifiersChanged([.command, .option])
+        XCTAssertTrue(recorder.performKeyEquivalent(
+            with: keyEvent("˚", unmodified: "k", keyCode: 40, modifiers: [.command, .option])))
+        XCTAssertEqual(recorded, [], "Holding the keys does not apply them yet")
+        XCTAssertEqual(recorder.pendingChord, ShortcutChord(key: "k", option: true))
+        XCTAssertEqual(recorder.displayText, "⌥⌘K")
+
+        // Releasing only Option keeps recording; a key-up with ⌘ still held does not apply it.
+        recorder.modifiersChanged(.command)
+        recorder.keyUp(with: keyEvent("k", unmodified: "k", keyCode: 40, modifiers: .command))
+        XCTAssertEqual(recorded, [])
+        XCTAssertTrue(recorder.isRecording)
+
+        recorder.modifiersChanged([])
+        XCTAssertEqual(recorded, [ShortcutChord(key: "k", option: true)])
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertNil(recorder.pendingChord)
+    }
+
+    /// A key pressed by mistake is replaced by the next one while the modifiers are held (#62).
+    func testRecorderKeepsOnlyTheLastKeyPressedWhileModifiersAreHeld() throws {
+        let (window, recorder) = makeRecorder()
+        var recorded: [ShortcutChord] = []
+        recorder.onRecord = { recorded.append($0) }
+        XCTAssertTrue(window.makeFirstResponder(recorder))
+
+        recorder.modifiersChanged(.command)
+        XCTAssertTrue(recorder.performKeyEquivalent(with: keyEvent("j", unmodified: "j", keyCode: 38, modifiers: .command)))
+        XCTAssertTrue(recorder.performKeyEquivalent(with: keyEvent("k", unmodified: "k", keyCode: 40, modifiers: .command)))
+        recorder.modifiersChanged([])
+        XCTAssertEqual(recorded, [ShortcutChord(key: "k")])
+    }
+
+    /// While recording, the field shows the modifiers being held, as System Settings does (#62).
+    func testRecorderShowsTheHeldModifiers() throws {
+        let (window, recorder) = makeRecorder()
+        recorder.label = "⌘B"
+        XCTAssertEqual(recorder.displayText, "⌘B")
+        XCTAssertTrue(window.makeFirstResponder(recorder))
+        XCTAssertEqual(recorder.displayText, String(localized: "キーを入力…"))
+        recorder.modifiersChanged([.command, .shift, .control, .capsLock])
+        XCTAssertEqual(recorder.displayText, "⌃⇧⌘…")
+        XCTAssertEqual(recorder.accessibilityValue() as? String, "⌃⇧⌘…")
+        recorder.modifiersChanged([])
+        XCTAssertEqual(recorder.displayText, String(localized: "キーを入力…"), "Nothing is applied without a key")
+        XCTAssertTrue(recorder.isRecording)
+
+        // Leaving the field drops a combination that was never released.
+        recorder.modifiersChanged(.command)
+        XCTAssertTrue(recorder.performKeyEquivalent(with: keyEvent("k", unmodified: "k", keyCode: 40, modifiers: .command)))
+        var recorded: [ShortcutChord] = []
+        recorder.onRecord = { recorded.append($0) }
+        window.makeFirstResponder(nil)
+        XCTAssertNil(recorder.pendingChord)
+        XCTAssertEqual(recorder.displayText, "⌘B")
+        XCTAssertEqual(recorded, [])
+    }
+
+    /// A key without modifiers has no flags to release, so its key-up applies it.
+    func testRecorderAppliesAKeyWithoutModifiersOnKeyUp() throws {
+        let (window, recorder) = makeRecorder()
+        var recorded: [ShortcutChord] = []
+        recorder.onRecord = { recorded.append($0) }
+        XCTAssertTrue(window.makeFirstResponder(recorder))
+        recorder.keyDown(with: keyEvent("a", unmodified: "a", keyCode: 0, modifiers: []))
+        XCTAssertEqual(recorded, [])
+        recorder.keyUp(with: keyEvent("a", unmodified: "a", keyCode: 0, modifiers: []))
+        XCTAssertEqual(recorded, [ShortcutChord(key: "a", command: false)])
     }
 
     func testClearedShortcutStaysRemovedUntilReset() throws {
