@@ -179,6 +179,31 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
             id: "../outside", documentPath: nil, entries: [])))
     }
 
+    func testBackgroundDeleteRemovesOnlyThatSnapshotAndEmptyFolder() async throws {
+        let (root, store) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let document = root.appendingPathComponent("document.md")
+        try Data("text".utf8).write(to: document)
+        let first = try store.save("first", title: "first", for: document,
+                                   now: Date(timeIntervalSince1970: 100))
+        let second = try store.save("second", title: "second", for: document,
+                                    now: Date(timeIntervalSince1970: 200))
+        let folder = try XCTUnwrap(historyFolders(in: store).first)
+
+        // 履歴シートは削除を背景で実行する。
+        try await Task.detached { try store.delete(first, documentURL: document) }.value
+        XCTAssertEqual(try store.entries(for: document), [second])
+        XCTAssertEqual(try store.text(for: second, documentURL: document), "second")
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: folder.appendingPathComponent(first.id.uuidString + ".md").path))
+        // 索引から外れた項目の再削除と、内容ファイルを失った項目の削除は失敗にしない。
+        try await Task.detached { try store.delete(first, documentURL: document) }.value
+        try FileManager.default.removeItem(at: folder.appendingPathComponent(second.id.uuidString + ".md"))
+        try await Task.detached { try store.delete(second, documentURL: document) }.value
+        XCTAssertEqual(try store.entries(for: document), [])
+        XCTAssertEqual(try historyFolders(in: store), [])
+    }
+
     private func makeStore() throws -> (URL, WorkspaceSnapshotStore) {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("snapshot-tests-\(UUID().uuidString)", isDirectory: true)

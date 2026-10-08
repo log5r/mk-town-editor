@@ -392,6 +392,7 @@ struct WorkspaceSnapshotHistorySheet: View {
     @State private var errorMessage: String?
     @State private var isWorking = false
     @State private var showingCleanup = false
+    @State private var pendingDeletion: WorkspaceSnapshotEntry?
 
     let documentURL: URL
     @Binding var currentText: String
@@ -429,7 +430,7 @@ struct WorkspaceSnapshotHistorySheet: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button("削除", role: .destructive) { delete(entry) }
+                        Button("削除", role: .destructive) { pendingDeletion = entry }
                             .disabled(isWorking)
                     }
                 }
@@ -486,6 +487,14 @@ struct WorkspaceSnapshotHistorySheet: View {
         .task { await loadEntries() }
         .sheet(isPresented: $showingCleanup, onDismiss: { Task { await loadEntries() } }) {
             WorkspaceSnapshotCleanupSheet(store: store)
+        }
+        .confirmationDialog(Text("“\(pendingDeletion?.title ?? "")”を削除しますか？"),
+                            isPresented: Binding(get: { pendingDeletion != nil },
+                                                 set: { if !$0 { pendingDeletion = nil } }),
+                            presenting: pendingDeletion) { entry in
+            Button("削除", role: .destructive) { delete(entry) }
+        } message: { _ in
+            Text("このスナップショットの内容は完全に削除されます。この操作は取り消せません。")
         }
         .onChange(of: currentText) { _, _ in compare() }
         .onChange(of: selectedText) { _, _ in compare() }
@@ -564,11 +573,18 @@ struct WorkspaceSnapshotHistorySheet: View {
     }
 
     private func delete(_ entry: WorkspaceSnapshotEntry) {
-        do {
-            try store.delete(entry, documentURL: documentURL)
-            entries.removeAll { $0.id == entry.id }
-            if selected?.id == entry.id { selected = nil; selectedText = nil }
-        } catch { errorMessage = error.localizedDescription }
+        isWorking = true
+        errorMessage = nil
+        Task {
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try store.delete(entry, documentURL: documentURL)
+                }.value
+                entries.removeAll { $0.id == entry.id }
+                if selected?.id == entry.id { selected = nil; selectedText = nil }
+            } catch { errorMessage = error.localizedDescription }
+            isWorking = false
+        }
     }
 
     private func apply(_ restored: String) {
