@@ -66,7 +66,7 @@ enum AutomationDocumentWriter {
             guard let document = try? MarkdownDocument(data: data) else { throw WriterError.invalidSource }
             return document.text
         }
-        let html = try await MarkdownHTMLExporter.renderAsync(text, documentURL: source)
+        let html = try await MarkdownHTMLExporter.renderAsync(text, documentURL: source, outputURL: destination)
         try await DocumentWork.commit { try save(html, at: destination) }
     }
 
@@ -76,7 +76,7 @@ enum AutomationDocumentWriter {
             .contains(source.pathExtension.lowercased()) else { throw WriterError.invalidSource }
         let data = try Data(contentsOf: source)
         guard let document = try? MarkdownDocument(data: data) else { throw WriterError.invalidSource }
-        let html = MarkdownHTMLExporter.render(document.text, documentURL: source)
+        let html = MarkdownHTMLExporter.render(document.text, documentURL: source, outputURL: destination)
         try save(html, at: destination)
     }
 }

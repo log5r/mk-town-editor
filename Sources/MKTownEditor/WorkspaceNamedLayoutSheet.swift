@@ -7,6 +7,7 @@ struct WorkspaceNamedLayoutSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var layouts: [WorkspaceNamedLayout] = []
+    @State private var pendingDeletion: WorkspaceNamedLayout?
     private let store = WorkspaceNamedLayoutStore()
 
     var body: some View {
@@ -47,8 +48,7 @@ struct WorkspaceNamedLayoutSheet: View {
                         }
                         .buttonStyle(.plain)
                         Button("削除", systemImage: "trash", role: .destructive) {
-                            store.delete(layout.id, for: root)
-                            layouts = store.layouts(for: root)
+                            pendingDeletion = layout
                         }
                         .labelStyle(.iconOnly)
                         .help("レイアウトを削除")
@@ -59,6 +59,17 @@ struct WorkspaceNamedLayoutSheet: View {
         .frame(minWidth: 520, minHeight: 400)
         .padding(20)
         .onAppear { layouts = store.layouts(for: root) }
+        .confirmationDialog(Text("“\(pendingDeletion?.name ?? "")”を削除しますか？"),
+                            isPresented: Binding(get: { pendingDeletion != nil },
+                                                 set: { if !$0 { pendingDeletion = nil } }),
+                            presenting: pendingDeletion) { layout in
+            Button("削除", role: .destructive) {
+                store.delete(layout.id, for: root)
+                layouts = store.layouts(for: root)
+            }
+        } message: { _ in
+            Text("保存したレイアウトを削除します。開いている書類やファイルは変更されません。この操作は取り消せません。")
+        }
     }
 
     private func save() {

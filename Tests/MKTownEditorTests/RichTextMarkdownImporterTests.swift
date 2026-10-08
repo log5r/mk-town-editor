@@ -47,6 +47,17 @@ final class RichTextMarkdownImporterTests: XCTestCase {
             Data(repeating: 65, count: 10_000_001), format: .html))
     }
 
+    func testJapaneseLegacyCharsetsInHTMLAreDecoded() throws {
+        let cases: [(String, String.Encoding)] = [("EUC-JP", .japaneseEUC), ("ISO-2022-JP", .iso2022JP),
+                                                   ("Windows-31J", .shiftJIS), ("x-sjis", .shiftJIS)]
+        for (charset, encoding) in cases {
+            let html = "<html><head><meta charset=\"\(charset)\"></head><body><p>日本語</p></body></html>"
+            let data = try XCTUnwrap(html.data(using: encoding))
+            let result = try RichTextMarkdownImporter.convert(data, format: .html)
+            XCTAssertTrue(result.markdown.contains("日本語"), "\(charset): \(result.markdown)")
+        }
+    }
+
     func testShiftJISHTMLUsesDeclaredEncoding() throws {
         let html = "<html><head><meta charset=Shift_JIS></head><body><p>日本語</p></body></html>"
         let data = try XCTUnwrap(html.data(using: .shiftJIS))

@@ -137,7 +137,10 @@ enum RichTextMarkdownImporter {
         let charset = match.map { (prefix as NSString).substring(with: $0.range(at: 1)).lowercased() }
         let encoding: String.Encoding
         switch charset {
-        case "shift_jis", "shift-jis", "sjis": encoding = .shiftJIS
+        case "shift_jis", "shift-jis", "sjis", "x-sjis", "windows-31j", "cp932", "ms932", "ms_kanji":
+            encoding = .shiftJIS
+        case "euc-jp", "x-euc-jp": encoding = .japaneseEUC
+        case "iso-2022-jp", "csiso2022jp": encoding = .iso2022JP
         case "windows-1252", "iso-8859-1": encoding = .windowsCP1252
         case "utf-16", "utf-16le", "utf-16be": encoding = .utf16
         default: encoding = .utf8
@@ -210,11 +213,11 @@ enum RichTextMarkdownImporter {
         var output = ""
         content.enumerateAttributes(in: NSRange(location: 0, length: content.length)) { attrs, range, _ in
             if attrs[.attachment] != nil {
-                output += "[画像]"
+                output += "[\(String(localized: "画像"))]"
                 return
             }
             var text = (content.string as NSString).substring(with: range)
-                .replacingOccurrences(of: "\u{FFFC}", with: "[画像]")
+                .replacingOccurrences(of: "\u{FFFC}", with: "[\(String(localized: "画像"))]")
             text = text.replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "*", with: "\\*")
                 .replacingOccurrences(of: "[", with: "\\[")
@@ -254,12 +257,12 @@ enum RichTextMarkdownImporter {
             let altPattern = altAttributeExpression
             let altMatch = altPattern.firstMatch(in: tag,
                 range: NSRange(location: 0, length: (tag as NSString).length))
-            let alt = altMatch.map { (tag as NSString).substring(with: $0.range(at: 1)) } ?? "画像"
+            let alt = altMatch.map { (tag as NSString).substring(with: $0.range(at: 1)) } ?? String(localized: "画像")
             let safe = alt.replacingOccurrences(of: "&", with: "&amp;")
                 .replacingOccurrences(of: "<", with: "&lt;")
                 .replacingOccurrences(of: ">", with: "&gt;")
             result = (result as NSString).replacingCharacters(in: match.range,
-                with: "<span>[画像: \(safe)]</span>")
+                with: "<span>[\(String(localized: "画像: \(safe)"))]</span>")
         }
         let headings = headingTagExpression
         let headingMatches = headings.matches(in: result,

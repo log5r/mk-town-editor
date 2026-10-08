@@ -85,7 +85,12 @@ enum MarkdownEditingContext {
 
     static func isInCode(at location: Int, source: String, analysis: MarkdownAnalysis?, allowsAnalysis: Bool) -> Bool {
         if let analysis = analysis ?? (allowsAnalysis ? MarkdownAnalysis(source) : nil) {
-            return analysis.blocks.contains { $0.kind == .codeBlock && NSLocationInRange(location, $0.sourceRange) }
+            // The end of a text without a final line break still belongs to its last line's block.
+            let text = source as NSString
+            let lookup = location == text.length && location > 0 &&
+                !CharacterSet.newlines.contains(UnicodeScalar(text.character(at: location - 1)) ?? " ")
+                ? location - 1 : location
+            return analysis.blocks.contains { $0.kind == .codeBlock && NSLocationInRange(lookup, $0.sourceRange) }
         }
         let text = source as NSString
         guard location >= 0, location <= text.length else { return true }

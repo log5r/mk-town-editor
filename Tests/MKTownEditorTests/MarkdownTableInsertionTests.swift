@@ -132,6 +132,35 @@ final class MarkdownTableEditingTests: XCTestCase {
                        .select(NSRange(location: (source as NSString).length, length: 0)))
     }
 
+    func testCaretAfterTheLastPipeOfAFinalTableWithoutNewlineIsInTheTable() throws {
+        let source = "Intro\n\n| A | B |\n| --- | ---: |\n| x | y |"
+        let end = NSRange(location: (source as NSString).length, length: 0)
+        let action = try XCTUnwrap(MarkdownTableEditing.tabAction(in: source, selection: end,
+                                                                   backwards: false, addsRowAtEnd: true))
+        guard case let .edit(edit) = action else { return XCTFail("行追加が必要") }
+        XCTAssertEqual(MarkdownAnalysis(edit.applying(to: source)).blocks.first { $0.kind == .table }?
+            .table?.rows.count, 2)
+        XCTAssertEqual(MarkdownTableEditing.tabAction(in: source, selection: end,
+                                                       backwards: true, addsRowAtEnd: true),
+                       .select((source as NSString).range(of: "x")))
+        XCTAssertEqual(MarkdownTableEditing.alignment(in: source, selection: end), .trailing)
+        XCTAssertNotNil(MarkdownTableEditing.gridDraft(in: source, selection: end))
+        for operation: MarkdownTableOperation in [.insertRow, .deleteRow, .insertColumn, .moveColumnLeft, .formatTable] {
+            XCTAssertNotNil(MarkdownTableEditing.edit(in: source, selection: end, operation: operation),
+                            "\(operation)")
+        }
+    }
+
+    func testCaretOnTheLineAfterAFinalTableIsOutsideIt() {
+        let source = "| A | B |\n| --- | --- |\n| x | y |\n"
+        let end = NSRange(location: (source as NSString).length, length: 0)
+        XCTAssertNil(MarkdownTableEditing.tabAction(in: source, selection: end,
+                                                     backwards: false, addsRowAtEnd: true))
+        XCTAssertNil(MarkdownTableEditing.gridDraft(in: source, selection: end))
+        XCTAssertNil(MarkdownTableEditing.edit(in: source, selection: end, operation: .insertRow))
+        XCTAssertNil(MarkdownTableEditing.alignment(in: source, selection: end))
+    }
+
     func testTabMaterializesMissingCellBeforeSelectingIt() throws {
         let source = "| A | B |\n| --- | --- |\n| only |\n"
         let selection = NSRange(location: (source as NSString).range(of: "only").location,

@@ -13,6 +13,7 @@ struct GitCommitSheet: View {
     @State private var message = ""
     @State private var error: String?
     @State private var busy = false
+    @AppStorage("gitCommitRunsHooks") private var runsHooks = true
 
     private var conflicts: [GitStatusEntry] { entries.filter(\.isConflicted) }
     private var changes: [GitStatusEntry] { entries.filter { !$0.isConflicted } }
@@ -103,21 +104,28 @@ struct GitCommitSheet: View {
                 }
                 Text("ステージ済み \(staged.count) 件")
                     .font(.headline)
-                Text("コミット対象のステージ済みファイルをすべて選択してください。")
+                Text("ステージ済みの変更がすべてコミットされます。")
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("コミットメッセージ", text: $message)
                     .textFieldStyle(.roundedBorder)
+                Toggle("リポジトリのフックを実行する", isOn: $runsHooks)
+                    .toggleStyle(.checkbox)
+                    .help("オフにすると、pre-commitなどのフックを実行せずにコミットします（git commit --no-verify）。")
                 Button("ステージ済みの変更をコミット") {
                     Task { await commit() }
                 }
-                .disabled(staged.isEmpty || !conflicts.isEmpty ||
-                          selected != Set(staged.map(\.path)) ||
-                          message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
+                .disabled(!Self.canCommit(entries: entries, message: message) || busy)
             }
         }
         .padding(20)
         .frame(minWidth: 980, minHeight: 620)
         .task { await refresh() }
+    }
+
+    /// The commit records the whole index, so the staged list itself is what gets committed.
+    static func canCommit(entries: [GitStatusEntry], message: String) -> Bool {
+        entries.contains(where: \.isStaged) && !entries.contains(where: \.isConflicted) &&
+            !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func refresh() async {
@@ -179,13 +187,13 @@ struct GitCommitSheet: View {
 
     private func commit() async {
         guard let snapshot else { return }
-        guard selected == Set(staged.map(\.path)) else {
-            error = GitRepositoryError.invalidSelection.localizedDescription
-            return
-        }
         let value = message
+        let hooks = runsHooks
         await mutate {
-            try GitRepository.commit(message: value, in: snapshot.rootURL)
+            try GitRepository.commit(message: value, in: snapshot.rootURL, runsHooks: hooks)
+        }
+        if let error, hooks {
+            self.error = error + "\n" + String(localized: "フックが原因でコミットできない場合は、「リポジトリのフックを実行する」をオフにしてください。")
         }
         if error == nil { message = "" }
     }

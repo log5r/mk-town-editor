@@ -130,9 +130,14 @@ final class EditorCommandTests: XCTestCase {
 
         let menu = view.makeMarkdownMenu(baseMenu: nil)
         let actualCommands = menu.items.compactMap { $0.representedObject as? EditorCommand }
-        let headingMenu = menu.items.last?.submenu
+        let markdownMenu = try! XCTUnwrap(menu.items.last?.submenu)
+        let headingMenu = markdownMenu.items.first(where: { $0.title == "見出しレベル" })?.submenu
 
         XCTAssertEqual(actualCommands, EditorCommand.context)
+        XCTAssertLessThanOrEqual(menu.items.filter { !$0.isSeparatorItem }.count, 10)
+        XCTAssertEqual(markdownMenu.items.compactMap { $0.representedObject as? EditorCommand },
+                       EditorCommand.contextMarkdown)
+        XCTAssertEqual(Set(EditorCommand.context).intersection(EditorCommand.contextMarkdown), [])
         XCTAssertEqual(headingMenu?.items.compactMap { $0.representedObject as? EditorCommand },
                        (0...6).map { .heading(level: $0) })
         XCTAssertTrue(menu.items.first?.isEnabled == true)
@@ -140,6 +145,32 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(view.string, "**abc**")
         model.disconnect(view)
         XCTAssertFalse(view.makeMarkdownMenu(baseMenu: nil).items.first?.isEnabled == true)
+    }
+
+    func testContextMenuAvailabilitySurvivesValidationBeforeDisplay() {
+        let view = EditorTextView()
+        view.string = "plain"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        let menu = view.makeMarkdownMenu(baseMenu: nil)
+
+        func commandItems(in menu: NSMenu) -> [NSMenuItem] {
+            menu.update()
+            return menu.items.flatMap { item in
+                item.submenu.map(commandItems(in:)) ?? (item.representedObject is EditorCommand ? [item] : [])
+            }
+        }
+        let items = commandItems(in: menu)
+        XCTAssertGreaterThan(items.count, 20)
+        for item in items {
+            let command = item.representedObject as! EditorCommand
+            XCTAssertEqual(item.isEnabled, command.canExecute(in: model), command.title)
+        }
+        XCTAssertTrue(items.contains { !$0.isEnabled }, "Some commands need a list or selection")
+        model.disconnect(view)
+        XCTAssertTrue(commandItems(in: menu).allSatisfy { !$0.isEnabled })
     }
 
     func testStrikethroughCommandUsesSharedActionAndShortcut() {
@@ -205,7 +236,7 @@ final class EditorCommandTests: XCTestCase {
         view.commandModel = model
         view.setSelectedRange(NSRange(location: 0, length: (view.string as NSString).length))
 
-        let menu = view.makeMarkdownMenu(baseMenu: nil)
+        let menu = try! XCTUnwrap(view.makeMarkdownMenu(baseMenu: nil).items.last?.submenu)
         let codeMenu = try! XCTUnwrap(menu.items.first(where: { $0.title == "コードブロック" })?.submenu)
         let expected: [EditorCommand] = [.codeBlock(language: nil)] +
             MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
@@ -225,7 +256,7 @@ final class EditorCommandTests: XCTestCase {
         view.commandModel = model
         view.setSelectedRange(NSRange(location: 6, length: 0))
 
-        let menu = view.makeMarkdownMenu(baseMenu: nil)
+        let menu = try! XCTUnwrap(view.makeMarkdownMenu(baseMenu: nil).items.last?.submenu)
         let index = try! XCTUnwrap(menu.items.firstIndex(where: {
             $0.representedObject as? EditorCommand == .horizontalRule
         }))

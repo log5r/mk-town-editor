@@ -52,26 +52,37 @@ enum PortablePackagePlanner {
         pattern: #"(!?)\[([^\]]+)\](?:\[([^\]]*)\])?"#)
     private static let referenceDestinationExpression = try! NSRegularExpression(
         pattern: #"^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|(\S+))"#)
-    private static let anchorExpression = try! NSRegularExpression(pattern: #"<a href="([^"]+)""#)
 
     @MainActor
     static func plan(source: String, documentURL: URL,
                      dialect: MarkdownDialect = .extended) throws -> PortablePackagePlan {
-        try planPrepared(source: source, documentURL: documentURL, dialect: dialect,
-            renderedHTML: MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect))
+        let prepared = try prepare(source: source, documentURL: documentURL, dialect: dialect)
+        let html = MarkdownHTMLExporter.render(source, documentURL: documentURL, dialect: dialect,
+                                               images: .relative(pathMap: prepared.htmlPaths))
+        return PortablePackagePlan(markdown: prepared.markdown, html: html, assets: prepared.assets)
     }
 
     @MainActor
     static func planAsync(source: String, documentURL: URL,
                           dialect: MarkdownDialect = .extended) async throws -> PortablePackagePlan {
-        let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: documentURL, dialect: dialect)
-        return try await DocumentWork.perform {
-            try planPrepared(source: source, documentURL: documentURL, dialect: dialect, renderedHTML: html)
+        let prepared = try await DocumentWork.perform {
+            try prepare(source: source, documentURL: documentURL, dialect: dialect)
         }
+        let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: documentURL, dialect: dialect,
+                                                              images: .relative(pathMap: prepared.htmlPaths))
+        return PortablePackagePlan(markdown: prepared.markdown, html: html, assets: prepared.assets)
     }
 
-    private static func planPrepared(source: String, documentURL: URL,
-                                     dialect: MarkdownDialect, renderedHTML: String) throws -> PortablePackagePlan {
+    private struct PreparedPackage: Sendable {
+        let markdown: String
+        let assets: [PortablePackageAsset]
+        /// Resolved source file -> percent-encoded `assets/...` path. The HTML references
+        /// these copies instead of embedding images, so each file is stored only once.
+        let htmlPaths: [URL: String]
+    }
+
+    private static func prepare(source: String, documentURL: URL,
+                                dialect: MarkdownDialect) throws -> PreparedPackage {
         let context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         guard context.directoryURL != nil else { throw PortablePackageError.unsavedDocument }
         let analysis = MarkdownAnalysis(source, dialect: dialect)
@@ -172,32 +183,8 @@ enum PortablePackagePlanner {
         for edit in changes.values.sorted(by: { $0.range.location > $1.range.location }) {
             rewritten.replaceCharacters(in: edit.range, with: edit.replacement)
         }
-        let html = rewriteHTMLAttachmentLinks(renderedHTML, context: context,
-                                              destinations: destinations)
-        return PortablePackagePlan(markdown: rewritten as String, html: html, assets: assets)
-    }
-
-    private static func rewriteHTMLAttachmentLinks(_ html: String, context: DocumentContext,
-                                                    destinations: [URL: String]) -> String {
-        let pattern = anchorExpression
-        let original = html as NSString
-        let output = NSMutableString(string: html)
-        for match in pattern.matches(in: html, range: NSRange(location: 0, length: original.length)).reversed() {
-            let range = match.range(at: 1)
-            let escaped = original.substring(with: range)
-            let destination = escaped.replacingOccurrences(of: "&amp;", with: "&")
-                .replacingOccurrences(of: "&#39;", with: "'")
-            let split = destination.firstIndex(where: { $0 == "#" || $0 == "?" })
-            let path = split.map { String(destination[..<$0]) } ?? destination
-            guard let url = context.resolveLocalResource(path),
-                  let relative = destinations[url.resolvingSymlinksInPath().standardizedFileURL]
-            else { continue }
-            let suffix = split.map { String(destination[$0...]) } ?? ""
-            let replacement = (relative + suffix).replacingOccurrences(of: "&", with: "&amp;")
-                .replacingOccurrences(of: "\"", with: "&quot;")
-            output.replaceCharacters(in: range, with: replacement)
-        }
-        return output as String
+        return PreparedPackage(markdown: rewritten as String, assets: assets,
+            htmlPaths: destinations.mapValues { MarkdownHTMLExporter.hrefPath($0.split(separator: "/").map(String.init)) })
     }
 }
 

@@ -86,6 +86,7 @@
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
 		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
 		A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* ExternalDocumentOpen.swift */; };
+		A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AC47 /* ApplicationActivation.swift */; };
 		A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* MarkdownSafeHTML.swift */; };
 		A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* MarkdownMultiSelection.swift */; };
 		A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000065 /* MarkdownLinkHover.swift */; };
@@ -230,6 +231,7 @@
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A20000000000000000000062 /* ExternalDocumentOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDocumentOpen.swift; sourceTree = "<group>"; };
+		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000063 /* MarkdownSafeHTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSafeHTML.swift; sourceTree = "<group>"; };
 		A20000000000000000000064 /* MarkdownMultiSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMultiSelection.swift; sourceTree = "<group>"; };
 		A20000000000000000000065 /* MarkdownLinkHover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkHover.swift; sourceTree = "<group>"; };
@@ -288,10 +290,30 @@
 		A200000000000000000000A0 /* CollaborativeTextReplacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborativeTextReplacement.swift; sourceTree = "<group>"; };
 		A200000000000000000000A1 /* AISuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestion.swift; sourceTree = "<group>"; };
 		A200000000000000000000A2 /* AISuggestionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestionSheet.swift; sourceTree = "<group>"; };
+		D10000000000000000000001 /* MKTownEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXContainerItemProxy section */
+		D50000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A80000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = MKTownEditor;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D20000000000000000000001 /* MKTownEditorTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Tests/MKTownEditorTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000087 /* SwiftMath in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		D30000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -300,6 +322,7 @@
 			children = (
 				A40000000000000000000002 /* MKTownEditor */,
 				A40000000000000000000003 /* Support */,
+				D20000000000000000000001 /* MKTownEditorTests */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -387,6 +410,7 @@
 				A20000000000000000000060 /* EditorShortcuts.swift */,
 				A20000000000000000000061 /* Localizable.xcstrings */,
 				A20000000000000000000062 /* ExternalDocumentOpen.swift */,
+				A2000000000000000000AC47 /* ApplicationActivation.swift */,
 				A20000000000000000000063 /* MarkdownSafeHTML.swift */,
 				A20000000000000000000064 /* MarkdownMultiSelection.swift */,
 				A20000000000000000000065 /* MarkdownLinkHover.swift */,
@@ -457,7 +481,7 @@
 		};
 		A40000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
-			children = (A2000000000000000000000D /* MKTownEditor.app */,);
+			children = (A2000000000000000000000D /* MKTownEditor.app */, D10000000000000000000001 /* MKTownEditorTests.xctest */,);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -480,6 +504,23 @@
 			productReference = A2000000000000000000000D /* MKTownEditor.app */;
 			productType = "com.apple.product-type.application";
 		};
+		D40000000000000000000001 /* MKTownEditorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D80000000000000000000001 /* Build configuration list for PBXNativeTarget "MKTownEditorTests" */;
+			buildPhases = (
+				D30000000000000000000001 /* Sources */,
+				D30000000000000000000002 /* Frameworks */,
+				D30000000000000000000003 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = (D60000000000000000000001 /* PBXTargetDependency */,);
+			fileSystemSynchronizedGroups = (D20000000000000000000001 /* MKTownEditorTests */,);
+			name = MKTownEditorTests;
+			packageProductDependencies = ();
+			productName = MKTownEditorTests;
+			productReference = D10000000000000000000001 /* MKTownEditorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -489,7 +530,10 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
-				TargetAttributes = { A50000000000000000000001 = { CreatedOnToolsVersion = 27.0; }; };
+				TargetAttributes = {
+					A50000000000000000000001 = { CreatedOnToolsVersion = 27.0; };
+					D40000000000000000000001 = { CreatedOnToolsVersion = 27.0; TestTargetID = A50000000000000000000001; };
+				};
 			};
 			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */;
 			compatibilityVersion = "Xcode 16.0";
@@ -501,12 +545,13 @@
 			packageReferences = (C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,);
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* MKTownEditor */,);
+			targets = (A50000000000000000000001 /* MKTownEditor */, D40000000000000000000001 /* MKTownEditorTests */,);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000061 /* Localizable.xcstrings in Resources */, A10000000000000000000089 /* mermaid.min.js in Resources */, A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
+		D30000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -593,6 +638,7 @@
 				A1000000000000000000005F /* EditorInvisibleCharacters.swift in Sources */,
 				A10000000000000000000060 /* EditorShortcuts.swift in Sources */,
 				A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */,
+				A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */,
 				A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */,
 				A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */,
 				A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */,
@@ -652,10 +698,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D30000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		D60000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* MKTownEditor */;
+			targetProxy = D50000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		B10000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0; }; name = Debug; };
+		B10000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0; }; name = Debug; };
 		B10000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; }; name = Release; };
 		B10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -691,6 +746,38 @@
 			};
 			name = Release;
 		};
+		D70000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditor.app/Contents/MacOS/MKTownEditor";
+			};
+			name = Debug;
+		};
+		D70000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditor.app/Contents/MacOS/MKTownEditor";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -712,6 +799,7 @@
 /* Begin XCConfigurationList section */
 		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		D80000000000000000000001 /* Build configuration list for PBXNativeTarget "MKTownEditorTests" */ = {isa = XCConfigurationList; buildConfigurations = (D70000000000000000000001 /* Debug */, D70000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = A80000000000000000000001 /* Project object */;

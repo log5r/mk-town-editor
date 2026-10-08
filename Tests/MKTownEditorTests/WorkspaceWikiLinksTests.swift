@@ -85,7 +85,7 @@ final class WorkspaceWikiLinksTests: XCTestCase {
         let source = root.appendingPathComponent("index.md")
         try "note".write(to: target, atomically: true, encoding: .utf8)
         try "[[note]]\n`[[note]]`".write(to: source, atomically: true, encoding: .utf8)
-        let index = WorkspaceFileIndex.scan(root: root)
+        let index = try WorkspaceFileIndex.scan(root: root)
         let backlinks = try WorkspaceBacklinkIndex.scan(root: root, targetURL: target,
             nodes: index.nodes, openBuffers: [:])
         XCTAssertEqual(backlinks.backlinks.count, 1)

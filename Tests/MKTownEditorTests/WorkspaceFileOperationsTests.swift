@@ -9,7 +9,7 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let documents = (0..<5).map { root.appendingPathComponent("doc\($0).md") }
         for url in documents { try "text".write(to: url, atomically: true, encoding: .utf8) }
-        let index = WorkspaceFileIndex.scan(root: root, maximumEntries: 2)
+        let index = try WorkspaceFileIndex.scan(root: root, maximumEntries: 2)
         let included = Set(index.nodes.map(\.url))
         let omitted = try XCTUnwrap(documents.first { !included.contains($0) })
         let source = try XCTUnwrap(documents.first { $0 != omitted })

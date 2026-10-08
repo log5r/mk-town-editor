@@ -120,7 +120,7 @@ final class MarkdownLineNumberRulerView: NSRulerView {
         clientView = editor
         NotificationCenter.default.addObserver(self, selector: #selector(storageDidChange(_:)),
             name: NSTextStorage.didProcessEditingNotification, object: editor.textStorage)
-        setAccessibilityLabel("行番号")
+        setAccessibilityLabel(String(localized: "行番号"))
         refresh()
     }
 

@@ -48,7 +48,7 @@ final class MarkdownInlineExtensionsTests: XCTestCase {
             XCTAssertEqual(undo.applying(to: wrapped), "abc")
         }
         XCTAssertTrue(EditorCommand.palette.contains(.highlight))
-        XCTAssertTrue(EditorCommand.context.contains(.superscript))
+        XCTAssertTrue(EditorCommand.contextMarkdown.contains(.superscript))
     }
 
     func testOuterEmphasisIsRetained() {
