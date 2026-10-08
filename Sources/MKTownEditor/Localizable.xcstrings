@@ -10746,6 +10746,126 @@
           }
         }
       }
+    },
+    "書き出し・公開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export & Publish"
+          }
+        }
+      }
+    },
+    "分割の方向と並び順" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split direction and order"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を一時停止・再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause or resume automatic preview updates"
+          }
+        }
+      }
+    },
+    "ブログ・静的サイトへ公開…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish to Blog or Static Site…"
+          }
+        }
+      }
+    },
+    "共同編集とコメント…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaboration and Comments…"
+          }
+        }
+      }
+    },
+    "書き出し・公開・共有" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export, publish, and share"
+          }
+        }
+      }
+    },
+    "明示スナップショット…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Named Snapshots…"
+          }
+        }
+      }
+    },
+    "Gitの差分と履歴…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Diff and History…"
+          }
+        }
+      }
+    },
+    "Gitのステージとコミット…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Stage and Commit…"
+          }
+        }
+      }
+    },
+    "スナップショット・Git・iCloudの履歴" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snapshot, Git, and iCloud history"
+          }
+        }
+      }
+    },
+    "選択範囲をAIで推敲・翻訳…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofread or Translate Selection with AI…"
+          }
+        }
+      }
+    },
+    "リンク・Markdown診断、用語確認、自動整形、AI推敲" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link and Markdown checks, terminology, auto-format, and AI proofreading"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

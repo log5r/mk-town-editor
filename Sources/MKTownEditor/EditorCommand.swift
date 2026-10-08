@@ -172,7 +172,7 @@ enum EditorCommand: Hashable {
         case .indentList: "increase.indent"
         case .outdentList: "decrease.indent"
         case .toggleTaskCompletion: "checkmark.square"
-        case .codeBlock: "chevron.left.forwardslash.chevron.right"
+        case .codeBlock: "curlybraces.square"
         case .horizontalRule: "minus"
         case .image: "photo"
         case .table: "tablecells"

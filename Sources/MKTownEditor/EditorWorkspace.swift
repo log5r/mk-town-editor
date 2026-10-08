@@ -18,6 +18,76 @@ struct EditorToolbarInstanceID: Equatable {
     }
 }
 
+/// The window toolbar's items other than formatting commands. Each has its own symbol so no two
+/// items look alike, and only the frequent ones are shown before the user customizes (#23).
+enum WorkspaceToolbarItem: String, CaseIterable {
+    case displayMode = "display-mode"
+    case splitLayout = "split-layout"
+    case detachedPreview = "detached-preview"
+    case previewUpdates = "preview-updates"
+    case exportMenu = "export-publish"
+    case historyMenu = "history"
+    case writingTools = "writing-tools"
+    case linkDiagnostics = "link-diagnostics"
+    case snapshots
+    case slides
+    case gitHistory = "git-history"
+    case gitCommit = "git-commit"
+    case cloudStatus = "cloud-status"
+    case publication
+    case collaboration
+    case aiSuggestion = "ai-suggestion"
+
+    var title: String {
+        switch self {
+        case .displayMode: String(localized: "表示")
+        case .splitLayout: String(localized: "分割配置")
+        case .detachedPreview: String(localized: "プレビューを別ウインドウで開く")
+        case .previewUpdates: String(localized: "プレビューの自動更新を一時停止")
+        case .exportMenu: String(localized: "書き出し・公開")
+        case .historyMenu: String(localized: "履歴")
+        case .writingTools: String(localized: "文章ツール")
+        case .linkDiagnostics: String(localized: "リンク診断")
+        case .snapshots: String(localized: "明示スナップショット")
+        case .slides: String(localized: "スライド表示")
+        case .gitHistory: String(localized: "Gitの差分と履歴")
+        case .gitCommit: String(localized: "Gitのステージとコミット")
+        case .cloudStatus: String(localized: "同期状態と競合版")
+        case .publication: String(localized: "ブログ・静的サイトへ公開")
+        case .collaboration: String(localized: "共同編集とコメント")
+        case .aiSuggestion: String(localized: "選択範囲をAIで推敲・翻訳")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .displayMode: "rectangle.split.2x1"
+        case .splitLayout: "rectangle.2.swap"
+        case .detachedPreview: "rectangle.on.rectangle"
+        case .previewUpdates: "pause.circle"
+        case .exportMenu: "arrow.up.doc"
+        case .historyMenu: "clock"
+        case .writingTools: "text.badge.checkmark"
+        case .linkDiagnostics: "link.circle"
+        case .snapshots: "camera.on.rectangle"
+        case .slides: "play.rectangle"
+        case .gitHistory: "arrow.triangle.branch"
+        case .gitCommit: "checkmark.circle"
+        case .cloudStatus: "icloud"
+        case .publication: "paperplane"
+        case .collaboration: "person.2"
+        case .aiSuggestion: "sparkles"
+        }
+    }
+
+    var showsByDefault: Bool {
+        switch self {
+        case .displayMode, .splitLayout, .detachedPreview, .exportMenu, .historyMenu, .writingTools: true
+        default: false
+        }
+    }
+}
+
 /// ForEach cannot provide individually customizable toolbar items.
 /// Keep these declarations in the same order as EditorCommand.toolbar.
 struct EditorFormattingToolbar<Content: View>: CustomizableToolbarContent {
@@ -320,41 +390,13 @@ struct EditorWorkspace: View {
 
     @ToolbarContentBuilder
     private var workspaceToolbar: some CustomizableToolbarContent {
+        // Only frequent actions are shown by default; related actions share a menu, and the
+        // single-purpose buttons stay available in "Customize Toolbar…" (#23).
         Group {
             EditorFormattingToolbar { command in
                 formatButton(command)
             }
-
-            ToolbarItem(id: "link-diagnostics", placement: .primaryAction) {
-                Button("リンク診断", systemImage: "link") {
-                    showingLinkDiagnostics = true
-                    checkLinks()
-                }
-                .help("ローカルリンクの参照先を確認")
-            }
-            ToolbarItem(id: "snapshots", placement: .primaryAction) {
-                Button("明示スナップショット", systemImage: "clock.arrow.circlepath") {
-                    showingSnapshotHistory = true
-                }
-                .disabled(fileURL == nil)
-                .help("名前を付けた本文履歴を保存・比較・復元")
-            }
-            ToolbarItem(id: "writing-tools", placement: .primaryAction) {
-                Menu("文章ツール", systemImage: "text.badge.checkmark") {
-                    Button("Markdown診断") {
-                        showingMarkdownLint = true
-                        checkMarkdownLint()
-                    }
-                    Button("用語の表記を確認") {
-                        showingTerminology = true
-                        checkTerminology()
-                    }
-                    Button("自動整形…") { showingAutoFormat = true }
-                }
-                .help("Markdown診断・用語確認・自動整形")
-            }
-
-            ToolbarItem(id: "display-mode", placement: .principal) {
+            toolbarItem(.displayMode, placement: .principal) {
                 Picker("表示", selection: mode) {
                     ForEach(EditorMode.allCases) { value in
                         Label(value.label, systemImage: value.symbolName)
@@ -366,8 +408,9 @@ struct EditorWorkspace: View {
                 .labelsHidden()
                 .frame(width: 220)
             }
-            ToolbarItem(id: "split-layout", placement: .primaryAction) {
-                Menu("分割配置", systemImage: "rectangle.split.2x1") {
+            toolbarItem(.splitLayout) {
+                Menu(WorkspaceToolbarItem.splitLayout.title,
+                     systemImage: WorkspaceToolbarItem.splitLayout.symbolName) {
                     Picker("方向", selection: $splitOrientation) {
                         ForEach(EditorSplitOrientation.allCases, id: \.self) { orientation in
                             Text(orientation.title).tag(orientation)
@@ -376,63 +419,147 @@ struct EditorWorkspace: View {
                     Toggle("プレビューを先に表示", isOn: $previewFirst)
                 }
                 .disabled(mode.wrappedValue != .split)
+                .help("分割の方向と並び順")
             }
-            ToolbarItem(id: "detached-preview", placement: .primaryAction) {
-                Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
-                    detachedPreview.show(document: $document, documentURL: fileURL,
-                                         settingsStore: settingsStore,
-                                         workspaceStore: workspaceStore, updates: previewUpdates)
+            toolbarItem(.detachedPreview) {
+                toolbarButton(.detachedPreview) { openDetachedPreview() }
+                    .help("現在の書類のプレビューを別ウインドウで表示")
+            }
+            toolbarItem(.previewUpdates) {
+                Toggle(isOn: Binding(get: { previewUpdates.state.isPaused },
+                                     set: { _ in togglePreviewUpdates() })) {
+                    Label(WorkspaceToolbarItem.previewUpdates.title,
+                          systemImage: WorkspaceToolbarItem.previewUpdates.symbolName)
                 }
-                .help("現在の書類のプレビューを別ウインドウで表示")
+                .help("プレビューの自動更新を一時停止・再開")
+            }
+            toolbarItem(.exportMenu) {
+                Menu(WorkspaceToolbarItem.exportMenu.title,
+                     systemImage: WorkspaceToolbarItem.exportMenu.symbolName) {
+                    Button("HTML…") { exportHTML() }
+                    Button("PDF…") { exportPDF() }
+                    Button("DOCX・ODT・EPUB…") { showingExternalExport = true }
+                    Button("テキスト…") { showingPlainExport = true }
+                    Button("添付を含むパッケージ…") { showingPortablePackage = true }
+                    Divider()
+                    Button("ブログ・静的サイトへ公開…") { showingPublication = true }
+                    Button("共同編集とコメント…") { showingCollaboration = true }
+                    Button("スライド表示") { showSlidePresentation() }
+                }
+                .help("書き出し・公開・共有")
+            }
+            toolbarItem(.historyMenu) {
+                Menu(WorkspaceToolbarItem.historyMenu.title,
+                     systemImage: WorkspaceToolbarItem.historyMenu.symbolName) {
+                    Button("明示スナップショット…") { showingSnapshotHistory = true }
+                    Divider()
+                    Button("Gitの差分と履歴…") { showingGitHistory = true }
+                    Button("Gitのステージとコミット…") { showingGitCommit = true }
+                    Divider()
+                    Button(cloudStatusTitle + "…") { showingCloudStatus = true }
+                }
+                .disabled(fileURL == nil)
+                .help("スナップショット・Git・iCloudの履歴")
+            }
+            toolbarItem(.writingTools) {
+                let hasActiveEditor = editorModel.hasActiveEditor
+                EditorSelectionReader(selection: editorModel.selectionState) { selection in
+                    Menu(WorkspaceToolbarItem.writingTools.title,
+                         systemImage: WorkspaceToolbarItem.writingTools.symbolName) {
+                        Button("リンク診断") { showLinkDiagnostics() }
+                        Button("Markdown診断") {
+                            showingMarkdownLint = true
+                            checkMarkdownLint()
+                        }
+                        Button("用語の表記を確認") {
+                            showingTerminology = true
+                            checkTerminology()
+                        }
+                        Button("自動整形…") { showingAutoFormat = true }
+                        Divider()
+                        Button("選択範囲をAIで推敲・翻訳…") { showingAISuggestion = true }
+                            .disabled(!hasActiveEditor || selection.length == 0)
+                    }
+                    .help("リンク・Markdown診断、用語確認、自動整形、AI推敲")
+                }
             }
         }
         Group {
-            ToolbarItem(id: "slides", placement: .primaryAction) {
-                Button("スライド表示", systemImage: "play.rectangle") {
-                    showSlidePresentation()
-                }
-                .help("区切り線をスライド境界として全画面表示")
+            toolbarItem(.linkDiagnostics) {
+                toolbarButton(.linkDiagnostics) { showLinkDiagnostics() }
+                    .help("ローカルリンクの参照先を確認")
             }
-            ToolbarItem(id: "git-history", placement: .primaryAction) {
-                Button("Gitの差分と履歴", systemImage: "clock.arrow.circlepath") {
-                    showingGitHistory = true
-                }
-                .disabled(fileURL == nil)
+            toolbarItem(.snapshots) {
+                toolbarButton(.snapshots) { showingSnapshotHistory = true }
+                    .disabled(fileURL == nil)
+                    .help("名前を付けた本文履歴を保存・比較・復元")
             }
-            ToolbarItem(id: "git-commit", placement: .primaryAction) {
-                Button("Gitのステージとコミット", systemImage: "checkmark.circle") {
-                    showingGitCommit = true
-                }
-                .disabled(fileURL == nil)
+            toolbarItem(.slides) {
+                toolbarButton(.slides) { showSlidePresentation() }
+                    .help("区切り線をスライド境界として全画面表示")
             }
-            ToolbarItem(id: "cloud-status", placement: .primaryAction) {
-                Button(cloudStatus?.hasUnresolvedConflicts == true ? "競合版あり" : "同期状態と競合版",
-                       systemImage: cloudStatus?.hasUnresolvedConflicts == true
-                           ? "exclamationmark.triangle" : "icloud") {
+            toolbarItem(.gitHistory) {
+                toolbarButton(.gitHistory) { showingGitHistory = true }
+                    .disabled(fileURL == nil)
+            }
+            toolbarItem(.gitCommit) {
+                toolbarButton(.gitCommit) { showingGitCommit = true }
+                    .disabled(fileURL == nil)
+            }
+            toolbarItem(.cloudStatus) {
+                Button(cloudStatusTitle, systemImage: cloudStatus?.hasUnresolvedConflicts == true
+                           ? "exclamationmark.icloud" : WorkspaceToolbarItem.cloudStatus.symbolName) {
                     showingCloudStatus = true
                 }
                 .disabled(fileURL == nil)
             }
-            ToolbarItem(id: "publication", placement: .primaryAction) {
-                Button("ブログ・静的サイトへ公開", systemImage: "square.and.arrow.up") {
-                    showingPublication = true
-                }
+            toolbarItem(.publication) {
+                toolbarButton(.publication) { showingPublication = true }
             }
-            ToolbarItem(id: "collaboration", placement: .primaryAction) {
-                Button("共同編集とコメント", systemImage: "person.2") {
-                    showingCollaboration = true
-                }
+            toolbarItem(.collaboration) {
+                toolbarButton(.collaboration) { showingCollaboration = true }
             }
-            ToolbarItem(id: "ai-suggestion", placement: .primaryAction) {
+            toolbarItem(.aiSuggestion) {
                 let hasActiveEditor = editorModel.hasActiveEditor
                 EditorSelectionReader(selection: editorModel.selectionState) { selection in
-                    Button("選択範囲をAIで推敲・翻訳", systemImage: "text.badge.checkmark") {
-                        showingAISuggestion = true
-                    }
-                    .disabled(!hasActiveEditor || selection.length == 0)
+                    toolbarButton(.aiSuggestion) { showingAISuggestion = true }
+                        .disabled(!hasActiveEditor || selection.length == 0)
                 }
             }
         }
+    }
+
+    private func toolbarItem<Content: View>(_ item: WorkspaceToolbarItem,
+                                            placement: ToolbarItemPlacement = .primaryAction,
+                                            @ViewBuilder content: () -> Content) -> some CustomizableToolbarContent {
+        ToolbarItem(id: item.rawValue, placement: placement, showsByDefault: item.showsByDefault,
+                    content: content)
+    }
+
+    private func toolbarButton(_ item: WorkspaceToolbarItem, action: @escaping () -> Void) -> some View {
+        Button(item.title, systemImage: item.symbolName, action: action)
+    }
+
+    private var cloudStatusTitle: String {
+        cloudStatus?.hasUnresolvedConflicts == true ? String(localized: "競合版あり")
+            : String(localized: "同期状態と競合版")
+    }
+
+    private func showLinkDiagnostics() {
+        showingLinkDiagnostics = true
+        checkLinks()
+    }
+
+    private func openDetachedPreview() {
+        detachedPreview.show(document: $document, documentURL: fileURL,
+                             settingsStore: settingsStore,
+                             workspaceStore: workspaceStore, updates: previewUpdates)
+    }
+
+    private func togglePreviewUpdates() {
+        previewUpdates.togglePause(source: document.text,
+                                   dialect: documentContext.markdownDialect,
+                                   preferredSnapshot: analysisStore.snapshot)
     }
 
     // Opaque return types bound type-checking work for each modifier chain.
@@ -486,11 +613,7 @@ struct EditorWorkspace: View {
             ) : nil)
         .focusedSceneValue(\.previewUpdateActions, PreviewUpdateActions(
                 isPaused: previewUpdates.state.isPaused, isStale: previewUpdates.state.isStale,
-                togglePause: {
-                    previewUpdates.togglePause(source: document.text,
-                                               dialect: documentContext.markdownDialect,
-                                               preferredSnapshot: analysisStore.snapshot)
-                },
+                togglePause: { togglePreviewUpdates() },
                 refresh: {
                     previewUpdates.refresh(source: document.text,
                                            dialect: documentContext.markdownDialect,
