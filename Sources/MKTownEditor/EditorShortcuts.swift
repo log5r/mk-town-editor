@@ -148,7 +148,8 @@ extension ShortcutChord {
 }
 
 /// A field that records the next key combination pressed while it has focus, like the
-/// shortcut fields in System Settings. The chord is applied as soon as it is pressed (#52).
+/// shortcut fields in System Settings. The combination is applied once its keys are released,
+/// so a wrong key can still be replaced while the modifiers are held (#52, #62).
 struct ShortcutRecorder: NSViewRepresentable {
     let label: String
     let accessibilityTitle: String
@@ -170,25 +171,30 @@ struct ShortcutRecorder: NSViewRepresentable {
 }
 
 final class ShortcutRecorderView: NSView {
+    static let recordedModifiers: NSEvent.ModifierFlags = [.command, .option, .control, .shift]
+
     var label = "" {
-        didSet {
-            if label != oldValue {
-                needsDisplay = true
-                setAccessibilityValue(label)
-            }
-        }
+        didSet { if label != oldValue { refresh() } }
     }
     var onRecord: ((ShortcutChord) -> Void)?
     var onClear: (() -> Void)?
     private(set) var isRecording = false {
-        didSet { if isRecording != oldValue { needsDisplay = true } }
+        didSet { if isRecording != oldValue { refresh() } }
+    }
+    /// The combination pressed so far. It is applied when every key is released.
+    private(set) var pendingChord: ShortcutChord? {
+        didSet { if pendingChord != oldValue { refresh() } }
+    }
+    /// The modifier keys held while recording, shown before a key is pressed.
+    private(set) var heldModifiers: NSEvent.ModifierFlags = [] {
+        didSet { if heldModifiers != oldValue { refresh() } }
     }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
-        setAccessibilityHelp(String(localized: "クリックしてからキーを押すと割り当てます。Deleteで解除、Escで中止します。"))
+        setAccessibilityHelp(String(localized: "クリックしてからキーの組み合わせを押して離すと割り当てます。Deleteで解除、Escで中止します。"))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
@@ -200,14 +206,56 @@ final class ShortcutRecorderView: NSView {
         NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
     }
 
+    /// The text in the field: the shortcut, or while recording what has been pressed so far.
+    var displayText: String {
+        guard isRecording else { return label }
+        if let pendingChord { return pendingChord.label }
+        if !heldModifiers.isEmpty {
+            return ShortcutChord(key: "", command: heldModifiers.contains(.command),
+                                 option: heldModifiers.contains(.option),
+                                 shift: heldModifiers.contains(.shift),
+                                 control: heldModifiers.contains(.control)).label + "…"
+        }
+        return String(localized: "キーを入力…")
+    }
+
+    private func refresh() {
+        needsDisplay = true
+        setAccessibilityValue(displayText)
+    }
+
     override func becomeFirstResponder() -> Bool {
         isRecording = true
+        heldModifiers = NSEvent.modifierFlags.intersection(Self.recordedModifiers)
         return true
     }
 
     override func resignFirstResponder() -> Bool {
         isRecording = false
+        discardPendingKeys()
         return true
+    }
+
+    // The release of a modifier held while leaving the window never reaches this view, so a
+    // combination pressed before switching away is dropped instead of applied later.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if let window {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: window)
+        }
+        if let newWindow {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowDidResignKey),
+                                                   name: NSWindow.didResignKeyNotification, object: newWindow)
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        discardPendingKeys()
+    }
+
+    private func discardPendingKeys() {
+        pendingChord = nil
+        heldModifiers = []
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -221,31 +269,63 @@ final class ShortcutRecorderView: NSView {
     // ⌘ combinations arrive here before the menu bar sees them.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard isRecording, window?.firstResponder === self else { return false }
-        record(event)
+        press(event)
         return true
     }
 
     override func keyDown(with event: NSEvent) {
         guard isRecording else { return super.keyDown(with: event) }
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        let modifiers = event.modifierFlags.intersection(Self.recordedModifiers)
         // A plain Tab still moves the keyboard focus.
         if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift {
             return super.keyDown(with: event)
         }
-        record(event)
+        press(event)
     }
 
-    func record(_ event: NSEvent) {
-        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+    // AppKit does not send key-up events for ⌘ combinations, so those are applied when the
+    // modifiers are released instead.
+    override func keyUp(with event: NSEvent) {
+        guard isRecording else { return super.keyUp(with: event) }
+        if heldModifiers.isEmpty { commit() }
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        guard isRecording else { return super.flagsChanged(with: event) }
+        modifiersChanged(event.modifierFlags)
+    }
+
+    /// Shows the held modifiers, and applies the pending combination once all are released.
+    func modifiersChanged(_ flags: NSEvent.ModifierFlags) {
+        heldModifiers = flags.intersection(Self.recordedModifiers)
+        if heldModifiers.isEmpty { commit() }
+    }
+
+    /// Escape and Delete act when pressed. Any other combination waits for its keys to be released.
+    func press(_ event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection(Self.recordedModifiers)
+        heldModifiers = modifiers
         switch event.keyCode {
         case 53 where modifiers.isEmpty: // Escape
-            break
-        case 51, 117: // Delete, Forward Delete
-            if modifiers.isEmpty { onClear?() } else { fallthrough }
+            finish()
+        case 51 where modifiers.isEmpty, 117 where modifiers.isEmpty: // Delete, Forward Delete
+            onClear?()
+            finish()
         default:
             guard let chord = ShortcutChord(recording: event) else { return }
-            onRecord?(chord)
+            pendingChord = chord
         }
+    }
+
+    private func commit() {
+        guard let chord = pendingChord else { return }
+        pendingChord = nil
+        onRecord?(chord)
+        finish()
+    }
+
+    private func finish() {
+        pendingChord = nil
         window?.makeFirstResponder(nil)
     }
 
@@ -257,10 +337,10 @@ final class ShortcutRecorderView: NSView {
         path.fill()
         NSColor.separatorColor.setStroke()
         path.stroke()
-        let text = isRecording ? String(localized: "キーを入力…") : label
+        let text = displayText
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
-            .foregroundColor: isRecording ? NSColor.secondaryLabelColor : NSColor.labelColor
+            .foregroundColor: isRecording && pendingChord == nil ? NSColor.secondaryLabelColor : NSColor.labelColor
         ]
         let size = (text as NSString).size(withAttributes: attributes)
         (text as NSString).draw(at: NSPoint(x: (bounds.width - size.width) / 2,
@@ -311,7 +391,7 @@ struct EditorShortcutPreferencesView: View {
                     .foregroundStyle(.red)
                     .font(.callout)
             } else {
-                Text("欄をクリックしてキーを押すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。")
+                Text("欄をクリックしてキーを押し、離すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

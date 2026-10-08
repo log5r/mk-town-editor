@@ -13,8 +13,14 @@ enum ListKeyboardSelection {
         return ids.first
     }
 
-    /// The row `offset` rows away from the selection, clamped to the list.
-    static func moved<ID: Equatable>(_ selection: ID?, in ids: [ID], by offset: Int) -> ID? {
+    /// The row `offset` rows away from the selection, clamped to the list. Palettes treat no
+    /// selection as the first row. A list that shows nothing selected passes
+    /// `startsUnselected`, so ↓ then selects the first row and ↑ the last (#60).
+    static func moved<ID: Equatable>(_ selection: ID?, in ids: [ID], by offset: Int,
+                                     startsUnselected: Bool = false) -> ID? {
+        if startsUnselected, selection.map({ !ids.contains($0) }) ?? true {
+            return offset < 0 ? ids.last : ids.first
+        }
         guard let current = resolved(selection, in: ids),
               let index = ids.firstIndex(of: current) else { return nil }
         return ids[min(max(0, index + offset), ids.count - 1)]
@@ -43,15 +49,18 @@ enum ListKeyboardSelection {
 
 extension View {
     /// Lets ↑ and ↓ in a palette's search field move the selection of the result list below it.
-    func movesListSelection<ID: Hashable>(_ selection: Binding<ID?>, in ids: [ID]) -> some View {
+    func movesListSelection<ID: Hashable>(_ selection: Binding<ID?>, in ids: [ID],
+                                          startsUnselected: Bool = false) -> some View {
         onKeyPress(.upArrow) {
             guard !ids.isEmpty else { return .ignored }
-            selection.wrappedValue = ListKeyboardSelection.moved(selection.wrappedValue, in: ids, by: -1)
+            selection.wrappedValue = ListKeyboardSelection.moved(selection.wrappedValue, in: ids, by: -1,
+                                                                 startsUnselected: startsUnselected)
             return .handled
         }
         .onKeyPress(.downArrow) {
             guard !ids.isEmpty else { return .ignored }
-            selection.wrappedValue = ListKeyboardSelection.moved(selection.wrappedValue, in: ids, by: 1)
+            selection.wrappedValue = ListKeyboardSelection.moved(selection.wrappedValue, in: ids, by: 1,
+                                                                 startsUnselected: startsUnselected)
             return .handled
         }
     }
@@ -64,5 +73,18 @@ extension View {
             .simultaneousGesture(TapGesture().onEnded {
                 if ListKeyboardSelection.isSingleClick(NSApp.currentEvent) { action() }
             })
+    }
+}
+
+extension View {
+    /// Runs `action` for the selected row when Return is pressed in a `List(selection:)` (#60).
+    /// A double-click also calls `primaryAction`, but `activatesOnClick` already handled the
+    /// click, so only the keyboard activates here.
+    func activatesSelectionOnReturn<ID: Hashable>(_ type: ID.Type,
+                                                  perform action: @escaping (ID) -> Void) -> some View {
+        contextMenu(forSelectionType: type) { _ in } primaryAction: { ids in
+            guard ListKeyboardSelection.isKeyboardActivation, let id = ids.first else { return }
+            action(id)
+        }
     }
 }

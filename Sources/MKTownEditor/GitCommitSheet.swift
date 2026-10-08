@@ -10,6 +10,7 @@ struct GitCommitSheet: View {
     @State private var selectedPath: String?
     @State private var stagedPreview = false
     @State private var diff = ""
+    @State private var diffTask: Task<Void, Never>?
     @State private var message = ""
     @State private var error: String?
     @State private var busy = false
@@ -40,7 +41,12 @@ struct GitCommitSheet: View {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("変更ファイル").font(.headline)
-                        List(changes) { entry in
+                        // The selected file's diff is shown on the right, so the arrow keys browse them (#60).
+                        List(changes, selection: Binding(get: { selectedPath }, set: { path in
+                            guard let path, path != selectedPath else { return }
+                            selectedPath = path
+                            reloadDiff()
+                        })) { entry in
                             HStack {
                                 Toggle("", isOn: Binding(
                                     get: { selected.contains(entry.path) },
@@ -48,11 +54,8 @@ struct GitCommitSheet: View {
                                            else { selected.remove(entry.path) } }
                                 ))
                                 .labelsHidden()
-                                Button(entry.path) {
-                                    selectedPath = entry.path
-                                    Task { await loadDiff(path: entry.path) }
-                                }
-                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(entry.path)をステージ対象にする")
+                                Text(entry.path)
                                 Spacer()
                                 if entry.isStaged {
                                     Text("ステージ済み").font(.caption)
@@ -94,7 +97,7 @@ struct GitCommitSheet: View {
                             Toggle("ステージ済みの差分", isOn: $stagedPreview)
                                 .toggleStyle(.checkbox)
                                 .onChange(of: stagedPreview) { _, _ in
-                                    if let selectedPath { Task { await loadDiff(path: selectedPath) } }
+                                    reloadDiff()
                                 }
                         }
                         GitDiffView(diff: diff,
@@ -120,6 +123,7 @@ struct GitCommitSheet: View {
         .padding(20)
         .frame(minWidth: 980, minHeight: 620)
         .task { await refresh() }
+        .onDisappear { diffTask?.cancel() }
     }
 
     /// The commit records the whole index, so the staged list itself is what gets committed.
@@ -142,24 +146,39 @@ struct GitCommitSheet: View {
             selected.formIntersection(Set(entries.map(\.path)))
             if let selectedPath, !entries.contains(where: { $0.path == selectedPath }) {
                 self.selectedPath = nil
-                diff = ""
             }
             error = nil
+            // The selected file may have changed on disk, so its diff is read again.
+            reloadDiff()
         } catch {
             self.error = error.localizedDescription
         }
     }
 
+    /// Loads the selected file's diff. A newer request cancels this one, so holding an arrow
+    /// key does not start one git process per row, and only the selected file's result is shown.
+    private func reloadDiff() {
+        diffTask?.cancel()
+        diff = ""
+        guard let path = selectedPath else { return }
+        diffTask = Task { await loadDiff(path: path) }
+    }
+
     private func loadDiff(path: String) async {
+        do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
         guard let snapshot else { return }
+        let staged = stagedPreview
         do {
-            let staged = stagedPreview
             let result = try await Task.detached(priority: .userInitiated) {
                 try GitRepository.diff(for: path, in: snapshot.rootURL, staged: staged)
             }.value
-            if selectedPath == path { diff = result }
+            guard !Task.isCancelled, selectedPath == path else { return }
+            diff = result
             error = nil
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            guard !Task.isCancelled, selectedPath == path else { return }
+            self.error = error.localizedDescription
+        }
     }
 
     private func stageSelected() async {
@@ -205,7 +224,6 @@ struct GitCommitSheet: View {
             busy = false
             selected.removeAll()
             await refresh()
-            if let selectedPath { await loadDiff(path: selectedPath) }
         } catch {
             busy = false
             self.error = error.localizedDescription

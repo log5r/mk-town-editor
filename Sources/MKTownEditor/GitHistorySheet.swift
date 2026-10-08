@@ -7,6 +7,7 @@ struct GitHistorySheet: View {
     @State private var snapshot: GitSnapshot?
     @State private var selectedRevision: GitRevision?
     @State private var historicalContent = ""
+    @State private var isLoadingContent = false
     @State private var error: String?
     @State private var isLoading = false
 
@@ -46,24 +47,29 @@ struct GitHistorySheet: View {
                     .padding(12)
                     .tabItem { Text("差分") }
                     HStack(spacing: 12) {
-                        List(snapshot.history) { revision in
-                            Button {
-                                selectedRevision = revision
-                                Task { await loadContent(revision, in: snapshot) }
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(revision.subject).lineLimit(2)
-                                    Text(revision.shortHash)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                }
+                        // The selected revision is shown on the right, so the arrow keys browse them (#60).
+                        List(snapshot.history, selection: Binding(get: { selectedRevision?.id }, set: { id in
+                            guard let revision = snapshot.history.first(where: { $0.id == id }) else { return }
+                            selectedRevision = revision
+                        })) { revision in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(revision.subject).lineLimit(2)
+                                Text(revision.shortHash)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
+                            .accessibilityElement(children: .combine)
                         }
                         .frame(width: 250)
-                        GitDiffView(diff: selectedRevision == nil ? "" : historicalContent,
-                                    placeholder: selectedRevision == nil
-                                        ? String(localized: "履歴から版を選択") : String(localized: "空のファイル"),
+                        // A new selection cancels the previous load, so holding an arrow key does
+                        // not start one git process per row.
+                        .task(id: selectedRevision?.id) {
+                            guard let revision = selectedRevision else { return }
+                            await loadContent(revision, in: snapshot)
+                        }
+                        GitDiffView(diff: selectedRevision == nil || isLoadingContent ? "" : historicalContent,
+                                    placeholder: selectedRevision == nil ? String(localized: "履歴から版を選択")
+                                        : isLoadingContent ? String(localized: "読み込み中") : String(localized: "空のファイル"),
                                     highlightsChanges: false)
                     }
                     .tabItem { Text("履歴") }
@@ -92,14 +98,20 @@ struct GitHistorySheet: View {
     }
 
     private func loadContent(_ revision: GitRevision, in snapshot: GitSnapshot) async {
+        isLoadingContent = true
+        do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
         do {
             let content = try await Task.detached(priority: .userInitiated) {
                 try GitRepository.content(of: revision, in: snapshot)
             }.value
-            if selectedRevision == revision { historicalContent = content }
+            guard !Task.isCancelled, selectedRevision == revision else { return }
+            historicalContent = content
         } catch {
+            guard !Task.isCancelled, selectedRevision == revision else { return }
+            historicalContent = ""
             self.error = error.localizedDescription
         }
+        isLoadingContent = false
     }
 }
 

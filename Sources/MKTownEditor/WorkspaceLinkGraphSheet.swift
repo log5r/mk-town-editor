@@ -10,6 +10,8 @@ struct WorkspaceLinkGraphSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var graph: WorkspaceLinkGraph?
     @State private var showsAll = false
+    @State private var selectedURL: URL?
+    @State private var didOpen = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceLinkGraph, Error>?
@@ -47,22 +49,15 @@ struct WorkspaceLinkGraphSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let displayed, !displayed.nodes.isEmpty {
                 HStack(spacing: 12) {
-                    WorkspaceGraphCanvas(data: displayed, focus: focusURL) { url in
-                        dismiss()
-                        onOpen(url)
-                    }
+                    WorkspaceGraphCanvas(data: displayed, focus: focusURL) { url in open(url) }
                     .background(Color.secondary.opacity(0.05),
                         in: RoundedRectangle(cornerRadius: 8))
-                    List(displayed.nodes, id: \.self) { url in
-                        Button {
-                            dismiss()
-                            onOpen(url)
-                        } label: {
-                            Label(relativePath(url), systemImage: "doc.text")
-                                .lineLimit(2)
-                        }
-                        .buttonStyle(.plain)
+                    List(displayed.nodes, id: \.self, selection: $selectedURL) { url in
+                        Label(relativePath(url), systemImage: "doc.text")
+                            .lineLimit(2)
+                            .activatesOnClick { open(url) }
                     }
+                    .activatesSelectionOnReturn(URL.self) { url in open(url) }
                     .frame(width: 230)
                 }
             } else {
@@ -90,10 +85,19 @@ struct WorkspaceLinkGraphSheet: View {
         .frame(minWidth: 800, minHeight: 520)
         .padding(20)
         .onAppear(perform: load)
+        .onChange(of: showsAll) { _, _ in selectedURL = nil }
         .onDisappear {
             worker?.cancel()
             worker = nil
         }
+    }
+
+    /// A second click or Return can reach the sheet while it closes, so only the first opens.
+    private func open(_ url: URL) {
+        guard !didOpen else { return }
+        didOpen = true
+        dismiss()
+        onOpen(url)
     }
 
     private func relativePath(_ url: URL) -> String {

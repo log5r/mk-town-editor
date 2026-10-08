@@ -9,6 +9,8 @@ struct WorkspaceSearchSheet: View {
     @State private var exclude = ""
     @State private var scope: WorkspaceSearchScope = .all
     @State private var results: [WorkspaceSearchResult] = []
+    @State private var selectedResultID: WorkspaceSearchResult.ID?
+    @State private var didOpen = false
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var searchTask: Task<WorkspaceSearchReport, Error>?
@@ -42,19 +44,19 @@ struct WorkspaceSearchSheet: View {
             if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
             if skippedCount > 0 { Text("読み込めなかった書類: \(skippedCount)件") }
             if isTruncated { Text("確認結果は一部のみです。対象を絞って再実行してください。") }
-            List(results) { result in
-                Button {
-                    dismiss()
-                    onOpen(result)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(result.relativePath):\(result.line)")
-                            .font(.subheadline.weight(.semibold))
-                        Text(result.excerpt).font(.caption).lineLimit(2)
-                            .foregroundStyle(.secondary)
-                    }
+            // The query field accepts newlines, so ↑↓ stay in it; Tab moves to the results (#60).
+            List(results, selection: $selectedResultID) { result in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(result.relativePath):\(result.line)")
+                        .font(.subheadline.weight(.semibold))
+                    Text(result.excerpt).font(.caption).lineLimit(2)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .activatesOnClick { open(result) }
+            }
+            .activatesSelectionOnReturn(WorkspaceSearchResult.ID.self) { id in
+                if let result = results.first(where: { $0.id == id }) { open(result) }
             }
             .frame(height: 330)
             if isSearching { ProgressView("検索中…") }
@@ -106,6 +108,15 @@ struct WorkspaceSearchSheet: View {
             }
             if generation == searchGeneration { isSearching = false }
         }
+    }
+
+    /// A second click or Return can reach the sheet while it closes, so only the first opens.
+    private func open(_ result: WorkspaceSearchResult) {
+        guard !didOpen else { return }
+        didOpen = true
+        cancelSearch()
+        dismiss()
+        onOpen(result)
     }
 
     private func cancelSearch() {
