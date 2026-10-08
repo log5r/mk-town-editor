@@ -14,7 +14,7 @@ struct MarkdownDocument: FileDocument {
     var text: String
     var format = MarkdownTextFormat()
 
-    init(text: String = WorkspaceDocumentTemplate.starter.text) {
+    init(text: String = "") {
         self.text = text
     }
 
