@@ -26,7 +26,7 @@ Human Interface Guidelinesから外れていたUXを2026-10に直した。各項
 
 サイドバーとパレット系シートの一覧は `List(selection:)` にした。
 
-- 矢印キーは選択を動かすだけ。アウトラインは選択した見出しへ本文を移動するが、フォーカスは一覧に残す（`navigate(to:focusesEditor: false)`）。連続したプレビューは「戻る」の履歴に1件だけ記録する（`NavigationHistory.recordPreview`）。見出しを10個送っても、「戻る」は送り始める前の位置へ1回で戻る。
+- 矢印キーは選択を動かすだけ。アウトラインは選択した見出しへ本文を移動するが、フォーカスは一覧に残す（`navigate(to:focusesEditor: false)`）。連続したプレビューは「戻る」の履歴に1件だけ記録する（`NavigationHistory.recordPreview`）。見出しを10個送っても、「戻る」は送り始める前の位置へ1回で戻る。連続かどうかは、起点が直前のプレビュー先と同じかで判定する。途中でエディタのキャレットを動かすと、次のプレビューは新しい連続移動として起点を記録する。
 - クリックは行の `activatesOnClick`（`simultaneousGesture` のタップ）で確定する。選択済みの行をもう一度クリックした場合も動く。選択のバインディングはクリックによる変更を無視し、二重に実行しない（`ListKeyboardSelection.isPointerEvent`）。
 - Returnは `.contextMenu(forSelectionType:menu:primaryAction:)` の `primaryAction` で確定する。`primaryAction` はダブルクリックでも呼ばれ、タップジェスチャもクリックごとに発火する。このため `primaryAction` はキーボード操作のときだけ実行し（`ListKeyboardSelection.isKeyboardActivation`）、タップは1回目のクリックだけで実行する（`isSingleClick`）。これがないと、ダブルクリックで添付ファイルが2〜3回開く。閉じかけのシートに2回目のクリックが届くことに備えて、パレットには `didSubmit` のガードも置く。右クリックメニューも同じ修飾子に移した。行ごとの `.contextMenu` と併用しない。
 - パレット系シートは検索欄にフォーカスを置いたまま `.movesListSelection` の↑↓で選択を動かし、Returnで選択中の候補を開く。候補がなくなったら先頭を選ぶ（`ListKeyboardSelection.resolved`）。
