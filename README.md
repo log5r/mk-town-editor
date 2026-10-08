@@ -50,7 +50,7 @@ Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`ス�
 ./start.sh rebuild
 ```
 
-起動処理は[`start.sh`](start.sh)で確認できます。
+起動処理は[`start.sh`](start.sh)で確認できます。Packageから起動したプロセスはアプリバンドルではないため、Markdown文書型の宣言やURLスキームなどInfo.plistに依存する機能は使えません。詳細は[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)を参照してください。
 
 ## 基本操作
 
