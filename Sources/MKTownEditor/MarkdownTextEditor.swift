@@ -198,7 +198,11 @@ struct MarkdownTextEditor: NSViewRepresentable {
             context.coordinator.lineNumberRuler?.refresh()
         }
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
-        guard textView.editorSource != text else {
+        // Input methods keep composed text marked until the user confirms it, and marked text is
+        // not reported to the binding. Replacing the contents here would destroy the composition
+        // (AppKit then asks the input method to commit) and drop the text being typed. The
+        // committed text reaches the binding through textDidChange once the composition ends.
+        guard textView.editorSource != text, !textView.hasMarkedText() else {
             context.coordinator.refreshSyntax()
             return
         }
