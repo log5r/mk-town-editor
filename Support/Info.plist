@@ -60,7 +60,10 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>近くの参加者とMarkdown書類を共同編集するためにローカルネットワークを使用します。</string>
 	<key>NSBonjourServices</key>
-	<array><string>_mktown-collab._tcp</string></array>
+	<array>
+		<string>_mktown-collab._tcp</string>
+		<string>_mktown-collab._udp</string>
+	</array>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSServices</key>
