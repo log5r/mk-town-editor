@@ -280,6 +280,12 @@ struct WorkspaceFileOperationSheet: View {
                     if let movePlan {
                         WorkspaceNamedLayoutStore().remapDocuments(from: source,
                             to: movePlan.destinationURL, root: root)
+                        // 移動は完了しているので、履歴を移せなくても操作は失敗扱いにしない。
+                        // 移せなかった履歴は、書類が見つからないスナップショットとして整理できる。
+                        try? await Task.detached(priority: .userInitiated) {
+                            try WorkspaceSnapshotStore.appSupport.remap(from: movePlan.sourceURL,
+                                                                        to: movePlan.destinationURL)
+                        }.value
                     }
                 case let .trash(source): workspaceStore.removePins(under: source)
                 case .createDocument, .createFolder: break
