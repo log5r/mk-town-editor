@@ -139,6 +139,7 @@ struct EditorWorkspace: View {
     @EnvironmentObject private var layoutActivation: WorkspaceLayoutActivation
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
+    @Environment(\.controlActiveState) private var controlActiveState
     @StateObject private var editorModel = MarkdownEditorModel()
     /// スクロール・選択のたびに書き換わる補助状態。変更でビュー全体を再評価しないよう参照型で保持する。
     @State private var transientState = EditorWorkspaceTransientState()
@@ -166,7 +167,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
-    @State private var presentedError: WorkspacePresentedError?
+    @State private var errorQueue = WorkspaceErrorQueue()
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
@@ -651,7 +652,7 @@ struct EditorWorkspace: View {
                 GitCommitSheet(fileURL: fileURL) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -749,7 +750,7 @@ struct EditorWorkspace: View {
             WorkspaceQuickOpenSheet { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                    catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                 }
             }
         }
@@ -766,7 +767,7 @@ struct EditorWorkspace: View {
                 WorkspaceAttachmentAuditSheet(root: root) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -817,7 +818,7 @@ struct EditorWorkspace: View {
             MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .encodingImport(error.localizedDescription) }
+                    catch { errorQueue.present(.encodingImport(error.localizedDescription)) }
                 }
             }
         }
@@ -886,7 +887,7 @@ struct EditorWorkspace: View {
                                        showingWorkspaceTags = false
                                        Task {
                                            do { try await openDocument(at: url) }
-                                           catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                                           catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                                        }
                                    })
             }
@@ -910,7 +911,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: backlink.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: backlink.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -936,7 +937,7 @@ struct EditorWorkspace: View {
                             fileURL.resolvingSymlinksInPath().standardizedFileURL { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -947,7 +948,7 @@ struct EditorWorkspace: View {
                     workspaceStore.refresh(force: true)
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -968,7 +969,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelTaskToggle(for: task.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -984,7 +985,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: task.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -1003,7 +1004,7 @@ struct EditorWorkspace: View {
                             fileURL?.resolvingSymlinksInPath().standardizedFileURL else { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1035,7 +1036,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1049,7 +1050,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1114,26 +1115,36 @@ struct EditorWorkspace: View {
         }
     }
 
+    private func dismissPresentedError() {
+        errorQueue.dismiss()
+        // Show the next failure after this alert has gone, so it is presented as a new alert.
+        DispatchQueue.main.async { errorQueue.advance() }
+    }
+
+    private func takeWorkspaceStoreError() {
+        guard let error = WorkspaceErrorQueue.storeError(workspaceStore.errorMessage,
+                                                         isKeyWindow: controlActiveState == .key) else { return }
+        workspaceStore.clearError()
+        errorQueue.present(error)
+    }
+
     private var alertView: some View {
         sheetView
         // One alert for every failure, so two failures never compete for presentation (#29).
-        .alert(presentedError?.title ?? "", isPresented: Binding(
-            get: { presentedError != nil },
-            set: { if !$0 { presentedError = nil } }
-        ), presenting: presentedError) { _ in
-            Button("OK") { presentedError = nil }
+        // A failure that arrives while another is shown waits for it to be dismissed (#61).
+        .alert(errorQueue.current?.title ?? "", isPresented: Binding(
+            get: { errorQueue.current != nil },
+            set: { if !$0 { dismissPresentedError() } }
+        ), presenting: errorQueue.current) { _ in
+            Button("OK") { dismissPresentedError() }
                 .keyboardShortcut(.defaultAction)
         } message: { error in
             Text(error.message)
         }
-        .alert("フォルダを記憶できません", isPresented: Binding(
-            get: { workspaceStore.errorMessage != nil },
-            set: { if !$0 { workspaceStore.clearError() } }
-        )) {
-            Button("OK") { workspaceStore.clearError() }
-        } message: {
-            Text(workspaceStore.errorMessage ?? "")
-        }
+        // The workspace store is shared by every document window, so only the key window
+        // shows its failure. If no document window is key, it waits until one is.
+        .onChange(of: workspaceStore.errorMessage, initial: true) { _, _ in takeWorkspaceStoreError() }
+        .onChange(of: controlActiveState) { _, _ in takeWorkspaceStoreError() }
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
                             analysis: currentAnalysisSnapshot?.analysis,
@@ -1458,7 +1469,7 @@ struct EditorWorkspace: View {
             onOpenEmbeddedDocument: { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                    catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                 }
             },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
@@ -1530,7 +1541,7 @@ struct EditorWorkspace: View {
                 catch { failed.append(url.lastPathComponent) }
             }
             if !failed.isEmpty {
-                presentedError = .workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))"))
+                errorQueue.present(.workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))")))
             }
         }
     }
@@ -1743,7 +1754,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: bookmark.documentURL)
             } catch {
                 documentLinkNavigation.cancelPosition(for: bookmark.documentURL)
-                presentedError = .workspaceOpen(error.localizedDescription)
+                errorQueue.present(.workspaceOpen(error.localizedDescription))
             }
         }
     }
@@ -1925,9 +1936,9 @@ struct EditorWorkspace: View {
         Task {
             if node.isEditableDocument {
                 do { try await openDocument(at: node.url) }
-                catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
             } else if !NSWorkspace.shared.open(node.url) {
-                presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
+                errorQueue.present(.workspaceOpen(String(localized: "添付ファイルを開けませんでした。")))
             }
         }
     }
@@ -2034,7 +2045,7 @@ struct EditorWorkspace: View {
     private func navigateToHeading(_ fragment: String) {
         guard let snapshot = currentAnalysisSnapshot else { return }
         guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
-            presentedError = .missingHeading(fragment)
+            errorQueue.present(.missingHeading(fragment))
             return
         }
         navigate(to: entry)
@@ -2052,7 +2063,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: link.fileURL)
             } catch {
                 documentLinkNavigation.cancel(for: link.fileURL)
-                presentedError = .documentLink(error.localizedDescription)
+                errorQueue.present(.documentLink(error.localizedDescription))
             }
         }
     }
@@ -2083,7 +2094,7 @@ struct EditorWorkspace: View {
             do { try await openDocument(at: result.url) }
             catch {
                 documentLinkNavigation.cancelPosition(for: result.url)
-                presentedError = .workspaceOpen(error.localizedDescription)
+                errorQueue.present(.workspaceOpen(error.localizedDescription))
             }
         }
     }
@@ -2111,12 +2122,12 @@ struct EditorWorkspace: View {
     private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
         guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
               !workspaceStore.isDocumentLocked(fileURL) else {
-            presentedError = .workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。"))
+            errorQueue.present(.workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")))
             return
         }
         if editorModel.hasActiveEditor {
             guard editorModel.applyRegexEdit(edit, expectedSource: document.text) else {
-                presentedError = .workspaceOpen(String(localized: "タスクを変更できませんでした。"))
+                errorQueue.present(.workspaceOpen(String(localized: "タスクを変更できませんでした。")))
                 return
             }
             editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
@@ -2225,7 +2236,7 @@ struct EditorWorkspace: View {
                 }.value
                 switch result {
                 case let .success(data): encodingImport = EncodingImport(url: url, data: data)
-                case let .failure(error): presentedError = .encodingImport(error.localizedDescription)
+                case let .failure(error): errorQueue.present(.encodingImport(error.localizedDescription))
                 }
             }
         }
@@ -2263,13 +2274,13 @@ struct EditorWorkspace: View {
                 let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset,
                                                                       dialect: dialect, outputURL: destination)
                 try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
-            } onError: { presentedError = .htmlExport($0) }
+            } onError: { errorQueue.present(.htmlExport($0)) }
         }
     }
 
     private func exportPDF() {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { presentedError = .pdfExport($0) }) else { return }
+                                          onError: { errorQueue.present(.pdfExport($0)) }) else { return }
         exportFormat = .pdf
     }
 
@@ -2329,13 +2340,13 @@ struct EditorWorkspace: View {
             let url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
-            } onError: { presentedError = .pdfExport($0) }
+            } onError: { errorQueue.present(.pdfExport($0)) }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { presentedError = .pdfExport($0) }) else { return }
+                                          onError: { errorQueue.present(.pdfExport($0)) }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
@@ -2345,7 +2356,7 @@ struct EditorWorkspace: View {
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
-            } onError: { presentedError = .pdfExport($0) }
+            } onError: { errorQueue.present(.pdfExport($0)) }
         }
     }
 
@@ -2366,7 +2377,7 @@ struct EditorWorkspace: View {
             operation.jobTitle = title
             operation.showsPrintPanel = true
             _ = try await MarkdownPDFExporter.run(operation)
-        } onError: { presentedError = .print($0) }
+        } onError: { errorQueue.present(.print($0)) }
     }
 
     private func copyRichSelection() {
@@ -2379,7 +2390,7 @@ struct EditorWorkspace: View {
         startDocumentOperation {
             try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
                                                       startingChangeCount: changeCount)
-        } onError: { presentedError = .richCopy($0) }
+        } onError: { errorQueue.present(.richCopy($0)) }
     }
 
     private func exportPlainText() {
@@ -2395,7 +2406,7 @@ struct EditorWorkspace: View {
                     MarkdownPlainTextExporter.render(source, options: options)
                 }
                 try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
-            } onError: { presentedError = .plainExport($0) }
+            } onError: { errorQueue.present(.plainExport($0)) }
         }
     }
 
@@ -2531,7 +2542,7 @@ struct EditorWorkspace: View {
                                                            model: editorModel,
                                                            currentContext: { documentContext })
             } catch {
-                presentedError = .imageInsert(error.localizedDescription)
+                errorQueue.present(.imageInsert(error.localizedDescription))
             }
         }
     }
@@ -2549,7 +2560,7 @@ struct EditorWorkspace: View {
                                                             context: context, model: editorModel,
                                                             currentContext: { documentContext })
             } catch {
-                presentedError = .imageInsert(error.localizedDescription)
+                errorQueue.present(.imageInsert(error.localizedDescription))
             }
         }
     }
@@ -3357,6 +3368,7 @@ enum WorkspacePresentedError: Identifiable, Equatable {
     case workspaceOpen(String)
     case imageInsert(String)
     case encodingImport(String)
+    case workspaceBookmark(String)
 
     var id: String { title + "\u{1F}" + message }
 
@@ -3372,6 +3384,7 @@ enum WorkspacePresentedError: Identifiable, Equatable {
         case .workspaceOpen: String(localized: "ファイルを開けません")
         case .imageInsert: String(localized: "画像を挿入できません")
         case .encodingImport: String(localized: "文字コードの取り込みに失敗")
+        case .workspaceBookmark: String(localized: "フォルダを記憶できません")
         }
     }
 
@@ -3380,9 +3393,37 @@ enum WorkspacePresentedError: Identifiable, Equatable {
         case let .missingHeading(fragment): String(localized: "#\(fragment) に対応する見出しがありません。")
         case let .documentLink(message), let .htmlExport(message), let .pdfExport(message),
              let .print(message), let .richCopy(message), let .plainExport(message),
-             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message):
+             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message),
+             let .workspaceBookmark(message):
             message
         }
+    }
+}
+
+/// The failures waiting for a window's alert. A failure that arrives while another is shown
+/// waits its turn instead of replacing it, so neither goes unseen (#61). The same failure is
+/// queued only once.
+struct WorkspaceErrorQueue: Equatable {
+    private(set) var current: WorkspacePresentedError?
+    private(set) var pending: [WorkspacePresentedError] = []
+
+    mutating func present(_ error: WorkspacePresentedError) {
+        guard current != error, !pending.contains(error) else { return }
+        if current == nil { current = error } else { pending.append(error) }
+    }
+
+    /// Clears the shown failure. `advance()` then shows the next one.
+    mutating func dismiss() { current = nil }
+
+    mutating func advance() {
+        guard current == nil, !pending.isEmpty else { return }
+        current = pending.removeFirst()
+    }
+
+    /// The failure a window takes from the shared workspace store: only the key window takes it.
+    static func storeError(_ message: String?, isKeyWindow: Bool) -> WorkspacePresentedError? {
+        guard isKeyWindow, let message else { return nil }
+        return .workspaceBookmark(message)
     }
 }
 

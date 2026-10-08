@@ -19,7 +19,7 @@ final class SheetPresentationTests: XCTestCase {
         let errors: [WorkspacePresentedError] = [
             .missingHeading("x"), .documentLink("x"), .htmlExport("x"), .pdfExport("x"),
             .print("x"), .richCopy("x"), .plainExport("x"), .workspaceOpen("x"),
-            .imageInsert("x"), .encodingImport("x")
+            .imageInsert("x"), .encodingImport("x"), .workspaceBookmark("x")
         ]
         XCTAssertEqual(Set(errors.map(\.title)).count, errors.count)
         XCTAssertEqual(Set(errors.map(\.id)).count, errors.count)
@@ -29,8 +29,44 @@ final class SheetPresentationTests: XCTestCase {
 
     func testWorkspaceDeclaresASingleErrorAlert() throws {
         let workspace = try source("EditorWorkspace.swift")
-        XCTAssertEqual(workspace.components(separatedBy: "presenting: presentedError").count - 1, 1)
+        XCTAssertEqual(workspace.components(separatedBy: "presenting: errorQueue.current").count - 1, 1)
         XCTAssertFalse(workspace.contains("@State private var htmlExportError"))
+        // The workspace store's failure goes through the same alert (#61).
+        XCTAssertFalse(workspace.contains(".alert(\"フォルダを記憶できません\""))
+        XCTAssertTrue(workspace.contains("onChange(of: workspaceStore.errorMessage"))
+        XCTAssertFalse(workspace.contains("presentedError = ."), "Failures go through errorQueue.present")
+    }
+
+    /// A second failure waits for the first to be dismissed instead of replacing it (#61).
+    func testErrorQueueShowsFailuresOneAtATimeInOrder() {
+        var queue = WorkspaceErrorQueue()
+        queue.present(.pdfExport("disk full"))
+        queue.present(.workspaceBookmark("no access"))
+        queue.present(.pdfExport("disk full"))
+        queue.present(.workspaceBookmark("no access"))
+        XCTAssertEqual(queue.current, .pdfExport("disk full"), "The shown failure is not replaced")
+        XCTAssertEqual(queue.pending, [.workspaceBookmark("no access")], "A repeated failure is queued once")
+
+        queue.advance()
+        XCTAssertEqual(queue.current, .pdfExport("disk full"), "Nothing advances while a failure is shown")
+        queue.dismiss()
+        XCTAssertNil(queue.current)
+        queue.advance()
+        XCTAssertEqual(queue.current, .workspaceBookmark("no access"))
+        XCTAssertEqual(queue.pending, [])
+        queue.dismiss()
+        queue.advance()
+        XCTAssertNil(queue.current)
+    }
+
+    /// The workspace store is shared by every window, so only the key window takes its failure.
+    func testOnlyTheKeyWindowTakesTheWorkspaceStoreFailure() {
+        XCTAssertEqual(WorkspaceErrorQueue.storeError("no access", isKeyWindow: true),
+                       .workspaceBookmark("no access"))
+        XCTAssertNil(WorkspaceErrorQueue.storeError("no access", isKeyWindow: false))
+        XCTAssertNil(WorkspaceErrorQueue.storeError(nil, isKeyWindow: true))
+        XCTAssertEqual(WorkspacePresentedError.workspaceBookmark("x").title,
+                       String(localized: "フォルダを記憶できません"))
     }
 
     func testFilePanelsAreNotAppModalOutsideTheServicesHandler() throws {
