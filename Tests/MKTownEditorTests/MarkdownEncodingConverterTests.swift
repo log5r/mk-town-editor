@@ -12,6 +12,16 @@ final class MarkdownEncodingConverterTests: XCTestCase {
         XCTAssertEqual(String(data: converted, encoding: .utf8), original)
     }
 
+    func testShiftJISWithIBMExtensionsIsReadAlthoughItEncodesBackDifferently() throws {
+        // ⅰ (IBM FA 40), 髙 (IBM FB FC), ① (NEC 87 40) as written by Windows.
+        let data = Data([0xFA, 0x40, 0xFB, 0xFC, 0x87, 0x40, 0x0D, 0x0A])
+        XCTAssertEqual(try MarkdownEncodingConverter.decode(data, as: .shiftJIS), "ⅰ髙①\r\n")
+        XCTAssertEqual(try MarkdownEncodingConverter.convert(data, from: .shiftJIS, to: .utf8),
+                       Data("ⅰ髙①\r\n".utf8))
+        XCTAssertThrowsError(try MarkdownEncodingConverter.decode(Data([0x41, 0x81]), as: .shiftJIS))
+        XCTAssertThrowsError(try MarkdownEncodingConverter.decode(Data([0xFF]), as: .shiftJIS))
+    }
+
     func testUnrepresentableCharactersCannotBeSavedSilently() throws {
         XCTAssertThrowsError(try MarkdownEncodingConverter.encode("絵文字🙂", as: .shiftJIS))
         XCTAssertThrowsError(try MarkdownEncodingConverter.encode("日本語", as: .latin1))
