@@ -20,7 +20,10 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         XCTAssertTrue(MarkdownHTMLExporter.render("---\nlang: \"fr\"\n---\n\nText").contains(#"<html lang="fr">"#))
         let fallback = Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
             ?? Bundle.main.developmentLocalization ?? "ja"
-        for source in ["Text", "---\nlang: \"><script>\n---\n\nText", "---\ntitle: x\n---\n\nText"] {
+        XCTAssertTrue(MarkdownHTMLExporter.render("# 見出し\n\nこれは日本語で書いた本文です。").contains(#"<html lang="ja">"#))
+        XCTAssertTrue(MarkdownHTMLExporter.render("This paragraph is written in plain English for the test.")
+            .contains(#"<html lang="en">"#))
+        for source in ["", "---\nlang: \"><script>\n---\n", "---\ntitle: x\n---\n\n```\ncode\n```"] {
             let html = MarkdownHTMLExporter.render(source)
             XCTAssertTrue(html.contains("<html lang=\"\(fallback)\">"), source)
             XCTAssertFalse(html.contains("<script>"))

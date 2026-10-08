@@ -152,11 +152,14 @@ enum MarkdownSafeHTML {
               let valueRange = Range(match.range(at: match.range(at: 1).location == NSNotFound ? 2 : 1),
                                      in: attributes) else { return nil }
         let value = String(attributes[valueRange])
-        // Browsers drop whitespace and control characters before reading a scheme, so
-        // " javascript:" or "java\tscript:" must not slip past a failed URL parse.
+        // Browsers drop surrounding spaces, tabs, line breaks and control characters before reading
+        // a scheme, so " javascript:" or "java\tscript:" must not slip past a failed URL parse.
+        // An inner space, as in "my file.md", is kept inside the <…> destination.
         guard !value.isEmpty, !value.contains("<"), !value.contains(">"), !value.contains("\\"),
+              value == value.trimmingCharacters(in: .whitespacesAndNewlines),
               !value.unicodeScalars.contains(where: {
-                  CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0)
+                  $0 != " " && (CharacterSet.whitespacesAndNewlines.contains($0) ||
+                                CharacterSet.controlCharacters.contains($0))
               }),
               let url = URL(string: value) else { return nil }
         if let scheme = url.scheme?.lowercased() {

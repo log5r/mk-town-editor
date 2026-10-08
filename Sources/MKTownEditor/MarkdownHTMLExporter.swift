@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import NaturalLanguage
 import WebKit
 
 enum MarkdownHTMLExporter {
@@ -497,8 +498,8 @@ enum MarkdownHTMLExporter {
         return text
     }
 
-    /// The front matter's `lang:` when it is a language tag, otherwise the app's localization,
-    /// which is the language of the generated headings such as the footnotes title.
+    /// The front matter's `lang:` when it is a language tag, then the language the body is written
+    /// in, and for text too short to tell, the app's localization used for the generated headings.
     static func documentLanguage(_ analysis: MarkdownAnalysis) -> String {
         if let raw = analysis.frontMatter?.raw,
            let value = FrontMatterProperties.items(in: raw)
@@ -506,6 +507,13 @@ enum MarkdownHTMLExporter {
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"' \t")),
            value.range(of: #"^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"#, options: .regularExpression) != nil {
             return value
+        }
+        let sample = analysis.blocks.lazy.filter { $0.kind != .codeBlock }.map(\.content)
+            .joined(separator: "\n").prefix(4_000)
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(sample))
+        if let language = recognizer.dominantLanguage, language != .undetermined {
+            return language.rawValue
         }
         return Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
             ?? Bundle.main.developmentLocalization ?? "ja"
