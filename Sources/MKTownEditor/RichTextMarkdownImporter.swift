@@ -137,7 +137,10 @@ enum RichTextMarkdownImporter {
         let charset = match.map { (prefix as NSString).substring(with: $0.range(at: 1)).lowercased() }
         let encoding: String.Encoding
         switch charset {
-        case "shift_jis", "shift-jis", "sjis": encoding = .shiftJIS
+        case "shift_jis", "shift-jis", "sjis", "x-sjis", "windows-31j", "cp932", "ms932", "ms_kanji":
+            encoding = .shiftJIS
+        case "euc-jp", "x-euc-jp": encoding = .japaneseEUC
+        case "iso-2022-jp", "csiso2022jp": encoding = .iso2022JP
         case "windows-1252", "iso-8859-1": encoding = .windowsCP1252
         case "utf-16", "utf-16le", "utf-16be": encoding = .utf16
         default: encoding = .utf8
