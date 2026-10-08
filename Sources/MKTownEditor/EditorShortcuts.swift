@@ -103,7 +103,7 @@ enum EditorShortcutRegistry {
         ShortcutChord(key: "f", option: true, shift: true),
         ShortcutChord(key: "f", shift: true),
         ShortcutChord(key: "g"), ShortcutChord(key: "g", shift: true),
-        ShortcutChord(key: "r", option: true, shift: true),
+        ShortcutChord(key: "r", option: true, shift: true), ShortcutChord(key: "r", option: true),
         ShortcutChord(key: "l"), ShortcutChord(key: "p", option: true),
         ShortcutChord(key: "o", option: true), ShortcutChord(key: "o", shift: true),
         ShortcutChord(key: "+"), ShortcutChord(key: "-"), ShortcutChord(key: "0"),

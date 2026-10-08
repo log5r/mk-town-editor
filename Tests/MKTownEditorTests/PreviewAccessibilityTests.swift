@@ -26,6 +26,34 @@ final class PreviewAccessibilityTests: XCTestCase {
         XCTAssertNil(state.displayedRevision)
     }
 
+    /// The bar is hidden while previews update automatically and never shows revision numbers (#24).
+    func testPreviewUpdateStatusIsHiddenWhileLiveAndDescribesPausedStateWithoutRevisions() throws {
+        var state = PreviewUpdateState()
+        XCTAssertNil(PreviewUpdateControls.statusText(for: state))
+        state.sourceChanged()
+        XCTAssertNil(PreviewUpdateControls.statusText(for: state))
+
+        state.pause(at: "a")
+        let upToDate = try XCTUnwrap(PreviewUpdateControls.statusText(for: state))
+        state.sourceChanged()
+        let stale = try XCTUnwrap(PreviewUpdateControls.statusText(for: state))
+        XCTAssertNotEqual(upToDate, stale)
+        for text in [upToDate, stale] {
+            XCTAssertFalse(text.contains("世代"))
+            XCTAssertNil(text.rangeOfCharacter(from: .decimalDigits), text)
+        }
+    }
+
+    func testTogglePauseFreezesThenResumesPreview() {
+        let updates = PreviewUpdateController()
+        updates.togglePause(source: "# A", preferredSnapshot: DocumentSnapshot(source: "# A"))
+        XCTAssertTrue(updates.state.isPaused)
+        XCTAssertEqual(updates.state.displayedSource, "# A")
+        updates.togglePause(source: "# B")
+        XCTAssertFalse(updates.state.isPaused)
+        XCTAssertNil(updates.snapshot)
+    }
+
     func testPreviewUpdateControllerFreezesAndRefreshesMatchingAnalysis() async {
         let updates = PreviewUpdateController()
         updates.pause(source: "# Frozen", preferredSnapshot: DocumentSnapshot(source: "# Frozen"))

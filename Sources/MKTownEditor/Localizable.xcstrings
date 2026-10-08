@@ -10636,6 +10636,86 @@
           }
         }
       }
+    },
+    "Markdown で書き始めましょう。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start writing in Markdown."
+          }
+        }
+      }
+    },
+    "プレビューは一時停止中 — 未反映の変更あり" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview paused — changes not shown yet"
+          }
+        }
+      }
+    },
+    "プレビューは一時停止中 — 最新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview paused — up to date"
+          }
+        }
+      }
+    },
+    "再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
+    "一時停止したまま最新の内容を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the latest content without resuming"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume Automatic Preview Updates"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を一時停止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause Automatic Preview Updates"
+          }
+        }
+      }
+    },
+    "一時停止中のプレビューを更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Paused Preview"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
