@@ -84,6 +84,20 @@ class StartScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.calls(), self.launch_calls())
 
+    def test_no_running_warning_when_the_app_is_not_running(self):
+        for _ in range(5):
+            result = self.run_script()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("already running", result.stderr)
+
+    def test_warns_when_the_bundled_app_is_already_running(self):
+        executable = self.app / "Contents" / "MacOS" / "MKTownEditor"
+        self.write_executable(Path(self.environment["PATH"].split(":")[0]) / "ps",
+                              f'#!/bin/bash\necho /usr/bin/grep\necho "{executable}"\n')
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("already running", result.stderr)
+
     def test_rebuild_cleans_before_building_and_opening(self):
         result = self.run_script("rebuild")
         self.assertEqual(result.returncode, 0, result.stderr)
