@@ -326,6 +326,22 @@ enum EditorSplitSizing {
         return max(effectiveMinimum,
                    min(available - effectiveMinimum, available * ratio))
     }
+
+    /// The ratio after dragging the divider `delta` points from where it was at `start`.
+    /// `editorTrailing` is true when the editor follows the preview, so dragging toward the
+    /// trailing edge shrinks it.
+    static func draggedRatio(from start: Double, delta: CGFloat, total: CGFloat,
+                             minimum: CGFloat, editorTrailing: Bool) -> Double {
+        let available = max(1, total - SplitDividerHandle.thickness)
+        let effectiveMinimum = Double(min(minimum, available / 2) / available)
+        let proposed = start + Double((editorTrailing ? -delta : delta) / available)
+        return max(effectiveMinimum, min(1 - effectiveMinimum, proposed))
+    }
+
+    /// Keyboard and VoiceOver adjustments move the divider in 5% steps within 20–80%.
+    static func adjustedRatio(_ ratio: Double, increment: Bool) -> Double {
+        increment ? min(0.8, ratio + 0.05) : max(0.2, ratio - 0.05)
+    }
 }
 
 struct FolderEditorSettings: Codable, Equatable {

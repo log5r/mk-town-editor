@@ -1343,40 +1343,30 @@ struct EditorWorkspace: View {
 
     private func splitDivider(total: CGFloat, minimum: CGFloat,
                               horizontal: Bool) -> some View {
-        let available = max(1, total - 8)
-        let effectiveMinimum = min(minimum, available / 2)
-        return Color.clear
-            .frame(width: horizontal ? 8 : nil, height: horizontal ? nil : 8)
-            .overlay {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.35))
-                    .frame(width: horizontal ? 1 : nil, height: horizontal ? nil : 1)
-            }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    if splitDragStart == nil { splitDragStart = splitRatio }
-                    let delta = horizontal ? value.translation.width : value.translation.height
-                    let sign: CGFloat = previewFirst ? -1 : 1
-                    let proposed = (splitDragStart ?? splitRatio) + Double(sign * delta / available)
-                    splitRatio = max(Double(effectiveMinimum / available),
-                                     min(1 - Double(effectiveMinimum / available), proposed))
-                }
-                .onEnded { _ in
-                    splitDragStart = nil
-                    savePosition(for: fileURL)
-                })
-            .accessibilityElement()
-            .accessibilityLabel("編集とプレビューの分割位置")
-            .accessibilityValue("編集 \(Int(splitRatio * 100))%")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: splitRatio = min(0.8, splitRatio + 0.05)
-                case .decrement: splitRatio = max(0.2, splitRatio - 0.05)
-                @unknown default: break
-                }
+        SplitDividerHandle(
+            isVertical: horizontal,
+            valueDescription: String(localized: "編集 \(Int(splitRatio * 100))%"),
+            onDrag: { delta in
+                if splitDragStart == nil { splitDragStart = splitRatio }
+                splitRatio = EditorSplitSizing.draggedRatio(from: splitDragStart ?? splitRatio,
+                    delta: delta, total: total, minimum: minimum, editorTrailing: previewFirst)
+            },
+            onDragEnded: {
+                splitDragStart = nil
                 savePosition(for: fileURL)
-            }
+            },
+            onReset: {
+                splitDragStart = nil
+                splitRatio = 0.5
+                savePosition(for: fileURL)
+            },
+            onAdjust: { increment in
+                splitRatio = EditorSplitSizing.adjustedRatio(splitRatio, increment: increment)
+                savePosition(for: fileURL)
+            })
+        .frame(width: horizontal ? SplitDividerHandle.thickness : nil,
+               height: horizontal ? nil : SplitDividerHandle.thickness)
+        .help("ドラッグで大きさを調整、ダブルクリックで均等に分割")
     }
 
     private func savePosition(for url: URL?) {

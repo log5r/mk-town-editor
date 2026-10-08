@@ -101,6 +101,7 @@
 		A10000000000000000000074 /* WorkspaceBacklinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* WorkspaceBacklinks.swift */; };
 		A10000000000000000000075 /* WorkspaceBacklinksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */; };
 		A10000000000000000000076 /* WorkspaceWikiLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000076 /* WorkspaceWikiLinks.swift */; };
+		A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD02 /* SplitDividerHandle.swift */; };
 		A1000000000000000000AD01 /* PanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD01 /* PanelPresentation.swift */; };
 		A10000000000000000000077 /* WorkspaceWikiLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000077 /* WorkspaceWikiLinkSheet.swift */; };
 		A10000000000000000000078 /* WorkspaceDocumentEmbed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000078 /* WorkspaceDocumentEmbed.swift */; };
@@ -247,6 +248,7 @@
 		A20000000000000000000074 /* WorkspaceBacklinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinks.swift; sourceTree = "<group>"; };
 		A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinksSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000076 /* WorkspaceWikiLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWikiLinks.swift; sourceTree = "<group>"; };
+		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
 		A20000000000000000000077 /* WorkspaceWikiLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWikiLinkSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000078 /* WorkspaceDocumentEmbed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDocumentEmbed.swift; sourceTree = "<group>"; };
@@ -427,6 +429,7 @@
 				A20000000000000000000074 /* WorkspaceBacklinks.swift */,
 				A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */,
 				A20000000000000000000076 /* WorkspaceWikiLinks.swift */,
+				A2000000000000000000AD02 /* SplitDividerHandle.swift */,
 				A2000000000000000000AD01 /* PanelPresentation.swift */,
 				A20000000000000000000077 /* WorkspaceWikiLinkSheet.swift */,
 				A20000000000000000000078 /* WorkspaceDocumentEmbed.swift */,
@@ -656,6 +659,7 @@
 				A10000000000000000000074 /* WorkspaceBacklinks.swift in Sources */,
 				A10000000000000000000075 /* WorkspaceBacklinksSheet.swift in Sources */,
 				A10000000000000000000076 /* WorkspaceWikiLinks.swift in Sources */,
+				A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */,
 				A1000000000000000000AD01 /* PanelPresentation.swift in Sources */,
 				A10000000000000000000077 /* WorkspaceWikiLinkSheet.swift in Sources */,
 				A10000000000000000000078 /* WorkspaceDocumentEmbed.swift in Sources */,

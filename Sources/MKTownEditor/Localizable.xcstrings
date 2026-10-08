@@ -10726,6 +10726,16 @@
           }
         }
       }
+    },
+    "ドラッグで大きさを調整、ダブルクリックで均等に分割" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to resize. Double-click to split evenly."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
