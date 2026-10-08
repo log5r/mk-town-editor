@@ -2844,6 +2844,7 @@ private struct LinkDiagnosticsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
     @State private var selectedRow: Row?
+    @State private var didChoose = false
 
     /// A row of either section. Local and external links are numbered separately.
     private enum Row: Hashable {
@@ -2888,7 +2889,7 @@ private struct LinkDiagnosticsSheet: View {
                                 }
                                 .tag(Row.local(diagnostic.id))
                                 .accessibilityElement(children: .combine)
-                                .activatesOnClick { onSelect(diagnostic.sourceRange) }
+                                .activatesOnClick { choose(diagnostic.sourceRange) }
                             }
                         }
                     }
@@ -2908,18 +2909,26 @@ private struct LinkDiagnosticsSheet: View {
                                 }
                                 .tag(Row.external(check.id))
                                 .accessibilityElement(children: .combine)
-                                .activatesOnClick { onSelect(check.target.sourceRange) }
+                                .activatesOnClick { choose(check.target.sourceRange) }
                             }
                         }
                     }
                 }
                 .activatesSelectionOnReturn(Row.self) { row in
-                    if let range = range(of: row) { onSelect(range) }
+                    if let range = range(of: row) { choose(range) }
                 }
             }
         }
         .frame(minWidth: 560, minHeight: 350)
         .padding(20)
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: NSRange) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 
@@ -2933,6 +2942,7 @@ private struct MarkdownLintSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
     @State private var selectedID: MarkdownLintDiagnostic.ID?
+    @State private var didChoose = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2966,15 +2976,23 @@ private struct MarkdownLintSheet: View {
                             .foregroundStyle(.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .activatesOnClick { onSelect(diagnostic) }
+                    .activatesOnClick { choose(diagnostic) }
                 }
                 .activatesSelectionOnReturn(MarkdownLintDiagnostic.ID.self) { id in
-                    if let diagnostic = diagnostics.first(where: { $0.id == id }) { onSelect(diagnostic) }
+                    if let diagnostic = diagnostics.first(where: { $0.id == id }) { choose(diagnostic) }
                 }
             }
         }
         .frame(minWidth: 560, minHeight: 350)
         .padding(20)
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: MarkdownLintDiagnostic) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 
@@ -2990,6 +3008,7 @@ private struct TerminologySheet: View {
     @State private var replaceFailed = false
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
     @State private var selectedID: TerminologyIssue.ID?
+    @State private var didChoose = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -3018,8 +3037,8 @@ private struct TerminologySheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
-                        .activatesOnClick { onSelect(issue) }
-                        Button("移動") { onSelect(issue) }
+                        .activatesOnClick { choose(issue) }
+                        Button("移動") { choose(issue) }
                         Button("置換") {
                             if !onReplace(issue) { replaceFailed = true }
                         }
@@ -3028,7 +3047,7 @@ private struct TerminologySheet: View {
                     }
                 }
                 .activatesSelectionOnReturn(TerminologyIssue.ID.self) { id in
-                    if let issue = issues.first(where: { $0.id == id }) { onSelect(issue) }
+                    if let issue = issues.first(where: { $0.id == id }) { choose(issue) }
                 }
             }
         }
@@ -3039,6 +3058,14 @@ private struct TerminologySheet: View {
         } message: {
             Text("本文が変更されたか編集中のため、置換できませんでした。")
         }
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: TerminologyIssue) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 

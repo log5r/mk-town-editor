@@ -128,7 +128,8 @@ final class ListKeyboardSelectionTests: XCTestCase {
         XCTAssertTrue(try source("WorkspaceSnapshotHistory.swift").contains("loadTask?.cancel()"))
         // Sheets that close when a row opens ignore a second click or Return while closing.
         for (name, guardName) in [("WorkspaceSearchSheet.swift", "didOpen"), ("WorkspaceLinkGraphSheet.swift", "didOpen"),
-                                  ("WorkspaceTaskSheet.swift", "didSubmit"), ("WorkspaceNamedLayoutSheet.swift", "didApply")] {
+                                  ("WorkspaceTaskSheet.swift", "didSubmit"), ("WorkspaceNamedLayoutSheet.swift", "didApply"),
+                                  ("WorkspaceBacklinksSheet.swift", "didOpen"), ("WorkspaceTagsSheet.swift", "didOpen")] {
             XCTAssertTrue(try source(name).contains("guard !\(guardName) else { return }"), name)
         }
 
@@ -139,6 +140,9 @@ final class ListKeyboardSelectionTests: XCTestCase {
             XCTAssertTrue(body.contains("List(selection:") || body.contains(", selection:"), start)
             XCTAssertTrue(body.contains(".activatesSelectionOnReturn("), start)
             XCTAssertTrue(body.contains(".activatesOnClick"), start)
+            if start.hasPrefix("private struct") {
+                XCTAssertTrue(body.contains("guard !didChoose else { return }"), start)
+            }
             XCTAssertFalse(body.contains(".buttonStyle(.plain)"), start)
         }
     }

@@ -10,6 +10,7 @@ struct WorkspaceTagsSheet: View {
     @State private var index: WorkspaceTagIndex?
     @State private var selectedTag: String?
     @State private var selectedDocumentID: WorkspaceTagDocument.ID?
+    @State private var didOpen = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceTagIndex, Error>?
@@ -45,9 +46,9 @@ struct WorkspaceTagsSheet: View {
                     Divider()
                     List(index.documents(for: selectedTag ?? ""), selection: $selectedDocumentID) { document in
                         Text(document.relativePath)
-                            .activatesOnClick { onOpen(document.url) }
+                            .activatesOnClick { open(document.url) }
                     }
-                    .activatesSelectionOnReturn(WorkspaceTagDocument.ID.self) { url in onOpen(url) }
+                    .activatesSelectionOnReturn(WorkspaceTagDocument.ID.self) { url in open(url) }
                 }
             } else {
                 ContentUnavailableView("タグが見つかりません", systemImage: "number")
@@ -75,6 +76,14 @@ struct WorkspaceTagsSheet: View {
             worker?.cancel()
             worker = nil
         }
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func open(_ url: URL) {
+        guard !didOpen else { return }
+        didOpen = true
+        onOpen(url)
     }
 
     private func load() {
