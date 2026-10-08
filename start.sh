@@ -35,7 +35,8 @@ products=$(swift build --configuration release --show-bin-path)
 app="$PWD/.build/MKTownEditor.app"
 Tools/make-app-bundle.sh "$products" "$app" > /dev/null
 
-if ps -axo command= | grep -Fq -- "$app/Contents/MacOS/MKTownEditor"; then
+# Match the executable path column exactly; the full command line would also match this grep itself.
+if ps -axo comm= | grep -Fxq -- "$app/Contents/MacOS/MKTownEditor"; then
     echo "$0: MKTownEditor is already running from $app; quit it to use the new build." >&2
 fi
 
