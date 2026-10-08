@@ -54,6 +54,63 @@ final class WorkspaceSnapshotHistoryTests: XCTestCase {
         XCTAssertEqual(store.orphans(), [])
     }
 
+    func testCaseOnlyRenameInDocumentWindowMovesHistory() async throws {
+        let (root, store) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let workspace = root.appendingPathComponent("workspace", isDirectory: true)
+        try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+        let old = workspace.appendingPathComponent("note.md")
+        let new = workspace.appendingPathComponent("Note.md")
+        try Data("body".utf8).write(to: old)
+        let entry = try store.save("body", title: "draft", for: old)
+        try FileManager.default.moveItem(at: old, to: new)
+        guard FileManager.default.fileExists(atPath: old.path) else {
+            throw XCTSkip("The temporary volume is case-sensitive")
+        }
+
+        await store.remapMovedDocument(from: old, to: new).value
+
+        XCTAssertEqual(try store.entries(for: new), [entry])
+        XCTAssertEqual(try historyFolders(in: store).count, 1)
+    }
+
+    func testConcurrentRemapsIntoExistingHistoryKeepEveryEntry() throws {
+        for _ in 0..<5 {
+            let (root, store) = try makeStore()
+            defer { try? FileManager.default.removeItem(at: root) }
+            let workspace = root.appendingPathComponent("workspace", isDirectory: true)
+            try FileManager.default.createDirectory(at: workspace, withIntermediateDirectories: true)
+            let sources = (0..<4).map { workspace.appendingPathComponent("old\($0).md") }
+            let destination = workspace.appendingPathComponent("new.md")
+            var expected = Set([try store.save("kept", title: "kept", for: destination).id])
+            for source in sources { expected.insert(try store.save("moved", title: "moved", for: source).id) }
+            try Data("body".utf8).write(to: destination)
+
+            DispatchQueue.concurrentPerform(iterations: sources.count * 2) { index in
+                try? store.remap(from: sources[index % sources.count], to: destination)
+            }
+
+            XCTAssertEqual(Set(try store.entries(for: destination).map(\.id)), expected)
+            XCTAssertEqual(try historyFolders(in: store).count, 1)
+        }
+    }
+
+    func testSnapshotsOnADisconnectedVolumeAreNotTreatedAsMissing() throws {
+        let (root, store) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let unmounted = URL(fileURLWithPath: "/Volumes/MKTown-Absent-\(UUID().uuidString)/book/chapter.md")
+        let entry = try store.save("body", title: "draft", for: unmounted)
+        XCTAssertEqual(try store.entries(for: unmounted), [entry])
+
+        XCTAssertEqual(store.orphans(), [])
+        let folder = try XCTUnwrap(try historyFolders(in: store).first)
+        let orphan = WorkspaceSnapshotOrphan(id: folder.lastPathComponent, documentPath: unmounted.path,
+                                             entries: [entry])
+        XCTAssertFalse(try store.deleteOrphan(orphan))
+        XCTAssertEqual(try store.entries(for: unmounted), [entry])
+        XCTAssertFalse(WorkspaceSnapshotStore.documentMayExist(atPath: root.appendingPathComponent("gone.md").path))
+    }
+
     func testFolderMoveRemapsDescendantsIncludingLegacyIndexes() throws {
         let (root, store) = try makeStore()
         defer { try? FileManager.default.removeItem(at: root) }

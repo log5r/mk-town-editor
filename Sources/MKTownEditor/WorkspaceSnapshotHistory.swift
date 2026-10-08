@@ -40,6 +40,22 @@ private struct WorkspaceSnapshotIndex: Codable {
 struct WorkspaceSnapshotStore: Sendable {
     let directory: URL
 
+    /// 保存・削除・付け替えは読み込みから書き込みまでを排他する。ワークスペースのシートと
+    /// 書類ウインドウが同じ移動を同時に付け替えると、統合した索引を互いに上書きするため。
+    private static let writeLock = NSRecursiveLock()
+    /// 書類ウインドウの改名・移動を起きた順に付け替える。
+    private static let moveQueue = DispatchQueue(label: "MKTownEditor.WorkspaceSnapshotStore.moves",
+                                                 qos: .utility)
+
+    /// 書類があるか、外したボリュームの上にあって有無を判断できない。
+    static func documentMayExist(atPath path: String) -> Bool {
+        let manager = FileManager.default
+        if manager.fileExists(atPath: path) { return true }
+        let components = (path as NSString).pathComponents
+        guard components.count > 2, components[0] == "/", components[1] == "Volumes" else { return false }
+        return !manager.fileExists(atPath: "/Volumes/" + components[2])
+    }
+
     static var appSupport: Self {
         let root = FileManager.default.urls(for: .applicationSupportDirectory,
                                             in: .userDomainMask)[0]
@@ -66,23 +82,25 @@ struct WorkspaceSnapshotStore: Sendable {
     @discardableResult
     func save(_ text: String, title: String, for documentURL: URL,
               now: Date = Date()) throws -> WorkspaceSnapshotEntry {
-        let path = Self.documentPath(for: documentURL)
-        let folder = folder(forPath: path)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let entry = WorkspaceSnapshotEntry(id: UUID(), createdAt: now,
-                                           title: title.trimmingCharacters(in: .whitespacesAndNewlines))
-        let content = contentURL(for: entry, in: folder)
-        try Data(text.utf8).write(to: content, options: .atomic)
-        do {
-            var index = try index(in: folder)
-            index.documentPath = path
-            index.entries.insert(entry, at: 0)
-            try write(index, to: folder)
-        } catch {
-            try? FileManager.default.removeItem(at: content)
-            throw error
+        try Self.writeLock.withLock {
+            let path = Self.documentPath(for: documentURL)
+            let folder = folder(forPath: path)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let entry = WorkspaceSnapshotEntry(id: UUID(), createdAt: now,
+                                               title: title.trimmingCharacters(in: .whitespacesAndNewlines))
+            let content = contentURL(for: entry, in: folder)
+            try Data(text.utf8).write(to: content, options: .atomic)
+            do {
+                var index = try index(in: folder)
+                index.documentPath = path
+                index.entries.insert(entry, at: 0)
+                try write(index, to: folder)
+            } catch {
+                try? FileManager.default.removeItem(at: content)
+                throw error
+            }
+            return entry
         }
-        return entry
     }
 
     func text(for entry: WorkspaceSnapshotEntry, documentURL: URL) throws -> String {
@@ -97,93 +115,114 @@ struct WorkspaceSnapshotStore: Sendable {
     }
 
     func delete(_ entry: WorkspaceSnapshotEntry, documentURL: URL) throws {
-        let path = Self.documentPath(for: documentURL)
-        let folder = folder(forPath: path)
-        var index = try index(in: folder)
-        guard index.entries.contains(where: { $0.id == entry.id }) else { return }
-        index.entries.removeAll { $0.id == entry.id }
-        guard !index.entries.isEmpty else {
-            // 最後の項目を消したら保存先ごと消し、空の履歴を残さない。
-            try FileManager.default.removeItem(at: folder)
-            return
-        }
-        index.documentPath = path
-        try write(index, to: folder)
-        do {
-            try FileManager.default.removeItem(at: contentURL(for: entry, in: folder))
-        } catch let error as CocoaError where error.code == .fileNoSuchFile {
-            // 索引から外せていれば、内容ファイルが既にないことは問題にしない。
+        try Self.writeLock.withLock {
+            let path = Self.documentPath(for: documentURL)
+            let folder = folder(forPath: path)
+            var index = try index(in: folder)
+            guard index.entries.contains(where: { $0.id == entry.id }) else { return }
+            index.entries.removeAll { $0.id == entry.id }
+            guard !index.entries.isEmpty else {
+                // 最後の項目を消したら保存先ごと消し、空の履歴を残さない。
+                try FileManager.default.removeItem(at: folder)
+                return
+            }
+            index.documentPath = path
+            try write(index, to: folder)
+            do {
+                try FileManager.default.removeItem(at: contentURL(for: entry, in: folder))
+            } catch let error as CocoaError where error.code == .fileNoSuchFile {
+                // 索引から外せていれば、内容ファイルが既にないことは問題にしない。
+            }
         }
     }
 
     /// 以前の形式の索引に書類のパスを書き加える。履歴を開いた書類は、以後の改名・移動と
     /// 書類が見つからない履歴の判定で、記録したパスから辿れるようになる。
     func recordDocumentPath(for documentURL: URL) throws {
-        let path = Self.documentPath(for: documentURL)
-        let folder = folder(forPath: path)
-        guard FileManager.default.fileExists(atPath: indexURL(in: folder).path) else { return }
-        var index = try index(in: folder)
-        guard index.documentPath != path else { return }
-        index.documentPath = path
-        try write(index, to: folder)
+        try Self.writeLock.withLock {
+            let path = Self.documentPath(for: documentURL)
+            let folder = folder(forPath: path)
+            guard FileManager.default.fileExists(atPath: indexURL(in: folder).path) else { return }
+            var index = try index(in: folder)
+            guard index.documentPath != path else { return }
+            index.documentPath = path
+            try write(index, to: folder)
+        }
     }
 
     /// 改名・移動した書類の履歴を新しいパスへ移す。書類を移動した後に呼ぶ。
     /// フォルダを移動した場合は、配下の書類の履歴もまとめて移す。
     func remap(from source: URL, to destination: URL) throws {
-        let oldBase = Self.documentPath(for: source)
-        let newBase = Self.documentPath(for: destination)
-        guard oldBase != newBase else { return }
-        let manager = FileManager.default
-        var oldPaths: Set<String> = [oldBase]
-        var isDirectory: ObjCBool = false
-        if manager.fileExists(atPath: destination.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            // 索引に記録したパスから、移動したフォルダ配下の履歴を探す。
-            for folder in historyFolders() {
-                if let path = try? index(in: folder).documentPath, path.hasPrefix(oldBase + "/") {
-                    oldPaths.insert(path)
-                }
-            }
-            // 以前の形式の索引はパスを持たないため、移動後のファイルから移動前のパスを求める。
-            if let enumerator = manager.enumerator(atPath: destination.path) {
-                while let relative = enumerator.nextObject() as? String {
-                    guard enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular else {
-                        continue
+        try Self.writeLock.withLock {
+            // 大文字小文字だけの改名では、旧パスも新しい名前に解決されるため、旧い名前のまま組み立てる。
+            let oldBase = source.lastPathComponent != destination.lastPathComponent &&
+                Self.sameFile(source, destination)
+                ? (Self.documentPath(for: source.deletingLastPathComponent()) as NSString)
+                    .appendingPathComponent(source.lastPathComponent)
+                : Self.documentPath(for: source)
+            let newBase = Self.documentPath(for: destination)
+            guard oldBase != newBase else { return }
+            let manager = FileManager.default
+            var oldPaths: Set<String> = [oldBase]
+            var isDirectory: ObjCBool = false
+            if manager.fileExists(atPath: destination.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                // 索引に記録したパスから、移動したフォルダ配下の履歴を探す。
+                for folder in historyFolders() {
+                    if let path = try? index(in: folder).documentPath, path.hasPrefix(oldBase + "/") {
+                        oldPaths.insert(path)
                     }
-                    oldPaths.insert(oldBase + "/" + relative)
+                }
+                // 以前の形式の索引はパスを持たないため、移動後のファイルから移動前のパスを求める。
+                if let enumerator = manager.enumerator(atPath: destination.path) {
+                    while let relative = enumerator.nextObject() as? String {
+                        guard enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular else {
+                            continue
+                        }
+                        oldPaths.insert(oldBase + "/" + relative)
+                    }
                 }
             }
-        }
-        // 1件の失敗で残りの履歴を置き去りにしないよう、すべて試してから最初の失敗を報告する。
-        var failure: (any Error)?
-        for oldPath in oldPaths {
-            let newPath = newBase + oldPath.dropFirst(oldBase.count)
-            do {
-                try moveHistory(from: folder(forPath: oldPath), to: folder(forPath: newPath),
-                                documentPath: newPath)
-            } catch {
-                failure = failure ?? error
+            // 1件の失敗で残りの履歴を置き去りにしないよう、すべて試してから最初の失敗を報告する。
+            var failure: (any Error)?
+            for oldPath in oldPaths {
+                let newPath = newBase + oldPath.dropFirst(oldBase.count)
+                do {
+                    try moveHistory(from: folder(forPath: oldPath), to: folder(forPath: newPath),
+                                    documentPath: newPath)
+                } catch {
+                    failure = failure ?? error
+                }
             }
+            if let failure { throw failure }
         }
-        if let failure { throw failure }
     }
 
     /// 書類ウインドウで改名・移動した書類の履歴を背景で移す。旧パスに書類が残る場合
     /// （別名で保存した場合など）は、元の書類の履歴として残す。
     @discardableResult
     func remapMovedDocument(from source: URL, to destination: URL) -> Task<Void, Never> {
-        Task.detached(priority: .utility) {
-            guard !FileManager.default.fileExists(atPath: source.path) else { return }
+        let (finished, continuation) = AsyncStream<Void>.makeStream()
+        Self.moveQueue.async {
+            defer { continuation.finish() }
+            // 大文字小文字を区別しないボリュームでは、大文字小文字だけの改名で旧パスも存在する。
+            guard !FileManager.default.fileExists(atPath: source.path) ||
+                    Self.sameFile(source, destination) else { return }
             // 移せなかった履歴は、書類が見つからないスナップショットとして整理画面に表示される。
             try? remap(from: source, to: destination)
         }
+        return Task { for await _ in finished {} }
+    }
+
+    private static func sameFile(_ lhs: URL, _ rhs: URL) -> Bool {
+        let key: Set<URLResourceKey> = [.fileResourceIdentifierKey]
+        guard let left = try? lhs.resourceValues(forKeys: key).fileResourceIdentifier,
+              let right = try? rhs.resourceValues(forKeys: key).fileResourceIdentifier else { return false }
+        return left.isEqual(right)
     }
 
     /// 元の書類が見つからない履歴を、書類のパス順に返す。パスを記録していない以前の形式の
     /// 履歴は書類の有無を判定できないため、`documentPath` を nil にして末尾に並べる。
-    func orphans(documentExists: (String) -> Bool = {
-        FileManager.default.fileExists(atPath: $0)
-    }) -> [WorkspaceSnapshotOrphan] {
+    func orphans(documentExists: (String) -> Bool = documentMayExist(atPath:)) -> [WorkspaceSnapshotOrphan] {
         let found = historyFolders().compactMap { folder -> WorkspaceSnapshotOrphan? in
             guard let index = try? index(in: folder) else { return nil }
             if let path = index.documentPath, documentExists(path) { return nil }
@@ -203,17 +242,18 @@ struct WorkspaceSnapshotStore: Sendable {
 
     /// 書類が見つからない履歴を削除する。一覧を作った後に書類が戻っていれば削除せず false を返す。
     @discardableResult
-    func deleteOrphan(_ orphan: WorkspaceSnapshotOrphan, documentExists: (String) -> Bool = {
-        FileManager.default.fileExists(atPath: $0)
-    }) throws -> Bool {
-        guard orphan.id.count == 64, orphan.id.allSatisfy(\.isHexDigit) else {
-            throw CocoaError(.fileNoSuchFile)
+    func deleteOrphan(_ orphan: WorkspaceSnapshotOrphan,
+                      documentExists: (String) -> Bool = documentMayExist(atPath:)) throws -> Bool {
+        try Self.writeLock.withLock {
+            guard orphan.id.count == 64, orphan.id.allSatisfy(\.isHexDigit) else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+            let folder = directory.appendingPathComponent(orphan.id, isDirectory: true)
+            guard FileManager.default.fileExists(atPath: folder.path) else { return true }
+            if let path = try? index(in: folder).documentPath, documentExists(path) { return false }
+            try FileManager.default.removeItem(at: folder)
+            return true
         }
-        let folder = directory.appendingPathComponent(orphan.id, isDirectory: true)
-        guard FileManager.default.fileExists(atPath: folder.path) else { return true }
-        if let path = try? index(in: folder).documentPath, documentExists(path) { return false }
-        try FileManager.default.removeItem(at: folder)
-        return true
     }
 
     private func moveHistory(from old: URL, to new: URL, documentPath: String) throws {
