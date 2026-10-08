@@ -1,9 +1,59 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
 @MainActor
 final class MarkdownMathTests: XCTestCase {
+    func testInlineMathSurvivesActualPreviewLayoutInEveryTextContainer() throws {
+        for source in [
+            "本文中に $E = mc^2$ のように書けます。",
+            "# 見出し $E = mc^2$",
+            "- [ ] タスク $E = mc^2$",
+            "| 式 |\n| --- |\n| $E = mc^2$ |",
+            "> 引用 $E = mc^2$",
+            "> [!NOTE]\n> 注記 $E = mc^2$",
+            "脚注[^1]\n\n[^1]: $E = mc^2$",
+            "[リンク](https://example.com) $E = mc^2$"
+        ] {
+            let host = NSHostingView(rootView: MarkdownPreview(
+                markdown: source, documentContext: DocumentContext(fileURL: nil)))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                                  styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = host
+            host.frame = window.contentView?.bounds ?? .zero
+            host.layoutSubtreeIfNeeded()
+            defer { window.contentView = nil }
+
+            func textViews(in view: NSView) -> [NSTextView] {
+                (view as? NSTextView).map { [$0] } ?? view.subviews.flatMap { textViews(in: $0) }
+            }
+            let views = textViews(in: host).filter { $0.string.contains("\u{FFFC}") }
+            XCTAssertFalse(views.isEmpty, source)
+            for view in views {
+                let location = (view.string as NSString).range(of: "\u{FFFC}").location
+                let attachment = try XCTUnwrap(view.attributedString().attribute(
+                    .attachment, at: location, effectiveRange: nil) as? NSTextAttachment, source)
+                let image = try XCTUnwrap(attachment.image, source)
+                let bitmap = try XCTUnwrap(image.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+                XCTAssertTrue((0..<bitmap.pixelsHigh).contains { y in
+                    (0..<bitmap.pixelsWide).contains { x in
+                        (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.1
+                    }
+                }, "Formula bitmap must contain visible pixels: \(source)")
+                let manager = try XCTUnwrap(view.layoutManager)
+                let container = try XCTUnwrap(view.textContainer)
+                manager.ensureLayout(for: container)
+                let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: location, length: 1),
+                                               actualCharacterRange: nil)
+                let rect = manager.boundingRect(forGlyphRange: glyphs, in: container)
+                XCTAssertGreaterThan(rect.width, 20, source)
+                XCTAssertGreaterThan(rect.height, 5, source)
+                XCTAssertGreaterThan(view.frame.height, 0, source)
+            }
+        }
+    }
+
     func testInlineMathAvoidsCurrencyEscapesAndCode() {
         let source = #"Price $5 and $6; $x^2+1$; \$literal$; `code $y$`"#
         let formulas = MarkdownMath.segments(source).compactMap { segment -> String? in

@@ -337,7 +337,7 @@ private final class PrintCompletion: NSObject {
         // NSPrintOperation has no public cancel() API. Use the documented job
         // disposition and end this operation's modal sheet if it is waiting.
         if operation.context != nil { operation.printInfo.jobDisposition = .cancel }
-        if let sheet = window.attachedSheet { NSApp.endSheet(sheet, returnCode: NSApplication.ModalResponse.cancel.rawValue) }
+        if let sheet = window.attachedSheet { window.endSheet(sheet, returnCode: .cancel) }
     }
     @objc func didRun(_ operation: NSPrintOperation, success: Bool, context: UnsafeMutableRawPointer?) {
         continuation?.resume(returning: success)
