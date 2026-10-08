@@ -41,6 +41,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         scrollView.drawsBackground = true
 
         let textView = EditorTextView()
+        textView.placeholder = String(localized: "Markdown で書き始めましょう。")
         textView.layoutManager?.delegate = textView
         textView.delegate = context.coordinator
         textView.string = text
@@ -644,6 +645,46 @@ final class EditorTextView: NSTextView {
             undoing: expected == nil || undoManager?.isUndoing == true || undoManager?.isRedoing == true)
         cachedSource = nil
         sourceRevision += 1
+        refreshPlaceholderVisibility()
+    }
+
+    /// Guidance drawn while the document is empty. It is never part of the text, so it is not
+    /// saved, copied, or read back as content (#28).
+    var placeholder: String? {
+        didSet {
+            guard placeholder != oldValue else { return }
+            setAccessibilityPlaceholderValue(placeholder)
+            needsDisplay = true
+        }
+    }
+    private var drewPlaceholder = false
+
+    var showsPlaceholder: Bool {
+        guard let placeholder, !placeholder.isEmpty else { return false }
+        return (textStorage?.length ?? 0) == 0 && !hasMarkedText()
+    }
+
+    private func refreshPlaceholderVisibility() {
+        guard showsPlaceholder != drewPlaceholder else { return }
+        needsDisplay = true
+    }
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        refreshPlaceholderVisibility()
+    }
+
+    private func drawPlaceholder() {
+        drewPlaceholder = showsPlaceholder
+        guard drewPlaceholder, let placeholder else { return }
+        let padding = textContainer?.lineFragmentPadding ?? 0
+        let origin = NSPoint(x: textContainerOrigin.x + padding, y: textContainerOrigin.y)
+        var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: NSColor.placeholderTextColor]
+        if let font = font ?? typingAttributes[.font] as? NSFont { attributes[.font] = font }
+        if let paragraph = defaultParagraphStyle { attributes[.paragraphStyle] = paragraph }
+        let width = max(0, bounds.width - origin.x - textContainerInset.width - padding)
+        (placeholder as NSString).draw(with: NSRect(origin: origin, size: NSSize(width: width, height: bounds.height)),
+                                       options: [.usesLineFragmentOrigin], attributes: attributes)
     }
 
     var onFocused: (() -> Void)?
@@ -737,6 +778,7 @@ final class EditorTextView: NSTextView {
 
     override func unmarkText() {
         super.unmarkText()
+        refreshPlaceholderVisibility()
         notifyCollaborativeReadiness()
     }
 
@@ -943,6 +985,7 @@ final class EditorTextView: NSTextView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        drawPlaceholder()
         drawInvisibles(in: dirtyRect)
         guard let imageDropLocation,
               let indicator = imageDropIndicatorRect(at: imageDropLocation),
