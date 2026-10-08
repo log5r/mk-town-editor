@@ -152,9 +152,14 @@ enum MarkdownSafeHTML {
               let valueRange = Range(match.range(at: match.range(at: 1).location == NSNotFound ? 2 : 1),
                                      in: attributes) else { return nil }
         let value = String(attributes[valueRange])
-        guard !value.isEmpty, !value.contains("<"), !value.contains(">"),
-              !value.contains("\\"), !value.contains("\n") else { return nil }
-        if let scheme = URL(string: value)?.scheme?.lowercased() {
+        // Browsers drop whitespace and control characters before reading a scheme, so
+        // " javascript:" or "java\tscript:" must not slip past a failed URL parse.
+        guard !value.isEmpty, !value.contains("<"), !value.contains(">"), !value.contains("\\"),
+              !value.unicodeScalars.contains(where: {
+                  CharacterSet.whitespacesAndNewlines.contains($0) || CharacterSet.controlCharacters.contains($0)
+              }),
+              let url = URL(string: value) else { return nil }
+        if let scheme = url.scheme?.lowercased() {
             guard ["http", "https", "mailto"].contains(scheme) else { return nil }
         }
         return value
