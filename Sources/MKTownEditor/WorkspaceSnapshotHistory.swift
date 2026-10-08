@@ -424,6 +424,7 @@ struct WorkspaceSnapshotHistorySheet: View {
     @State private var entries: [WorkspaceSnapshotEntry] = []
     @State private var selected: WorkspaceSnapshotEntry?
     @State private var selectedText: String?
+    @State private var loadTask: Task<Void, Never>?
     @State private var comparedText: String?
     @State private var comparedSnapshot: String?
     @State private var comparedRows: [WorkspaceSnapshotHunkRow] = []
@@ -458,18 +459,19 @@ struct WorkspaceSnapshotHistorySheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking)
             }
             HStack(alignment: .top, spacing: 16) {
-                List(entries) { entry in
-                    Button {
-                        select(entry)
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(entry.title).fontWeight(selected?.id == entry.id ? .semibold : .regular)
-                            Text(entry.createdAt, format: .dateTime.year().month().day().hour().minute())
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
+                // The selected snapshot is shown on the right, so the arrow keys browse them (#60).
+                List(entries, selection: Binding(get: { selected?.id }, set: { id in
+                    if let entry = entries.first(where: { $0.id == id }), entry.id != selected?.id { select(entry) }
+                })) { entry in
+                    VStack(alignment: .leading) {
+                        Text(entry.title)
+                        Text(entry.createdAt, format: .dateTime.year().month().day().hour().minute())
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
+                    .accessibilityElement(children: .combine)
+                }
+                .contextMenu(forSelectionType: WorkspaceSnapshotEntry.ID.self) { ids in
+                    if let entry = entries.first(where: { ids.contains($0.id) }) {
                         Button("削除", role: .destructive) { pendingDeletion = entry }
                             .disabled(isWorking)
                     }
@@ -538,7 +540,10 @@ struct WorkspaceSnapshotHistorySheet: View {
         }
         .onChange(of: currentText) { _, _ in compare() }
         .onChange(of: selectedText) { _, _ in compare() }
-        .onDisappear { comparisonTask?.cancel() }
+        .onDisappear {
+            comparisonTask?.cancel()
+            loadTask?.cancel()
+        }
     }
 
     private func loadEntries() async {
@@ -566,6 +571,7 @@ struct WorkspaceSnapshotHistorySheet: View {
                     try store.save(source, title: name, for: documentURL)
                 }.value
                 entries.insert(entry, at: 0)
+                loadTask?.cancel()
                 selected = entry
                 selectedText = source
                 title = ""
@@ -574,17 +580,25 @@ struct WorkspaceSnapshotHistorySheet: View {
         }
     }
 
+    /// Loads the selected snapshot. A newer selection cancels this load, so holding an arrow key
+    /// does not read one snapshot per row, and only the selected snapshot's result is shown.
     private func select(_ entry: WorkspaceSnapshotEntry) {
         selected = entry
         selectedText = nil
         errorMessage = nil
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
+            do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
             do {
                 let text = try await Task.detached(priority: .userInitiated) {
                     try store.text(for: entry, documentURL: documentURL)
                 }.value
-                if selected?.id == entry.id { selectedText = text }
-            } catch { errorMessage = error.localizedDescription }
+                guard !Task.isCancelled, selected?.id == entry.id else { return }
+                selectedText = text
+            } catch {
+                guard !Task.isCancelled, selected?.id == entry.id else { return }
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

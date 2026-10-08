@@ -10927,16 +10927,6 @@
         }
       }
     },
-    "クリックしてからキーを押すと割り当てます。Deleteで解除、Escで中止します。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Click, then press a key combination to assign it. Press Delete to remove it or Esc to cancel."
-          }
-        }
-      }
-    },
     "キーを入力…" : {
       "localizations" : {
         "en" : {
@@ -10967,12 +10957,32 @@
         }
       }
     },
-    "欄をクリックしてキーを押すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。" : {
+    "クリックしてからキーの組み合わせを押して離すと割り当てます。Deleteで解除、Escで中止します。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Click a field and press a key combination to assign it. Shortcuts already in use or reserved by macOS can't be assigned."
+            "value" : "Click, then press and release a key combination to assign it. Press Delete to remove it or Esc to cancel."
+          }
+        }
+      }
+    },
+    "欄をクリックしてキーを押し、離すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click a field, then press and release a key combination to assign it. Shortcuts already in use or reserved by macOS can't be assigned."
+          }
+        }
+      }
+    },
+    "%@をステージ対象にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include %@ in Staging"
           }
         }
       }

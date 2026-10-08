@@ -17,6 +17,8 @@ struct RegexSearchSheet: View {
     @State private var lineNumbers: [Int] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
+    /// The index in `matches` of the match selected in the list.
+    @State private var selectedIndex: Int?
 
     private struct Query: Hashable, Sendable {
         let source: String
@@ -47,6 +49,7 @@ struct RegexSearchSheet: View {
                 .font(.headline)
             Form {
                 TextField("検索パターン", text: $pattern)
+                    .movesListSelection(listSelection, in: Array(matches.indices), startsUnselected: true)
                 TextField("置換文字列（$1 などで参照）", text: $replacement)
                 Toggle("大文字小文字を区別", isOn: $caseSensitive)
                 Toggle("選択範囲内", isOn: $limitsToSelection)
@@ -65,21 +68,16 @@ struct RegexSearchSheet: View {
                     .foregroundStyle(.secondary)
             }
 
-            List(Array(matches.enumerated()), id: \.offset) { item in
-                Button {
-                    onSelect(item.element)
-                } label: {
-                    Text("\(lineNumbers.indices.contains(item.offset) ? lineNumbers[item.offset] : 0) 行: \(matchText(item.element))")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(.plain)
+            // Selecting a match with the arrow keys selects it in the editor; the focus stays
+            // in the list or the pattern field (#60).
+            List(matches.indices, id: \.self, selection: listSelection) { index in
+                Text("\(lineNumbers.indices.contains(index) ? lineNumbers[index] : 0) 行: \(matchText(matches[index]))")
+                    .activatesOnClick { select(index) }
             }
             .frame(minHeight: 180)
 
             HStack {
-                Button("次を検索") {
-                    if let match = nextMatch { onSelect(match) }
-                }
+                Button("次を検索") { selectNextMatch() }
                 .keyboardShortcut(.defaultAction)
                 .disabled(matches.isEmpty || isSearching)
                 Button("1件置換") { replace(only: replacementTarget) }
@@ -105,6 +103,7 @@ struct RegexSearchSheet: View {
             isSearching = true
             matches = []
             lineNumbers = []
+            selectedIndex = nil
             let query = Query(source: source, pattern: pattern, caseSensitive: caseSensitive,
                               scope: activeScope)
             let worker = Task.detached(priority: .userInitiated) {
@@ -128,6 +127,24 @@ struct RegexSearchSheet: View {
             errorMessage = result.message
             isSearching = false
         }
+    }
+
+    /// Clicks are left to the row's tap, so a click selects the match only once.
+    private var listSelection: Binding<Int?> {
+        Binding(get: { selectedIndex }, set: { index in
+            guard let index, !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
+            select(index)
+        })
+    }
+
+    private func select(_ index: Int) {
+        guard matches.indices.contains(index) else { return }
+        selectedIndex = index
+        onSelect(matches[index])
+    }
+
+    private func selectNextMatch() {
+        if let match = nextMatch, let index = matches.firstIndex(of: match) { select(index) }
     }
 
     private var nextMatch: NSRange? {

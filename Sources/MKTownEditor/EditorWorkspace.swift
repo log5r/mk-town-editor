@@ -166,7 +166,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
-    @State private var presentedError: WorkspacePresentedError?
+    @State private var errorQueue = WorkspaceErrorQueue()
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
@@ -205,6 +205,7 @@ struct EditorWorkspace: View {
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
     @State private var selectedBookmarkID: DocumentBookmark.ID?
+    @State private var selectedInspectorItemID: MarkdownContentItem.ID?
     @State private var selectedFileURL: URL?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
@@ -651,7 +652,7 @@ struct EditorWorkspace: View {
                 GitCommitSheet(fileURL: fileURL) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -749,7 +750,7 @@ struct EditorWorkspace: View {
             WorkspaceQuickOpenSheet { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                    catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                 }
             }
         }
@@ -766,7 +767,7 @@ struct EditorWorkspace: View {
                 WorkspaceAttachmentAuditSheet(root: root) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -817,7 +818,7 @@ struct EditorWorkspace: View {
             MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .encodingImport(error.localizedDescription) }
+                    catch { errorQueue.present(.encodingImport(error.localizedDescription)) }
                 }
             }
         }
@@ -886,7 +887,7 @@ struct EditorWorkspace: View {
                                        showingWorkspaceTags = false
                                        Task {
                                            do { try await openDocument(at: url) }
-                                           catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                                           catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                                        }
                                    })
             }
@@ -910,7 +911,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: backlink.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: backlink.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -936,7 +937,7 @@ struct EditorWorkspace: View {
                             fileURL.resolvingSymlinksInPath().standardizedFileURL { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -947,7 +948,7 @@ struct EditorWorkspace: View {
                     workspaceStore.refresh(force: true)
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                        catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                     }
                 }
             }
@@ -968,7 +969,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelTaskToggle(for: task.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -984,7 +985,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: task.sourceURL)
-                                    presentedError = .workspaceOpen(error.localizedDescription)
+                                    errorQueue.present(.workspaceOpen(error.localizedDescription))
                                 }
                             }
                         }
@@ -1003,7 +1004,7 @@ struct EditorWorkspace: View {
                             fileURL?.resolvingSymlinksInPath().standardizedFileURL else { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1035,7 +1036,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1049,7 +1050,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                            catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                         }
                     })
             }
@@ -1114,26 +1115,27 @@ struct EditorWorkspace: View {
         }
     }
 
+    private func dismissPresentedError() {
+        errorQueue.dismiss()
+        // Show the next failure after this alert has gone, so it is presented as a new alert.
+        DispatchQueue.main.async { errorQueue.advance() }
+    }
+
     private var alertView: some View {
         sheetView
         // One alert for every failure, so two failures never compete for presentation (#29).
-        .alert(presentedError?.title ?? "", isPresented: Binding(
-            get: { presentedError != nil },
-            set: { if !$0 { presentedError = nil } }
-        ), presenting: presentedError) { _ in
-            Button("OK") { presentedError = nil }
+        // A failure that arrives while another is shown waits for it to be dismissed (#61).
+        .alert(errorQueue.current?.title ?? "", isPresented: Binding(
+            get: { errorQueue.current != nil },
+            set: { if !$0 { dismissPresentedError() } }
+        ), presenting: errorQueue.current) { _ in
+            // Dismissing goes only through the binding, so one alert is never dismissed twice.
+            Button("OK") {}
                 .keyboardShortcut(.defaultAction)
         } message: { error in
             Text(error.message)
         }
-        .alert("フォルダを記憶できません", isPresented: Binding(
-            get: { workspaceStore.errorMessage != nil },
-            set: { if !$0 { workspaceStore.clearError() } }
-        )) {
-            Button("OK") { workspaceStore.clearError() }
-        } message: {
-            Text(workspaceStore.errorMessage ?? "")
-        }
+        .modifier(WorkspaceStoreErrorReceiver(store: workspaceStore) { errorQueue.present($0) })
         .sheet(item: $editorModel.linkDraft) { draft in
             LinkEditorSheet(draft: draft, documentContext: documentContext,
                             analysis: currentAnalysisSnapshot?.analysis,
@@ -1458,7 +1460,7 @@ struct EditorWorkspace: View {
             onOpenEmbeddedDocument: { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                    catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
                 }
             },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
@@ -1530,7 +1532,7 @@ struct EditorWorkspace: View {
                 catch { failed.append(url.lastPathComponent) }
             }
             if !failed.isEmpty {
-                presentedError = .workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))"))
+                errorQueue.present(.workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))")))
             }
         }
     }
@@ -1616,7 +1618,14 @@ struct EditorWorkspace: View {
                 MarkdownContentInspector.items(in: snapshot.source, analysis: snapshot.analysis)
             }
         } ?? []
-        return List {
+        // Like the outline, the arrow keys reveal each item while the list keeps the focus, and
+        // a click or Return moves into the editor. The action buttons stay buttons (#60).
+        return List(selection: Binding(get: { selectedInspectorItemID }, set: { id in
+            selectedInspectorItemID = id
+            guard let item = items.first(where: { $0.id == id }),
+                  !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
+            navigate(to: item.sourceRange.location, focusesEditor: false)
+        })) {
             Section("文書プロパティ") {
                 Button("プロパティを編集…") { showingFrontMatterProperties = true }
             }
@@ -1659,20 +1668,26 @@ struct EditorWorkspace: View {
                 let matching = items.filter { $0.kind == kind }
                 Section("\(kind.title)（\(matching.count)）") {
                     ForEach(matching) { item in
-                        Button { navigate(to: item.sourceRange.location) } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(item.label).lineLimit(2)
-                                if let destination = item.destination {
-                                    Text(destination).font(.caption)
-                                        .foregroundStyle(.secondary).lineLimit(1)
-                                }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.label).lineLimit(2)
+                            if let destination = item.destination {
+                                Text(destination).font(.caption)
+                                    .foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .tag(item.id)
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("\(kind.title)、\(item.label)")
+                        .activatesOnClick {
+                            selectedInspectorItemID = item.id
+                            navigate(to: item.sourceRange.location)
+                        }
                     }
                 }
             }
+        }
+        .activatesSelectionOnReturn(MarkdownContentItem.ID.self) { id in
+            if let item = items.first(where: { $0.id == id }) { navigate(to: item.sourceRange.location) }
         }
         .listStyle(.sidebar)
         .overlay {
@@ -1743,7 +1758,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: bookmark.documentURL)
             } catch {
                 documentLinkNavigation.cancelPosition(for: bookmark.documentURL)
-                presentedError = .workspaceOpen(error.localizedDescription)
+                errorQueue.present(.workspaceOpen(error.localizedDescription))
             }
         }
     }
@@ -1925,9 +1940,9 @@ struct EditorWorkspace: View {
         Task {
             if node.isEditableDocument {
                 do { try await openDocument(at: node.url) }
-                catch { presentedError = .workspaceOpen(error.localizedDescription) }
+                catch { errorQueue.present(.workspaceOpen(error.localizedDescription)) }
             } else if !NSWorkspace.shared.open(node.url) {
-                presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
+                errorQueue.present(.workspaceOpen(String(localized: "添付ファイルを開けませんでした。")))
             }
         }
     }
@@ -2034,7 +2049,7 @@ struct EditorWorkspace: View {
     private func navigateToHeading(_ fragment: String) {
         guard let snapshot = currentAnalysisSnapshot else { return }
         guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
-            presentedError = .missingHeading(fragment)
+            errorQueue.present(.missingHeading(fragment))
             return
         }
         navigate(to: entry)
@@ -2052,7 +2067,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: link.fileURL)
             } catch {
                 documentLinkNavigation.cancel(for: link.fileURL)
-                presentedError = .documentLink(error.localizedDescription)
+                errorQueue.present(.documentLink(error.localizedDescription))
             }
         }
     }
@@ -2083,7 +2098,7 @@ struct EditorWorkspace: View {
             do { try await openDocument(at: result.url) }
             catch {
                 documentLinkNavigation.cancelPosition(for: result.url)
-                presentedError = .workspaceOpen(error.localizedDescription)
+                errorQueue.present(.workspaceOpen(error.localizedDescription))
             }
         }
     }
@@ -2111,12 +2126,12 @@ struct EditorWorkspace: View {
     private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
         guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
               !workspaceStore.isDocumentLocked(fileURL) else {
-            presentedError = .workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。"))
+            errorQueue.present(.workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")))
             return
         }
         if editorModel.hasActiveEditor {
             guard editorModel.applyRegexEdit(edit, expectedSource: document.text) else {
-                presentedError = .workspaceOpen(String(localized: "タスクを変更できませんでした。"))
+                errorQueue.present(.workspaceOpen(String(localized: "タスクを変更できませんでした。")))
                 return
             }
             editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
@@ -2225,7 +2240,7 @@ struct EditorWorkspace: View {
                 }.value
                 switch result {
                 case let .success(data): encodingImport = EncodingImport(url: url, data: data)
-                case let .failure(error): presentedError = .encodingImport(error.localizedDescription)
+                case let .failure(error): errorQueue.present(.encodingImport(error.localizedDescription))
                 }
             }
         }
@@ -2263,13 +2278,13 @@ struct EditorWorkspace: View {
                 let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset,
                                                                       dialect: dialect, outputURL: destination)
                 try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
-            } onError: { presentedError = .htmlExport($0) }
+            } onError: { errorQueue.present(.htmlExport($0)) }
         }
     }
 
     private func exportPDF() {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { presentedError = .pdfExport($0) }) else { return }
+                                          onError: { errorQueue.present(.pdfExport($0)) }) else { return }
         exportFormat = .pdf
     }
 
@@ -2329,13 +2344,13 @@ struct EditorWorkspace: View {
             let url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
-            } onError: { presentedError = .pdfExport($0) }
+            } onError: { errorQueue.present(.pdfExport($0)) }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { presentedError = .pdfExport($0) }) else { return }
+                                          onError: { errorQueue.present(.pdfExport($0)) }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
@@ -2345,7 +2360,7 @@ struct EditorWorkspace: View {
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
-            } onError: { presentedError = .pdfExport($0) }
+            } onError: { errorQueue.present(.pdfExport($0)) }
         }
     }
 
@@ -2366,7 +2381,7 @@ struct EditorWorkspace: View {
             operation.jobTitle = title
             operation.showsPrintPanel = true
             _ = try await MarkdownPDFExporter.run(operation)
-        } onError: { presentedError = .print($0) }
+        } onError: { errorQueue.present(.print($0)) }
     }
 
     private func copyRichSelection() {
@@ -2379,7 +2394,7 @@ struct EditorWorkspace: View {
         startDocumentOperation {
             try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
                                                       startingChangeCount: changeCount)
-        } onError: { presentedError = .richCopy($0) }
+        } onError: { errorQueue.present(.richCopy($0)) }
     }
 
     private func exportPlainText() {
@@ -2395,7 +2410,7 @@ struct EditorWorkspace: View {
                     MarkdownPlainTextExporter.render(source, options: options)
                 }
                 try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
-            } onError: { presentedError = .plainExport($0) }
+            } onError: { errorQueue.present(.plainExport($0)) }
         }
     }
 
@@ -2531,7 +2546,7 @@ struct EditorWorkspace: View {
                                                            model: editorModel,
                                                            currentContext: { documentContext })
             } catch {
-                presentedError = .imageInsert(error.localizedDescription)
+                errorQueue.present(.imageInsert(error.localizedDescription))
             }
         }
     }
@@ -2549,7 +2564,7 @@ struct EditorWorkspace: View {
                                                             context: context, model: editorModel,
                                                             currentContext: { documentContext })
             } catch {
-                presentedError = .imageInsert(error.localizedDescription)
+                errorQueue.present(.imageInsert(error.localizedDescription))
             }
         }
     }
@@ -2828,6 +2843,21 @@ private struct LinkDiagnosticsSheet: View {
     let onSelect: (NSRange) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedRow: Row?
+    @State private var didChoose = false
+
+    /// A row of either section. Local and external links are numbered separately.
+    private enum Row: Hashable {
+        case local(MarkdownLinkDiagnostic.ID)
+        case external(MarkdownExternalLinkCheck.ID)
+    }
+
+    private func range(of row: Row) -> NSRange? {
+        switch row {
+        case let .local(id): diagnostics.first(where: { $0.id == id })?.sourceRange
+        case let .external(id): externalChecks.first(where: { $0.id == id })?.target.sourceRange
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2847,53 +2877,58 @@ private struct LinkDiagnosticsSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List {
+                List(selection: $selectedRow) {
                     if !diagnostics.isEmpty {
                         Section("ローカルリンク") {
                             ForEach(diagnostics) { diagnostic in
-                                Button {
-                                    onSelect(diagnostic.sourceRange)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(diagnostic.title).fontWeight(.medium)
-                                        Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(diagnostic.title).fontWeight(.medium)
+                                    Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .buttonStyle(.plain)
+                                .tag(Row.local(diagnostic.id))
+                                .accessibilityElement(children: .combine)
+                                .activatesOnClick { choose(diagnostic.sourceRange) }
                             }
                         }
                     }
                     if !externalChecks.isEmpty {
                         Section("外部URL") {
                             ForEach(externalChecks) { check in
-                                Button {
-                                    onSelect(check.target.sourceRange)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(check.status.title).fontWeight(.medium)
-                                        Text("\(lines.line(containingUTF16Offset: check.target.sourceRange.location)) 行: \(check.target.url.absoluteString)")
-                                            .font(.caption)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(check.status.title).fontWeight(.medium)
+                                    Text("\(lines.line(containingUTF16Offset: check.target.sourceRange.location)) 行: \(check.target.url.absoluteString)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if let code = check.httpStatus {
+                                        Text("HTTP \(code)")
+                                            .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                        if let code = check.httpStatus {
-                                            Text("HTTP \(code)")
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                        }
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .buttonStyle(.plain)
+                                .tag(Row.external(check.id))
+                                .accessibilityElement(children: .combine)
+                                .activatesOnClick { choose(check.target.sourceRange) }
                             }
                         }
                     }
+                }
+                .activatesSelectionOnReturn(Row.self) { row in
+                    if let range = range(of: row) { choose(range) }
                 }
             }
         }
         .frame(minWidth: 560, minHeight: 350)
         .padding(20)
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: NSRange) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 
@@ -2906,6 +2941,8 @@ private struct MarkdownLintSheet: View {
     let onSelect: (MarkdownLintDiagnostic) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedID: MarkdownLintDiagnostic.ID?
+    @State private var didChoose = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2931,22 +2968,31 @@ private struct MarkdownLintSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List(diagnostics) { diagnostic in
-                    Button { onSelect(diagnostic) } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(diagnostic.rule.title).fontWeight(.medium)
-                            Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                List(diagnostics, selection: $selectedID) { diagnostic in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(diagnostic.rule.title).fontWeight(.medium)
+                        Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .activatesOnClick { choose(diagnostic) }
+                }
+                .activatesSelectionOnReturn(MarkdownLintDiagnostic.ID.self) { id in
+                    if let diagnostic = diagnostics.first(where: { $0.id == id }) { choose(diagnostic) }
                 }
             }
         }
         .frame(minWidth: 560, minHeight: 350)
         .padding(20)
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: MarkdownLintDiagnostic) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 
@@ -2961,6 +3007,8 @@ private struct TerminologySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var replaceFailed = false
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedID: TerminologyIssue.ID?
+    @State private var didChoose = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2978,7 +3026,8 @@ private struct TerminologySheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List(issues) { issue in
+                // A click on the text or Return moves to the issue, as its Move button does (#60).
+                List(issues, selection: $selectedID) { issue in
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("\(issue.prohibited) → \(issue.preferred)")
@@ -2987,14 +3036,18 @@ private struct TerminologySheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Button("移動") { onSelect(issue) }
+                        .accessibilityElement(children: .combine)
+                        .activatesOnClick { choose(issue) }
+                        Button("移動") { choose(issue) }
                         Button("置換") {
                             if !onReplace(issue) { replaceFailed = true }
                         }
                         .disabled(!canReplace)
                         .help(canReplace ? "推奨表記に置き換える" : "編集表示で置換できます")
                     }
+                }
+                .activatesSelectionOnReturn(TerminologyIssue.ID.self) { id in
+                    if let issue = issues.first(where: { $0.id == id }) { choose(issue) }
                 }
             }
         }
@@ -3005,6 +3058,14 @@ private struct TerminologySheet: View {
         } message: {
             Text("本文が変更されたか編集中のため、置換できませんでした。")
         }
+    }
+
+    /// The sheet closes when a row opens. A second click or a repeated Return can reach it while
+    /// it closes, so only the first one acts.
+    private func choose(_ value: TerminologyIssue) {
+        guard !didChoose else { return }
+        didChoose = true
+        onSelect(value)
     }
 }
 
@@ -3357,6 +3418,7 @@ enum WorkspacePresentedError: Identifiable, Equatable {
     case workspaceOpen(String)
     case imageInsert(String)
     case encodingImport(String)
+    case workspaceBookmark(String)
 
     var id: String { title + "\u{1F}" + message }
 
@@ -3372,6 +3434,7 @@ enum WorkspacePresentedError: Identifiable, Equatable {
         case .workspaceOpen: String(localized: "ファイルを開けません")
         case .imageInsert: String(localized: "画像を挿入できません")
         case .encodingImport: String(localized: "文字コードの取り込みに失敗")
+        case .workspaceBookmark: String(localized: "フォルダを記憶できません")
         }
     }
 
@@ -3380,9 +3443,62 @@ enum WorkspacePresentedError: Identifiable, Equatable {
         case let .missingHeading(fragment): String(localized: "#\(fragment) に対応する見出しがありません。")
         case let .documentLink(message), let .htmlExport(message), let .pdfExport(message),
              let .print(message), let .richCopy(message), let .plainExport(message),
-             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message):
+             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message),
+             let .workspaceBookmark(message):
             message
         }
+    }
+}
+
+/// Moves the shared workspace store's failure into the key window's alert. The store is shared
+/// by every document window, so only the key window takes it; if none is key, it waits until
+/// one is (#61). It reads the window state here so that switching windows does not
+/// re-evaluate the whole workspace.
+private struct WorkspaceStoreErrorReceiver: ViewModifier {
+    @ObservedObject var store: WorkspaceStore
+    let present: (WorkspacePresentedError) -> Void
+    @Environment(\.controlActiveState) private var controlActiveState
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: store.errorMessage, initial: true) { _, _ in take() }
+            .onChange(of: controlActiveState) { _, _ in take() }
+    }
+
+    private func take() {
+        guard let error = WorkspaceErrorQueue.storeError(store.errorMessage,
+                                                         isKeyWindow: controlActiveState == .key) else { return }
+        store.clearError()
+        present(error)
+    }
+}
+
+/// The failures waiting for a window's alert. A failure that arrives while another is shown
+/// waits its turn instead of replacing it, so neither goes unseen (#61). The same failure is
+/// queued only once.
+struct WorkspaceErrorQueue: Equatable {
+    private(set) var current: WorkspacePresentedError?
+    private(set) var pending: [WorkspacePresentedError] = []
+
+    /// Between `dismiss()` and `advance()` nothing is shown, but a failure that is already
+    /// waiting still goes first, so failures are always shown in the order they arrived.
+    mutating func present(_ error: WorkspacePresentedError) {
+        guard current != error, !pending.contains(error) else { return }
+        if current == nil, pending.isEmpty { current = error } else { pending.append(error) }
+    }
+
+    /// Clears the shown failure. `advance()` then shows the next one.
+    mutating func dismiss() { current = nil }
+
+    mutating func advance() {
+        guard current == nil, !pending.isEmpty else { return }
+        current = pending.removeFirst()
+    }
+
+    /// The failure a window takes from the shared workspace store: only the key window takes it.
+    static func storeError(_ message: String?, isKeyWindow: Bool) -> WorkspacePresentedError? {
+        guard isKeyWindow, let message else { return nil }
+        return .workspaceBookmark(message)
     }
 }
 

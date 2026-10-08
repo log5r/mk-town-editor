@@ -9,6 +9,8 @@ struct WorkspaceTaskSheet: View {
     let onOpen: (WorkspaceTaskItem) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var index: WorkspaceTaskIndex?
+    @State private var selectedID: WorkspaceTaskItem.ID?
+    @State private var didSubmit = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceTaskIndex, Error>?
@@ -30,28 +32,26 @@ struct WorkspaceTaskSheet: View {
                     systemImage: "exclamationmark.triangle", description: Text(errorMessage))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let index, !index.tasks.isEmpty {
-                List(index.tasks) { task in
+                List(index.tasks, selection: $selectedID) { task in
                     HStack(spacing: 12) {
                         Button("完了にする", systemImage: "circle") {
-                            dismiss()
-                            onToggle(task)
+                            submit { onToggle(task) }
                         }
                         .labelStyle(.iconOnly)
                         .help("完了にする")
-                        Button {
-                            dismiss()
-                            onOpen(task)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(task.title.isEmpty ? "無題のタスク" : task.title)
-                                    .fontWeight(.medium)
-                                Text("\(task.relativePath):\(task.line)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(task.title.isEmpty ? "無題のタスク" : task.title)
+                                .fontWeight(.medium)
+                            Text("\(task.relativePath):\(task.line)")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .combine)
+                        .activatesOnClick { submit { onOpen(task) } }
                     }
+                }
+                .activatesSelectionOnReturn(WorkspaceTaskItem.ID.self) { id in
+                    guard let task = index.tasks.first(where: { $0.id == id }) else { return }
+                    submit { onOpen(task) }
                 }
             } else {
                 ContentUnavailableView("未完了のタスクはありません",
@@ -76,6 +76,14 @@ struct WorkspaceTaskSheet: View {
             worker?.cancel()
             worker = nil
         }
+    }
+
+    /// A second click or Return can reach the sheet while it closes, so only the first acts.
+    private func submit(_ action: () -> Void) {
+        guard !didSubmit else { return }
+        didSubmit = true
+        dismiss()
+        action()
     }
 
     private func load() {
