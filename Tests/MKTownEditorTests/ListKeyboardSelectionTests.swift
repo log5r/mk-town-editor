@@ -121,6 +121,11 @@ final class ListKeyboardSelectionTests: XCTestCase {
             XCTAssertTrue(text.contains(".activatesOnClick"), name)
         }
         XCTAssertTrue(try source("RegexSearchSheet.swift").contains("startsUnselected: true"))
+        // Browsing with the arrow keys cancels the previous load instead of starting one per row.
+        for name in ["GitHistorySheet.swift", "GitCommitSheet.swift", "WorkspaceSnapshotHistory.swift"] {
+            XCTAssertTrue(try source(name).contains("Task.sleep(for: .milliseconds(120))"), name)
+        }
+        XCTAssertTrue(try source("WorkspaceSnapshotHistory.swift").contains("loadTask?.cancel()"))
         // Sheets that close when a row opens ignore a second click or Return while closing.
         for (name, guardName) in [("WorkspaceSearchSheet.swift", "didOpen"), ("WorkspaceLinkGraphSheet.swift", "didOpen"),
                                   ("WorkspaceTaskSheet.swift", "didSubmit"), ("WorkspaceNamedLayoutSheet.swift", "didApply")] {

@@ -424,6 +424,7 @@ struct WorkspaceSnapshotHistorySheet: View {
     @State private var entries: [WorkspaceSnapshotEntry] = []
     @State private var selected: WorkspaceSnapshotEntry?
     @State private var selectedText: String?
+    @State private var loadTask: Task<Void, Never>?
     @State private var comparedText: String?
     @State private var comparedSnapshot: String?
     @State private var comparedRows: [WorkspaceSnapshotHunkRow] = []
@@ -539,7 +540,10 @@ struct WorkspaceSnapshotHistorySheet: View {
         }
         .onChange(of: currentText) { _, _ in compare() }
         .onChange(of: selectedText) { _, _ in compare() }
-        .onDisappear { comparisonTask?.cancel() }
+        .onDisappear {
+            comparisonTask?.cancel()
+            loadTask?.cancel()
+        }
     }
 
     private func loadEntries() async {
@@ -567,6 +571,7 @@ struct WorkspaceSnapshotHistorySheet: View {
                     try store.save(source, title: name, for: documentURL)
                 }.value
                 entries.insert(entry, at: 0)
+                loadTask?.cancel()
                 selected = entry
                 selectedText = source
                 title = ""
@@ -575,17 +580,25 @@ struct WorkspaceSnapshotHistorySheet: View {
         }
     }
 
+    /// Loads the selected snapshot. A newer selection cancels this load, so holding an arrow key
+    /// does not read one snapshot per row, and only the selected snapshot's result is shown.
     private func select(_ entry: WorkspaceSnapshotEntry) {
         selected = entry
         selectedText = nil
         errorMessage = nil
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
+            do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
             do {
                 let text = try await Task.detached(priority: .userInitiated) {
                     try store.text(for: entry, documentURL: documentURL)
                 }.value
-                if selected?.id == entry.id { selectedText = text }
-            } catch { errorMessage = error.localizedDescription }
+                guard !Task.isCancelled, selected?.id == entry.id else { return }
+                selectedText = text
+            } catch {
+                guard !Task.isCancelled, selected?.id == entry.id else { return }
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
