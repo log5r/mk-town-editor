@@ -51,6 +51,7 @@ final class MarkdownSafeHTMLTests: XCTestCase {
 
     func testRelativeAndMailDestinationsStayClickable() {
         XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href=\"notes/a.md#top\">a</a>"), "[a](<notes/a.md#top>)")
+        XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href=\"notes/my file.md\">f</a>"), "[f](<notes/my file.md>)")
         XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href='mailto:me@example.com'>m</a>"),
                        "[m](<mailto:me@example.com>)")
     }

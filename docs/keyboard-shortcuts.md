@@ -16,5 +16,6 @@ AppKitのメニューは、押されたキーで入力される文字（Shiftの
 
 `EditorShortcutRegistry.reserved` には、macOSの標準操作と、アプリのメニューに固定で割り当てたショートカットをすべて含める。ユーザーがパレットのコマンドに割り当てを上書きするとき、ここに含まれるキーは拒否する。
 
+- 新しい版で既定値を変えたキーを、利用者が既に別のコマンドへ割り当てている場合は、利用者の割り当てを優先し、そのコマンドの既定値を外す（`EditorShortcutRegistry.shortcut(for:overrides:)`）。
 - コマンド自身の既定値は予約されていても許可する。⌘Fは「検索」コマンドの既定値で、プレビュー検索のメニューも同じキーを使う。
 - `EditorShortcutsTests.testEveryFixedMenuShortcutIsReserved` は `Sources/MKTownEditor` の `.keyboardShortcut("x", modifiers: ...)` をすべて抽出し、予約リストに含まれることを確認する。メニューに固定のショートカットを追加したら、予約リストにも追加する。

@@ -61,9 +61,11 @@ enum EditorShortcutRegistry {
 
     static func shortcut(for command: EditorCommand,
                          overrides: [String: ShortcutChord]) -> ShortcutChord? {
-        overrides[command.toolbarIdentifier] ?? command.shortcut.map {
-            ShortcutChord(key: $0.key, modifiers: $0.modifiers)
-        }
+        if let override = overrides[command.toolbarIdentifier] { return override }
+        guard let chord = command.shortcut.map({ ShortcutChord(key: $0.key, modifiers: $0.modifiers) })
+        else { return nil }
+        // A default added in a later version gives way to a key the user already assigned elsewhere.
+        return overrides.contains { $0.key != command.toolbarIdentifier && $0.value == chord } ? nil : chord
     }
 
     static func validate(_ chord: ShortcutChord, for command: EditorCommand,

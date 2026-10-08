@@ -91,7 +91,7 @@ final class EditorShortcutsTests: XCTestCase {
     func testShiftedCharacterShortcutMatchesTheKeyThatTypesIt() {
         func matches(key: String, shift: Bool, characters: String, flags: NSEvent.ModifierFlags) -> Bool {
             let menu = NSMenu()
-            let item = NSMenuItem(title: "Quote", action: #selector(ShortcutTarget.perform(_:)), keyEquivalent: key)
+            let item = NSMenuItem(title: "Quote", action: #selector(ShortcutTarget.shortcutFired(_:)), keyEquivalent: key)
             item.keyEquivalentModifierMask = shift ? [.command, .shift] : .command
             // NSMenuItem holds its target weakly.
             let target = ShortcutTarget()
@@ -110,6 +110,13 @@ final class EditorShortcutsTests: XCTestCase {
         XCTAssertFalse(matches(key: quote.key, shift: quote.shift, characters: ".", flags: .command))
         // Shift on the unshifted key never matches, because AppKit compares the typed character.
         XCTAssertFalse(matches(key: ".", shift: true, characters: ">", flags: [.command, .shift]))
+    }
+
+    func testUserAssignmentWinsOverANewDefaultForTheSameKey() {
+        let overrides = [EditorCommand.highlight.toolbarIdentifier: ShortcutChord(key: "c", shift: true)]
+        XCTAssertEqual(EditorShortcutRegistry.shortcut(for: .highlight, overrides: overrides)?.label, "⇧⌘C")
+        XCTAssertNil(EditorShortcutRegistry.shortcut(for: .inlineCode, overrides: overrides))
+        XCTAssertEqual(EditorShortcutRegistry.shortcut(for: .inlineCode, overrides: [:])?.label, "⇧⌘C")
     }
 
     func testOverridePersistsAndResetRestoresDefault() throws {
@@ -140,5 +147,5 @@ final class EditorShortcutsTests: XCTestCase {
 
 private final class ShortcutTarget: NSObject {
     var hits = 0
-    @objc func perform(_ sender: Any?) { hits += 1 }
+    @objc func shortcutFired(_ sender: Any?) { hits += 1 }
 }
