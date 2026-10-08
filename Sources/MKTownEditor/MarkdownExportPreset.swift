@@ -40,7 +40,7 @@ struct MarkdownExportPreset: Codable, Equatable, Identifiable, Sendable {
     }
 
     static let standard = MarkdownExportPreset(
-        id: UUID(uuidString: "D253A65D-02C4-4077-9969-FBCF564E522D")!, name: "標準",
+        id: UUID(uuidString: "D253A65D-02C4-4077-9969-FBCF564E522D")!, name: String(localized: "標準"),
         bodyWidth: 800, fontSize: 16, font: .system, margin: 48,
         cover: false, tableOfContents: false
     )
@@ -67,7 +67,7 @@ struct MarkdownExportPresetStore {
         let saved = preset.id == MarkdownExportPreset.standard.id
             ? MarkdownExportPreset(id: UUID(),
                                    name: preset.name == MarkdownExportPreset.standard.name
-                                        ? "標準のコピー" : preset.name,
+                                        ? String(localized: "標準のコピー") : preset.name,
                                    bodyWidth: preset.bodyWidth,
                                    fontSize: preset.fontSize, font: preset.font, margin: preset.margin,
                                    cover: preset.cover, tableOfContents: preset.tableOfContents)

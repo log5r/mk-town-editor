@@ -1,31 +1,62 @@
 import AppKit
 import Foundation
+import NaturalLanguage
 import WebKit
 
 enum MarkdownHTMLExporter {
     static let coverBreakMarker = "\u{E000}"
 
-    enum ImagePolicy: Sendable { case embedded, fileReferences }
-    @TaskLocal private static var imagePolicy: ImagePolicy = .embedded
+    /// How local files referenced by images, media and links are written.
+    /// Map keys and resolver arguments are symlink-resolved, standardized file URLs;
+    /// values are written as-is into `src`/`href`, so they must already be valid URL text.
+    enum ImageSource: Sendable {
+        /// Embed local images as base64 `data:` URIs so the HTML stands alone.
+        case embedBase64
+        /// Reference mapped files instead of embedding them. Unmapped images fall back
+        /// to their alt text and unmapped links keep their original destination.
+        case relative(pathMap: [URL: String])
+        /// Like `relative`, but asks for each file while rendering (e.g. to collect uploads).
+        case resolver(@Sendable (URL) -> String?)
+
+        func destination(for fileURL: URL) -> String? {
+            let key = fileURL.resolvingSymlinksInPath().standardizedFileURL
+            switch self {
+            case .embedBase64: return nil
+            case let .relative(pathMap): return pathMap[key]
+            case let .resolver(resolve): return resolve(key)
+            }
+        }
+    }
+
+    @TaskLocal private static var activeImages: ImageSource = .embedBase64
+    @TaskLocal private static var activeOutputURL: URL?
     @TaskLocal private static var mathImages: [String: String] = [:]
 
+    /// `outputURL` is where the HTML will be saved. With `.embedBase64`, local media links are
+    /// written relative to it; without it they stay absolute `file:` URLs for local use.
     @MainActor
     static func render(_ markdown: String, documentURL: URL? = nil,
                        preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
-                       dialect: MarkdownDialect = .extended) -> String {
+                       dialect: MarkdownDialect = .extended, images: ImageSource = .embedBase64,
+                       outputURL: URL? = nil) -> String {
         let analysis = MarkdownAnalysis(markdown, dialect: dialect)
         let resources = formulas(in: analysis).reduce(into: [String: String]()) { values, item in
             values[item.key] = MarkdownMathRenderer.htmlImage(item.formula, fontSize: item.size)
         }
         return $mathImages.withValue(resources) {
-            renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+            $activeImages.withValue(images) {
+                $activeOutputURL.withValue(outputURL) {
+                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                }
+            }
         }
     }
 
     @MainActor
     static func renderAsync(_ markdown: String, documentURL: URL? = nil,
                             preset: MarkdownExportPreset = .standard, printLayout: Bool = false,
-                            dialect: MarkdownDialect = .extended, images: ImagePolicy = .embedded) async throws -> String {
+                            dialect: MarkdownDialect = .extended, images: ImageSource = .embedBase64,
+                            outputURL: URL? = nil) async throws -> String {
         let analysis = try await DocumentWork.perform { MarkdownAnalysis(markdown, dialect: dialect) }
         let items = try await DocumentWork.perform { formulas(in: analysis) }
         var resources: [String: String] = [:]
@@ -37,8 +68,10 @@ enum MarkdownHTMLExporter {
         let prepared = resources
         return try await DocumentWork.perform {
             $mathImages.withValue(prepared) {
-                $imagePolicy.withValue(images) {
-                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                $activeImages.withValue(images) {
+                    $activeOutputURL.withValue(outputURL) {
+                        renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                    }
                 }
             }
         }
@@ -97,37 +130,37 @@ enum MarkdownHTMLExporter {
             }
         }
         if !analysis.footnotes.entries.isEmpty {
-            body += "<section class=\"footnotes\"><h2>脚注</h2><ol>"
+            body += "<section class=\"footnotes\"><h2>\(escape(String(localized: "脚注")))</h2><ol>"
             for note in analysis.footnotes.entries {
                 body += "<li id=\"fn-\(note.number)\">" +
                     inline(note.content, analysis: analysis,
                            context: context) +
-                    " <a href=\"#fnref-\(note.number)\" aria-label=\"本文に戻る\">↩</a></li>"
+                    " <a href=\"#fnref-\(note.number)\" aria-label=\"\(escape(String(localized: "本文に戻る")))\">↩</a></li>"
             }
             body += "</ol></section>"
         }
         if dialect == .extended,
            let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
-            body += "<section class=\"bibliography\"><h2>参考文献</h2><ol>"
+            body += "<section class=\"bibliography\"><h2>\(escape(String(localized: "参考文献")))</h2><ol>"
             for entry in catalog.entries {
                 body += "<li>\(escape(entry.bibliographyText))</li>"
             }
             body += "</ol></section>"
         }
         let title = MarkdownOutline.entries(in: analysis).first.map { visibleText($0.title) }
-            ?? documentURL?.deletingPathExtension().lastPathComponent ?? "無題"
+            ?? documentURL?.deletingPathExtension().lastPathComponent ?? String(localized: "無題")
         let cover = preset.cover
             ? "<section class=\"cover\"><h1>\(escape(title))</h1></section>\n" +
                 (printLayout ? "<p>\(coverBreakMarker)</p>\n" : "") : ""
         let tableOfContents = preset.tableOfContents
-            ? "<nav aria-label=\"目次\"><h2>目次</h2><ol>" +
+            ? "<nav aria-label=\"\(escape(String(localized: "目次")))\"><h2>\(escape(String(localized: "目次")))</h2><ol>" +
                 MarkdownHeadingIndex(analysis: analysis).anchors.map {
                     "<li><a href=\"#\(escape($0.slug))\">\(escape(visibleText($0.entry.title)))</a></li>"
                 }.joined() + "</ol></nav>\n" : ""
         return """
         <!doctype html>
-        <html lang="ja">
+        <html lang="\(escape(documentLanguage(analysis)))">
         <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -233,9 +266,10 @@ enum MarkdownHTMLExporter {
             if let media = MarkdownMedia(block, dialect: context.markdownDialect) {
                 let label = escape(media.label)
                 if let url = media.localURL(in: context) {
-                    return "<p><a href=\"\(escape(url.absoluteString))\">\(label)</a></p>\n"
+                    guard let destination = mediaDestination(url) else { return "<p>\(label)</p>\n" }
+                    return "<p><a href=\"\(escape(destination))\">\(label)</a></p>\n"
                 }
-                return "<p>\(label)（再生不可）</p>\n"
+                return "<p>\(escape(String(localized: "\(media.label)（再生不可）")))</p>\n"
             }
             if let definitions = MarkdownDefinitionList(block, dialect: context.markdownDialect) {
                 let entries = definitions.entries.map { entry in
@@ -365,7 +399,7 @@ enum MarkdownHTMLExporter {
             if intent?.contains(.strikethrough) == true { run = "<del>\(run)</del>" }
             if let link = attributes[.link],
                let destination = safeLink(link) {
-                run = "<a href=\"\(escape(destination))\">\(run)</a>"
+                run = "<a href=\"\(escape(linkDestination(destination, context: context)))\">\(run)</a>"
             }
             html += run
         }
@@ -408,7 +442,7 @@ enum MarkdownHTMLExporter {
         if url.scheme == "http" || url.scheme == "https" { return url.absoluteString }
         guard !Task<Never, Never>.isCancelled, url.scheme == nil,
               let fileURL = context.resolveLocalResource(url.relativeString) else { return nil }
-        if imagePolicy == .fileReferences { return fileURL.absoluteString }
+        guard case .embedBase64 = activeImages else { return activeImages.destination(for: fileURL) }
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         let mime: String
         switch fileURL.pathExtension.lowercased() {
@@ -421,6 +455,40 @@ enum MarkdownHTMLExporter {
         return "data:\(mime);base64,\(data.base64EncodedString())"
     }
 
+    private static func mediaDestination(_ fileURL: URL) -> String? {
+        guard case .embedBase64 = activeImages else { return activeImages.destination(for: fileURL) }
+        guard let outputURL = activeOutputURL else { return fileURL.absoluteString }
+        return relativePath(from: outputURL.deletingLastPathComponent(), to: fileURL)
+    }
+
+    /// Local attachment links follow the same mapping as images, keeping `#`/`?` suffixes.
+    private static func linkDestination(_ destination: String, context: DocumentContext) -> String {
+        if case .embedBase64 = activeImages { return destination }
+        let split = destination.firstIndex(where: { $0 == "#" || $0 == "?" })
+        let path = split.map { String(destination[..<$0]) } ?? destination
+        guard let fileURL = context.resolveLocalResource(path),
+              let mapped = activeImages.destination(for: fileURL) else { return destination }
+        return mapped + (split.map { String(destination[$0...]) } ?? "")
+    }
+
+    /// A percent-encoded relative URL path from `directory` to `fileURL`.
+    static func relativePath(from directory: URL, to fileURL: URL) -> String {
+        let base = directory.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let target = fileURL.resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        var common = 0
+        while common < base.count, common < target.count - 1, base[common] == target[common] { common += 1 }
+        return hrefPath(Array(repeating: "..", count: base.count - common) + target[common...])
+    }
+
+    /// Encodes each component so names containing `:`, `#`, `?` or spaces stay one relative path.
+    static func hrefPath<Components: Sequence<String>>(_ components: Components) -> String {
+        components.map { $0.addingPercentEncoding(withAllowedCharacters: hrefComponentAllowed) ?? $0 }
+            .joined(separator: "/")
+    }
+
+    private static let hrefComponentAllowed = CharacterSet.urlPathAllowed
+        .subtracting(CharacterSet(charactersIn: "/:;?#"))
+
     private static func safeLink(_ value: Any) -> String? {
         let text = (value as? URL)?.relativeString ?? value as? String
         guard let text, let url = URL(string: text),
@@ -428,6 +496,27 @@ enum MarkdownHTMLExporter {
             return nil
         }
         return text
+    }
+
+    /// The front matter's `lang:` when it is a language tag, then the language the body is written
+    /// in, and for text too short to tell, the app's localization used for the generated headings.
+    static func documentLanguage(_ analysis: MarkdownAnalysis) -> String {
+        if let raw = analysis.frontMatter?.raw,
+           let value = FrontMatterProperties.items(in: raw)
+            .first(where: { $0.key.lowercased() == "lang" })?.value
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"' \t")),
+           value.range(of: #"^[A-Za-z]{2,8}(-[A-Za-z0-9]{1,8})*$"#, options: .regularExpression) != nil {
+            return value
+        }
+        let sample = analysis.blocks.lazy.filter { $0.kind != .codeBlock }.map(\.content)
+            .joined(separator: "\n").prefix(4_000)
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(String(sample))
+        if let language = recognizer.dominantLanguage, language != .undetermined {
+            return language.rawValue
+        }
+        return Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
+            ?? Bundle.main.developmentLocalization ?? "ja"
     }
 
     private static func escape(_ text: String) -> String {

@@ -23,4 +23,6 @@ Swift Packageがビルドする実行ファイルはアプリバンドルでは�
 
 ## 残る制約
 
-ポリシーの修復は、Info.plistがないこと自体を解消しない。Markdown文書型の宣言、URLスキーム `mktowneditor://`、サービスメニューの登録はアプリバンドルのInfo.plistに依存するため、`swift run` で起動したプロセスでは従来どおり使えないか、プレーンテキストにフォールバックする。これらが必要な場合は `MKTownEditor.xcodeproj` から起動する。
+ポリシーの修復は、Info.plistがないこと自体を解消しない。Markdown文書型の宣言、URLスキーム `mktowneditor://`、サービスメニューの登録はアプリバンドルのInfo.plistに依存するため、`swift run` で起動したプロセスでは従来どおり使えないか、プレーンテキストにフォールバックする。
+
+その後、`start.sh` はアプリバンドルを組み立てて起動するように変わった（[`start.sh` のアプリバンドル起動](production-launcher.md)）。バンドルとして起動したプロセスのポリシーは最初から `regular` なので、この修復は働かない。修復は `swift run MKTownEditor` やXcodeで `Package.swift` を開いて実行した場合のために残している。

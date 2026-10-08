@@ -13,6 +13,17 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertFalse(MarkdownEditingContext.isInCode(at: 4, source: "text", analysis: nil, allowsAnalysis: false))
     }
 
+    func testAnalyzedCodeBlockOwnsTheEndOfATextWithoutFinalNewline() {
+        for source in ["```swift\nlet a", "    code", "text\n\n```\nopen"] {
+            XCTAssertTrue(MarkdownEditingContext.isInCode(at: source.utf16.count, source: source,
+                analysis: MarkdownAnalysis(source), allowsAnalysis: true), source)
+        }
+        XCTAssertFalse(MarkdownEditingContext.isInCode(at: 13, source: "```\ncode\n```\n",
+            analysis: MarkdownAnalysis("```\ncode\n```\n"), allowsAnalysis: true))
+        XCTAssertNil(MarkdownSymbolCompletion.edit(in: "```\nlet a = ", selection: NSRange(location: 12, length: 0),
+                                                   typed: "`"))
+    }
+
     func testSharedAnalysisDrivesRepeatedTableValidationAndRejectsStaleDialect() {
         let view = EditorTextView()
         view.string = "| A |\n| --- |\n| B |"

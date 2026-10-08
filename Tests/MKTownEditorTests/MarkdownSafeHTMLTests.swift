@@ -40,6 +40,22 @@ final class MarkdownSafeHTMLTests: XCTestCase {
         XCTAssertTrue(result.contains("do not open"))
     }
 
+    func testUnparseableDestinationsHidingAnUnsafeSchemeDoNotBecomeClickable() {
+        for destination in [" javascript:alert(1)", "java\tscript:alert(1)", "\u{0001}javascript:alert(1)",
+                            "javascript:alert(1) ", "java\u{00A0}script:alert(1)"] {
+            let result = MarkdownSafeHTML.previewMarkdown("<a href=\"\(destination)\">do not open</a>")
+            XCTAssertFalse(result.contains("]("), "\(destination.debugDescription) became a link: \(result)")
+            XCTAssertTrue(result.contains("do not open"))
+        }
+    }
+
+    func testRelativeAndMailDestinationsStayClickable() {
+        XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href=\"notes/a.md#top\">a</a>"), "[a](<notes/a.md#top>)")
+        XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href=\"notes/my file.md\">f</a>"), "[f](<notes/my file.md>)")
+        XCTAssertEqual(MarkdownSafeHTML.previewMarkdown("<a href='mailto:me@example.com'>m</a>"),
+                       "[m](<mailto:me@example.com>)")
+    }
+
     func testMarkdownAutolinksAreNotMistakenForHTML() {
         let source = "<https://example.com> <person@example.com>"
         XCTAssertEqual(MarkdownSafeHTML.previewMarkdown(source), source)

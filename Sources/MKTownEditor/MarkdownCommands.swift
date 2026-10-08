@@ -304,12 +304,12 @@ struct MarkdownCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .option])
             Button("ファイル名で開く…") { openQuickFileAction?() }
                 .keyboardShortcut("p", modifiers: [.command, .option])
-                .disabled(openQuickFileAction == nil || workspaceStore.rootURL == nil)
+                .disabled(openQuickFileAction == nil || workspaceStore.rootURL == nil || workspaceStore.isRootUnavailable)
             Button("フォルダ全体を検索…") { searchWorkspaceAction?() }
                 .keyboardShortcut("f", modifiers: [.command, .option, .shift])
-                .disabled(searchWorkspaceAction == nil || workspaceStore.rootURL == nil)
+                .disabled(searchWorkspaceAction == nil || workspaceStore.rootURL == nil || workspaceStore.isRootUnavailable)
             Button("複数ファイルを置換…") { replaceWorkspaceAction?() }
-                .disabled(replaceWorkspaceAction == nil || workspaceStore.rootURL == nil)
+                .disabled(replaceWorkspaceAction == nil || workspaceStore.rootURL == nil || workspaceStore.isRootUnavailable)
             Button("ファイル一覧を更新") { workspaceStore.refresh(force: true) }
                 .disabled(workspaceStore.rootURL == nil)
         }

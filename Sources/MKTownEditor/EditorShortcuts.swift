@@ -61,9 +61,11 @@ enum EditorShortcutRegistry {
 
     static func shortcut(for command: EditorCommand,
                          overrides: [String: ShortcutChord]) -> ShortcutChord? {
-        overrides[command.toolbarIdentifier] ?? command.shortcut.map {
-            ShortcutChord(key: $0.key, modifiers: $0.modifiers)
-        }
+        if let override = overrides[command.toolbarIdentifier] { return override }
+        guard let chord = command.shortcut.map({ ShortcutChord(key: $0.key, modifiers: $0.modifiers) })
+        else { return nil }
+        // A default added in a later version gives way to a key the user already assigned elsewhere.
+        return overrides.contains { $0.key != command.toolbarIdentifier && $0.value == chord } ? nil : chord
     }
 
     static func validate(_ chord: ShortcutChord, for command: EditorCommand,
@@ -73,7 +75,8 @@ enum EditorShortcutRegistry {
               character.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
         else { throw ShortcutError.invalidKey }
         guard chord.command || chord.control else { throw ShortcutError.modifierRequired }
-        if reserved.contains(chord) { throw ShortcutError.reserved }
+        let ownDefault = command.shortcut.map { ShortcutChord(key: $0.key, modifiers: $0.modifiers) }
+        if reserved.contains(chord) && chord != ownDefault { throw ShortcutError.reserved }
         if let collision = commands.first(where: { other in
             other != command && shortcut(for: other, overrides: overrides) == chord
         }) {
@@ -81,7 +84,9 @@ enum EditorShortcutRegistry {
         }
     }
 
-    private static let reserved: Set<ShortcutChord> = [
+    /// System shortcuts and every fixed shortcut in the app's own menus. A palette command may
+    /// still keep its own default here, as Find does with ⌘F shared by the preview search.
+    static let reserved: Set<ShortcutChord> = [
         ShortcutChord(key: "q"), ShortcutChord(key: "w"), ShortcutChord(key: "h"),
         ShortcutChord(key: "m"), ShortcutChord(key: "n"), ShortcutChord(key: "o"),
         ShortcutChord(key: "s"), ShortcutChord(key: ","), ShortcutChord(key: "p"),
@@ -103,7 +108,12 @@ enum EditorShortcutRegistry {
         ShortcutChord(key: "o", option: true), ShortcutChord(key: "o", shift: true),
         ShortcutChord(key: "+"), ShortcutChord(key: "-"), ShortcutChord(key: "0"),
         ShortcutChord(key: "+", option: true), ShortcutChord(key: "-", option: true),
-        ShortcutChord(key: "0", option: true, shift: true)
+        ShortcutChord(key: "0", option: true, shift: true),
+        // Window cycling, toolbar visibility, navigation history and Find.
+        ShortcutChord(key: "`"), ShortcutChord(key: "`", shift: true),
+        ShortcutChord(key: "t", option: true),
+        ShortcutChord(key: "[", option: true), ShortcutChord(key: "]", option: true),
+        ShortcutChord(key: "f")
     ]
 }
 

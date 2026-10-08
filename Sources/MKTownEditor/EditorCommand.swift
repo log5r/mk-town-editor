@@ -82,7 +82,15 @@ enum EditorCommand: Hashable {
         .deleteLines, .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
-    static let context: [Self] = [.bold, .italic, .strikethrough, .highlight, .superscript, .subscriptText, .inlineCode, .removeFormatting, .selectNextOccurrence, .link, .convertLinkForm, .footnote, .image, .table, .quote, .plainBlock, .unorderedList, .orderedList, .taskList, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
+    /// The editor's context menu stays short: inline formatting, links and images, and list
+    /// toggles. Everything else is in its "Markdown" submenu.
+    static let contextGroups: [[Self]] = [
+        [.bold, .italic, .strikethrough, .inlineCode],
+        [.link, .image],
+        [.unorderedList, .orderedList, .taskList]
+    ]
+    static let context: [Self] = contextGroups.flatMap { $0 }
+    static let contextMarkdown: [Self] = [.highlight, .superscript, .subscriptText, .removeFormatting, .selectNextOccurrence, .convertLinkForm, .footnote, .table, .quote, .plainBlock, .renumberList, .indentList, .outdentList, .toggleTaskCompletion, .horizontalRule]
 
     var title: String {
         switch self {
@@ -178,12 +186,15 @@ enum EditorCommand: Hashable {
         case .italic: ("i", .command)
         case .strikethrough: ("x", [.command, .shift])
         case .highlight, .superscript, .subscriptText: nil
-        case .inlineCode: ("`", .command)
+        // ⌘` moves between windows system-wide, so inline code takes ⇧⌘C.
+        case .inlineCode: ("c", [.command, .shift])
         case .link: ("k", .command)
         case .convertLinkForm: nil
         case .footnote: nil
         case let .heading(level): (KeyEquivalent(Character(String(level))), [.command, .option])
-        case .quote: (">", [.command, .shift])
+        // ">" already implies whatever modifier the layout needs; adding Shift to "." instead
+        // would never match, because AppKit compares the shifted character.
+        case .quote: (">", .command)
         case .plainBlock: nil
         case .removeFormatting: nil
         case .tableOfContents: nil
@@ -198,7 +209,8 @@ enum EditorCommand: Hashable {
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
         case .indentList, .outdentList: nil
-        case .toggleTaskCompletion: ("t", [.command, .option])
+        // ⌥⌘T shows or hides the toolbar; Notes uses ⇧⌘U to check an item.
+        case .toggleTaskCompletion: ("u", [.command, .shift])
         case let .codeBlock(language): language == nil ? ("`", [.command, .option]) : nil
         case .horizontalRule: nil
         case .image: nil

@@ -13,7 +13,7 @@ enum MarkdownTextEncoding: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .utf8: "UTF-8"
-        case .shiftJIS: "Shift JIS"
+        case .shiftJIS: "Shift JIS (CP932)"
         case .eucJP: "EUC-JP"
         case .latin1: "ISO-8859-1"
         case .utf16LE: "UTF-16 LE"
@@ -24,6 +24,7 @@ enum MarkdownTextEncoding: String, CaseIterable, Identifiable {
     var foundationEncoding: String.Encoding {
         switch self {
         case .utf8: .utf8
+        // Foundation's Shift JIS is Windows code page 932, NEC and IBM extensions included.
         case .shiftJIS: .shiftJIS
         case .eucJP: .japaneseEUC
         case .latin1: .isoLatin1
@@ -47,10 +48,12 @@ enum MarkdownEncodingError: LocalizedError {
 
 enum MarkdownEncodingConverter {
     static func decode(_ data: Data, as encoding: MarkdownTextEncoding) throws -> String {
+        // Compare text rather than bytes: Shift JIS has several byte sequences for one character
+        // (IBM and NEC-selected IBM extensions), and they encode back to only one of them.
         guard let text = String(data: data, encoding: encoding.foundationEncoding),
               let roundTrip = text.data(using: encoding.foundationEncoding,
                                         allowLossyConversion: false),
-              roundTrip == data else {
+              String(data: roundTrip, encoding: encoding.foundationEncoding) == text else {
             throw MarkdownEncodingError.cannotDecode
         }
         return text

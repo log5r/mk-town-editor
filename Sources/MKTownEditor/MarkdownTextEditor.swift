@@ -1051,15 +1051,24 @@ final class EditorTextView: NSTextView {
            let value = imagePasteboard.string(forType: .string),
            MarkdownURLPaste.validURL(value) != nil {
             if !menu.items.isEmpty { menu.addItem(.separator()) }
-            let plainPaste = NSMenuItem(title: "URL をそのまま貼り付け", action: #selector(pasteURLAsPlainText(_:)),
-                                       keyEquivalent: "")
+            let plainPaste = NSMenuItem(title: String(localized: "URL をそのまま貼り付け"),
+                                        action: #selector(pasteURLAsPlainText(_:)), keyEquivalent: "")
             plainPaste.target = self
             menu.addItem(plainPaste)
         }
-        if !menu.items.isEmpty { menu.addItem(.separator()) }
-        for command in EditorCommand.context {
-            add(command, to: menu)
+        for group in EditorCommand.contextGroups {
+            if !menu.items.isEmpty { menu.addItem(.separator()) }
+            for command in group { add(command, to: menu) }
         }
+        menu.addItem(.separator())
+        let markdownMenu = NSMenu(title: "Markdown")
+        let headingItem = NSMenuItem(title: String(localized: "見出しレベル"), action: nil, keyEquivalent: "")
+        let headingMenu = NSMenu(title: String(localized: "見出しレベル"))
+        for level in 0...6 {
+            add(.heading(level: level), to: headingMenu)
+        }
+        headingItem.submenu = headingMenu
+        markdownMenu.addItem(headingItem)
         let codeItem = NSMenuItem(title: String(localized: "コードブロック"), action: nil, keyEquivalent: "")
         let codeMenu = NSMenu(title: String(localized: "コードブロック"))
         add(.codeBlock(language: nil), to: codeMenu)
@@ -1067,14 +1076,14 @@ final class EditorTextView: NSTextView {
             add(.codeBlock(language: language), to: codeMenu)
         }
         codeItem.submenu = codeMenu
-        menu.addItem(codeItem)
-        let headingItem = NSMenuItem(title: String(localized: "見出しレベル"), action: nil, keyEquivalent: "")
-        let headingMenu = NSMenu(title: String(localized: "見出しレベル"))
-        for level in 0...6 {
-            add(.heading(level: level), to: headingMenu)
+        markdownMenu.addItem(codeItem)
+        markdownMenu.addItem(.separator())
+        for command in EditorCommand.contextMarkdown {
+            add(command, to: markdownMenu)
         }
-        headingItem.submenu = headingMenu
-        menu.addItem(headingItem)
+        let markdownItem = NSMenuItem(title: "Markdown", action: nil, keyEquivalent: "")
+        markdownItem.submenu = markdownMenu
+        menu.addItem(markdownItem)
         return menu
     }
 
@@ -1084,6 +1093,15 @@ final class EditorTextView: NSTextView {
         item.representedObject = command
         item.isEnabled = command.canExecute(in: commandModel)
         menu.addItem(item)
+    }
+
+    /// Menus validate their items again just before showing them, so availability must come from here.
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(performMarkdownCommand(_:)) {
+            guard let command = menuItem.representedObject as? EditorCommand else { return false }
+            return command.canExecute(in: commandModel)
+        }
+        return super.validateMenuItem(menuItem)
     }
 
     @objc private func performMarkdownCommand(_ item: NSMenuItem) {

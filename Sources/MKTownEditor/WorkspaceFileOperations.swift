@@ -172,7 +172,7 @@ struct WorkspaceMovePlan: Sendable {
     func validateCurrentState() throws {
         let manager = FileManager.default
         guard !isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
-        let currentIndex = WorkspaceFileIndex.scan(root: rootURL, maximumEntries: scanMaximumEntries)
+        let currentIndex = try WorkspaceFileIndex.scan(root: rootURL, maximumEntries: scanMaximumEntries)
         guard !currentIndex.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let currentDocuments = Set(WorkspaceFileOperations.markdownFiles(in: currentIndex.nodes)
             .map { $0.resolvingSymlinksInPath().standardizedFileURL.path })
@@ -285,7 +285,7 @@ enum WorkspaceFileOperations {
         guard !FileManager.default.fileExists(atPath: destination.path) else {
             throw WorkspaceFileOperationError.destinationExists
         }
-        let index = WorkspaceFileIndex.scan(root: root, maximumEntries: scanMaximumEntries)
+        let index = try WorkspaceFileIndex.scan(root: root, maximumEntries: scanMaximumEntries)
         guard !index.isTruncated else { throw WorkspaceFileOperationError.indexTruncated }
         let documents = markdownFiles(in: index.nodes)
         let documentIndex = WorkspaceDocumentIndex(documents: documents)

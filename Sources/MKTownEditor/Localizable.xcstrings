@@ -4,6 +4,420 @@
     "" : {
 
     },
+    "%@（再生不可）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (can't be played)"
+          }
+        }
+      }
+    },
+    "%@をWordPressのメディアライブラリへアップロードできませんでした: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't upload %1$@ to the WordPress media library: %2$@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@をWordPressのメディアライブラリへアップロードできませんでした: %2$@"
+          }
+        }
+      }
+    },
+    "%lld件・最新 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snapshots: %1$lld · Latest: %2$@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld件・最新 %2$@"
+          }
+        }
+      }
+    },
+    "%lld件のスナップショットを削除します。この操作は取り消せません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snapshots to delete: %lld. You can't undo this action."
+          }
+        }
+      }
+    },
+    "%lld件の書類のスナップショットを削除しますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete the snapshots of these documents (%lld)?"
+          }
+        }
+      }
+    },
+    "URL をそのまま貼り付け" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste URL as Plain Text"
+          }
+        }
+      }
+    },
+    "“%@”のスナップショットを削除しますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete the snapshots of “%@”?"
+          }
+        }
+      }
+    },
+    "“%@”を削除しますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@”?"
+          }
+        }
+      }
+    },
+    "このスナップショットの内容は完全に削除されます。この操作は取り消せません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This snapshot's contents will be permanently deleted. You can't undo this action."
+          }
+        }
+      }
+    },
+    "このスナップショットを削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete These Snapshots"
+          }
+        }
+      }
+    },
+    "このフォルダを読み込む権限がありません。フォルダを選び直してアクセスを許可してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You don't have permission to read this folder. Choose the folder again to grant access."
+          }
+        }
+      }
+    },
+    "この場所はフォルダではありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This location isn't a folder."
+          }
+        }
+      }
+    },
+    "コミットが時間切れになりました。リポジトリのフックが終了しなかった可能性があります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The commit timed out. A repository hook may not have finished."
+          }
+        }
+      }
+    },
+    "ステージ済みの変更がすべてコミットされます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All staged changes will be committed."
+          }
+        }
+      }
+    },
+    "フォルダが見つかりません。削除または移動されたか、フォルダのあるディスクが取り外された可能性があります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The folder can't be found. It may have been deleted or moved, or the disk containing it may have been disconnected."
+          }
+        }
+      }
+    },
+    "フォルダにアクセスできません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't Access Folder"
+          }
+        }
+      }
+    },
+    "フォルダを選び直す…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Folder Again…"
+          }
+        }
+      }
+    },
+    "以前のバージョンで保存し、その後に履歴を開いていない書類のスナップショットです。書類が残っている場合は、その書類の履歴を開くとこの一覧に表示されなくなります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These snapshots were saved by an earlier version, and their document's history hasn't been opened since. If the document still exists, opening its history removes them from this list."
+          }
+        }
+      }
+    },
+    "保存したレイアウトを削除します。開いている書類やファイルは変更されません。この操作は取り消せません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The saved layout will be deleted. Open documents and files aren't changed. You can't undo this action."
+          }
+        }
+      }
+    },
+    "リポジトリのフックを実行する" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run Repository Hooks"
+          }
+        }
+      }
+    },
+    "オフにすると、pre-commitなどのフックを実行せずにコミットします（git commit --no-verify）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, commits without running hooks such as pre-commit (git commit --no-verify)."
+          }
+        }
+      }
+    },
+    "フックが原因でコミットできない場合は、「リポジトリのフックを実行する」をオフにしてください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If a hook prevents the commit, turn off “Run Repository Hooks.”"
+          }
+        }
+      }
+    },
+    "元の書類が不明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Document Unknown"
+          }
+        }
+      }
+    },
+    "元の書類が見つからない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Document Missing"
+          }
+        }
+      }
+    },
+    "元の書類が見つからないものをすべて削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All with Missing Documents"
+          }
+        }
+      }
+    },
+    "元の書類を改名・移動・削除したため、どの書類の履歴にも表示されないスナップショットです。書類を元の場所に戻すと、再びその書類の履歴に表示されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These snapshots no longer appear in any document's history because the original document was renamed, moved, or deleted. If you put the document back in its original location, they appear in its history again."
+          }
+        }
+      }
+    },
+    "成功 %lld件・失敗 %lld件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Succeeded: %1$lld · Failed: %2$lld"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "成功 %1$lld件・失敗 %2$lld件"
+          }
+        }
+      }
+    },
+    "成功 %lld件・失敗 %lld件・中止しました" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Succeeded: %1$lld · Failed: %2$lld · Stopped"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "成功 %1$lld件・失敗 %2$lld件・中止しました"
+          }
+        }
+      }
+    },
+    "整理するスナップショットはありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Snapshots to Clean Up"
+          }
+        }
+      }
+    },
+    "書類が見つからないスナップショット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snapshots of Missing Documents"
+          }
+        }
+      }
+    },
+    "書類が見つからないスナップショットを整理…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clean Up Snapshots of Missing Documents…"
+          }
+        }
+      }
+    },
+    "標準" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard"
+          }
+        }
+      }
+    },
+    "標準のコピー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Standard Copy"
+          }
+        }
+      }
+    },
+    "画像: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image: %@"
+          }
+        }
+      }
+    },
+    "目次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contents"
+          }
+        }
+      }
+    },
+    "変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert"
+          }
+        }
+      }
+    },
+    "読み込めなかったフォルダ: %lld件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folders that couldn't be read: %lld"
+          }
+        }
+      }
+    },
+    "送信サイズが公開先の上限を超えたため受け付けられませんでした（HTTP 413）。サーバーのアップロード上限を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The destination rejected the request because it exceeds the size limit (HTTP 413). Check the server's upload limit."
+          }
+        }
+      }
+    },
+    "送信前にローカルの画像・メディア%lld件をWordPressのメディアライブラリへアップロードし、本文の mktown-upload:// をそのURLに置き換えます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before sending, local images and media (%lld) are uploaded to the WordPress media library, and mktown-upload:// references in the body are replaced with their URLs."
+          }
+        }
+      }
+    },
     " " : {
       "localizations" : {
         "en" : {

@@ -32,6 +32,31 @@ final class MarkdownMediaTests: XCTestCase {
         XCTAssertTrue(view.string.contains("動画: Demo"))
     }
 
+    // Issue #41: saved HTML linked media by absolute file: URL, exposing the home folder.
+    func testSavedHTMLLinksMediaRelativeToTheSavedFile() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("export"),
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try Data([0]).write(to: folder.appendingPathComponent("voice note.m4a"))
+        let source = folder.appendingPathComponent("note.md")
+        try Data("!audio[Voice](voice%20note.m4a)".utf8).write(to: source)
+        let destination = folder.appendingPathComponent("export/note.html")
+        try await AutomationDocumentWriter.exportHTMLAsync(source: source, to: destination)
+        let html = try String(contentsOf: destination, encoding: .utf8)
+        XCTAssertTrue(html.contains("<a href=\"../voice%20note.m4a\">音声: Voice</a>"), html)
+        XCTAssertFalse(html.contains("file:"))
+
+        let output = folder.appendingPathComponent("batch")
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        let documents = [BatchExportDocument(sourceURL: source, relativePath: "notes/note.md")]
+        let report = try await WorkspaceBatchExporter.export(documents: documents, to: output, format: .html)
+        XCTAssertEqual(report.exported, 1)
+        let batch = try String(contentsOf: output.appendingPathComponent("notes/note.html"), encoding: .utf8)
+        XCTAssertTrue(batch.contains("<a href=\"../../voice%20note.m4a\">"), batch)
+        XCTAssertFalse(batch.contains("file:"))
+    }
+
     func testUnsupportedRemoteMissingAndBasicMediaUseFallback() throws {
         let source = "!audio[Song](https://example.com/song.mp3)"
         let remote = try XCTUnwrap(MarkdownMedia(MarkdownAnalysis(source).rootBlocks[0],

@@ -80,6 +80,10 @@ struct PublicationSheet: View {
                         .padding(8)
                 }
                 .background(Color.secondary.opacity(0.05))
+                if !prepared.uploads.isEmpty {
+                    Text("送信前にローカルの画像・メディア\(prepared.uploads.count)件をWordPressのメディアライブラリへアップロードし、本文の mktown-upload:// をそのURLに置き換えます。")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 HStack {
                     Spacer()
                     Button(sending ? "送信中…" : mode == .draft ? "下書きを作成" : "公開を実行") {
@@ -132,7 +136,7 @@ struct PublicationSheet: View {
         error = nil
         sendTask = Task {
             do {
-                result = try await PublicationTransport.send(prepared.request)
+                result = try await prepared.publish()
                 succeeded = true
             } catch { self.error = error.localizedDescription }
             sending = false

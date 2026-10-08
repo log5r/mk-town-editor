@@ -222,12 +222,26 @@ enum MarkdownTableTabAction: Equatable {
 }
 
 enum MarkdownTableEditing {
+    /// The table around a caret. A table that ends the document without a line break also
+    /// owns the end of the text, where the caret sits after typing the final `|`.
+    private static func table(at location: Int, in source: NSString,
+                              analysis: MarkdownAnalysis) -> (MarkdownBlock, MarkdownTable, Int)? {
+        guard location >= 0, location <= source.length else { return nil }
+        let atOpenEnd = location == source.length && location > 0 &&
+            !CharacterSet.newlines.contains(UnicodeScalar(source.character(at: location - 1)) ?? " ")
+        let lookup = atOpenEnd ? location - 1 : location
+        guard lookup < source.length,
+              let block = analysis.blocks.first(where: {
+                  $0.kind == .table && NSLocationInRange(lookup, $0.sourceRange)
+              }), let table = block.table else { return nil }
+        return (block, table, lookup)
+    }
+
     static func gridDraft(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTableGridDraft? {
         let source = text as NSString
-        guard selection.location >= 0, selection.location < source.length,
-              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
-                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
-              }), let table = block.table else { return nil }
+        guard let (block, table, _) = table(at: selection.location, in: source,
+                                                    analysis: analysis ?? MarkdownAnalysis(text))
+        else { return nil }
         let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
         let delimiterRange = source.lineRange(for: NSRange(location: NSMaxRange(headerRange), length: 0))
         let ranges = [headerRange, delimiterRange] + table.rowRanges
@@ -292,20 +306,19 @@ enum MarkdownTableEditing {
     static func tabAction(in text: String, selection: NSRange,
                           backwards: Bool, addsRowAtEnd: Bool, analysis: MarkdownAnalysis? = nil) -> MarkdownTableTabAction? {
         let source = text as NSString
-        guard selection.location >= 0, selection.location < source.length,
-              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
-                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
-              }), let table = block.table else { return nil }
+        guard let (block, table, location) = table(at: selection.location, in: source,
+                                                    analysis: analysis ?? MarkdownAnalysis(text))
+        else { return nil }
         let header = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
         let delimiter = source.lineRange(for: NSRange(location: NSMaxRange(header), length: 0))
         let rows = [header] + table.rowRanges
-        let currentLine = source.lineRange(for: NSRange(location: selection.location, length: 0))
+        let currentLine = source.lineRange(for: NSRange(location: location, length: 0))
         let currentRow = rows.firstIndex(of: currentLine)
         let currentColumn: Int
         if let currentRow {
             let content = lineContent(source.substring(with: rows[currentRow])).content
             guard let currentCells = cells(in: content, expected: table.header.count) else { return nil }
-            currentColumn = columnIndex(at: selection.location - rows[currentRow].location,
+            currentColumn = columnIndex(at: location - rows[currentRow].location,
                                         cells: currentCells)
         } else if currentLine == delimiter {
             currentColumn = backwards ? 0 : table.header.count - 1
@@ -383,31 +396,29 @@ enum MarkdownTableEditing {
 
     static func alignment(in text: String, selection: NSRange, analysis: MarkdownAnalysis? = nil) -> MarkdownTable.Alignment? {
         let source = text as NSString
-        guard selection.location >= 0, selection.location < source.length,
-              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
-                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
-              }), let table = block.table else { return nil }
-        let lineRange = source.lineRange(for: NSRange(location: selection.location, length: 0))
+        guard let (_, table, location) = table(at: selection.location, in: source,
+                                                    analysis: analysis ?? MarkdownAnalysis(text))
+        else { return nil }
+        let lineRange = source.lineRange(for: NSRange(location: location, length: 0))
         guard let selectedCells = cells(in: lineContent(source.substring(with: lineRange)).content,
                                         expected: table.header.count) else { return nil }
-        let column = columnIndex(at: selection.location - lineRange.location, cells: selectedCells)
+        let column = columnIndex(at: location - lineRange.location, cells: selectedCells)
         return table.alignments[column]
     }
 
     static func edit(in text: String, selection: NSRange,
                      operation: MarkdownTableOperation, analysis: MarkdownAnalysis? = nil) -> MarkdownEdit? {
         let source = text as NSString
-        guard selection.location >= 0, selection.location < source.length,
-              let block = (analysis ?? MarkdownAnalysis(text)).blocks.first(where: {
-                  $0.kind == .table && NSLocationInRange(selection.location, $0.sourceRange)
-              }), let table = block.table else { return nil }
+        guard let (block, table, location) = table(at: selection.location, in: source,
+                                                    analysis: analysis ?? MarkdownAnalysis(text))
+        else { return nil }
         let headerRange = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
         let delimiterRange = source.lineRange(for: NSRange(location: NSMaxRange(headerRange), length: 0))
         let ranges = [headerRange, delimiterRange] + table.rowRanges
-        guard let rowIndex = ranges.firstIndex(where: { NSLocationInRange(selection.location, $0) }),
+        guard let rowIndex = ranges.firstIndex(where: { NSLocationInRange(location, $0) }),
               let selectedCells = cells(in: lineContent(source.substring(with: ranges[rowIndex])).content,
                                 expected: table.header.count) else { return nil }
-        let column = columnIndex(at: selection.location - ranges[rowIndex].location, cells: selectedCells)
+        let column = columnIndex(at: location - ranges[rowIndex].location, cells: selectedCells)
         switch operation {
         case .moveRowUp, .moveRowDown:
             guard rowIndex >= 2 else { return nil }
