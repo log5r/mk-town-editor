@@ -3007,7 +3007,7 @@ private struct TerminologySheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                // Return moves to the selected issue, as its Move button does (#60).
+                // A click on the text or Return moves to the issue, as its Move button does (#60).
                 List(issues, selection: $selectedID) { issue in
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
@@ -3018,7 +3018,7 @@ private struct TerminologySheet: View {
                                 .foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)
-                        Spacer()
+                        .activatesOnClick { onSelect(issue) }
                         Button("移動") { onSelect(issue) }
                         Button("置換") {
                             if !onReplace(issue) { replaceFailed = true }

@@ -138,6 +138,7 @@ final class ListKeyboardSelectionTests: XCTestCase {
             let body = try declaration(start, in: workspace)
             XCTAssertTrue(body.contains("List(selection:") || body.contains(", selection:"), start)
             XCTAssertTrue(body.contains(".activatesSelectionOnReturn("), start)
+            XCTAssertTrue(body.contains(".activatesOnClick"), start)
             XCTAssertFalse(body.contains(".buttonStyle(.plain)"), start)
         }
     }
