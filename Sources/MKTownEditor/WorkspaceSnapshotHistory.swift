@@ -458,18 +458,19 @@ struct WorkspaceSnapshotHistorySheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking)
             }
             HStack(alignment: .top, spacing: 16) {
-                List(entries) { entry in
-                    Button {
-                        select(entry)
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(entry.title).fontWeight(selected?.id == entry.id ? .semibold : .regular)
-                            Text(entry.createdAt, format: .dateTime.year().month().day().hour().minute())
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
+                // The selected snapshot is shown on the right, so the arrow keys browse them (#60).
+                List(entries, selection: Binding(get: { selected?.id }, set: { id in
+                    if let entry = entries.first(where: { $0.id == id }), entry.id != selected?.id { select(entry) }
+                })) { entry in
+                    VStack(alignment: .leading) {
+                        Text(entry.title)
+                        Text(entry.createdAt, format: .dateTime.year().month().day().hour().minute())
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
+                    .accessibilityElement(children: .combine)
+                }
+                .contextMenu(forSelectionType: WorkspaceSnapshotEntry.ID.self) { ids in
+                    if let entry = entries.first(where: { ids.contains($0.id) }) {
                         Button("削除", role: .destructive) { pendingDeletion = entry }
                             .disabled(isWorking)
                     }

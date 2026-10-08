@@ -9,6 +9,7 @@ struct WorkspaceTagsSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var index: WorkspaceTagIndex?
     @State private var selectedTag: String?
+    @State private var selectedDocumentID: WorkspaceTagDocument.ID?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceTagIndex, Error>?
@@ -42,10 +43,11 @@ struct WorkspaceTagsSheet: View {
                     }
                     .frame(width: 230)
                     Divider()
-                    List(index.documents(for: selectedTag ?? "")) { document in
-                        Button(document.relativePath) { onOpen(document.url) }
-                            .buttonStyle(.plain)
+                    List(index.documents(for: selectedTag ?? ""), selection: $selectedDocumentID) { document in
+                        Text(document.relativePath)
+                            .activatesOnClick { onOpen(document.url) }
                     }
+                    .activatesSelectionOnReturn(WorkspaceTagDocument.ID.self) { url in onOpen(url) }
                 }
             } else {
                 ContentUnavailableView("タグが見つかりません", systemImage: "number")

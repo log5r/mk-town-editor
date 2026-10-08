@@ -66,3 +66,16 @@ extension View {
             })
     }
 }
+
+extension View {
+    /// Runs `action` for the selected row when Return is pressed in a `List(selection:)` (#60).
+    /// A double-click also calls `primaryAction`, but `activatesOnClick` already handled the
+    /// click, so only the keyboard activates here.
+    func activatesSelectionOnReturn<ID: Hashable>(_ type: ID.Type,
+                                                  perform action: @escaping (ID) -> Void) -> some View {
+        contextMenu(forSelectionType: type) { _ in } primaryAction: { ids in
+            guard ListKeyboardSelection.isKeyboardActivation, let id = ids.first else { return }
+            action(id)
+        }
+    }
+}

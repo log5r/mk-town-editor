@@ -40,7 +40,12 @@ struct GitCommitSheet: View {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("変更ファイル").font(.headline)
-                        List(changes) { entry in
+                        // The selected file's diff is shown on the right, so the arrow keys browse them (#60).
+                        List(changes, selection: Binding(get: { selectedPath }, set: { path in
+                            guard let path, path != selectedPath else { return }
+                            selectedPath = path
+                            Task { await loadDiff(path: path) }
+                        })) { entry in
                             HStack {
                                 Toggle("", isOn: Binding(
                                     get: { selected.contains(entry.path) },
@@ -48,11 +53,8 @@ struct GitCommitSheet: View {
                                            else { selected.remove(entry.path) } }
                                 ))
                                 .labelsHidden()
-                                Button(entry.path) {
-                                    selectedPath = entry.path
-                                    Task { await loadDiff(path: entry.path) }
-                                }
-                                .buttonStyle(.plain)
+                                .accessibilityLabel("\(entry.path)をステージ対象にする")
+                                Text(entry.path)
                                 Spacer()
                                 if entry.isStaged {
                                     Text("ステージ済み").font(.caption)

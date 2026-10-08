@@ -206,6 +206,7 @@ struct EditorWorkspace: View {
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
     @State private var selectedBookmarkID: DocumentBookmark.ID?
+    @State private var selectedInspectorItemID: MarkdownContentItem.ID?
     @State private var selectedFileURL: URL?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
@@ -1627,7 +1628,14 @@ struct EditorWorkspace: View {
                 MarkdownContentInspector.items(in: snapshot.source, analysis: snapshot.analysis)
             }
         } ?? []
-        return List {
+        // Like the outline, the arrow keys reveal each item while the list keeps the focus, and
+        // a click or Return moves into the editor. The action buttons stay buttons (#60).
+        return List(selection: Binding(get: { selectedInspectorItemID }, set: { id in
+            selectedInspectorItemID = id
+            guard let item = items.first(where: { $0.id == id }),
+                  !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
+            navigate(to: item.sourceRange.location, focusesEditor: false)
+        })) {
             Section("文書プロパティ") {
                 Button("プロパティを編集…") { showingFrontMatterProperties = true }
             }
@@ -1670,20 +1678,26 @@ struct EditorWorkspace: View {
                 let matching = items.filter { $0.kind == kind }
                 Section("\(kind.title)（\(matching.count)）") {
                     ForEach(matching) { item in
-                        Button { navigate(to: item.sourceRange.location) } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(item.label).lineLimit(2)
-                                if let destination = item.destination {
-                                    Text(destination).font(.caption)
-                                        .foregroundStyle(.secondary).lineLimit(1)
-                                }
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.label).lineLimit(2)
+                            if let destination = item.destination {
+                                Text(destination).font(.caption)
+                                    .foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
-                        .buttonStyle(.plain)
+                        .tag(item.id)
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("\(kind.title)、\(item.label)")
+                        .activatesOnClick {
+                            selectedInspectorItemID = item.id
+                            navigate(to: item.sourceRange.location)
+                        }
                     }
                 }
             }
+        }
+        .activatesSelectionOnReturn(MarkdownContentItem.ID.self) { id in
+            if let item = items.first(where: { $0.id == id }) { navigate(to: item.sourceRange.location) }
         }
         .listStyle(.sidebar)
         .overlay {
@@ -2839,6 +2853,20 @@ private struct LinkDiagnosticsSheet: View {
     let onSelect: (NSRange) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedRow: Row?
+
+    /// A row of either section. Local and external links are numbered separately.
+    private enum Row: Hashable {
+        case local(MarkdownLinkDiagnostic.ID)
+        case external(MarkdownExternalLinkCheck.ID)
+    }
+
+    private func range(of row: Row) -> NSRange? {
+        switch row {
+        case let .local(id): diagnostics.first(where: { $0.id == id })?.sourceRange
+        case let .external(id): externalChecks.first(where: { $0.id == id })?.target.sourceRange
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2858,48 +2886,45 @@ private struct LinkDiagnosticsSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List {
+                List(selection: $selectedRow) {
                     if !diagnostics.isEmpty {
                         Section("ローカルリンク") {
                             ForEach(diagnostics) { diagnostic in
-                                Button {
-                                    onSelect(diagnostic.sourceRange)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(diagnostic.title).fontWeight(.medium)
-                                        Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(diagnostic.title).fontWeight(.medium)
+                                    Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
                                 }
-                                .buttonStyle(.plain)
+                                .tag(Row.local(diagnostic.id))
+                                .accessibilityElement(children: .combine)
+                                .activatesOnClick { onSelect(diagnostic.sourceRange) }
                             }
                         }
                     }
                     if !externalChecks.isEmpty {
                         Section("外部URL") {
                             ForEach(externalChecks) { check in
-                                Button {
-                                    onSelect(check.target.sourceRange)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(check.status.title).fontWeight(.medium)
-                                        Text("\(lines.line(containingUTF16Offset: check.target.sourceRange.location)) 行: \(check.target.url.absoluteString)")
-                                            .font(.caption)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(check.status.title).fontWeight(.medium)
+                                    Text("\(lines.line(containingUTF16Offset: check.target.sourceRange.location)) 行: \(check.target.url.absoluteString)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    if let code = check.httpStatus {
+                                        Text("HTTP \(code)")
+                                            .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                        if let code = check.httpStatus {
-                                            Text("HTTP \(code)")
-                                                .font(.caption2)
-                                                .foregroundStyle(.secondary)
-                                        }
                                     }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .buttonStyle(.plain)
+                                .tag(Row.external(check.id))
+                                .accessibilityElement(children: .combine)
+                                .activatesOnClick { onSelect(check.target.sourceRange) }
                             }
                         }
                     }
+                }
+                .activatesSelectionOnReturn(Row.self) { row in
+                    if let range = range(of: row) { onSelect(range) }
                 }
             }
         }
@@ -2917,6 +2942,7 @@ private struct MarkdownLintSheet: View {
     let onSelect: (MarkdownLintDiagnostic) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedID: MarkdownLintDiagnostic.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2942,17 +2968,18 @@ private struct MarkdownLintSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List(diagnostics) { diagnostic in
-                    Button { onSelect(diagnostic) } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(diagnostic.rule.title).fontWeight(.medium)
-                            Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                List(diagnostics, selection: $selectedID) { diagnostic in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(diagnostic.rule.title).fontWeight(.medium)
+                        Text("\(lines.line(containingUTF16Offset: diagnostic.sourceRange.location)) 行: \(diagnostic.detail)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .activatesOnClick { onSelect(diagnostic) }
+                }
+                .activatesSelectionOnReturn(MarkdownLintDiagnostic.ID.self) { id in
+                    if let diagnostic = diagnostics.first(where: { $0.id == id }) { onSelect(diagnostic) }
                 }
             }
         }
@@ -2972,6 +2999,7 @@ private struct TerminologySheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var replaceFailed = false
     @State private var lineIndexCache = DerivedValueCache<String, MarkdownLineIndex>()
+    @State private var selectedID: TerminologyIssue.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2989,7 +3017,8 @@ private struct TerminologySheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 let lines = lineIndexCache.value(for: source) { MarkdownLineIndex($0) }
-                List(issues) { issue in
+                // Return moves to the selected issue, as its Move button does (#60).
+                List(issues, selection: $selectedID) { issue in
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("\(issue.prohibited) → \(issue.preferred)")
@@ -2998,6 +3027,7 @@ private struct TerminologySheet: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .combine)
                         Spacer()
                         Button("移動") { onSelect(issue) }
                         Button("置換") {
@@ -3006,6 +3036,9 @@ private struct TerminologySheet: View {
                         .disabled(!canReplace)
                         .help(canReplace ? "推奨表記に置き換える" : "編集表示で置換できます")
                     }
+                }
+                .activatesSelectionOnReturn(TerminologyIssue.ID.self) { id in
+                    if let issue = issues.first(where: { $0.id == id }) { onSelect(issue) }
                 }
             }
         }
