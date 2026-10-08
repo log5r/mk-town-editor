@@ -223,6 +223,28 @@ final class LocalImagePreviewTests: XCTestCase {
         XCTAssertFalse(protected.contains(key), "Images unused beyond the protection interval are evicted")
     }
 
+    func testImageRequesterScopesRestoreTheExportDefault() throws {
+        let preview = LocalImageRequester()
+        let nestedPreview = LocalImageRequester()
+        XCTAssertNil(MarkdownRenderer.localImageRequester)
+
+        MarkdownRenderer.$localImageRequester.withValue(preview) {
+            XCTAssertTrue(MarkdownRenderer.localImageRequester === preview)
+            MarkdownRenderer.$localImageRequester.withValue(nestedPreview) {
+                XCTAssertTrue(MarkdownRenderer.localImageRequester === nestedPreview)
+            }
+            XCTAssertTrue(MarkdownRenderer.localImageRequester === preview)
+        }
+        XCTAssertNil(MarkdownRenderer.localImageRequester,
+                     "Export and printing must keep using synchronous image decoding")
+
+        enum ScopeError: Error { case cancelled }
+        XCTAssertThrowsError(try MarkdownRenderer.$localImageRequester.withValue(preview) {
+            throw ScopeError.cancelled
+        })
+        XCTAssertNil(MarkdownRenderer.localImageRequester)
+    }
+
     func testPreviewDecodesLocalImagesInBackgroundAndRendersAfterRevision() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
