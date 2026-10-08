@@ -9,6 +9,7 @@ struct WorkspaceTaskSheet: View {
     let onOpen: (WorkspaceTaskItem) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var index: WorkspaceTaskIndex?
+    @State private var selectedID: WorkspaceTaskItem.ID?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceTaskIndex, Error>?
@@ -30,7 +31,7 @@ struct WorkspaceTaskSheet: View {
                     systemImage: "exclamationmark.triangle", description: Text(errorMessage))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let index, !index.tasks.isEmpty {
-                List(index.tasks) { task in
+                List(index.tasks, selection: $selectedID) { task in
                     HStack(spacing: 12) {
                         Button("完了にする", systemImage: "circle") {
                             dismiss()
@@ -38,20 +39,23 @@ struct WorkspaceTaskSheet: View {
                         }
                         .labelStyle(.iconOnly)
                         .help("完了にする")
-                        Button {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(task.title.isEmpty ? "無題のタスク" : task.title)
+                                .fontWeight(.medium)
+                            Text("\(task.relativePath):\(task.line)")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .activatesOnClick {
                             dismiss()
                             onOpen(task)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(task.title.isEmpty ? "無題のタスク" : task.title)
-                                    .fontWeight(.medium)
-                                Text("\(task.relativePath):\(task.line)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .buttonStyle(.plain)
                     }
+                }
+                .activatesSelectionOnReturn(WorkspaceTaskItem.ID.self) { id in
+                    guard let task = index.tasks.first(where: { $0.id == id }) else { return }
+                    dismiss()
+                    onOpen(task)
                 }
             } else {
                 ContentUnavailableView("未完了のタスクはありません",

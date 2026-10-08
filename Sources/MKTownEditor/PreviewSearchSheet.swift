@@ -9,6 +9,7 @@ struct PreviewSearchSheet: View {
     @State private var text: String
     @State private var matches: [PreviewSearchMatch] = []
     @State private var isSearching = false
+    @State private var selectedMatchID: PreviewSearchMatch.ID?
 
     let source: String
     let selectedLocation: Int?
@@ -48,17 +49,18 @@ struct PreviewSearchSheet: View {
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            List(matches) { match in
-                Button {
-                    navigate(to: match)
-                } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("行\(match.line)").font(.subheadline.weight(.semibold))
-                        Text(match.excerpt).font(.caption).lineLimit(2)
-                            .foregroundStyle(.secondary)
-                    }
+            // The query field accepts newlines, so ↑↓ stay in it; Tab moves to the results (#60).
+            List(matches, selection: $selectedMatchID) { match in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("行\(match.line)").font(.subheadline.weight(.semibold))
+                    Text(match.excerpt).font(.caption).lineLimit(2)
+                        .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .activatesOnClick { navigate(to: match) }
+            }
+            .activatesSelectionOnReturn(PreviewSearchMatch.ID.self) { id in
+                if let match = matches.first(where: { $0.id == id }) { navigate(to: match) }
             }
             .frame(height: 260)
             HStack {
@@ -102,6 +104,7 @@ struct PreviewSearchSheet: View {
     }
 
     private func navigate(to match: PreviewSearchMatch) {
+        selectedMatchID = match.id
         if query != text { query = text }
         onNavigate(match)
     }

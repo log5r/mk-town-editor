@@ -10976,6 +10976,16 @@
           }
         }
       }
+    },
+    "%@をステージ対象にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include %@ in Staging"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

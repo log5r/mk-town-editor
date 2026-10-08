@@ -46,19 +46,20 @@ struct GitHistorySheet: View {
                     .padding(12)
                     .tabItem { Text("差分") }
                     HStack(spacing: 12) {
-                        List(snapshot.history) { revision in
-                            Button {
-                                selectedRevision = revision
-                                Task { await loadContent(revision, in: snapshot) }
-                            } label: {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(revision.subject).lineLimit(2)
-                                    Text(revision.shortHash)
-                                        .font(.caption.monospaced())
-                                        .foregroundStyle(.secondary)
-                                }
+                        // The selected revision is shown on the right, so the arrow keys browse them (#60).
+                        List(snapshot.history, selection: Binding(get: { selectedRevision?.id }, set: { id in
+                            guard let revision = snapshot.history.first(where: { $0.id == id }),
+                                  revision != selectedRevision else { return }
+                            selectedRevision = revision
+                            Task { await loadContent(revision, in: snapshot) }
+                        })) { revision in
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(revision.subject).lineLimit(2)
+                                Text(revision.shortHash)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
+                            .accessibilityElement(children: .combine)
                         }
                         .frame(width: 250)
                         GitDiffView(diff: selectedRevision == nil ? "" : historicalContent,

@@ -8,6 +8,7 @@ struct WorkspaceNamedLayoutSheet: View {
     @State private var name = ""
     @State private var layouts: [WorkspaceNamedLayout] = []
     @State private var pendingDeletion: WorkspaceNamedLayout?
+    @State private var selectedID: WorkspaceNamedLayout.ID?
     private let store = WorkspaceNamedLayoutStore()
 
     var body: some View {
@@ -33,26 +34,24 @@ struct WorkspaceNamedLayoutSheet: View {
                     systemImage: "rectangle.3.group")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(layouts) { layout in
+                List(layouts, selection: $selectedID) { layout in
                     HStack(spacing: 8) {
-                        Button {
-                            dismiss()
-                            onApply(layout)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(layout.name).fontWeight(.medium)
-                                Text("\(layout.documentPaths.count)書類・\(layout.mode.label)")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(layout.name).fontWeight(.medium)
+                            Text("\(layout.documentPaths.count)書類・\(layout.mode.label)")
+                                .font(.caption).foregroundStyle(.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .accessibilityElement(children: .combine)
+                        .activatesOnClick { apply(layout) }
                         Button("削除", systemImage: "trash", role: .destructive) {
                             pendingDeletion = layout
                         }
                         .labelStyle(.iconOnly)
                         .help("レイアウトを削除")
                     }
+                }
+                .activatesSelectionOnReturn(WorkspaceNamedLayout.ID.self) { id in
+                    if let layout = layouts.first(where: { $0.id == id }) { apply(layout) }
                 }
             }
         }
@@ -70,6 +69,11 @@ struct WorkspaceNamedLayoutSheet: View {
         } message: { _ in
             Text("保存したレイアウトを削除します。開いている書類やファイルは変更されません。この操作は取り消せません。")
         }
+    }
+
+    private func apply(_ layout: WorkspaceNamedLayout) {
+        dismiss()
+        onApply(layout)
     }
 
     private func save() {

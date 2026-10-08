@@ -10,6 +10,7 @@ struct WorkspaceLinkGraphSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var graph: WorkspaceLinkGraph?
     @State private var showsAll = false
+    @State private var selectedURL: URL?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var worker: Task<WorkspaceLinkGraph, Error>?
@@ -53,15 +54,17 @@ struct WorkspaceLinkGraphSheet: View {
                     }
                     .background(Color.secondary.opacity(0.05),
                         in: RoundedRectangle(cornerRadius: 8))
-                    List(displayed.nodes, id: \.self) { url in
-                        Button {
-                            dismiss()
-                            onOpen(url)
-                        } label: {
-                            Label(relativePath(url), systemImage: "doc.text")
-                                .lineLimit(2)
-                        }
-                        .buttonStyle(.plain)
+                    List(displayed.nodes, id: \.self, selection: $selectedURL) { url in
+                        Label(relativePath(url), systemImage: "doc.text")
+                            .lineLimit(2)
+                            .activatesOnClick {
+                                dismiss()
+                                onOpen(url)
+                            }
+                    }
+                    .activatesSelectionOnReturn(URL.self) { url in
+                        dismiss()
+                        onOpen(url)
                     }
                     .frame(width: 230)
                 }
