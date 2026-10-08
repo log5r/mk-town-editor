@@ -60,6 +60,23 @@ final class SheetPresentationTests: XCTestCase {
         XCTAssertNil(queue.current)
     }
 
+    /// A failure that arrives after one is dismissed but before the next is shown waits behind
+    /// the failure already queued.
+    func testErrorQueueKeepsArrivalOrderWhileAdvancing() {
+        var queue = WorkspaceErrorQueue()
+        queue.present(.pdfExport("A"))
+        queue.present(.htmlExport("B"))
+        queue.dismiss()
+        queue.present(.print("C"))
+        XCTAssertNil(queue.current)
+        queue.advance()
+        XCTAssertEqual(queue.current, .htmlExport("B"))
+        XCTAssertEqual(queue.pending, [.print("C")])
+        queue.dismiss()
+        queue.advance()
+        XCTAssertEqual(queue.current, .print("C"))
+    }
+
     /// The workspace store is shared by every window, so only the key window takes its failure.
     func testOnlyTheKeyWindowTakesTheWorkspaceStoreFailure() {
         XCTAssertEqual(WorkspaceErrorQueue.storeError("no access", isKeyWindow: true),

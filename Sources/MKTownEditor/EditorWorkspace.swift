@@ -3453,9 +3453,11 @@ struct WorkspaceErrorQueue: Equatable {
     private(set) var current: WorkspacePresentedError?
     private(set) var pending: [WorkspacePresentedError] = []
 
+    /// Between `dismiss()` and `advance()` nothing is shown, but a failure that is already
+    /// waiting still goes first, so failures are always shown in the order they arrived.
     mutating func present(_ error: WorkspacePresentedError) {
         guard current != error, !pending.contains(error) else { return }
-        if current == nil { current = error } else { pending.append(error) }
+        if current == nil, pending.isEmpty { current = error } else { pending.append(error) }
     }
 
     /// Clears the shown failure. `advance()` then shows the next one.
