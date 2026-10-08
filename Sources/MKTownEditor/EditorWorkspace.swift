@@ -1257,6 +1257,7 @@ struct EditorWorkspace: View {
     private var documentChangesView: some View {
         lifecycleView
         .onChange(of: fileURL) { oldURL, newURL in
+            selectedFileURL = nil
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
             monitorCloudDocument(newURL)
             refreshCloudStatus()
@@ -1711,6 +1712,7 @@ struct EditorWorkspace: View {
                     }
                 }
             } primaryAction: { ids in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let bookmark = settingsStore.bookmarks.first(where: { ids.contains($0.id) }) {
                     openBookmark(bookmark)
                 }
@@ -1874,7 +1876,7 @@ struct EditorWorkspace: View {
 
     private var workspaceFileList: some View {
         VStack(spacing: 0) {
-            List(selection: Binding(get: { selectedFileURL ?? fileURL },
+            List(selection: Binding(get: { selectedFileURL ?? fileURL?.standardizedFileURL },
                                     set: { selectedFileURL = $0 })) {
                 OutlineGroup(workspaceStore.visibleNodes, children: \.children) { node in
                     if node.isDirectory {
@@ -1882,14 +1884,14 @@ struct EditorWorkspace: View {
                             Label(node.name, systemImage: "folder")
                             if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
-                        .tag(node.url)
+                        .tag(node.url.standardizedFileURL)
                     } else {
                         HStack {
                             Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
                             if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
                         .activatesOnClick { openWorkspaceFile(node) }
-                        .tag(node.url)
+                        .tag(node.url.standardizedFileURL)
                     }
                 }
             }
@@ -1898,6 +1900,7 @@ struct EditorWorkspace: View {
                     fileContextActions(for: node)
                 }
             } primaryAction: { urls in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let url = urls.first, let node = workspaceNode(at: url), !node.isDirectory {
                     openWorkspaceFile(node)
                 }
@@ -2003,6 +2006,7 @@ struct EditorWorkspace: View {
                 .disabled(!canEdit || actions?.canDemote != true)
             }
         } primaryAction: { ids in
+            guard ListKeyboardSelection.isKeyboardActivation else { return }
             if let entry = entries.first(where: { ids.contains($0.id) }) { navigate(to: entry) }
         }
         }
@@ -2401,7 +2405,11 @@ struct EditorWorkspace: View {
 
     private func navigate(to location: Int, focusesEditor: Bool = true) {
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
-        navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        if focusesEditor {
+            navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        } else {
+            navigationHistory.recordPreview(from: currentNavigationPoint, to: destination)
+        }
         editorModel.navigate(to: location, focusesEditor: focusesEditor)
         scrollPreview(to: location)
     }
@@ -3388,7 +3396,7 @@ private struct TransientNoticeBanner: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .accessibilityHidden(true)
-                Text(notice)
+                Text(notice.message)
                     .lineLimit(2)
                 Button {
                     model.notice = nil
@@ -3406,9 +3414,9 @@ private struct TransientNoticeBanner: View {
             .background(.regularMaterial, in: Capsule())
             .shadow(radius: 2, y: 1)
             .accessibilityElement(children: .contain)
-            .task(id: notice) {
+            .task(id: notice.id) {
                 try? await Task.sleep(for: .seconds(5))
-                if !Task.isCancelled, model.notice == notice { model.notice = nil }
+                if !Task.isCancelled, model.notice?.id == notice.id { model.notice = nil }
             }
         }
     }

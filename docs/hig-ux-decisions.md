@@ -8,7 +8,7 @@ Human Interface Guidelinesから外れていたUXを2026-10に直した。各項
 
 ## プレビューの自動更新（#24）
 
-自動更新中は何も表示しない。一時停止中だけ「プレビューは一時停止中 — 最新／未反映の変更あり」と「更新」「再開」を表示する。内部の世代番号は表示しない。切り替えは「表示」メニュー（⌥⌘R、予約リストに追加済み）とツールバーのカスタマイズ項目から行う。
+自動更新中は何も表示しない。一時停止中だけ「プレビューは一時停止中 — 最新／未反映の変更あり」と「更新」「再開」を表示する。内部の世代番号は表示しない。切り替えは「表示」メニュー（⌥⌘R、予約リストに追加済み）とツールバーのカスタマイズ項目から行う。別ウインドウのプレビューは `NSWindow` に載せたビューでSwiftUIのシーンではないため、メニューの操作が届かない。そのウインドウには右上に一時停止ボタンを置く。
 
 ## シート・パネル・エラー表示（#29）
 
@@ -26,9 +26,9 @@ Human Interface Guidelinesから外れていたUXを2026-10に直した。各項
 
 サイドバーとパレット系シートの一覧は `List(selection:)` にした。
 
-- 矢印キーは選択を動かすだけ。アウトラインは選択した見出しへ本文を移動するが、フォーカスは一覧に残す（`navigate(to:focusesEditor: false)`）。
+- 矢印キーは選択を動かすだけ。アウトラインは選択した見出しへ本文を移動するが、フォーカスは一覧に残す（`navigate(to:focusesEditor: false)`）。連続したプレビューは「戻る」の履歴に1件だけ記録する（`NavigationHistory.recordPreview`）。見出しを10個送っても、「戻る」は送り始める前の位置へ1回で戻る。
 - クリックは行の `activatesOnClick`（`simultaneousGesture` のタップ）で確定する。選択済みの行をもう一度クリックした場合も動く。選択のバインディングはクリックによる変更を無視し、二重に実行しない（`ListKeyboardSelection.isPointerEvent`）。
-- Returnとダブルクリックは `.contextMenu(forSelectionType:menu:primaryAction:)` の `primaryAction` で確定する。右クリックメニューも同じ修飾子に移した。行ごとの `.contextMenu` と併用しない。
+- Returnは `.contextMenu(forSelectionType:menu:primaryAction:)` の `primaryAction` で確定する。`primaryAction` はダブルクリックでも呼ばれ、タップジェスチャもクリックごとに発火する。このため `primaryAction` はキーボード操作のときだけ実行し（`ListKeyboardSelection.isKeyboardActivation`）、タップは1回目のクリックだけで実行する（`isSingleClick`）。これがないと、ダブルクリックで添付ファイルが2〜3回開く。閉じかけのシートに2回目のクリックが届くことに備えて、パレットには `didSubmit` のガードも置く。右クリックメニューも同じ修飾子に移した。行ごとの `.contextMenu` と併用しない。
 - パレット系シートは検索欄にフォーカスを置いたまま `.movesListSelection` の↑↓で選択を動かし、Returnで選択中の候補を開く。候補がなくなったら先頭を選ぶ（`ListKeyboardSelection.resolved`）。
 - サイドバーの切り替えは日本語名が省略されないようアイコンにし、名前はツールチップとVoiceOverのラベルにした。
 
@@ -38,7 +38,7 @@ ID・名前・シンボル・既定表示の有無を `WorkspaceToolbarItem` に
 
 ## 設定ウインドウ（#52）
 
-`Settings` を `TabView` のタブ（一般・エディタ・プレビュー・校正・スニペット・拡張・キーボード）に分けた。設定値はバインディングから直接 `EditorSettingsStore` に書き込み、保存ボタンはない。ショートカットは `ShortcutRecorderView` でキー入力を記録して即座に適用する。保存形式は[キーボードショートカットの割り当て方針](keyboard-shortcuts.md#記録したキーの保存形式52)を参照。行番号は `AppEditorSettings.showsLineNumbers` から `EditorLayoutOptions` を通じて `rulersVisible` に反映する。
+`Settings` を `TabView` のタブ（一般・エディタ・プレビュー・校正・スニペット・拡張・キーボード）に分けた。記録したキーのうち、AppKitが私用領域の文字（U+F700〜U+F8FF）で表す矢印・ファンクション・Home/End・Pageキーは割り当てない。⌘←などをメニューに取られると、エディタの標準のカーソル移動ができなくなる。以前の版で保存した割り当てが、後の版でメニューに固定したキー（⌥⌘Rなど）と重なる場合は、固定のメニュー項目を優先する。設定値はバインディングから直接 `EditorSettingsStore` に書き込み、保存ボタンはない。ショートカットは `ShortcutRecorderView` でキー入力を記録して即座に適用する。保存形式は[キーボードショートカットの割り当て方針](keyboard-shortcuts.md#記録したキーの保存形式52)を参照。行番号は `AppEditorSettings.showsLineNumbers` から `EditorLayoutOptions` を通じて `rulersVisible` に反映する。
 
 ## 実機での確認方法
 

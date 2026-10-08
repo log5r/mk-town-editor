@@ -115,7 +115,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     /// A recoverable problem shown briefly in the window instead of an alert (#29).
-    @Published var notice: String?
+    @Published var notice: EditorNotice?
     weak var textView: NSTextView?
     var sharedSnapshot: DocumentSnapshot? {
         didSet {
@@ -817,7 +817,8 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func showNotice(_ message: String) {
-        notice = message
+        // A new identity restarts the banner's timer even when the message repeats.
+        notice = EditorNotice(message: message)
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
                              userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
@@ -976,4 +977,9 @@ final class MarkdownEditorModel: ObservableObject {
         item.tag = action.rawValue
         textView.performTextFinderAction(item)
     }
+}
+
+struct EditorNotice: Identifiable, Equatable {
+    let id = UUID()
+    let message: String
 }

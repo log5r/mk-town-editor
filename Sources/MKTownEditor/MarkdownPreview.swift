@@ -972,6 +972,23 @@ private struct DetachedPreviewContent: View {
                             bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         }
         .frame(minWidth: 420, minHeight: 300)
+        // This window is not a SwiftUI scene, so the View menu command cannot reach it; it keeps
+        // its own pause button while the update bar is hidden.
+        .overlay(alignment: .topTrailing) {
+            if !updates.state.isPaused {
+                Button {
+                    updates.pause(source: document.text, dialect: dialect)
+                } label: {
+                    Image(systemName: "pause.circle")
+                        .font(.title3)
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .padding(10)
+                .help("プレビューの自動更新を一時停止")
+                .accessibilityLabel("プレビューの自動更新を一時停止")
+            }
+        }
     }
 }
 

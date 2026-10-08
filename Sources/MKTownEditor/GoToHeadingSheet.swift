@@ -31,7 +31,9 @@ struct GoToHeadingSheet: View {
                         go()
                     }
             }
-            .contextMenu(forSelectionType: Int.self) { _ in } primaryAction: { _ in go() }
+            .contextMenu(forSelectionType: Int.self) { _ in } primaryAction: { _ in
+                if ListKeyboardSelection.isKeyboardActivation { go() }
+            }
             .frame(height: 260)
             Text("↑↓キーで選び、Returnで移動します。")
                 .font(.caption)

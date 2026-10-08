@@ -9,11 +9,22 @@ struct NavigationHistory: Equatable {
     private(set) var back: [NavigationPoint] = []
     private(set) var forward: [NavigationPoint] = []
     private let capacity = 100
+    /// True while consecutive previews (arrow keys in the outline) are being recorded as one jump.
+    private var isPreviewing = false
 
     var canGoBack: Bool { !back.isEmpty }
     var canGoForward: Bool { !forward.isEmpty }
 
+    /// Records a preview jump. A run of previews adds a single Back entry, the place before the
+    /// first one, so Back returns there instead of stepping through every previewed heading.
+    mutating func recordPreview(from origin: NavigationPoint, to destination: NavigationPoint) {
+        guard !isPreviewing else { return }
+        recordJump(from: origin, to: destination)
+        isPreviewing = origin != destination
+    }
+
     mutating func recordJump(from origin: NavigationPoint, to destination: NavigationPoint) {
+        isPreviewing = false
         guard origin != destination else { return }
         back.append(origin)
         if back.count > capacity { back.removeFirst(back.count - capacity) }
@@ -21,12 +32,14 @@ struct NavigationHistory: Equatable {
     }
 
     mutating func goBack(from current: NavigationPoint) -> NavigationPoint? {
+        isPreviewing = false
         guard let destination = back.popLast() else { return nil }
         forward.append(current)
         return destination
     }
 
     mutating func goForward(from current: NavigationPoint) -> NavigationPoint? {
+        isPreviewing = false
         guard let destination = forward.popLast() else { return nil }
         back.append(current)
         if back.count > capacity { back.removeFirst(back.count - capacity) }
