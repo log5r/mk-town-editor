@@ -26,6 +26,16 @@ final class ListKeyboardSelectionTests: XCTestCase {
         XCTAssertNil(ListKeyboardSelection.moved(nil, in: [Int](), by: 1))
     }
 
+    /// A list that shows nothing selected starts at its first row, not the second (#60).
+    func testMovingFromNoSelectionStartsAtTheEnds() {
+        let ids = [1, 2, 3]
+        XCTAssertEqual(ListKeyboardSelection.moved(nil, in: ids, by: 1, startsUnselected: true), 1)
+        XCTAssertEqual(ListKeyboardSelection.moved(nil, in: ids, by: -1, startsUnselected: true), 3)
+        XCTAssertEqual(ListKeyboardSelection.moved(9, in: ids, by: 1, startsUnselected: true), 1)
+        XCTAssertEqual(ListKeyboardSelection.moved(1, in: ids, by: 1, startsUnselected: true), 2)
+        XCTAssertNil(ListKeyboardSelection.moved(nil, in: [Int](), by: 1, startsUnselected: true))
+    }
+
     func testOnlyMouseEventsCountAsClicks() throws {
         let click = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
             timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
@@ -110,7 +120,12 @@ final class ListKeyboardSelectionTests: XCTestCase {
             XCTAssertTrue(text.contains(".activatesSelectionOnReturn("), name)
             XCTAssertTrue(text.contains(".activatesOnClick"), name)
         }
-        XCTAssertTrue(try source("RegexSearchSheet.swift").contains(".movesListSelection("))
+        XCTAssertTrue(try source("RegexSearchSheet.swift").contains("startsUnselected: true"))
+        // Sheets that close when a row opens ignore a second click or Return while closing.
+        for (name, guardName) in [("WorkspaceSearchSheet.swift", "didOpen"), ("WorkspaceLinkGraphSheet.swift", "didOpen"),
+                                  ("WorkspaceTaskSheet.swift", "didSubmit"), ("WorkspaceNamedLayoutSheet.swift", "didApply")] {
+            XCTAssertTrue(try source(name).contains("guard !\(guardName) else { return }"), name)
+        }
 
         let workspace = try source("EditorWorkspace.swift")
         for start in ["private var contentInspectorSidebar: some View {", "private struct LinkDiagnosticsSheet: View {",

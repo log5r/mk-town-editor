@@ -10,6 +10,7 @@ struct WorkspaceSearchSheet: View {
     @State private var scope: WorkspaceSearchScope = .all
     @State private var results: [WorkspaceSearchResult] = []
     @State private var selectedResultID: WorkspaceSearchResult.ID?
+    @State private var didOpen = false
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var searchTask: Task<WorkspaceSearchReport, Error>?
@@ -109,7 +110,10 @@ struct WorkspaceSearchSheet: View {
         }
     }
 
+    /// A second click or Return can reach the sheet while it closes, so only the first opens.
     private func open(_ result: WorkspaceSearchResult) {
+        guard !didOpen else { return }
+        didOpen = true
         cancelSearch()
         dismiss()
         onOpen(result)

@@ -134,6 +134,31 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertEqual(recorded, [])
     }
 
+    /// Leaving the window while holding a modifier never delivers its release, so the pending
+    /// combination is dropped instead of being applied by a later unrelated key (#62).
+    func testRecorderDropsTheCombinationWhenTheWindowResignsKey() throws {
+        let (window, recorder) = makeRecorder()
+        var recorded: [ShortcutChord] = []
+        recorder.onRecord = { recorded.append($0) }
+        XCTAssertTrue(window.makeFirstResponder(recorder))
+        recorder.modifiersChanged(.command)
+        XCTAssertTrue(recorder.performKeyEquivalent(with: keyEvent("k", unmodified: "k", keyCode: 40, modifiers: .command)))
+
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+        XCTAssertNil(recorder.pendingChord)
+        XCTAssertEqual(recorder.displayText, String(localized: "キーを入力…"))
+        recorder.modifiersChanged([])
+        recorder.keyUp(with: keyEvent("a", unmodified: "a", keyCode: 0, modifiers: []))
+        XCTAssertEqual(recorded, [])
+
+        // Another window resigning key does not affect the recorder.
+        let other = NSWindow(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+        recorder.modifiersChanged(.command)
+        XCTAssertTrue(recorder.performKeyEquivalent(with: keyEvent("k", unmodified: "k", keyCode: 40, modifiers: .command)))
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: other)
+        XCTAssertEqual(recorder.pendingChord, ShortcutChord(key: "k"))
+    }
+
     /// A key without modifiers has no flags to release, so its key-up applies it.
     func testRecorderAppliesAKeyWithoutModifiersOnKeyUp() throws {
         let (window, recorder) = makeRecorder()
