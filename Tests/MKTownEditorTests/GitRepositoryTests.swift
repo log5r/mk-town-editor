@@ -43,6 +43,32 @@ final class GitRepositoryTests: XCTestCase {
             in: snapshot))
     }
 
+    func testDocumentsReachedThroughSymbolicLinksAreFoundInTheirRepository() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let folder = base.appendingPathComponent("repository")
+        let chapters = folder.appendingPathComponent("book/chapters")
+        try FileManager.default.createDirectory(at: chapters, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try git(["init", "--quiet"], in: folder)
+        try git(["config", "user.name", "Test"], in: folder)
+        try git(["config", "user.email", "test@example.invalid"], in: folder)
+        try "body\n".write(to: chapters.appendingPathComponent("one.md"), atomically: true, encoding: .utf8)
+        try git(["add", "--", "book/chapters/one.md"], in: folder)
+        try git(["commit", "--quiet", "-m", "Add chapter"], in: folder)
+        let link = base.appendingPathComponent("linked")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: folder)
+        let linkedChapters = base.appendingPathComponent("chapters-link")
+        try FileManager.default.createSymbolicLink(at: linkedChapters, withDestinationURL: chapters)
+
+        for document in [link.appendingPathComponent("book/chapters/one.md"),
+                         linkedChapters.appendingPathComponent("one.md")] {
+            let snapshot = try GitRepository.load(for: document)
+            XCTAssertEqual(snapshot.relativePath, "book/chapters/one.md")
+            XCTAssertEqual(snapshot.history.first?.subject, "Add chapter")
+            XCTAssertEqual(try GitRepository.content(of: snapshot.history[0], in: snapshot), "body\n")
+        }
+    }
+
     func testStagesUnstagesAndCommitsOnlyReviewedIndex() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
