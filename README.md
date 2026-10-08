@@ -30,27 +30,24 @@ Swift Packageの定義はSwift tools 6.0です。初回ビルドでは、依存�
 
 ## 実行
 
-リポジトリのルートディレクトリで、次のコマンドを実行します。
-
-```sh
-swift run MKTownEditor
-```
-
-Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`スキームを選んで実行します。
-
-### Releaseビルドで起動する
+リポジトリのルートディレクトリで、次のコマンドを実行します。Releaseビルドからアプリバンドル`.build/MKTownEditor.app`を組み立てて起動します。
 
 ```sh
 ./start.sh
 ```
 
-通常は差分ビルドを行います。ビルド成果物を削除してから起動する場合は、次のコマンドを使います。Debugの成果物も削除されます。
+通常は差分ビルドを行います。ビルド成果物を削除してから起動する場合は`rebuild`を付けます。Debugの成果物も削除されます。書類のパスを続けると、起動後にその書類を開きます。
 
 ```sh
 ./start.sh rebuild
+./start.sh notes/example.md
 ```
 
-起動処理は[`start.sh`](start.sh)で確認できます。Packageから起動したプロセスはアプリバンドルではないため、Markdown文書型の宣言やURLスキームなどInfo.plistに依存する機能は使えません。詳細は[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)を参照してください。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
+アプリバンドルとして起動するので、URLスキーム、Markdownの書類タイプ、サービスメニュー、共同編集のローカルネットワーク利用など、Info.plistに依存する機能も使えます。バンドルの構成と制約（アドホック署名、起動中のアプリとの関係など）は[`start.sh` のアプリバンドル起動](docs/production-launcher.md)にまとめています。
+
+Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`スキームを選んで実行します。
+
+`swift run MKTownEditor`でも起動できますが、実行ファイルを直接起動するため、Info.plistに依存する機能は使えません（[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)）。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
 
 ## 基本操作
 
@@ -80,7 +77,7 @@ Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`ス�
 
 ### ターミナルから書類・行を開く
 
-インストール済みのアプリ、または一度起動してURLスキームを登録したアプリへ、書類と行番号を渡せます。
+インストール済みのアプリ、または`./start.sh`かXcodeで一度起動してURLスキームを登録したアプリへ、書類と行番号を渡せます。
 
 ```sh
 swift Tools/mktown-open.swift --line 42 ~/notes/example.md
@@ -108,6 +105,8 @@ Mermaidと数式の描画ライブラリは同梱しています。[数式の書
 swift test
 ```
 
+Xcodeでは`MKTownEditor`スキームでProduct > Testを選ぶと、アプリをホストにして同じテストを実行できます。
+
 CIと同じチェック（Pythonのスクリプトテスト、Swiftの全ユニットテスト、Releaseビルド）を実行する場合は、次のコマンドを使います。Python 3が必要です。
 
 ```sh
@@ -122,7 +121,7 @@ CIでは`Package.resolved`に固定した依存ライブラリを使い、テス
 | --- | --- |
 | [`Sources/MKTownEditor`](Sources/MKTownEditor) | アプリ本体と同梱リソース |
 | [`Tests/MKTownEditorTests`](Tests/MKTownEditorTests) | Swiftのユニットテスト |
-| [`Tools`](Tools) | CI、起動スクリプトのテスト、書類を開くCLI |
+| [`Tools`](Tools) | CI、アプリバンドルの組み立て、スクリプトのテスト、書類を開くCLI |
 | [`Package.swift`](Package.swift) | Swift Packageの構成と依存ライブラリ |
 | [`docs`](docs) | 機能ガイドなどの公開ドキュメント |
 
