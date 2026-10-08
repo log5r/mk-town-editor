@@ -54,12 +54,14 @@ enum GitRepository {
         guard documentURL.isFileURL else { throw GitRepositoryError.invalidDocument }
         let fileURL = documentURL.standardizedFileURL
         let folder = fileURL.deletingLastPathComponent()
-        let rootPath = try run(in: folder, arguments: ["rev-parse", "--show-toplevel"])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rootPath.isEmpty else { throw GitRepositoryError.invalidDocument }
-        let root = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
-        guard fileURL.path.hasPrefix(root.path + "/") else { throw GitRepositoryError.invalidDocument }
-        let relativePath = String(fileURL.path.dropFirst(root.path.count + 1))
+        // Git reports the top level with symbolic links resolved, so the document's place in
+        // the repository comes from Git's own prefix instead of comparing the two paths.
+        let location = try run(in: folder, arguments: ["rev-parse", "--show-toplevel", "--show-prefix"])
+            .split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard location.count >= 2, !location[0].isEmpty, !fileURL.lastPathComponent.isEmpty
+        else { throw GitRepositoryError.invalidDocument }
+        let root = URL(fileURLWithPath: location[0], isDirectory: true).standardizedFileURL
+        let relativePath = location[1] + fileURL.lastPathComponent
         let status = try run(in: root, arguments: ["status", "--short", "--untracked-files=normal"])
         let hasHead = (try? run(in: root, arguments: ["rev-parse", "--verify", "HEAD"])) != nil
         let diff = hasHead ? try run(in: root,
