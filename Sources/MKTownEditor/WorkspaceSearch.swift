@@ -131,7 +131,7 @@ enum WorkspaceSearch {
     static func report(root: URL, options: WorkspaceSearchOptions,
                        maximumResults: Int = 2_000) throws -> WorkspaceSearchReport {
         guard !options.query.isEmpty else { return WorkspaceSearchReport(results: [], skippedDocuments: [], isTruncated: false) }
-        let scan = WorkspaceFileIndex.scan(root: root)
+        let scan = try WorkspaceFileIndex.scan(root: root)
         var skipped: [URL] = []
         var results: [WorkspaceSearchResult] = []
         let rootPath = root.resolvingSymlinksInPath().standardizedFileURL.path

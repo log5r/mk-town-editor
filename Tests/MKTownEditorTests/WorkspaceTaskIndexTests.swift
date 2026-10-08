@@ -13,7 +13,7 @@ final class WorkspaceTaskIndexTests: XCTestCase {
         try "- [x] saved".write(to: one, atomically: true, encoding: .utf8)
         try "- [ ] second\n```\n- [ ] code\n```".write(to: two,
             atomically: true, encoding: .utf8)
-        let nodes = WorkspaceFileIndex.scan(root: root).nodes
+        let nodes = try WorkspaceFileIndex.scan(root: root).nodes
         let index = try WorkspaceTaskIndex.scan(root: root, nodes: nodes,
             openBuffers: [one: Data("- [ ] unsaved\n- [x] done".utf8)])
         XCTAssertEqual(index.tasks.map(\.title), ["unsaved", "second"])

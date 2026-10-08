@@ -14,7 +14,7 @@ final class WorkspaceLinkGraphTests: XCTestCase {
             try "body".write(to: url, atomically: true, encoding: .utf8)
         }
         let open = "[B](b.md) [[b]]\n![[c]]\n```\n[[c]]\n```\n![image](c.md)"
-        let index = WorkspaceFileIndex.scan(root: root)
+        let index = try WorkspaceFileIndex.scan(root: root)
         let graph = try WorkspaceLinkGraph.scan(root: root, nodes: index.nodes,
             openBuffers: [a: Data(open.utf8)])
         XCTAssertEqual(Set(graph.edges), Set([
