@@ -33,6 +33,7 @@ enum GitRepositoryError: LocalizedError {
     case invalidDocument
     case commandFailed(String)
     case timedOut
+    case commitTimedOut
     case tooLarge
     case invalidSelection
     case unresolvedConflict
@@ -42,6 +43,7 @@ enum GitRepositoryError: LocalizedError {
         case .invalidDocument: String(localized: "Git管理下の保存済み文書を選んでください。")
         case let .commandFailed(message): message
         case .timedOut: String(localized: "Gitの読み取りが時間切れになりました。")
+        case .commitTimedOut: String(localized: "コミットが時間切れになりました。リポジトリのフックが終了しなかった可能性があります。")
         case .tooLarge: String(localized: "Gitの読み取り結果が大きすぎます。")
         case .invalidSelection: String(localized: "変更ファイルの選択を確認してください。")
         case .unresolvedConflict: String(localized: "競合記号を解消し、保存してからステージしてください。")
@@ -155,9 +157,16 @@ enum GitRepository {
               !entries.contains(where: \.isConflicted) else {
             throw GitRepositoryError.invalidSelection
         }
-        _ = try run(in: root, arguments: ["-c", "core.hooksPath=/dev/null",
-                                             "commit", "-m", trimmed])
+        // Hooks run as they do from the command line; a rejecting hook's message is shown as the error.
+        do {
+            _ = try run(in: root, arguments: ["commit", "-m", trimmed], timeout: commitTimeout)
+        } catch GitRepositoryError.timedOut {
+            throw GitRepositoryError.commitTimedOut
+        }
     }
+
+    /// Hooks such as linters can take far longer than a read.
+    static let commitTimeout: TimeInterval = 120
 
     private static func validate(_ paths: [String], in root: URL) throws {
         guard !paths.isEmpty else { throw GitRepositoryError.invalidSelection }
@@ -168,7 +177,7 @@ enum GitRepository {
         }
     }
 
-    private static func run(in folder: URL, arguments: [String]) throws -> String {
+    private static func run(in folder: URL, arguments: [String], timeout: TimeInterval = 8) throws -> String {
         let temporary = FileManager.default.temporaryDirectory
         let outputURL = temporary.appendingPathComponent("mktown-git-\(UUID().uuidString).out")
         let errorURL = temporary.appendingPathComponent("mktown-git-\(UUID().uuidString).err")
@@ -190,17 +199,16 @@ enum GitRepository {
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         try process.run()
-        if finished.wait(timeout: .now() + 8) == .timedOut {
+        if finished.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
             throw GitRepositoryError.timedOut
         }
         try output.synchronize()
         try errors.synchronize()
         let data = try Data(contentsOf: outputURL)
-        let errorData = try Data(contentsOf: errorURL)
-        guard data.count <= 4_000_000, errorData.count <= 20_000 else {
-            throw GitRepositoryError.tooLarge
-        }
+        // Hooks and progress can write a lot to standard error; the end holds the failure.
+        let errorData = try Data(contentsOf: errorURL).suffix(20_000)
+        guard data.count <= 4_000_000 else { throw GitRepositoryError.tooLarge }
         guard process.terminationStatus == 0 else {
             let message = String(decoding: errorData, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
