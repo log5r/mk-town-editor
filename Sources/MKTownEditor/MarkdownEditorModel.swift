@@ -436,7 +436,9 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
-    func navigate(to sourceLocation: Int) {
+    /// `focusesEditor` is false when a list's selection follows the arrow keys, so the list
+    /// keeps the keyboard focus while the editor shows the selected place.
+    func navigate(to sourceLocation: Int, focusesEditor: Bool = true) {
         let location = max(0, sourceLocation)
         guard let textView else {
             selectedRange = NSRange(location: location, length: 0)
@@ -449,7 +451,7 @@ final class MarkdownEditorModel: ObservableObject {
         (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
-        textView.window?.makeFirstResponder(textView)
+        if focusesEditor { textView.window?.makeFirstResponder(textView) }
         selectedRange = range
         selectedRanges = [range]
     }

@@ -10736,6 +10736,16 @@
           }
         }
       }
+    },
+    "↑↓キーで選び、Returnで移動します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use ↑ and ↓ to choose a heading, then press Return to go to it."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
