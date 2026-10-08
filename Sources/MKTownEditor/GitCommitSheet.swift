@@ -13,6 +13,7 @@ struct GitCommitSheet: View {
     @State private var message = ""
     @State private var error: String?
     @State private var busy = false
+    @AppStorage("gitCommitRunsHooks") private var runsHooks = true
 
     private var conflicts: [GitStatusEntry] { entries.filter(\.isConflicted) }
     private var changes: [GitStatusEntry] { entries.filter { !$0.isConflicted } }
@@ -29,7 +30,7 @@ struct GitCommitSheet: View {
                 .disabled(busy)
                 Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            Text("保存済みファイルの変更を操作します。通信操作は行いません。コミット時はリポジトリのフック（pre-commitなど）を実行します。")
+            Text("保存済みファイルの変更を操作します。通信操作は行いません。")
                 .font(.caption).foregroundStyle(.secondary)
             if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             if busy { ProgressView() }
@@ -107,6 +108,9 @@ struct GitCommitSheet: View {
                     .font(.caption).foregroundStyle(.secondary)
                 TextField("コミットメッセージ", text: $message)
                     .textFieldStyle(.roundedBorder)
+                Toggle("リポジトリのフックを実行する", isOn: $runsHooks)
+                    .toggleStyle(.checkbox)
+                    .help("オフにすると、pre-commitなどのフックを実行せずにコミットします（git commit --no-verify）。")
                 Button("ステージ済みの変更をコミット") {
                     Task { await commit() }
                 }
@@ -184,8 +188,12 @@ struct GitCommitSheet: View {
     private func commit() async {
         guard let snapshot else { return }
         let value = message
+        let hooks = runsHooks
         await mutate {
-            try GitRepository.commit(message: value, in: snapshot.rootURL)
+            try GitRepository.commit(message: value, in: snapshot.rootURL, runsHooks: hooks)
+        }
+        if let error, hooks {
+            self.error = error + "\n" + String(localized: "フックが原因でコミットできない場合は、「リポジトリのフックを実行する」をオフにしてください。")
         }
         if error == nil { message = "" }
     }

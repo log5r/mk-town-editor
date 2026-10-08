@@ -206,12 +206,32 @@
         }
       }
     },
-    "保存済みファイルの変更を操作します。通信操作は行いません。コミット時はリポジトリのフック（pre-commitなど）を実行します。" : {
+    "リポジトリのフックを実行する" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Works with changes to saved files. No network operations are performed. Committing runs the repository's hooks, such as pre-commit."
+            "value" : "Run Repository Hooks"
+          }
+        }
+      }
+    },
+    "オフにすると、pre-commitなどのフックを実行せずにコミットします（git commit --no-verify）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, commits without running hooks such as pre-commit (git commit --no-verify)."
+          }
+        }
+      }
+    },
+    "フックが原因でコミットできない場合は、「リポジトリのフックを実行する」をオフにしてください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If a hook prevents the commit, turn off “Run Repository Hooks.”"
           }
         }
       }

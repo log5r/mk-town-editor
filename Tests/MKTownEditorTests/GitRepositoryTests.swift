@@ -109,6 +109,7 @@ final class GitRepositoryTests: XCTestCase {
         // Long output on standard error must not hide the hook's verdict.
         try """
         #!/bin/sh
+        cat > /dev/null
         yes noise | head -n 5000 >&2
         if [ -e "$(git rev-parse --show-toplevel)/allow" ]; then exit 0; fi
         echo "pre-commit: lint failed" >&2
@@ -123,10 +124,25 @@ final class GitRepositoryTests: XCTestCase {
         }
         XCTAssertTrue(try GitRepository.statusEntries(in: folder).contains(where: \.isStaged))
 
+        try GitRepository.commit(message: "Skip hooks", in: folder, runsHooks: false)
+        XCTAssertEqual(try GitRepository.load(for: folder.appendingPathComponent("note.md")).history.first?.subject,
+                       "Skip hooks")
+        try "changed".write(to: folder.appendingPathComponent("note.md"), atomically: true, encoding: .utf8)
+        try GitRepository.stage(["note.md"], in: folder)
         FileManager.default.createFile(atPath: folder.appendingPathComponent("allow").path, contents: nil)
+        try GitRepository.stage(["allow"], in: folder)
         try GitRepository.commit(message: "Add note", in: folder)
         XCTAssertEqual(try GitRepository.load(for: folder.appendingPathComponent("note.md")).history.first?.subject,
                        "Add note")
+    }
+
+    func testHooksFindHomebrewToolsWhenOpenedFromFinder() {
+        let environment = GitRepository.environment(["PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/Users/x"])
+        XCTAssertEqual(environment["PATH"], "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin")
+        XCTAssertEqual(environment["GIT_TERMINAL_PROMPT"], "0")
+        XCTAssertEqual(environment["HOME"], "/Users/x")
+        XCTAssertEqual(GitRepository.environment(["PATH": "/opt/homebrew/bin:/usr/bin"])["PATH"],
+                       "/opt/homebrew/bin:/usr/bin:/opt/homebrew/sbin:/usr/local/bin")
     }
 
     func testStagedChangesCanBeCommittedWithoutSelectingThemAgain() {
