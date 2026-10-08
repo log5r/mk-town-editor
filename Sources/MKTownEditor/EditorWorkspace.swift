@@ -84,7 +84,6 @@ struct EditorWorkspace: View {
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
     @State private var toolbarInstanceID: EditorToolbarInstanceID
-    @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     @State private var focusMode = FocusModeState()
@@ -97,8 +96,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
-    @State private var missingHeading: String?
-    @State private var documentLinkError: String?
+    @State private var presentedError: WorkspacePresentedError?
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
@@ -120,16 +118,12 @@ struct EditorWorkspace: View {
     @State private var terminologyTask: Task<[TerminologyIssue], Never>?
     @State private var showingAutoFormat = false
     @State private var showingRegexSearch = false
-    @State private var htmlExportError: String?
-    @State private var pdfExportError: String?
     @State private var documentOperation: Task<Void, Never>?
     @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
     @State private var printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
     @State private var printSettings = MarkdownPrintSettings()
-    @State private var printError: String?
     @State private var printRequested = false
-    @State private var richCopyError: String?
     @State private var showingPlainExport = false
     @State private var showingExternalExport = false
     @State private var showingRichImport = false
@@ -137,11 +131,9 @@ struct EditorWorkspace: View {
     @State private var showingBatchExport = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
-    @State private var plainExportError: String?
     @State private var exportFormat: MarkdownExportFormat?
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
-    @State private var workspaceOpenError: String?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
     @State private var showingWorkspaceTasks = false
@@ -173,7 +165,6 @@ struct EditorWorkspace: View {
     @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
-    @State private var encodingImportError: String?
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
 
@@ -295,6 +286,10 @@ struct EditorWorkspace: View {
                 }
             }
             .frame(minWidth: 720, minHeight: 480)
+            .overlay(alignment: .bottom) {
+                TransientNoticeBanner(model: editorModel)
+                    .padding(.bottom, focusMode.isActive ? 12 : 34)
+            }
             .overlay(alignment: .topTrailing) {
                 if focusMode.isActive {
                     Button("集中モードを終了", systemImage: "arrow.down.right.and.arrow.up.left") {
@@ -522,7 +517,7 @@ struct EditorWorkspace: View {
                 GitCommitSheet(fileURL: fileURL) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -620,7 +615,7 @@ struct EditorWorkspace: View {
             WorkspaceQuickOpenSheet { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { workspaceOpenError = error.localizedDescription }
+                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
                 }
             }
         }
@@ -637,7 +632,7 @@ struct EditorWorkspace: View {
                 WorkspaceAttachmentAuditSheet(root: root) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -688,7 +683,7 @@ struct EditorWorkspace: View {
             MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { encodingImportError = error.localizedDescription }
+                    catch { presentedError = .encodingImport(error.localizedDescription) }
                 }
             }
         }
@@ -757,7 +752,7 @@ struct EditorWorkspace: View {
                                        showingWorkspaceTags = false
                                        Task {
                                            do { try await openDocument(at: url) }
-                                           catch { workspaceOpenError = error.localizedDescription }
+                                           catch { presentedError = .workspaceOpen(error.localizedDescription) }
                                        }
                                    })
             }
@@ -781,7 +776,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: backlink.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: backlink.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -807,7 +802,7 @@ struct EditorWorkspace: View {
                             fileURL.resolvingSymlinksInPath().standardizedFileURL { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -818,7 +813,7 @@ struct EditorWorkspace: View {
                     workspaceStore.refresh(force: true)
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -839,7 +834,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelTaskToggle(for: task.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -855,7 +850,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: task.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -874,7 +869,7 @@ struct EditorWorkspace: View {
                             fileURL?.resolvingSymlinksInPath().standardizedFileURL else { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -906,7 +901,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -920,7 +915,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -987,69 +982,15 @@ struct EditorWorkspace: View {
 
     private var alertView: some View {
         sheetView
-        .alert("見出しが見つかりません", isPresented: Binding(
-            get: { missingHeading != nil },
-            set: { if !$0 { missingHeading = nil } }
-        )) {
-            Button("OK") { missingHeading = nil }
-        } message: {
-            Text("#\(missingHeading ?? "") に対応する見出しがありません。")
-        }
-        .alert("リンク先を開けません", isPresented: Binding(
-            get: { documentLinkError != nil },
-            set: { if !$0 { documentLinkError = nil } }
-        )) {
-            Button("OK") { documentLinkError = nil }
-        } message: {
-            Text(documentLinkError ?? "")
-        }
-        .alert("HTMLを書き出せません", isPresented: Binding(
-            get: { htmlExportError != nil },
-            set: { if !$0 { htmlExportError = nil } }
-        )) {
-            Button("OK") { htmlExportError = nil }
-        } message: {
-            Text(htmlExportError ?? "")
-        }
-        .alert("PDFを書き出せません", isPresented: Binding(
-            get: { pdfExportError != nil },
-            set: { if !$0 { pdfExportError = nil } }
-        )) {
-            Button("OK") { pdfExportError = nil }
-        } message: {
-            Text(pdfExportError ?? "")
-        }
-        .alert("印刷できません", isPresented: Binding(
-            get: { printError != nil },
-            set: { if !$0 { printError = nil } }
-        )) {
-            Button("OK") { printError = nil }
-        } message: {
-            Text(printError ?? "")
-        }
-        .alert("書式付きコピーに失敗しました", isPresented: Binding(
-            get: { richCopyError != nil },
-            set: { if !$0 { richCopyError = nil } }
-        )) {
-            Button("OK") { richCopyError = nil }
-        } message: {
-            Text(richCopyError ?? "")
-        }
-        .alert("テキストを書き出せません", isPresented: Binding(
-            get: { plainExportError != nil },
-            set: { if !$0 { plainExportError = nil } }
-        )) {
-            Button("OK") { plainExportError = nil }
-        } message: {
-            Text(plainExportError ?? "")
-        }
-        .alert("ファイルを開けません", isPresented: Binding(
-            get: { workspaceOpenError != nil },
-            set: { if !$0 { workspaceOpenError = nil } }
-        )) {
-            Button("OK") { workspaceOpenError = nil }
-        } message: {
-            Text(workspaceOpenError ?? "")
+        // One alert for every failure, so two failures never compete for presentation (#29).
+        .alert(presentedError?.title ?? "", isPresented: Binding(
+            get: { presentedError != nil },
+            set: { if !$0 { presentedError = nil } }
+        ), presenting: presentedError) { _ in
+            Button("OK") { presentedError = nil }
+                .keyboardShortcut(.defaultAction)
+        } message: { error in
+            Text(error.message)
         }
         .alert("フォルダを記憶できません", isPresented: Binding(
             get: { workspaceStore.errorMessage != nil },
@@ -1097,31 +1038,15 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $editorModel.showingCommandPalette) {
             CommandPaletteView(model: editorModel)
         }
-        .alert(pasteNeedsSave ? "先に書類を保存" : "画像を挿入できません", isPresented: Binding(
-            get: { imageDropError != nil || pasteNeedsSave },
-            set: { if !$0 { imageDropError = nil; pasteNeedsSave = false } }
-        )) {
-            if pasteNeedsSave {
-                Button("キャンセル", role: .cancel) { pasteNeedsSave = false }
-                Button("保存…") {
-                    pasteNeedsSave = false
-                    NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
-                }
-            } else {
-                Button("OK", role: .cancel) { imageDropError = nil }
+        .alert("先に書類を保存", isPresented: $pasteNeedsSave) {
+            Button("キャンセル", role: .cancel) { pasteNeedsSave = false }
+            Button("保存…") {
+                pasteNeedsSave = false
+                NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
             }
+            .keyboardShortcut(.defaultAction)
         } message: {
-            Text(pasteNeedsSave
-                 ? String(localized: "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。")
-                 : imageDropError ?? "")
-        }
-        .alert("文字コードの取り込みに失敗", isPresented: Binding(
-            get: { encodingImportError != nil },
-            set: { if !$0 { encodingImportError = nil } }
-        )) {
-            Button("OK", role: .cancel) { encodingImportError = nil }
-        } message: {
-            Text(encodingImportError ?? "")
+            Text("画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。")
         }
     }
 
@@ -1398,7 +1323,7 @@ struct EditorWorkspace: View {
             onOpenEmbeddedDocument: { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { workspaceOpenError = error.localizedDescription }
+                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
                 }
             },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
@@ -1480,7 +1405,7 @@ struct EditorWorkspace: View {
                 catch { failed.append(url.lastPathComponent) }
             }
             if !failed.isEmpty {
-                workspaceOpenError = String(localized: "開けなかった書類: \(failed.joined(separator: ", "))")
+                presentedError = .workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))"))
             }
         }
     }
@@ -1681,7 +1606,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: bookmark.documentURL)
             } catch {
                 documentLinkNavigation.cancelPosition(for: bookmark.documentURL)
-                workspaceOpenError = error.localizedDescription
+                presentedError = .workspaceOpen(error.localizedDescription)
             }
         }
     }
@@ -1827,9 +1752,9 @@ struct EditorWorkspace: View {
                             Task {
                                 if node.isEditableDocument {
                                     do { try await openDocument(at: node.url) }
-                                    catch { workspaceOpenError = error.localizedDescription }
+                                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
                                 } else if !NSWorkspace.shared.open(node.url) {
-                                    workspaceOpenError = String(localized: "添付ファイルを開けませんでした。")
+                                    presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
                                 }
                             }
                         } label: {
@@ -1952,7 +1877,7 @@ struct EditorWorkspace: View {
     private func navigateToHeading(_ fragment: String) {
         guard let snapshot = currentAnalysisSnapshot else { return }
         guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
-            missingHeading = fragment
+            presentedError = .missingHeading(fragment)
             return
         }
         navigate(to: entry)
@@ -1970,7 +1895,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: link.fileURL)
             } catch {
                 documentLinkNavigation.cancel(for: link.fileURL)
-                documentLinkError = error.localizedDescription
+                presentedError = .documentLink(error.localizedDescription)
             }
         }
     }
@@ -2001,7 +1926,7 @@ struct EditorWorkspace: View {
             do { try await openDocument(at: result.url) }
             catch {
                 documentLinkNavigation.cancelPosition(for: result.url)
-                workspaceOpenError = error.localizedDescription
+                presentedError = .workspaceOpen(error.localizedDescription)
             }
         }
     }
@@ -2029,12 +1954,12 @@ struct EditorWorkspace: View {
     private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
         guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
               !workspaceStore.isDocumentLocked(fileURL) else {
-            workspaceOpenError = String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")
+            presentedError = .workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。"))
             return
         }
         if editorModel.hasActiveEditor {
             guard editorModel.applyRegexEdit(edit, expectedSource: document.text) else {
-                workspaceOpenError = String(localized: "タスクを変更できませんでした。")
+                presentedError = .workspaceOpen(String(localized: "タスクを変更できませんでした。"))
                 return
             }
             editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
@@ -2132,13 +2057,20 @@ struct EditorWorkspace: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [MarkdownDocument.markdownType, .plainText]
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        do {
-            encodingImport = EncodingImport(url: url, data: try Data(contentsOf: url))
-        } catch {
-            encodingImportError = error.localizedDescription
+        panel.beginAttached { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in
+                // Read off the main thread so a large or slow file does not stall the window.
+                let result = await Task.detached(priority: .userInitiated) {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    return Result { try Data(contentsOf: url) }
+                }.value
+                switch result {
+                case let .success(data): encodingImport = EncodingImport(url: url, data: data)
+                case let .failure(error): presentedError = .encodingImport(error.localizedDescription)
+                }
+            }
         }
     }
 
@@ -2159,8 +2091,7 @@ struct EditorWorkspace: View {
     }
 
     private func beginSavePanel(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
-        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: completion) }
-        else { panel.begin(completionHandler: completion) }
+        panel.beginAttached(completionHandler: completion)
     }
 
     private func saveHTML(preset: MarkdownExportPreset) {
@@ -2175,13 +2106,13 @@ struct EditorWorkspace: View {
                 let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset,
                                                                       dialect: dialect, outputURL: destination)
                 try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
-            } onError: { htmlExportError = $0 }
+            } onError: { presentedError = .htmlExport($0) }
         }
     }
 
     private func exportPDF() {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { pdfExportError = $0 }) else { return }
+                                          onError: { presentedError = .pdfExport($0) }) else { return }
         exportFormat = .pdf
     }
 
@@ -2241,13 +2172,13 @@ struct EditorWorkspace: View {
             let url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
-            } onError: { pdfExportError = $0 }
+            } onError: { presentedError = .pdfExport($0) }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { pdfExportError = $0 }) else { return }
+                                          onError: { presentedError = .pdfExport($0) }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
@@ -2257,7 +2188,7 @@ struct EditorWorkspace: View {
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
-            } onError: { pdfExportError = $0 }
+            } onError: { presentedError = .pdfExport($0) }
         }
     }
 
@@ -2278,7 +2209,7 @@ struct EditorWorkspace: View {
             operation.jobTitle = title
             operation.showsPrintPanel = true
             _ = try await MarkdownPDFExporter.run(operation)
-        } onError: { printError = $0 }
+        } onError: { presentedError = .print($0) }
     }
 
     private func copyRichSelection() {
@@ -2291,7 +2222,7 @@ struct EditorWorkspace: View {
         startDocumentOperation {
             try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
                                                       startingChangeCount: changeCount)
-        } onError: { richCopyError = $0 }
+        } onError: { presentedError = .richCopy($0) }
     }
 
     private func exportPlainText() {
@@ -2307,7 +2238,7 @@ struct EditorWorkspace: View {
                     MarkdownPlainTextExporter.render(source, options: options)
                 }
                 try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
-            } onError: { plainExportError = $0 }
+            } onError: { presentedError = .plainExport($0) }
         }
     }
 
@@ -2439,7 +2370,7 @@ struct EditorWorkspace: View {
                                                            model: editorModel,
                                                            currentContext: { documentContext })
             } catch {
-                imageDropError = error.localizedDescription
+                presentedError = .imageInsert(error.localizedDescription)
             }
         }
     }
@@ -2457,7 +2388,7 @@ struct EditorWorkspace: View {
                                                             context: context, model: editorModel,
                                                             currentContext: { documentContext })
             } catch {
-                imageDropError = error.localizedDescription
+                presentedError = .imageInsert(error.localizedDescription)
             }
         }
     }
@@ -3250,4 +3181,82 @@ private struct DocumentStatusReader<Content: View>: View {
     @ViewBuilder let content: (DocumentStatistics?, (title: String, value: DocumentStatistics)?) -> Content
 
     var body: some View { content(store.selection, store.section) }
+}
+
+/// A failure the user can only acknowledge. Each case has a title and message so the window
+/// presents them through a single alert (#29).
+enum WorkspacePresentedError: Identifiable, Equatable {
+    case missingHeading(String)
+    case documentLink(String)
+    case htmlExport(String)
+    case pdfExport(String)
+    case print(String)
+    case richCopy(String)
+    case plainExport(String)
+    case workspaceOpen(String)
+    case imageInsert(String)
+    case encodingImport(String)
+
+    var id: String { title + "\u{1F}" + message }
+
+    var title: String {
+        switch self {
+        case .missingHeading: String(localized: "見出しが見つかりません")
+        case .documentLink: String(localized: "リンク先を開けません")
+        case .htmlExport: String(localized: "HTMLを書き出せません")
+        case .pdfExport: String(localized: "PDFを書き出せません")
+        case .print: String(localized: "印刷できません")
+        case .richCopy: String(localized: "書式付きコピーに失敗しました")
+        case .plainExport: String(localized: "テキストを書き出せません")
+        case .workspaceOpen: String(localized: "ファイルを開けません")
+        case .imageInsert: String(localized: "画像を挿入できません")
+        case .encodingImport: String(localized: "文字コードの取り込みに失敗")
+        }
+    }
+
+    var message: String {
+        switch self {
+        case let .missingHeading(fragment): String(localized: "#\(fragment) に対応する見出しがありません。")
+        case let .documentLink(message), let .htmlExport(message), let .pdfExport(message),
+             let .print(message), let .richCopy(message), let .plainExport(message),
+             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message):
+            message
+        }
+    }
+}
+
+/// Shows `MarkdownEditorModel.notice` for a few seconds at the bottom of the window.
+private struct TransientNoticeBanner: View {
+    @ObservedObject var model: MarkdownEditorModel
+
+    var body: some View {
+        if let notice = model.notice {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Text(notice)
+                    .lineLimit(2)
+                Button {
+                    model.notice = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("閉じる")
+                .accessibilityLabel("閉じる")
+            }
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(radius: 2, y: 1)
+            .accessibilityElement(children: .contain)
+            .task(id: notice) {
+                try? await Task.sleep(for: .seconds(5))
+                if !Task.isCancelled, model.notice == notice { model.notice = nil }
+            }
+        }
+    }
 }

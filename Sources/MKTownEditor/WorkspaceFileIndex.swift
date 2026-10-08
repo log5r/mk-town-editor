@@ -425,7 +425,7 @@ final class WorkspaceStore: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.prompt = String(localized: "開く")
         if let rootURL { panel.directoryURL = rootURL.deletingLastPathComponent() }
-        panel.begin { [weak self] response in
+        panel.beginAttached { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             self.setRoot(url)
             do { try self.saveBookmark(for: url) }
