@@ -149,7 +149,7 @@ enum GitRepository {
         _ = try run(in: root, arguments: ["add", "--", path])
     }
 
-    static func commit(message: String, in root: URL) throws {
+    static func commit(message: String, in root: URL, runsHooks: Bool = true) throws {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let entries = try statusEntries(in: root)
         guard !trimmed.isEmpty, trimmed.count <= 2_000,
@@ -159,7 +159,8 @@ enum GitRepository {
         }
         // Hooks run as they do from the command line; a rejecting hook's message is shown as the error.
         do {
-            _ = try run(in: root, arguments: ["commit", "-m", trimmed], timeout: commitTimeout)
+            _ = try run(in: root, arguments: ["commit"] + (runsHooks ? [] : ["--no-verify"]) + ["-m", trimmed],
+                        timeout: commitTimeout)
         } catch GitRepositoryError.timedOut {
             throw GitRepositoryError.commitTimedOut
         }
@@ -175,6 +176,17 @@ enum GitRepository {
             !$0.hasPrefix("/") && !$0.components(separatedBy: "/").contains("..") }) else {
             throw GitRepositoryError.invalidSelection
         }
+    }
+
+    /// Apps opened from Finder get only the system PATH, so hooks that call Homebrew tools
+    /// such as npx or pre-commit would not find them.
+    static func environment(_ base: [String: String]) -> [String: String] {
+        var environment = base
+        environment["GIT_TERMINAL_PROMPT"] = "0"
+        let current = (base["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin").split(separator: ":").map(String.init)
+        let extra = ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"].filter { !current.contains($0) }
+        environment["PATH"] = (current + extra).joined(separator: ":")
+        return environment
     }
 
     private static func run(in folder: URL, arguments: [String], timeout: TimeInterval = 8) throws -> String {
@@ -193,7 +205,9 @@ enum GitRepository {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", folder.path, "-c", "core.pager=cat", "-c", "core.quotepath=false"] + arguments
-        process.environment = ProcessInfo.processInfo.environment.merging(["GIT_TERMINAL_PROMPT": "0"]) { _, new in new }
+        process.environment = environment(ProcessInfo.processInfo.environment)
+        // A hook that reads standard input must see its end instead of waiting until the time limit.
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = output
         process.standardError = errors
         let finished = DispatchSemaphore(value: 0)
