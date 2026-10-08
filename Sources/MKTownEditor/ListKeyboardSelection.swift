@@ -20,6 +20,16 @@ enum ListKeyboardSelection {
         return ids[min(max(0, index + offset), ids.count - 1)]
     }
 
+    /// False for the second and later clicks of a multiple click.
+    static func isSingleClick(_ event: NSEvent?) -> Bool {
+        guard let event, isPointerEvent(event) else { return true }
+        return event.clickCount <= 1
+    }
+
+    /// True when a list's `primaryAction` comes from Return rather than a double-click. A click
+    /// already activated the row through `activatesOnClick`, so a double-click must not run it again.
+    @MainActor static var isKeyboardActivation: Bool { !isPointerEvent(NSApp.currentEvent) }
+
     /// True when `event` is a click. A click selects and activates a row through its tap
     /// gesture, so the selection binding leaves the activation to that gesture.
     static func isPointerEvent(_ event: NSEvent?) -> Bool {
@@ -47,9 +57,12 @@ extension View {
     }
 
     /// Activates a list row on a single click without taking over the list's own selection.
+    /// The later clicks of a double-click are ignored, so the row is activated only once.
     func activatesOnClick(_ action: @escaping () -> Void) -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-            .simultaneousGesture(TapGesture().onEnded(action))
+            .simultaneousGesture(TapGesture().onEnded {
+                if ListKeyboardSelection.isSingleClick(NSApp.currentEvent) { action() }
+            })
     }
 }

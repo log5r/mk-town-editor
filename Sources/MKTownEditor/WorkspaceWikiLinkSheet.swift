@@ -49,6 +49,7 @@ struct WorkspaceWikiLinkSheet: View {
                     .activatesOnClick { insert(result.url) }
             }
             .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { urls in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let url = urls.first { insert(url) }
             }
             .frame(height: 280)

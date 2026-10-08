@@ -61,10 +61,15 @@ enum EditorShortcutRegistry {
 
     static func shortcut(for command: EditorCommand,
                          overrides: [String: ShortcutChord]) -> ShortcutChord? {
-        // An override with an empty key records that the user removed the shortcut.
-        if let override = overrides[command.toolbarIdentifier] { return override.key.isEmpty ? nil : override }
-        guard let chord = command.shortcut.map({ ShortcutChord(key: $0.key, modifiers: $0.modifiers) })
-        else { return nil }
+        let ownDefault = command.shortcut.map { ShortcutChord(key: $0.key, modifiers: $0.modifiers) }
+        if let override = overrides[command.toolbarIdentifier] {
+            // An override with an empty key records that the user removed the shortcut. A key
+            // saved before a later version reserved it for a fixed menu item gives way to it.
+            guard !override.key.isEmpty, !reserved.contains(override) || override == ownDefault
+            else { return nil }
+            return override
+        }
+        guard let chord = ownDefault else { return nil }
         // A default added in a later version gives way to a key the user already assigned elsewhere.
         return overrides.contains { $0.key != command.toolbarIdentifier && $0.value == chord } ? nil : chord
     }
@@ -73,7 +78,9 @@ enum EditorShortcutRegistry {
                          overrides: [String: ShortcutChord]) throws {
         guard chord.key.count == 1, let character = chord.key.first,
               !character.isWhitespace, !character.isNewline,
-              character.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
+              character.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
+              // AppKit reports arrow, function and navigation keys as private-use characters.
+              !character.unicodeScalars.contains(where: { (0xF700...0xF8FF).contains($0.value) })
         else { throw ShortcutError.invalidKey }
         guard chord.command || chord.control else { throw ShortcutError.modifierRequired }
         let ownDefault = command.shortcut.map { ShortcutChord(key: $0.key, modifiers: $0.modifiers) }

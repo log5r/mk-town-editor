@@ -503,8 +503,12 @@ struct SnippetPickerView: View {
     let snippets: [EditorSnippet]
     let onSelect: (EditorSnippet) -> Void
     @State private var selectedID: UUID?
+    @State private var didSubmit = false
 
     private func insert(_ snippet: EditorSnippet) {
+        // The sheet closes asynchronously, so a second click could arrive before it is gone.
+        guard !didSubmit else { return }
+        didSubmit = true
         onSelect(snippet)
         dismiss()
     }
@@ -524,6 +528,7 @@ struct SnippetPickerView: View {
                 .activatesOnClick { insert(snippet) }
             }
             .contextMenu(forSelectionType: UUID.self) { _ in } primaryAction: { ids in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let snippet = available.first(where: { ids.contains($0.id) }) { insert(snippet) }
             }
             HStack {
@@ -554,6 +559,7 @@ struct CommandPaletteView: View {
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
     @State private var selectedCommand: EditorCommand?
+    @State private var didSubmit = false
 
     private var matches: [EditorCommand] {
         EditorCommand.paletteMatches(query, in: model,
@@ -580,6 +586,7 @@ struct CommandPaletteView: View {
                 .activatesOnClick { execute(command) }
             }
             .contextMenu(forSelectionType: EditorCommand.self) { _ in } primaryAction: { commands in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let command = commands.first { execute(command) }
             }
             if matches.isEmpty {
@@ -597,6 +604,8 @@ struct CommandPaletteView: View {
     }
 
     private func execute(_ command: EditorCommand) {
+        guard !didSubmit else { return }
+        didSubmit = true
         dismiss()
         model.showingCommandPalette = false
         command.perform(on: model)

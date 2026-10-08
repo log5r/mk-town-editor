@@ -6,6 +6,7 @@ struct WorkspaceQuickOpenSheet: View {
     @FocusState private var searchFocused: Bool
     @State private var query = ""
     @State private var selectedURL: URL?
+    @State private var didSubmit = false
 
     let onOpen: (URL) -> Void
 
@@ -26,6 +27,7 @@ struct WorkspaceQuickOpenSheet: View {
                     .activatesOnClick { open(result.url) }
             }
             .contextMenu(forSelectionType: URL.self) { _ in } primaryAction: { urls in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
                 if let url = urls.first { open(url) }
             }
             .frame(height: 300)
@@ -48,6 +50,8 @@ struct WorkspaceQuickOpenSheet: View {
     }
 
     private func open(_ url: URL) {
+        guard !didSubmit else { return }
+        didSubmit = true
         dismiss()
         onOpen(url)
     }
