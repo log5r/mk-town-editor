@@ -1202,6 +1202,7 @@ struct EditorWorkspace: View {
             switch (oldURL, newURL) {
             case let (oldURL?, newURL?):
                 settingsStore.moveDocumentState(from: oldURL, to: newURL)
+                WorkspaceSnapshotStore.appSupport.remapMovedDocument(from: oldURL, to: newURL)
             case let (nil, newURL?):
                 if !settingsStore.hasDocumentState(for: newURL) {
                     settingsStore.setMode(unsavedMode, for: newURL)
