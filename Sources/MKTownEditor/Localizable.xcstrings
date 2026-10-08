@@ -10866,6 +10866,116 @@
           }
         }
       }
+    },
+    "一般" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        }
+      }
+    },
+    "エディタ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor"
+          }
+        }
+      }
+    },
+    "ネットワーク" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network"
+          }
+        }
+      }
+    },
+    "文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "行番号を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show line numbers"
+          }
+        }
+      }
+    },
+    "字下げと表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indentation and Tables"
+          }
+        }
+      }
+    },
+    "クリックしてからキーを押すと割り当てます。Deleteで解除、Escで中止します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click, then press a key combination to assign it. Press Delete to remove it or Esc to cancel."
+          }
+        }
+      }
+    },
+    "キーを入力…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type Shortcut…"
+          }
+        }
+      }
+    },
+    "%@のショートカット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut for %@"
+          }
+        }
+      }
+    },
+    "%@を既定に戻す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Default Shortcut for %@"
+          }
+        }
+      }
+    },
+    "欄をクリックしてキーを押すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click a field and press a key combination to assign it. Shortcuts already in use or reserved by macOS can't be assigned."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

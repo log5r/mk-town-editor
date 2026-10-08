@@ -79,7 +79,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
         scrollView.verticalRulerView = lineNumberRuler
         scrollView.hasVerticalRuler = true
-        scrollView.rulersVisible = true
+        scrollView.rulersVisible = layoutOptions.showsLineNumbers
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRuler = lineNumberRuler
