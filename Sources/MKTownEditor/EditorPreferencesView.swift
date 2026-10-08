@@ -3,50 +3,143 @@ import SwiftUI
 
 struct EditorPreferencesView: View {
     @ObservedObject var settingsStore: EditorSettingsStore
-    @State private var showingShortcuts = false
     @State private var extensionError: String?
     @AppStorage("graphvizRendererPath") private var graphvizPath = ""
     @AppStorage("plantUMLJarPath") private var plantUMLPath = ""
 
+    /// The Settings window follows the macOS convention: a toolbar tab per area and controls
+    /// that take effect as soon as they change, with no Save button (#52).
+    enum Pane: String, CaseIterable {
+        case general, editor, preview, proofing, snippets, extensions, keyboard
+
+        var title: String {
+            switch self {
+            case .general: String(localized: "一般")
+            case .editor: String(localized: "エディタ")
+            case .preview: String(localized: "プレビュー")
+            case .proofing: String(localized: "校正")
+            case .snippets: String(localized: "スニペット")
+            case .extensions: String(localized: "拡張")
+            case .keyboard: String(localized: "キーボード")
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .general: "gearshape"
+            case .editor: "square.and.pencil"
+            case .preview: "eye"
+            case .proofing: "textformat.abc.dottedunderline"
+            case .snippets: "text.insert"
+            case .extensions: "puzzlepiece.extension"
+            case .keyboard: "keyboard"
+            }
+        }
+    }
+
+    @AppStorage("settingsPane") private var selectedPane = Pane.general
+
     var body: some View {
+        TabView(selection: $selectedPane) {
+            ForEach(Pane.allCases, id: \.self) { pane in
+                paneContent(pane)
+                    .tabItem { Label(pane.title, systemImage: pane.symbolName) }
+                    .tag(pane)
+            }
+        }
+        .frame(width: 600, height: 520)
+        .alert("拡張を読み込めません", isPresented: Binding(get: { extensionError != nil },
+            set: { if !$0 { extensionError = nil } })) {
+            Button("OK") { extensionError = nil }
+        } message: { Text(extensionError ?? "") }
+    }
+
+    @ViewBuilder
+    private func paneContent(_ pane: Pane) -> some View {
+        switch pane {
+        case .general: generalPane
+        case .editor: editorPane
+        case .preview: previewPane
+        case .proofing: proofingPane
+        case .snippets: snippetsPane
+        case .extensions: extensionsPane
+        case .keyboard:
+            EditorShortcutPreferencesView(settingsStore: settingsStore)
+                .padding(20)
+        }
+    }
+
+    private var generalPane: some View {
         Form {
-            Picker("フォント", selection: binding(\.fontChoice, default: .monospacedSystem)) {
-                ForEach(EditorFontChoice.allCases, id: \.self) { choice in
-                    Text(choice.title).tag(choice)
+            Section("書類") {
+                Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
+                    ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
+                        Text(directory.title).tag(directory)
+                    }
+                }
+                Picker("Markdown構文", selection: binding(\.markdownDialect, default: .extended)) {
+                    ForEach(MarkdownDialect.allCases, id: \.self) { dialect in
+                        Text(dialect.title).tag(dialect)
+                    }
                 }
             }
-            Stepper(value: binding(\.fontSize), in: 10...32, step: 1) {
-                Text("文字サイズ: \(Int(settingsStore.app.fontSize)) pt")
+            Section("ネットワーク") {
+                Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
+                Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))
             }
-            Stepper(value: binding(\.lineSpacing), in: 0...12, step: 1) {
-                Text("行間: \(Int(settingsStore.app.lineSpacing)) pt")
+        }
+        .formStyle(.grouped)
+    }
+
+    private var editorPane: some View {
+        Form {
+            Section("文字") {
+                Picker("フォント", selection: binding(\.fontChoice, default: .monospacedSystem)) {
+                    ForEach(EditorFontChoice.allCases, id: \.self) { choice in
+                        Text(choice.title).tag(choice)
+                    }
+                }
+                Stepper(value: binding(\.fontSize), in: 10...32, step: 1) {
+                    Text("文字サイズ: \(Int(settingsStore.app.fontSize)) pt")
+                }
+                Stepper(value: binding(\.lineSpacing), in: 0...12, step: 1) {
+                    Text("行間: \(Int(settingsStore.app.lineSpacing)) pt")
+                }
+                Stepper(value: binding(\.horizontalMargin, default: 18), in: 8...48, step: 2) {
+                    Text("左右の余白: \(Int(settingsStore.app.horizontalMargin ?? 18)) pt")
+                }
+                Stepper(value: binding(\.verticalMargin, default: 18), in: 8...48, step: 2) {
+                    Text("上下の余白: \(Int(settingsStore.app.verticalMargin ?? 18)) pt")
+                }
             }
-            Stepper(value: binding(\.horizontalMargin, default: 18), in: 8...48, step: 2) {
-                Text("左右の余白: \(Int(settingsStore.app.horizontalMargin ?? 18)) pt")
+            Section("表示") {
+                Toggle("行番号を表示", isOn: binding(\.showsLineNumbers, default: true))
+                Toggle("行を折り返す", isOn: binding(\.wrapsLines))
+                Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
+                Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
+                Toggle("ミニマップを表示", isOn: binding(\.showsMinimap, default: false))
+                Toggle("編集中以外のMarkdown記号を控えめに表示", isOn: binding(\.usesInlineLivePresentation, default: false))
+                Toggle("タイプライターモード", isOn: binding(\.usesTypewriterMode, default: false))
             }
-            Stepper(value: binding(\.verticalMargin, default: 18), in: 8...48, step: 2) {
-                Text("上下の余白: \(Int(settingsStore.app.verticalMargin ?? 18)) pt")
+            Section("字下げと表") {
+                Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
+                    Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
+                }
+                Stepper(value: binding(\.listIndentWidth, default: 2), in: 2...8) {
+                    Text("リストの字下げ: \(settingsStore.app.listIndentWidth ?? 2) 文字")
+                }
+                Stepper(value: binding(\.codeIndentWidth, default: 4), in: 2...8) {
+                    Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
+                }
+                Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
             }
-            Toggle("行を折り返す", isOn: binding(\.wrapsLines))
-            Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
-            Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
-            Toggle("ミニマップを表示", isOn: binding(\.showsMinimap, default: false))
-            Toggle("編集中以外のMarkdown記号を控えめに表示", isOn: binding(\.usesInlineLivePresentation, default: false))
-            Toggle("タイプライターモード", isOn: binding(\.usesTypewriterMode, default: false))
-            Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
-                Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
-            }
-            Stepper(value: binding(\.listIndentWidth, default: 2), in: 2...8) {
-                Text("リストの字下げ: \(settingsStore.app.listIndentWidth ?? 2) 文字")
-            }
-            Stepper(value: binding(\.codeIndentWidth, default: 4), in: 2...8) {
-                Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
-            }
-            Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
-            Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
-            Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
-            Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))
-            Section("プレビュー") {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var previewPane: some View {
+        Form {
+            Section("表示") {
                 Picker("配色", selection: binding(\.previewTheme, default: .system)) {
                     ForEach(PreviewTheme.allCases +
                         (settingsStore.app.extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) },
@@ -57,6 +150,7 @@ struct EditorPreferencesView: View {
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
                 }
+                Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
             }
             Section("外部の図描画器") {
                 HStack {
@@ -74,17 +168,13 @@ struct EditorPreferencesView: View {
                 Text("使用する描画器だけを指定してください。PlantUMLにはJavaが必要です。図の本文は外部サーバーへ送信しません。")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
-                ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
-                    Text(directory.title).tag(directory)
-                }
-            }
-            Picker("Markdown構文", selection: binding(\.markdownDialect, default: .extended)) {
-                ForEach(MarkdownDialect.allCases, id: \.self) { dialect in
-                    Text(dialect.title).tag(dialect)
-                }
-            }
-            Section("校正") {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var proofingPane: some View {
+        Form {
+            Section("スペルチェック") {
                 Picker("スペルチェックの言語", selection: proofingBinding(\.language)) {
                     ForEach(ProofingLanguage.allCases, id: \.self) { language in
                         Text(language.title).tag(language)
@@ -131,10 +221,13 @@ struct EditorPreferencesView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("キーボード") {
-                Button("ショートカット一覧と設定…") { showingShortcuts = true }
-            }
-            Section("スニペット") {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var snippetsPane: some View {
+        Form {
+            Section {
                 ForEach(settingsStore.app.snippets ?? []) { snippet in
                     VStack(alignment: .leading) {
                         HStack {
@@ -152,11 +245,18 @@ struct EditorPreferencesView: View {
                         [EditorSnippet(trigger: "", template: "${1:入力}$0")]
                     settingsStore.setAppSettings(settings)
                 }
+            } footer: {
                 Text("${1:文字}、${2:文字}をTabで順に選択し、$0を最後のカーソル位置にします。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("拡張") {
+        }
+        .formStyle(.grouped)
+    }
+
+    private var extensionsPane: some View {
+        Form {
+            Section {
                 ForEach(settingsStore.app.extensionPackages ?? []) { package in
                     HStack {
                         VStack(alignment: .leading) {
@@ -169,26 +269,25 @@ struct EditorPreferencesView: View {
                     }
                 }
                 Button("JSON拡張を読み込む…") { importExtension() }
+            } footer: {
                 Text("宣言的なテーマとスニペットのみを読み込みます。コードは実行しません。")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560)
-        .sheet(isPresented: $showingShortcuts) {
-            EditorShortcutPreferencesView(settingsStore: settingsStore)
-        }
-        .alert("拡張を読み込めません", isPresented: Binding(get: { extensionError != nil },
-            set: { if !$0 { extensionError = nil } })) {
-            Button("OK") { extensionError = nil }
-        } message: { Text(extensionError ?? "") }
     }
 
     private func importExtension() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.canChooseDirectories = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        panel.beginAttached { response in
+            guard response == .OK, let url = panel.url else { return }
+            loadExtension(from: url)
+        }
+    }
+
+    private func loadExtension(from url: URL) {
         do {
             let package = try DeclarativeExtension.load(from: url)
             var settings = settingsStore.app
@@ -217,7 +316,8 @@ struct EditorPreferencesView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        if panel.runModal() == .OK, let path = panel.url?.path {
+        panel.beginAttached { response in
+            guard response == .OK, let path = panel.url?.path else { return }
             if kind == .graphviz { graphvizPath = path }
             else { plantUMLPath = path }
         }
@@ -402,25 +502,46 @@ struct SnippetPickerView: View {
     @Environment(\.dismiss) private var dismiss
     let snippets: [EditorSnippet]
     let onSelect: (EditorSnippet) -> Void
+    @State private var selectedID: UUID?
+    @State private var didSubmit = false
+
+    private func insert(_ snippet: EditorSnippet) {
+        // The sheet closes asynchronously, so a second click could arrive before it is gone.
+        guard !didSubmit else { return }
+        didSubmit = true
+        onSelect(snippet)
+        dismiss()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("スニペットを挿入").font(.headline)
-            List(snippets) { snippet in
-                Button {
-                    onSelect(snippet)
-                    dismiss()
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(snippet.trigger.isEmpty ? "定型文" : snippet.trigger)
-                        Text(snippet.template).lineLimit(2).font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+            let available = snippets.filter { !$0.template.isEmpty }
+            List(available, selection: Binding(
+                get: { ListKeyboardSelection.resolved(selectedID, in: available.map(\.id)) },
+                set: { selectedID = $0 })) { snippet in
+                VStack(alignment: .leading) {
+                    Text(snippet.trigger.isEmpty ? "定型文" : snippet.trigger)
+                    Text(snippet.template).lineLimit(2).font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .disabled(snippet.template.isEmpty)
+                .activatesOnClick { insert(snippet) }
             }
-            Button("キャンセル") { dismiss() }
-                .keyboardShortcut(.cancelAction)
+            .contextMenu(forSelectionType: UUID.self) { _ in } primaryAction: { ids in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
+                if let snippet = available.first(where: { ids.contains($0.id) }) { insert(snippet) }
+            }
+            HStack {
+                Spacer()
+                Button("キャンセル") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("挿入") {
+                    let id = ListKeyboardSelection.resolved(selectedID, in: available.map(\.id))
+                    if let snippet = available.first(where: { $0.id == id }) { insert(snippet) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(available.isEmpty)
+            }
         }
         .padding()
         .frame(width: 420, height: 320)
@@ -437,6 +558,8 @@ struct CommandPaletteView: View {
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
     @State private var query = ""
+    @State private var selectedCommand: EditorCommand?
+    @State private var didSubmit = false
 
     private var matches: [EditorCommand] {
         EditorCommand.paletteMatches(query, in: model,
@@ -444,20 +567,27 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
+        let matches = matches
+        let selection = Binding(get: { ListKeyboardSelection.resolved(selectedCommand, in: matches) },
+                                set: { selectedCommand = $0 })
         VStack(spacing: 10) {
             TextField("コマンド名またはショートカット", text: $query)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit { if let first = matches.first { execute(first) } }
-            List(matches, id: \.self) { command in
-                Button { execute(command) } label: {
-                    HStack {
-                        Label(command.title, systemImage: command.symbolName)
-                        Spacer()
-                        if let shortcut = settingsStore.shortcut(for: command)?.label {
-                            Text(shortcut).font(.caption).foregroundStyle(.secondary)
-                        }
+                .movesListSelection(selection, in: matches)
+                .onSubmit { if let command = selection.wrappedValue { execute(command) } }
+            List(matches, id: \.self, selection: selection) { command in
+                HStack {
+                    Label(command.title, systemImage: command.symbolName)
+                    Spacer()
+                    if let shortcut = settingsStore.shortcut(for: command)?.label {
+                        Text(shortcut).font(.caption).foregroundStyle(.secondary)
                     }
                 }
+                .activatesOnClick { execute(command) }
+            }
+            .contextMenu(forSelectionType: EditorCommand.self) { _ in } primaryAction: { commands in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
+                if let command = commands.first { execute(command) }
             }
             if matches.isEmpty {
                 ContentUnavailableView.search(text: query)
@@ -474,6 +604,8 @@ struct CommandPaletteView: View {
     }
 
     private func execute(_ command: EditorCommand) {
+        guard !didSubmit else { return }
+        didSubmit = true
         dismiss()
         model.showingCommandPalette = false
         command.perform(on: model)

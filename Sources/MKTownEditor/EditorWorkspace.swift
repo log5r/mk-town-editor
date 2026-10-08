@@ -18,6 +18,76 @@ struct EditorToolbarInstanceID: Equatable {
     }
 }
 
+/// The window toolbar's items other than formatting commands. Each has its own symbol so no two
+/// items look alike, and only the frequent ones are shown before the user customizes (#23).
+enum WorkspaceToolbarItem: String, CaseIterable {
+    case displayMode = "display-mode"
+    case splitLayout = "split-layout"
+    case detachedPreview = "detached-preview"
+    case previewUpdates = "preview-updates"
+    case exportMenu = "export-publish"
+    case historyMenu = "history"
+    case writingTools = "writing-tools"
+    case linkDiagnostics = "link-diagnostics"
+    case snapshots
+    case slides
+    case gitHistory = "git-history"
+    case gitCommit = "git-commit"
+    case cloudStatus = "cloud-status"
+    case publication
+    case collaboration
+    case aiSuggestion = "ai-suggestion"
+
+    var title: String {
+        switch self {
+        case .displayMode: String(localized: "表示")
+        case .splitLayout: String(localized: "分割配置")
+        case .detachedPreview: String(localized: "プレビューを別ウインドウで開く")
+        case .previewUpdates: String(localized: "プレビューの自動更新を一時停止")
+        case .exportMenu: String(localized: "書き出し・公開")
+        case .historyMenu: String(localized: "履歴")
+        case .writingTools: String(localized: "文章ツール")
+        case .linkDiagnostics: String(localized: "リンク診断")
+        case .snapshots: String(localized: "明示スナップショット")
+        case .slides: String(localized: "スライド表示")
+        case .gitHistory: String(localized: "Gitの差分と履歴")
+        case .gitCommit: String(localized: "Gitのステージとコミット")
+        case .cloudStatus: String(localized: "同期状態と競合版")
+        case .publication: String(localized: "ブログ・静的サイトへ公開")
+        case .collaboration: String(localized: "共同編集とコメント")
+        case .aiSuggestion: String(localized: "選択範囲をAIで推敲・翻訳")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .displayMode: "rectangle.split.2x1"
+        case .splitLayout: "rectangle.2.swap"
+        case .detachedPreview: "rectangle.on.rectangle"
+        case .previewUpdates: "pause.circle"
+        case .exportMenu: "arrow.up.doc"
+        case .historyMenu: "clock"
+        case .writingTools: "text.badge.checkmark"
+        case .linkDiagnostics: "link.circle"
+        case .snapshots: "camera.on.rectangle"
+        case .slides: "play.rectangle"
+        case .gitHistory: "arrow.triangle.branch"
+        case .gitCommit: "checkmark.circle"
+        case .cloudStatus: "icloud"
+        case .publication: "paperplane"
+        case .collaboration: "person.2"
+        case .aiSuggestion: "sparkles"
+        }
+    }
+
+    var showsByDefault: Bool {
+        switch self {
+        case .displayMode, .splitLayout, .detachedPreview, .exportMenu, .historyMenu, .writingTools: true
+        default: false
+        }
+    }
+}
+
 /// ForEach cannot provide individually customizable toolbar items.
 /// Keep these declarations in the same order as EditorCommand.toolbar.
 struct EditorFormattingToolbar<Content: View>: CustomizableToolbarContent {
@@ -84,7 +154,6 @@ struct EditorWorkspace: View {
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
     @State private var toolbarInstanceID: EditorToolbarInstanceID
-    @State private var imageDropError: String?
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
     @State private var focusMode = FocusModeState()
@@ -97,8 +166,7 @@ struct EditorWorkspace: View {
     @State private var showingGoToLine = false
     @State private var showingGoToHeading = false
     @State private var navigationHistory = NavigationHistory()
-    @State private var missingHeading: String?
-    @State private var documentLinkError: String?
+    @State private var presentedError: WorkspacePresentedError?
     @State private var showingLinkDiagnostics = false
     @State private var isCheckingLinks = false
     @State private var linkDiagnostics: [MarkdownLinkDiagnostic] = []
@@ -120,16 +188,12 @@ struct EditorWorkspace: View {
     @State private var terminologyTask: Task<[TerminologyIssue], Never>?
     @State private var showingAutoFormat = false
     @State private var showingRegexSearch = false
-    @State private var htmlExportError: String?
-    @State private var pdfExportError: String?
     @State private var documentOperation: Task<Void, Never>?
     @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
     @State private var printInfo = NSPrintInfo.shared.copy() as! NSPrintInfo
     @State private var printSettings = MarkdownPrintSettings()
-    @State private var printError: String?
     @State private var printRequested = false
-    @State private var richCopyError: String?
     @State private var showingPlainExport = false
     @State private var showingExternalExport = false
     @State private var showingRichImport = false
@@ -137,11 +201,11 @@ struct EditorWorkspace: View {
     @State private var showingBatchExport = false
     @State private var plainExportRequested = false
     @State private var plainOptions = MarkdownPlainTextOptions()
-    @State private var plainExportError: String?
     @State private var exportFormat: MarkdownExportFormat?
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
-    @State private var workspaceOpenError: String?
+    @State private var selectedBookmarkID: DocumentBookmark.ID?
+    @State private var selectedFileURL: URL?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
     @State private var showingWorkspaceTasks = false
@@ -173,7 +237,6 @@ struct EditorWorkspace: View {
     @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
-    @State private var encodingImportError: String?
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
 
@@ -191,6 +254,15 @@ struct EditorWorkspace: View {
             case "ブックマーク": self = .bookmarks
             case "ファイル": self = .files
             default: self.init(rawValue: storedValue)
+            }
+        }
+
+        var symbolName: String {
+            switch self {
+            case .outline: "list.bullet.indent"
+            case .inspector: "info.circle"
+            case .bookmarks: "bookmark"
+            case .files: "folder"
             }
         }
 
@@ -295,6 +367,10 @@ struct EditorWorkspace: View {
                 }
             }
             .frame(minWidth: 720, minHeight: 480)
+            .overlay(alignment: .bottom) {
+                TransientNoticeBanner(model: editorModel)
+                    .padding(.bottom, focusMode.isActive ? 12 : 34)
+            }
             .overlay(alignment: .topTrailing) {
                 if focusMode.isActive {
                     Button("集中モードを終了", systemImage: "arrow.down.right.and.arrow.up.left") {
@@ -314,41 +390,13 @@ struct EditorWorkspace: View {
 
     @ToolbarContentBuilder
     private var workspaceToolbar: some CustomizableToolbarContent {
+        // Only frequent actions are shown by default; related actions share a menu, and the
+        // single-purpose buttons stay available in "Customize Toolbar…" (#23).
         Group {
             EditorFormattingToolbar { command in
                 formatButton(command)
             }
-
-            ToolbarItem(id: "link-diagnostics", placement: .primaryAction) {
-                Button("リンク診断", systemImage: "link") {
-                    showingLinkDiagnostics = true
-                    checkLinks()
-                }
-                .help("ローカルリンクの参照先を確認")
-            }
-            ToolbarItem(id: "snapshots", placement: .primaryAction) {
-                Button("明示スナップショット", systemImage: "clock.arrow.circlepath") {
-                    showingSnapshotHistory = true
-                }
-                .disabled(fileURL == nil)
-                .help("名前を付けた本文履歴を保存・比較・復元")
-            }
-            ToolbarItem(id: "writing-tools", placement: .primaryAction) {
-                Menu("文章ツール", systemImage: "text.badge.checkmark") {
-                    Button("Markdown診断") {
-                        showingMarkdownLint = true
-                        checkMarkdownLint()
-                    }
-                    Button("用語の表記を確認") {
-                        showingTerminology = true
-                        checkTerminology()
-                    }
-                    Button("自動整形…") { showingAutoFormat = true }
-                }
-                .help("Markdown診断・用語確認・自動整形")
-            }
-
-            ToolbarItem(id: "display-mode", placement: .principal) {
+            toolbarItem(.displayMode, placement: .principal) {
                 Picker("表示", selection: mode) {
                     ForEach(EditorMode.allCases) { value in
                         Label(value.label, systemImage: value.symbolName)
@@ -360,8 +408,9 @@ struct EditorWorkspace: View {
                 .labelsHidden()
                 .frame(width: 220)
             }
-            ToolbarItem(id: "split-layout", placement: .primaryAction) {
-                Menu("分割配置", systemImage: "rectangle.split.2x1") {
+            toolbarItem(.splitLayout) {
+                Menu(WorkspaceToolbarItem.splitLayout.title,
+                     systemImage: WorkspaceToolbarItem.splitLayout.symbolName) {
                     Picker("方向", selection: $splitOrientation) {
                         ForEach(EditorSplitOrientation.allCases, id: \.self) { orientation in
                             Text(orientation.title).tag(orientation)
@@ -370,63 +419,147 @@ struct EditorWorkspace: View {
                     Toggle("プレビューを先に表示", isOn: $previewFirst)
                 }
                 .disabled(mode.wrappedValue != .split)
+                .help("分割の方向と並び順")
             }
-            ToolbarItem(id: "detached-preview", placement: .primaryAction) {
-                Button("プレビューを別ウインドウで開く", systemImage: "rectangle.on.rectangle") {
-                    detachedPreview.show(document: $document, documentURL: fileURL,
-                                         settingsStore: settingsStore,
-                                         workspaceStore: workspaceStore, updates: previewUpdates)
+            toolbarItem(.detachedPreview) {
+                toolbarButton(.detachedPreview) { openDetachedPreview() }
+                    .help("現在の書類のプレビューを別ウインドウで表示")
+            }
+            toolbarItem(.previewUpdates) {
+                Toggle(isOn: Binding(get: { previewUpdates.state.isPaused },
+                                     set: { _ in togglePreviewUpdates() })) {
+                    Label(WorkspaceToolbarItem.previewUpdates.title,
+                          systemImage: WorkspaceToolbarItem.previewUpdates.symbolName)
                 }
-                .help("現在の書類のプレビューを別ウインドウで表示")
+                .help("プレビューの自動更新を一時停止・再開")
+            }
+            toolbarItem(.exportMenu) {
+                Menu(WorkspaceToolbarItem.exportMenu.title,
+                     systemImage: WorkspaceToolbarItem.exportMenu.symbolName) {
+                    Button("HTML…") { exportHTML() }
+                    Button("PDF…") { exportPDF() }
+                    Button("DOCX・ODT・EPUB…") { showingExternalExport = true }
+                    Button("テキスト…") { showingPlainExport = true }
+                    Button("添付を含むパッケージ…") { showingPortablePackage = true }
+                    Divider()
+                    Button("ブログ・静的サイトへ公開…") { showingPublication = true }
+                    Button("共同編集とコメント…") { showingCollaboration = true }
+                    Button("スライド表示") { showSlidePresentation() }
+                }
+                .help("書き出し・公開・共有")
+            }
+            toolbarItem(.historyMenu) {
+                Menu(WorkspaceToolbarItem.historyMenu.title,
+                     systemImage: WorkspaceToolbarItem.historyMenu.symbolName) {
+                    Button("明示スナップショット…") { showingSnapshotHistory = true }
+                    Divider()
+                    Button("Gitの差分と履歴…") { showingGitHistory = true }
+                    Button("Gitのステージとコミット…") { showingGitCommit = true }
+                    Divider()
+                    Button(cloudStatusTitle + "…") { showingCloudStatus = true }
+                }
+                .disabled(fileURL == nil)
+                .help("スナップショット・Git・iCloudの履歴")
+            }
+            toolbarItem(.writingTools) {
+                let hasActiveEditor = editorModel.hasActiveEditor
+                EditorSelectionReader(selection: editorModel.selectionState) { selection in
+                    Menu(WorkspaceToolbarItem.writingTools.title,
+                         systemImage: WorkspaceToolbarItem.writingTools.symbolName) {
+                        Button("リンク診断") { showLinkDiagnostics() }
+                        Button("Markdown診断") {
+                            showingMarkdownLint = true
+                            checkMarkdownLint()
+                        }
+                        Button("用語の表記を確認") {
+                            showingTerminology = true
+                            checkTerminology()
+                        }
+                        Button("自動整形…") { showingAutoFormat = true }
+                        Divider()
+                        Button("選択範囲をAIで推敲・翻訳…") { showingAISuggestion = true }
+                            .disabled(!hasActiveEditor || selection.length == 0)
+                    }
+                    .help("リンク・Markdown診断、用語確認、自動整形、AI推敲")
+                }
             }
         }
         Group {
-            ToolbarItem(id: "slides", placement: .primaryAction) {
-                Button("スライド表示", systemImage: "play.rectangle") {
-                    showSlidePresentation()
-                }
-                .help("区切り線をスライド境界として全画面表示")
+            toolbarItem(.linkDiagnostics) {
+                toolbarButton(.linkDiagnostics) { showLinkDiagnostics() }
+                    .help("ローカルリンクの参照先を確認")
             }
-            ToolbarItem(id: "git-history", placement: .primaryAction) {
-                Button("Gitの差分と履歴", systemImage: "clock.arrow.circlepath") {
-                    showingGitHistory = true
-                }
-                .disabled(fileURL == nil)
+            toolbarItem(.snapshots) {
+                toolbarButton(.snapshots) { showingSnapshotHistory = true }
+                    .disabled(fileURL == nil)
+                    .help("名前を付けた本文履歴を保存・比較・復元")
             }
-            ToolbarItem(id: "git-commit", placement: .primaryAction) {
-                Button("Gitのステージとコミット", systemImage: "checkmark.circle") {
-                    showingGitCommit = true
-                }
-                .disabled(fileURL == nil)
+            toolbarItem(.slides) {
+                toolbarButton(.slides) { showSlidePresentation() }
+                    .help("区切り線をスライド境界として全画面表示")
             }
-            ToolbarItem(id: "cloud-status", placement: .primaryAction) {
-                Button(cloudStatus?.hasUnresolvedConflicts == true ? "競合版あり" : "同期状態と競合版",
-                       systemImage: cloudStatus?.hasUnresolvedConflicts == true
-                           ? "exclamationmark.triangle" : "icloud") {
+            toolbarItem(.gitHistory) {
+                toolbarButton(.gitHistory) { showingGitHistory = true }
+                    .disabled(fileURL == nil)
+            }
+            toolbarItem(.gitCommit) {
+                toolbarButton(.gitCommit) { showingGitCommit = true }
+                    .disabled(fileURL == nil)
+            }
+            toolbarItem(.cloudStatus) {
+                Button(cloudStatusTitle, systemImage: cloudStatus?.hasUnresolvedConflicts == true
+                           ? "exclamationmark.icloud" : WorkspaceToolbarItem.cloudStatus.symbolName) {
                     showingCloudStatus = true
                 }
                 .disabled(fileURL == nil)
             }
-            ToolbarItem(id: "publication", placement: .primaryAction) {
-                Button("ブログ・静的サイトへ公開", systemImage: "square.and.arrow.up") {
-                    showingPublication = true
-                }
+            toolbarItem(.publication) {
+                toolbarButton(.publication) { showingPublication = true }
             }
-            ToolbarItem(id: "collaboration", placement: .primaryAction) {
-                Button("共同編集とコメント", systemImage: "person.2") {
-                    showingCollaboration = true
-                }
+            toolbarItem(.collaboration) {
+                toolbarButton(.collaboration) { showingCollaboration = true }
             }
-            ToolbarItem(id: "ai-suggestion", placement: .primaryAction) {
+            toolbarItem(.aiSuggestion) {
                 let hasActiveEditor = editorModel.hasActiveEditor
                 EditorSelectionReader(selection: editorModel.selectionState) { selection in
-                    Button("選択範囲をAIで推敲・翻訳", systemImage: "text.badge.checkmark") {
-                        showingAISuggestion = true
-                    }
-                    .disabled(!hasActiveEditor || selection.length == 0)
+                    toolbarButton(.aiSuggestion) { showingAISuggestion = true }
+                        .disabled(!hasActiveEditor || selection.length == 0)
                 }
             }
         }
+    }
+
+    private func toolbarItem<Content: View>(_ item: WorkspaceToolbarItem,
+                                            placement: ToolbarItemPlacement = .primaryAction,
+                                            @ViewBuilder content: () -> Content) -> some CustomizableToolbarContent {
+        ToolbarItem(id: item.rawValue, placement: placement, showsByDefault: item.showsByDefault,
+                    content: content)
+    }
+
+    private func toolbarButton(_ item: WorkspaceToolbarItem, action: @escaping () -> Void) -> some View {
+        Button(item.title, systemImage: item.symbolName, action: action)
+    }
+
+    private var cloudStatusTitle: String {
+        cloudStatus?.hasUnresolvedConflicts == true ? String(localized: "競合版あり")
+            : String(localized: "同期状態と競合版")
+    }
+
+    private func showLinkDiagnostics() {
+        showingLinkDiagnostics = true
+        checkLinks()
+    }
+
+    private func openDetachedPreview() {
+        detachedPreview.show(document: $document, documentURL: fileURL,
+                             settingsStore: settingsStore,
+                             workspaceStore: workspaceStore, updates: previewUpdates)
+    }
+
+    private func togglePreviewUpdates() {
+        previewUpdates.togglePause(source: document.text,
+                                   dialect: documentContext.markdownDialect,
+                                   preferredSnapshot: analysisStore.snapshot)
     }
 
     // Opaque return types bound type-checking work for each modifier chain.
@@ -478,6 +611,14 @@ struct EditorWorkspace: View {
                 next: { navigatePreviewSearch(backwards: false) },
                 previous: { navigatePreviewSearch(backwards: true) }
             ) : nil)
+        .focusedSceneValue(\.previewUpdateActions, PreviewUpdateActions(
+                isPaused: previewUpdates.state.isPaused, isStale: previewUpdates.state.isStale,
+                togglePause: { togglePreviewUpdates() },
+                refresh: {
+                    previewUpdates.refresh(source: document.text,
+                                           dialect: documentContext.markdownDialect,
+                                           preferredSnapshot: analysisStore.snapshot)
+                }))
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,
@@ -510,7 +651,7 @@ struct EditorWorkspace: View {
                 GitCommitSheet(fileURL: fileURL) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -608,7 +749,7 @@ struct EditorWorkspace: View {
             WorkspaceQuickOpenSheet { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { workspaceOpenError = error.localizedDescription }
+                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
                 }
             }
         }
@@ -625,7 +766,7 @@ struct EditorWorkspace: View {
                 WorkspaceAttachmentAuditSheet(root: root) { url in
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -676,7 +817,7 @@ struct EditorWorkspace: View {
             MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { encodingImportError = error.localizedDescription }
+                    catch { presentedError = .encodingImport(error.localizedDescription) }
                 }
             }
         }
@@ -745,7 +886,7 @@ struct EditorWorkspace: View {
                                        showingWorkspaceTags = false
                                        Task {
                                            do { try await openDocument(at: url) }
-                                           catch { workspaceOpenError = error.localizedDescription }
+                                           catch { presentedError = .workspaceOpen(error.localizedDescription) }
                                        }
                                    })
             }
@@ -769,7 +910,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: backlink.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: backlink.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -795,7 +936,7 @@ struct EditorWorkspace: View {
                             fileURL.resolvingSymlinksInPath().standardizedFileURL { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -806,7 +947,7 @@ struct EditorWorkspace: View {
                     workspaceStore.refresh(force: true)
                     Task {
                         do { try await openDocument(at: url) }
-                        catch { workspaceOpenError = error.localizedDescription }
+                        catch { presentedError = .workspaceOpen(error.localizedDescription) }
                     }
                 }
             }
@@ -827,7 +968,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelTaskToggle(for: task.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -843,7 +984,7 @@ struct EditorWorkspace: View {
                                 do { try await openDocument(at: task.sourceURL) }
                                 catch {
                                     documentLinkNavigation.cancelPosition(for: task.sourceURL)
-                                    workspaceOpenError = error.localizedDescription
+                                    presentedError = .workspaceOpen(error.localizedDescription)
                                 }
                             }
                         }
@@ -862,7 +1003,7 @@ struct EditorWorkspace: View {
                             fileURL?.resolvingSymlinksInPath().standardizedFileURL else { return }
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -894,7 +1035,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -908,7 +1049,7 @@ struct EditorWorkspace: View {
                         workspaceStore.refresh(force: true)
                         Task {
                             do { try await openDocument(at: url) }
-                            catch { workspaceOpenError = error.localizedDescription }
+                            catch { presentedError = .workspaceOpen(error.localizedDescription) }
                         }
                     })
             }
@@ -975,69 +1116,15 @@ struct EditorWorkspace: View {
 
     private var alertView: some View {
         sheetView
-        .alert("見出しが見つかりません", isPresented: Binding(
-            get: { missingHeading != nil },
-            set: { if !$0 { missingHeading = nil } }
-        )) {
-            Button("OK") { missingHeading = nil }
-        } message: {
-            Text("#\(missingHeading ?? "") に対応する見出しがありません。")
-        }
-        .alert("リンク先を開けません", isPresented: Binding(
-            get: { documentLinkError != nil },
-            set: { if !$0 { documentLinkError = nil } }
-        )) {
-            Button("OK") { documentLinkError = nil }
-        } message: {
-            Text(documentLinkError ?? "")
-        }
-        .alert("HTMLを書き出せません", isPresented: Binding(
-            get: { htmlExportError != nil },
-            set: { if !$0 { htmlExportError = nil } }
-        )) {
-            Button("OK") { htmlExportError = nil }
-        } message: {
-            Text(htmlExportError ?? "")
-        }
-        .alert("PDFを書き出せません", isPresented: Binding(
-            get: { pdfExportError != nil },
-            set: { if !$0 { pdfExportError = nil } }
-        )) {
-            Button("OK") { pdfExportError = nil }
-        } message: {
-            Text(pdfExportError ?? "")
-        }
-        .alert("印刷できません", isPresented: Binding(
-            get: { printError != nil },
-            set: { if !$0 { printError = nil } }
-        )) {
-            Button("OK") { printError = nil }
-        } message: {
-            Text(printError ?? "")
-        }
-        .alert("書式付きコピーに失敗しました", isPresented: Binding(
-            get: { richCopyError != nil },
-            set: { if !$0 { richCopyError = nil } }
-        )) {
-            Button("OK") { richCopyError = nil }
-        } message: {
-            Text(richCopyError ?? "")
-        }
-        .alert("テキストを書き出せません", isPresented: Binding(
-            get: { plainExportError != nil },
-            set: { if !$0 { plainExportError = nil } }
-        )) {
-            Button("OK") { plainExportError = nil }
-        } message: {
-            Text(plainExportError ?? "")
-        }
-        .alert("ファイルを開けません", isPresented: Binding(
-            get: { workspaceOpenError != nil },
-            set: { if !$0 { workspaceOpenError = nil } }
-        )) {
-            Button("OK") { workspaceOpenError = nil }
-        } message: {
-            Text(workspaceOpenError ?? "")
+        // One alert for every failure, so two failures never compete for presentation (#29).
+        .alert(presentedError?.title ?? "", isPresented: Binding(
+            get: { presentedError != nil },
+            set: { if !$0 { presentedError = nil } }
+        ), presenting: presentedError) { _ in
+            Button("OK") { presentedError = nil }
+                .keyboardShortcut(.defaultAction)
+        } message: { error in
+            Text(error.message)
         }
         .alert("フォルダを記憶できません", isPresented: Binding(
             get: { workspaceStore.errorMessage != nil },
@@ -1085,31 +1172,15 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $editorModel.showingCommandPalette) {
             CommandPaletteView(model: editorModel)
         }
-        .alert(pasteNeedsSave ? "先に書類を保存" : "画像を挿入できません", isPresented: Binding(
-            get: { imageDropError != nil || pasteNeedsSave },
-            set: { if !$0 { imageDropError = nil; pasteNeedsSave = false } }
-        )) {
-            if pasteNeedsSave {
-                Button("キャンセル", role: .cancel) { pasteNeedsSave = false }
-                Button("保存…") {
-                    pasteNeedsSave = false
-                    NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
-                }
-            } else {
-                Button("OK", role: .cancel) { imageDropError = nil }
+        .alert("先に書類を保存", isPresented: $pasteNeedsSave) {
+            Button("キャンセル", role: .cancel) { pasteNeedsSave = false }
+            Button("保存…") {
+                pasteNeedsSave = false
+                NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil)
             }
+            .keyboardShortcut(.defaultAction)
         } message: {
-            Text(pasteNeedsSave
-                 ? String(localized: "画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。")
-                 : imageDropError ?? "")
-        }
-        .alert("文字コードの取り込みに失敗", isPresented: Binding(
-            get: { encodingImportError != nil },
-            set: { if !$0 { encodingImportError = nil } }
-        )) {
-            Button("OK", role: .cancel) { encodingImportError = nil }
-        } message: {
-            Text(encodingImportError ?? "")
+            Text("画像を貼り付けるには保存先が必要です。書類を保存した後、もう一度貼り付けてください。")
         }
     }
 
@@ -1186,6 +1257,7 @@ struct EditorWorkspace: View {
     private var documentChangesView: some View {
         lifecycleView
         .onChange(of: fileURL) { oldURL, newURL in
+            selectedFileURL = nil
             if oldURL != nil, oldURL != newURL { collaboration.stop() }
             monitorCloudDocument(newURL)
             refreshCloudStatus()
@@ -1386,7 +1458,7 @@ struct EditorWorkspace: View {
             onOpenEmbeddedDocument: { url in
                 Task {
                     do { try await openDocument(at: url) }
-                    catch { workspaceOpenError = error.localizedDescription }
+                    catch { presentedError = .workspaceOpen(error.localizedDescription) }
                 }
             },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
@@ -1406,40 +1478,30 @@ struct EditorWorkspace: View {
 
     private func splitDivider(total: CGFloat, minimum: CGFloat,
                               horizontal: Bool) -> some View {
-        let available = max(1, total - 8)
-        let effectiveMinimum = min(minimum, available / 2)
-        return Color.clear
-            .frame(width: horizontal ? 8 : nil, height: horizontal ? nil : 8)
-            .overlay {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.35))
-                    .frame(width: horizontal ? 1 : nil, height: horizontal ? nil : 1)
-            }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    if splitDragStart == nil { splitDragStart = splitRatio }
-                    let delta = horizontal ? value.translation.width : value.translation.height
-                    let sign: CGFloat = previewFirst ? -1 : 1
-                    let proposed = (splitDragStart ?? splitRatio) + Double(sign * delta / available)
-                    splitRatio = max(Double(effectiveMinimum / available),
-                                     min(1 - Double(effectiveMinimum / available), proposed))
-                }
-                .onEnded { _ in
-                    splitDragStart = nil
-                    savePosition(for: fileURL)
-                })
-            .accessibilityElement()
-            .accessibilityLabel("編集とプレビューの分割位置")
-            .accessibilityValue("編集 \(Int(splitRatio * 100))%")
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: splitRatio = min(0.8, splitRatio + 0.05)
-                case .decrement: splitRatio = max(0.2, splitRatio - 0.05)
-                @unknown default: break
-                }
+        SplitDividerHandle(
+            isVertical: horizontal,
+            valueDescription: String(localized: "編集 \(Int(splitRatio * 100))%"),
+            onDrag: { delta in
+                if splitDragStart == nil { splitDragStart = splitRatio }
+                splitRatio = EditorSplitSizing.draggedRatio(from: splitDragStart ?? splitRatio,
+                    delta: delta, total: total, minimum: minimum, editorTrailing: previewFirst)
+            },
+            onDragEnded: {
+                splitDragStart = nil
                 savePosition(for: fileURL)
-            }
+            },
+            onReset: {
+                splitDragStart = nil
+                splitRatio = 0.5
+                savePosition(for: fileURL)
+            },
+            onAdjust: { increment in
+                splitRatio = EditorSplitSizing.adjustedRatio(splitRatio, increment: increment)
+                savePosition(for: fileURL)
+            })
+        .frame(width: horizontal ? SplitDividerHandle.thickness : nil,
+               height: horizontal ? nil : SplitDividerHandle.thickness)
+        .help("ドラッグで大きさを調整、ダブルクリックで均等に分割")
     }
 
     private func savePosition(for url: URL?) {
@@ -1468,7 +1530,7 @@ struct EditorWorkspace: View {
                 catch { failed.append(url.lastPathComponent) }
             }
             if !failed.isEmpty {
-                workspaceOpenError = String(localized: "開けなかった書類: \(failed.joined(separator: ", "))")
+                presentedError = .workspaceOpen(String(localized: "開けなかった書類: \(failed.joined(separator: ", "))"))
             }
         }
     }
@@ -1523,12 +1585,19 @@ struct EditorWorkspace: View {
 
     private var workspaceSidebar: some View {
         VStack(spacing: 0) {
+            // Icons keep the four segments readable in a narrow sidebar; the names stay
+            // available to VoiceOver and as the tooltip (#26).
             Picker("サイドバー", selection: $sidebarTab) {
                 ForEach(SidebarTab.allCases, id: \.self) { tab in
-                    Text(tab.title).tag(tab)
+                    Label(tab.title, systemImage: tab.symbolName)
+                        .labelStyle(.iconOnly)
+                        .help(tab.title)
+                        .tag(tab)
                 }
             }
             .pickerStyle(.segmented)
+            .labelsHidden()
+            .help(sidebarTab.title)
             .padding(8)
             switch sidebarTab {
             case .outline: outlineSidebar
@@ -1628,19 +1697,24 @@ struct EditorWorkspace: View {
                 .help("現在のカーソル位置をブックマーク")
             }
             .padding(12)
-            List(settingsStore.bookmarks) { bookmark in
-                Button { openBookmark(bookmark) } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(bookmark.title).lineLimit(1)
-                        Text(bookmark.documentURL.lastPathComponent)
-                            .font(.caption).foregroundStyle(.secondary)
+            List(settingsStore.bookmarks, selection: $selectedBookmarkID) { bookmark in
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(bookmark.title).lineLimit(1)
+                    Text(bookmark.documentURL.lastPathComponent)
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .activatesOnClick { openBookmark(bookmark) }
+            }
+            .contextMenu(forSelectionType: DocumentBookmark.ID.self) { ids in
+                if !ids.isEmpty {
+                    Button("ブックマークを削除", role: .destructive) {
+                        ids.forEach(settingsStore.removeBookmark)
                     }
                 }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button("ブックマークを削除", role: .destructive) {
-                        settingsStore.removeBookmark(bookmark.id)
-                    }
+            } primaryAction: { ids in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
+                if let bookmark = settingsStore.bookmarks.first(where: { ids.contains($0.id) }) {
+                    openBookmark(bookmark)
                 }
             }
             .listStyle(.sidebar)
@@ -1669,7 +1743,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: bookmark.documentURL)
             } catch {
                 documentLinkNavigation.cancelPosition(for: bookmark.documentURL)
-                workspaceOpenError = error.localizedDescription
+                presentedError = .workspaceOpen(error.localizedDescription)
             }
         }
     }
@@ -1802,33 +1876,33 @@ struct EditorWorkspace: View {
 
     private var workspaceFileList: some View {
         VStack(spacing: 0) {
-            List {
+            List(selection: Binding(get: { selectedFileURL ?? fileURL?.standardizedFileURL },
+                                    set: { selectedFileURL = $0 })) {
                 OutlineGroup(workspaceStore.visibleNodes, children: \.children) { node in
                     if node.isDirectory {
                         HStack {
                             Label(node.name, systemImage: "folder")
                             if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
-                            .contextMenu { fileContextActions(for: node) }
+                        .tag(node.url.standardizedFileURL)
                     } else {
-                        Button {
-                            Task {
-                                if node.isEditableDocument {
-                                    do { try await openDocument(at: node.url) }
-                                    catch { workspaceOpenError = error.localizedDescription }
-                                } else if !NSWorkspace.shared.open(node.url) {
-                                    workspaceOpenError = String(localized: "添付ファイルを開けませんでした。")
-                                }
-                            }
-                        } label: {
-                            HStack {
-                                Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
-                                if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
-                            }
+                        HStack {
+                            Label(node.name, systemImage: node.isEditableDocument ? "doc.text" : "paperclip")
+                            if isPinned(node) { Image(systemName: "pin.fill").foregroundStyle(.secondary) }
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu { fileContextActions(for: node) }
+                        .activatesOnClick { openWorkspaceFile(node) }
+                        .tag(node.url.standardizedFileURL)
                     }
+                }
+            }
+            .contextMenu(forSelectionType: URL.self) { urls in
+                if let url = urls.first, let node = workspaceNode(at: url) {
+                    fileContextActions(for: node)
+                }
+            } primaryAction: { urls in
+                guard ListKeyboardSelection.isKeyboardActivation else { return }
+                if let url = urls.first, let node = workspaceNode(at: url), !node.isDirectory {
+                    openWorkspaceFile(node)
                 }
             }
             .listStyle(.sidebar)
@@ -1845,6 +1919,21 @@ struct EditorWorkspace: View {
                     .padding(8)
             }
         }
+    }
+
+    private func openWorkspaceFile(_ node: WorkspaceNode) {
+        Task {
+            if node.isEditableDocument {
+                do { try await openDocument(at: node.url) }
+                catch { presentedError = .workspaceOpen(error.localizedDescription) }
+            } else if !NSWorkspace.shared.open(node.url) {
+                presentedError = .workspaceOpen(String(localized: "添付ファイルを開けませんでした。"))
+            }
+        }
+    }
+
+    private func workspaceNode(at url: URL) -> WorkspaceNode? {
+        WorkspaceNode.first(at: url, in: workspaceStore.visibleNodes)
     }
 
     @ViewBuilder
@@ -1877,17 +1966,23 @@ struct EditorWorkspace: View {
         let canEdit = isCurrent && editorModel.canExecuteCommand
         let highlightedID = isCurrent
             ? MarkdownOutline.currentSection(at: selection.location, in: entries)?.id : nil
-        List(entries) { entry in
-            let actions = snapshot?.sectionActions[entry.id]
-            Button {
-                navigate(to: entry)
-            } label: {
-                Text(entry.title)
-                    .lineLimit(1)
-                    .padding(.leading, CGFloat(entry.level - 1) * 12)
-            }
-            .buttonStyle(.plain)
-            .contextMenu {
+        // The selection follows the caret's section. Arrow keys move through the headings and
+        // reveal each one while the list keeps the focus; a click or Return moves into the editor.
+        List(entries, selection: Binding(get: { highlightedID }, set: { id in
+            guard let entry = entries.first(where: { $0.id == id }),
+                  !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
+            navigate(to: entry, focusesEditor: false)
+        })) { entry in
+            Text(entry.title)
+                .lineLimit(1)
+                .padding(.leading, CGFloat(entry.level - 1) * 12)
+                .activatesOnClick { navigate(to: entry) }
+                .disabled(!isCurrent)
+                .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
+        }
+        .contextMenu(forSelectionType: MarkdownOutlineEntry.ID.self) { ids in
+            if let entry = entries.first(where: { ids.contains($0.id) }) {
+                let actions = snapshot?.sectionActions[entry.id]
                 Button("セクションを上へ移動") {
                     editorModel.moveSection(at: entry.sourceRange.location, direction: .up, snapshot: snapshot,
                         dialect: documentContext.markdownDialect)
@@ -1910,10 +2005,9 @@ struct EditorWorkspace: View {
                 }
                 .disabled(!canEdit || actions?.canDemote != true)
             }
-            .listRowBackground(highlightedID == entry.id ? Color.accentColor.opacity(0.16) : Color.clear)
-            .disabled(!isCurrent)
-            .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
-            .accessibilityAddTraits(highlightedID == entry.id ? .isSelected : [])
+        } primaryAction: { ids in
+            guard ListKeyboardSelection.isKeyboardActivation else { return }
+            if let entry = entries.first(where: { ids.contains($0.id) }) { navigate(to: entry) }
         }
         }
         .listStyle(.sidebar)
@@ -1925,10 +2019,10 @@ struct EditorWorkspace: View {
         }
     }
 
-    private func navigate(to entry: MarkdownOutlineEntry) {
+    private func navigate(to entry: MarkdownOutlineEntry, focusesEditor: Bool = true) {
         guard let snapshot = currentAnalysisSnapshot,
               snapshot.outlineEntries.contains(entry) else { return }
-        navigate(to: entry.sourceRange.location)
+        navigate(to: entry.sourceRange.location, focusesEditor: focusesEditor)
     }
 
     private func goToLine(_ requestedLine: Int) {
@@ -1940,7 +2034,7 @@ struct EditorWorkspace: View {
     private func navigateToHeading(_ fragment: String) {
         guard let snapshot = currentAnalysisSnapshot else { return }
         guard let entry = MarkdownHeadingIndex(analysis: snapshot.analysis).entry(forFragment: fragment) else {
-            missingHeading = fragment
+            presentedError = .missingHeading(fragment)
             return
         }
         navigate(to: entry)
@@ -1958,7 +2052,7 @@ struct EditorWorkspace: View {
                 try await openDocument(at: link.fileURL)
             } catch {
                 documentLinkNavigation.cancel(for: link.fileURL)
-                documentLinkError = error.localizedDescription
+                presentedError = .documentLink(error.localizedDescription)
             }
         }
     }
@@ -1989,7 +2083,7 @@ struct EditorWorkspace: View {
             do { try await openDocument(at: result.url) }
             catch {
                 documentLinkNavigation.cancelPosition(for: result.url)
-                workspaceOpenError = error.localizedDescription
+                presentedError = .workspaceOpen(error.localizedDescription)
             }
         }
     }
@@ -2017,12 +2111,12 @@ struct EditorWorkspace: View {
     private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
         guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
               !workspaceStore.isDocumentLocked(fileURL) else {
-            workspaceOpenError = String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")
+            presentedError = .workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。"))
             return
         }
         if editorModel.hasActiveEditor {
             guard editorModel.applyRegexEdit(edit, expectedSource: document.text) else {
-                workspaceOpenError = String(localized: "タスクを変更できませんでした。")
+                presentedError = .workspaceOpen(String(localized: "タスクを変更できませんでした。"))
                 return
             }
             editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
@@ -2120,13 +2214,20 @@ struct EditorWorkspace: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [MarkdownDocument.markdownType, .plainText]
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        do {
-            encodingImport = EncodingImport(url: url, data: try Data(contentsOf: url))
-        } catch {
-            encodingImportError = error.localizedDescription
+        panel.beginAttached { response in
+            guard response == .OK, let url = panel.url else { return }
+            Task { @MainActor in
+                // Read off the main thread so a large or slow file does not stall the window.
+                let result = await Task.detached(priority: .userInitiated) {
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    return Result { try Data(contentsOf: url) }
+                }.value
+                switch result {
+                case let .success(data): encodingImport = EncodingImport(url: url, data: data)
+                case let .failure(error): presentedError = .encodingImport(error.localizedDescription)
+                }
+            }
         }
     }
 
@@ -2147,8 +2248,7 @@ struct EditorWorkspace: View {
     }
 
     private func beginSavePanel(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
-        if let window = NSApp.keyWindow { panel.beginSheetModal(for: window, completionHandler: completion) }
-        else { panel.begin(completionHandler: completion) }
+        panel.beginAttached(completionHandler: completion)
     }
 
     private func saveHTML(preset: MarkdownExportPreset) {
@@ -2163,13 +2263,13 @@ struct EditorWorkspace: View {
                 let html = try await MarkdownHTMLExporter.renderAsync(source, documentURL: url, preset: preset,
                                                                       dialect: dialect, outputURL: destination)
                 try await DocumentWork.commit { try Data(html.utf8).write(to: destination, options: .atomic) }
-            } onError: { htmlExportError = $0 }
+            } onError: { presentedError = .htmlExport($0) }
         }
     }
 
     private func exportPDF() {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { pdfExportError = $0 }) else { return }
+                                          onError: { presentedError = .pdfExport($0) }) else { return }
         exportFormat = .pdf
     }
 
@@ -2229,13 +2329,13 @@ struct EditorWorkspace: View {
             let url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownSlidePDFExporter.exportAsync(deck, documentURL: url, to: destination, dialect: dialect)
-            } onError: { pdfExportError = $0 }
+            } onError: { presentedError = .pdfExport($0) }
         }
     }
 
     private func savePDF(preset: MarkdownExportPreset) {
         guard DocumentOperationGate.admit(running: documentOperationRunning,
-                                          onError: { pdfExportError = $0 }) else { return }
+                                          onError: { presentedError = .pdfExport($0) }) else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
@@ -2245,7 +2345,7 @@ struct EditorWorkspace: View {
             let source = document.text, url = fileURL, dialect = documentContext.markdownDialect
             startDocumentOperation {
                 try await MarkdownPDFExporter.exportAsync(source, documentURL: url, to: destination, preset: preset, dialect: dialect)
-            } onError: { pdfExportError = $0 }
+            } onError: { presentedError = .pdfExport($0) }
         }
     }
 
@@ -2266,7 +2366,7 @@ struct EditorWorkspace: View {
             operation.jobTitle = title
             operation.showsPrintPanel = true
             _ = try await MarkdownPDFExporter.run(operation)
-        } onError: { printError = $0 }
+        } onError: { presentedError = .print($0) }
     }
 
     private func copyRichSelection() {
@@ -2279,7 +2379,7 @@ struct EditorWorkspace: View {
         startDocumentOperation {
             try await MarkdownRichClipboard.copyAsync(selected, documentURL: url, to: .general, dialect: dialect,
                                                       startingChangeCount: changeCount)
-        } onError: { richCopyError = $0 }
+        } onError: { presentedError = .richCopy($0) }
     }
 
     private func exportPlainText() {
@@ -2295,7 +2395,7 @@ struct EditorWorkspace: View {
                     MarkdownPlainTextExporter.render(source, options: options)
                 }
                 try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
-            } onError: { plainExportError = $0 }
+            } onError: { presentedError = .plainExport($0) }
         }
     }
 
@@ -2303,10 +2403,14 @@ struct EditorWorkspace: View {
         NavigationPoint(documentURL: fileURL, utf16Location: editorModel.selectedRange.location)
     }
 
-    private func navigate(to location: Int) {
+    private func navigate(to location: Int, focusesEditor: Bool = true) {
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
-        navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
-        editorModel.navigate(to: location)
+        if focusesEditor {
+            navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
+        } else {
+            navigationHistory.recordPreview(from: currentNavigationPoint, to: destination)
+        }
+        editorModel.navigate(to: location, focusesEditor: focusesEditor)
         scrollPreview(to: location)
     }
 
@@ -2427,7 +2531,7 @@ struct EditorWorkspace: View {
                                                            model: editorModel,
                                                            currentContext: { documentContext })
             } catch {
-                imageDropError = error.localizedDescription
+                presentedError = .imageInsert(error.localizedDescription)
             }
         }
     }
@@ -2445,7 +2549,7 @@ struct EditorWorkspace: View {
                                                             context: context, model: editorModel,
                                                             currentContext: { documentContext })
             } catch {
-                imageDropError = error.localizedDescription
+                presentedError = .imageInsert(error.localizedDescription)
             }
         }
     }
@@ -3238,4 +3342,82 @@ private struct DocumentStatusReader<Content: View>: View {
     @ViewBuilder let content: (DocumentStatistics?, (title: String, value: DocumentStatistics)?) -> Content
 
     var body: some View { content(store.selection, store.section) }
+}
+
+/// A failure the user can only acknowledge. Each case has a title and message so the window
+/// presents them through a single alert (#29).
+enum WorkspacePresentedError: Identifiable, Equatable {
+    case missingHeading(String)
+    case documentLink(String)
+    case htmlExport(String)
+    case pdfExport(String)
+    case print(String)
+    case richCopy(String)
+    case plainExport(String)
+    case workspaceOpen(String)
+    case imageInsert(String)
+    case encodingImport(String)
+
+    var id: String { title + "\u{1F}" + message }
+
+    var title: String {
+        switch self {
+        case .missingHeading: String(localized: "見出しが見つかりません")
+        case .documentLink: String(localized: "リンク先を開けません")
+        case .htmlExport: String(localized: "HTMLを書き出せません")
+        case .pdfExport: String(localized: "PDFを書き出せません")
+        case .print: String(localized: "印刷できません")
+        case .richCopy: String(localized: "書式付きコピーに失敗しました")
+        case .plainExport: String(localized: "テキストを書き出せません")
+        case .workspaceOpen: String(localized: "ファイルを開けません")
+        case .imageInsert: String(localized: "画像を挿入できません")
+        case .encodingImport: String(localized: "文字コードの取り込みに失敗")
+        }
+    }
+
+    var message: String {
+        switch self {
+        case let .missingHeading(fragment): String(localized: "#\(fragment) に対応する見出しがありません。")
+        case let .documentLink(message), let .htmlExport(message), let .pdfExport(message),
+             let .print(message), let .richCopy(message), let .plainExport(message),
+             let .workspaceOpen(message), let .imageInsert(message), let .encodingImport(message):
+            message
+        }
+    }
+}
+
+/// Shows `MarkdownEditorModel.notice` for a few seconds at the bottom of the window.
+private struct TransientNoticeBanner: View {
+    @ObservedObject var model: MarkdownEditorModel
+
+    var body: some View {
+        if let notice = model.notice {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                Text(notice.message)
+                    .lineLimit(2)
+                Button {
+                    model.notice = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("閉じる")
+                .accessibilityLabel("閉じる")
+            }
+            .font(.callout)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(radius: 2, y: 1)
+            .accessibilityElement(children: .contain)
+            .task(id: notice.id) {
+                try? await Task.sleep(for: .seconds(5))
+                if !Task.isCancelled, model.notice?.id == notice.id { model.notice = nil }
+            }
+        }
+    }
 }

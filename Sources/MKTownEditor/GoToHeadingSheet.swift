@@ -19,15 +19,23 @@ struct GoToHeadingSheet: View {
                 .font(.headline)
             TextField("見出し名で検索", text: $query)
                 .focused($searchFocused)
+                .movesListSelection($selectedID, in: results.map(\.id))
                 .onSubmit(go)
             List(results, selection: $selectedID) { entry in
                 Text(entry.title)
                     .padding(.leading, CGFloat(entry.level - 1) * 12)
                     .tag(entry.id)
                     .accessibilityLabel("見出しレベル \(entry.level)、\(entry.title)")
+                    .activatesOnClick {
+                        selectedID = entry.id
+                        go()
+                    }
+            }
+            .contextMenu(forSelectionType: Int.self) { _ in } primaryAction: { _ in
+                if ListKeyboardSelection.isKeyboardActivation { go() }
             }
             .frame(height: 260)
-            Text("Tabで一覧へ移動し、矢印キーで選んでから移動できます。")
+            Text("↑↓キーで選び、Returnで移動します。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack {

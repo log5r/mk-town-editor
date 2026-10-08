@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import SwiftUI
 
 struct ShortcutChord: Codable, Hashable, Sendable {
@@ -61,9 +61,15 @@ enum EditorShortcutRegistry {
 
     static func shortcut(for command: EditorCommand,
                          overrides: [String: ShortcutChord]) -> ShortcutChord? {
-        if let override = overrides[command.toolbarIdentifier] { return override }
-        guard let chord = command.shortcut.map({ ShortcutChord(key: $0.key, modifiers: $0.modifiers) })
-        else { return nil }
+        let ownDefault = command.shortcut.map { ShortcutChord(key: $0.key, modifiers: $0.modifiers) }
+        if let override = overrides[command.toolbarIdentifier] {
+            // An override with an empty key records that the user removed the shortcut. A key
+            // saved before a later version reserved it for a fixed menu item gives way to it.
+            guard !override.key.isEmpty, !reserved.contains(override) || override == ownDefault
+            else { return nil }
+            return override
+        }
+        guard let chord = ownDefault else { return nil }
         // A default added in a later version gives way to a key the user already assigned elsewhere.
         return overrides.contains { $0.key != command.toolbarIdentifier && $0.value == chord } ? nil : chord
     }
@@ -72,7 +78,9 @@ enum EditorShortcutRegistry {
                          overrides: [String: ShortcutChord]) throws {
         guard chord.key.count == 1, let character = chord.key.first,
               !character.isWhitespace, !character.isNewline,
-              character.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) })
+              character.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }),
+              // AppKit reports arrow, function and navigation keys as private-use characters.
+              !character.unicodeScalars.contains(where: { (0xF700...0xF8FF).contains($0.value) })
         else { throw ShortcutError.invalidKey }
         guard chord.command || chord.control else { throw ShortcutError.modifierRequired }
         let ownDefault = command.shortcut.map { ShortcutChord(key: $0.key, modifiers: $0.modifiers) }
@@ -103,7 +111,7 @@ enum EditorShortcutRegistry {
         ShortcutChord(key: "f", option: true, shift: true),
         ShortcutChord(key: "f", shift: true),
         ShortcutChord(key: "g"), ShortcutChord(key: "g", shift: true),
-        ShortcutChord(key: "r", option: true, shift: true),
+        ShortcutChord(key: "r", option: true, shift: true), ShortcutChord(key: "r", option: true),
         ShortcutChord(key: "l"), ShortcutChord(key: "p", option: true),
         ShortcutChord(key: "o", option: true), ShortcutChord(key: "o", shift: true),
         ShortcutChord(key: "+"), ShortcutChord(key: "-"), ShortcutChord(key: "0"),
@@ -117,13 +125,155 @@ enum EditorShortcutRegistry {
     ]
 }
 
+extension ShortcutChord {
+    /// The chord for a recorded key press. `unshifted` and `shifted` are the characters the key
+    /// produces without modifiers and with only Shift. Letters and digits keep Shift as a
+    /// modifier, as the defaults do (⇧⌘8). For other keys AppKit matches the shifted
+    /// character, so Shift becomes part of the key instead (">" rather than ⇧".").
+    init?(recordedKey unshifted: String, shifted: String, modifiers: NSEvent.ModifierFlags) {
+        guard unshifted.count == 1, let character = unshifted.first else { return nil }
+        let usesShiftedCharacter = modifiers.contains(.shift) && !character.isLetter &&
+            !character.isNumber && shifted.count == 1 && shifted != unshifted
+        self.init(key: usesShiftedCharacter ? shifted : unshifted,
+                  command: modifiers.contains(.command), option: modifiers.contains(.option),
+                  shift: modifiers.contains(.shift) && !usesShiftedCharacter,
+                  control: modifiers.contains(.control))
+    }
+
+    init?(recording event: NSEvent) {
+        self.init(recordedKey: event.characters(byApplyingModifiers: []) ?? "",
+                  shifted: event.characters(byApplyingModifiers: .shift) ?? "",
+                  modifiers: event.modifierFlags.intersection(.deviceIndependentFlagsMask))
+    }
+}
+
+/// A field that records the next key combination pressed while it has focus, like the
+/// shortcut fields in System Settings. The chord is applied as soon as it is pressed (#52).
+struct ShortcutRecorder: NSViewRepresentable {
+    let label: String
+    let accessibilityTitle: String
+    let onRecord: (ShortcutChord) -> Void
+    let onClear: () -> Void
+
+    func makeNSView(context: Context) -> ShortcutRecorderView {
+        let view = ShortcutRecorderView()
+        updateNSView(view, context: context)
+        return view
+    }
+
+    func updateNSView(_ view: ShortcutRecorderView, context: Context) {
+        view.label = label
+        view.setAccessibilityLabel(accessibilityTitle)
+        view.onRecord = onRecord
+        view.onClear = onClear
+    }
+}
+
+final class ShortcutRecorderView: NSView {
+    var label = "" {
+        didSet {
+            if label != oldValue {
+                needsDisplay = true
+                setAccessibilityValue(label)
+            }
+        }
+    }
+    var onRecord: ((ShortcutChord) -> Void)?
+    var onClear: (() -> Void)?
+    private(set) var isRecording = false {
+        didSet { if isRecording != oldValue { needsDisplay = true } }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityHelp(String(localized: "クリックしてからキーを押すと割り当てます。Deleteで解除、Escで中止します。"))
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: 120, height: 22) }
+    override var acceptsFirstResponder: Bool { true }
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        isRecording = true
+        return true
+    }
+
+    override func resignFirstResponder() -> Bool {
+        isRecording = false
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        window?.makeFirstResponder(self) ?? false
+    }
+
+    // ⌘ combinations arrive here before the menu bar sees them.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isRecording, window?.firstResponder === self else { return false }
+        record(event)
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isRecording else { return super.keyDown(with: event) }
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        // A plain Tab still moves the keyboard focus.
+        if event.keyCode == 48, modifiers.isEmpty || modifiers == .shift {
+            return super.keyDown(with: event)
+        }
+        record(event)
+    }
+
+    func record(_ event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        switch event.keyCode {
+        case 53 where modifiers.isEmpty: // Escape
+            break
+        case 51, 117: // Delete, Forward Delete
+            if modifiers.isEmpty { onClear?() } else { fallthrough }
+        default:
+            guard let chord = ShortcutChord(recording: event) else { return }
+            onRecord?(chord)
+        }
+        window?.makeFirstResponder(nil)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let frame = bounds.insetBy(dx: 0.5, dy: 0.5)
+        let path = NSBezierPath(roundedRect: frame, xRadius: 5, yRadius: 5)
+        (isRecording ? NSColor.selectedContentBackgroundColor.withAlphaComponent(0.15)
+                     : NSColor.controlBackgroundColor).setFill()
+        path.fill()
+        NSColor.separatorColor.setStroke()
+        path.stroke()
+        let text = isRecording ? String(localized: "キーを入力…") : label
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+            .foregroundColor: isRecording ? NSColor.secondaryLabelColor : NSColor.labelColor
+        ]
+        let size = (text as NSString).size(withAttributes: attributes)
+        (text as NSString).draw(at: NSPoint(x: (bounds.width - size.width) / 2,
+                                            y: (bounds.height - size.height) / 2),
+                                withAttributes: attributes)
+    }
+}
+
+/// Every command with a shortcut, each with a recorder field. Changes apply immediately.
 struct EditorShortcutPreferencesView: View {
-    @Environment(\.dismiss) private var dismiss
     @ObservedObject var settingsStore: EditorSettingsStore
     @State private var search = ""
-    @State private var selected: EditorCommand?
-    @State private var draft = ShortcutChord(key: "")
-    @State private var errorMessage: String?
+    @State private var failure: (command: EditorCommand, message: String)?
 
     private var commands: [EditorCommand] {
         EditorShortcutRegistry.commands.filter {
@@ -132,63 +282,61 @@ struct EditorShortcutPreferencesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("ショートカット").font(.headline)
-                Spacer()
-                Button("閉じる") { dismiss() }.keyboardShortcut(.cancelAction)
-            }
-            Text("コマンドを選び、キーと修飾キーを設定します。重複する操作やmacOSの予約操作は保存できません。")
-                .font(.caption).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
             TextField("コマンドを検索", text: $search)
+                .textFieldStyle(.roundedBorder)
             List(commands, id: \.self) { command in
-                Button {
-                    selected = command
-                    draft = settingsStore.shortcut(for: command) ?? ShortcutChord(key: "")
-                    errorMessage = nil
-                } label: {
-                    HStack {
-                        Text(command.title)
-                        Spacer()
-                        Text(settingsStore.shortcut(for: command)?.label ?? "未設定")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            .frame(height: 300)
-            if let selected {
-                Divider()
-                Text(selected.title).font(.subheadline.weight(.semibold))
                 HStack {
-                    TextField("キー（1文字）", text: $draft.key).frame(width: 110)
-                    Toggle("⌘", isOn: $draft.command)
-                    Toggle("⌥", isOn: $draft.option)
-                    Toggle("⇧", isOn: $draft.shift)
-                    Toggle("⌃", isOn: $draft.control)
-                }
-                .toggleStyle(.checkbox)
-                HStack {
-                    Button("既定に戻す") {
-                        do {
-                            try settingsStore.resetShortcut(for: selected)
-                            draft = settingsStore.shortcut(for: selected) ?? ShortcutChord(key: "")
-                            errorMessage = nil
-                        } catch { errorMessage = error.localizedDescription }
-                    }
+                    Text(command.title)
                     Spacer()
-                    Button("設定を保存") {
-                        do {
-                            try settingsStore.setShortcut(draft, for: selected)
-                            errorMessage = nil
-                        } catch { errorMessage = error.localizedDescription }
+                    ShortcutRecorder(label: settingsStore.shortcut(for: command)?.label
+                                        ?? String(localized: "未設定"),
+                                     accessibilityTitle: String(localized: "\(command.title)のショートカット"),
+                                     onRecord: { assign($0, to: command) },
+                                     onClear: { clear(command) })
+                        .frame(width: 120, height: 22)
+                    Button {
+                        reset(command)
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
                     }
-                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderless)
+                    .disabled(settingsStore.app.shortcutOverrides?[command.toolbarIdentifier] == nil)
+                    .help("既定に戻す")
+                    .accessibilityLabel("\(command.title)を既定に戻す")
                 }
             }
-            if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+            if let failure {
+                Label("\(failure.command.title): \(failure.message)", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            } else {
+                Text("欄をクリックしてキーを押すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
-        .padding(20)
-        .frame(width: 570)
+    }
+
+    private func assign(_ chord: ShortcutChord, to command: EditorCommand) {
+        do {
+            try settingsStore.setShortcut(chord, for: command)
+            failure = nil
+        } catch {
+            failure = (command, error.localizedDescription)
+        }
+    }
+
+    private func clear(_ command: EditorCommand) {
+        settingsStore.clearShortcut(for: command)
+        failure = nil
+    }
+
+    private func reset(_ command: EditorCommand) {
+        do {
+            try settingsStore.resetShortcut(for: command)
+            failure = nil
+        } catch {
+            failure = (command, error.localizedDescription)
+        }
     }
 }

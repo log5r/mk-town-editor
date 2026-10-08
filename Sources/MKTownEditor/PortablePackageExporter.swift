@@ -379,7 +379,7 @@ struct PortablePackageSheet: View {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.canCreateDirectories = true
-        panel.begin { response in
+        panel.beginAttached { response in
             guard response == .OK, let parent = panel.url, let documentURL else { return }
             isWorking = true
             errorMessage = nil

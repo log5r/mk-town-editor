@@ -131,14 +131,13 @@ struct WorkspaceFileOperationSheet: View {
                     if !isWorking { dismiss() }
                 }
                     .keyboardShortcut(.cancelAction)
-                if needsPlan && plan == nil {
-                    Button("変更を確認") { preparePlan() }
-                        .disabled(isWorking || inputIsEmpty)
-                } else {
-                    Button(actionIsTrash ? "ゴミ箱へ移動" : "適用") { apply() }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(isWorking || inputIsEmpty || plan?.isTruncated == true)
+                // Renaming and moving confirm the link check only when there is something to
+                // review; otherwise the first Return applies the change (#29).
+                Button(actionIsTrash ? "ゴミ箱へ移動" : "適用") {
+                    if needsPlan && plan == nil { preparePlan(thenApply: true) } else { apply() }
                 }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isWorking || inputIsEmpty || plan?.isTruncated == true)
             }
         }
         .frame(width: 500)
@@ -188,7 +187,13 @@ struct WorkspaceFileOperationSheet: View {
         }
     }
 
-    private func preparePlan() {
+    /// A plan with nothing to review is applied without a second confirmation.
+    static func appliesWithoutReview(_ plan: WorkspaceMovePlan) -> Bool {
+        plan.changedLinks == 0 && plan.skippedDocuments.isEmpty && !plan.isTruncated &&
+            !plan.changes.contains { $0.openOriginalData != nil && $0.linkCount > 0 }
+    }
+
+    private func preparePlan(thenApply: Bool = false) {
         guard let source = action.sourceURL else { return }
         let destination = destinationURL ?? source.deletingLastPathComponent()
             .appendingPathComponent(".trash-preview-\(UUID().uuidString)")
@@ -213,6 +218,11 @@ struct WorkspaceFileOperationSheet: View {
                 try Task.checkCancellation()
                 if actionIsTrash || destinationURL?.resolvingSymlinksInPath() == destination.resolvingSymlinksInPath() {
                     plan = result
+                    if thenApply && Self.appliesWithoutReview(result) {
+                        isWorking = false
+                        apply()
+                        return
+                    }
                 }
             } catch is CancellationError {
                 // Stop planning without publishing a partial plan.

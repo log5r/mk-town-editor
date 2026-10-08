@@ -193,11 +193,13 @@ struct EditorTextStyle: Equatable {
 
 struct EditorLayoutOptions: Equatable {
     var wrapsLines = true
+    var showsLineNumbers = true
     var listIndentWidth = 2
     var codeIndentWidth = 4
 
     @MainActor
     func apply(to textView: NSTextView, in scrollView: NSScrollView) {
+        scrollView.rulersVisible = showsLineNumbers
         scrollView.hasHorizontalScroller = !wrapsLines
         textView.isHorizontallyResizable = !wrapsLines
         textView.autoresizingMask = wrapsLines ? [.width] : []
@@ -264,6 +266,7 @@ struct AppEditorSettings: Codable, Equatable {
     var previewBodyWidth: Int?
     var showsInvisibleCharacters: Bool?
     var showsIndentGuides: Bool?
+    var showsLineNumbers: Bool?
     var shortcutOverrides: [String: ShortcutChord]?
 
     var effectiveSnippets: [EditorSnippet] {
@@ -325,6 +328,22 @@ enum EditorSplitSizing {
         let effectiveMinimum = min(minimum, available / 2)
         return max(effectiveMinimum,
                    min(available - effectiveMinimum, available * ratio))
+    }
+
+    /// The ratio after dragging the divider `delta` points from where it was at `start`.
+    /// `editorTrailing` is true when the editor follows the preview, so dragging toward the
+    /// trailing edge shrinks it.
+    static func draggedRatio(from start: Double, delta: CGFloat, total: CGFloat,
+                             minimum: CGFloat, editorTrailing: Bool) -> Double {
+        let available = max(1, total - SplitDividerHandle.thickness)
+        let effectiveMinimum = Double(min(minimum, available / 2) / available)
+        let proposed = start + Double((editorTrailing ? -delta : delta) / available)
+        return max(effectiveMinimum, min(1 - effectiveMinimum, proposed))
+    }
+
+    /// Keyboard and VoiceOver adjustments move the divider in 5% steps within 20–80%.
+    static func adjustedRatio(_ ratio: Double, increment: Bool) -> Double {
+        increment ? min(0.8, ratio + 0.05) : max(0.2, ratio - 0.05)
     }
 }
 
@@ -433,6 +452,13 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    /// Leaves the command without a shortcut, even one it has by default.
+    func clearShortcut(for command: EditorCommand) {
+        values.app.shortcutOverrides = values.app.shortcutOverrides ?? [:]
+        values.app.shortcutOverrides?[command.toolbarIdentifier] = ShortcutChord(key: "")
+        save()
+    }
+
     func resetShortcut(for command: EditorCommand) throws {
         var remaining = values.app.shortcutOverrides ?? [:]
         remaining[command.toolbarIdentifier] = nil
@@ -528,6 +554,7 @@ final class EditorSettingsStore: ObservableObject {
     func layoutOptions(for documentURL: URL? = nil) -> EditorLayoutOptions {
         EditorLayoutOptions(
             wrapsLines: values.app.wrapsLines,
+            showsLineNumbers: values.app.showsLineNumbers ?? true,
             listIndentWidth: min(8, max(2,
                 documentURL.flatMap { nearestFolderValue(for: $0, \.listIndentWidth) }
                     ?? values.app.listIndentWidth ?? 2)),

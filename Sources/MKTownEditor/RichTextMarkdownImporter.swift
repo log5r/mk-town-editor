@@ -337,7 +337,7 @@ struct RichTextImportSheet: View {
     private func chooseFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.html, .rtf]
-        panel.begin { response in
+        panel.beginAttached { response in
             guard response == .OK, let url = panel.url else { return }
             guard let format = RichTextImportFormat(url: url) else {
                 errorMessage = RichTextImportError.unsupportedFormat.localizedDescription

@@ -80,6 +80,7 @@ struct RegexSearchSheet: View {
                 Button("次を検索") {
                     if let match = nextMatch { onSelect(match) }
                 }
+                .keyboardShortcut(.defaultAction)
                 .disabled(matches.isEmpty || isSearching)
                 Button("1件置換") { replace(only: replacementTarget) }
                     .disabled(matches.isEmpty || isSearching)
