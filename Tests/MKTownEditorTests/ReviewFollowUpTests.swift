@@ -37,6 +37,20 @@ final class ReviewFollowUpTests: XCTestCase {
         XCTAssertEqual(history.back, [start, points[0]])
     }
 
+    /// Moving the caret in the editor between two preview runs starts a new run, so Back from
+    /// the second run returns to where the caret was moved, not to the start of the first run.
+    func testPreviewRunAfterTheCaretMovedRecordsItsOwnOrigin() {
+        var history = NavigationHistory()
+        let point = { NavigationPoint(documentURL: nil, utf16Location: $0) }
+        history.recordPreview(from: point(0), to: point(10))
+        history.recordPreview(from: point(10), to: point(20))
+        // The user clicks in the editor at 50; selection changes are not recorded as jumps.
+        history.recordPreview(from: point(50), to: point(30))
+        history.recordPreview(from: point(30), to: point(40))
+        XCTAssertEqual(history.back, [point(0), point(50)])
+        XCTAssertEqual(history.goBack(from: point(40)), point(50))
+    }
+
     /// AppKit reports arrow and function keys as private-use characters; they are not shortcuts.
     func testArrowAndFunctionKeysCannotBeAssigned() {
         for key in ["\u{F700}", "\u{F702}", "\u{F704}", "\u{F729}"] {
