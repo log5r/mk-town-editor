@@ -125,6 +125,17 @@ private struct PreviewSearchActionsKey: FocusedValueKey {
     typealias Value = PreviewSearchActions
 }
 
+struct PreviewUpdateActions {
+    let isPaused: Bool
+    let isStale: Bool
+    let togglePause: () -> Void
+    let refresh: () -> Void
+}
+
+private struct PreviewUpdateActionsKey: FocusedValueKey {
+    typealias Value = PreviewUpdateActions
+}
+
 extension FocusedValues {
     var focusModeActions: FocusModeActions? {
         get { self[FocusModeActionsKey.self] }
@@ -225,6 +236,10 @@ extension FocusedValues {
         get { self[PreviewSearchActionsKey.self] }
         set { self[PreviewSearchActionsKey.self] = newValue }
     }
+    var previewUpdateActions: PreviewUpdateActions? {
+        get { self[PreviewUpdateActionsKey.self] }
+        set { self[PreviewUpdateActionsKey.self] = newValue }
+    }
 }
 
 struct MarkdownCommands: Commands {
@@ -254,6 +269,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.openEncodingImportAction) private var openEncodingImportAction
     @FocusedValue(\.textFormatActions) private var textFormatActions
     @FocusedValue(\.previewSearchActions) private var previewSearchActions
+    @FocusedValue(\.previewUpdateActions) private var previewUpdateActions
     @ObservedObject var settingsStore: EditorSettingsStore
     @ObservedObject var workspaceStore: WorkspaceStore
 
@@ -370,6 +386,17 @@ struct MarkdownCommands: Commands {
             Button("プレビューを標準サイズに戻す") { zoomActions?.reset(.preview) }
                 .keyboardShortcut("0", modifiers: [.command, .option, .shift])
                 .disabled(zoomActions == nil)
+        }
+        CommandGroup(after: .toolbar) {
+            Divider()
+            Button(previewUpdateActions?.isPaused == true ? "プレビューの自動更新を再開"
+                                                         : "プレビューの自動更新を一時停止") {
+                previewUpdateActions?.togglePause()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .option])
+            .disabled(previewUpdateActions == nil)
+            Button("一時停止中のプレビューを更新") { previewUpdateActions?.refresh() }
+                .disabled(previewUpdateActions?.isStale != true)
         }
         CommandMenu("書き出し") {
             Button("HTML…") { exportHTMLAction?() }

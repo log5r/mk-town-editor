@@ -1,0 +1,79 @@
+import AppKit
+import XCTest
+@testable import MKTownEditor
+
+private final class FocusableView: NSView {
+    override var acceptsFirstResponder: Bool { true }
+}
+
+/// Sidebar lists and palettes select with the arrow keys and activate with Return (#26).
+@MainActor
+final class ListKeyboardSelectionTests: XCTestCase {
+    func testResolvedSelectionFallsBackToFirstRow() {
+        XCTAssertEqual(ListKeyboardSelection.resolved(nil, in: ["a", "b"]), "a")
+        XCTAssertEqual(ListKeyboardSelection.resolved("b", in: ["a", "b"]), "b")
+        XCTAssertEqual(ListKeyboardSelection.resolved("gone", in: ["a", "b"]), "a")
+        XCTAssertNil(ListKeyboardSelection.resolved("a", in: [String]()))
+    }
+
+    func testMovingClampsToTheList() {
+        let ids = [1, 2, 3]
+        XCTAssertEqual(ListKeyboardSelection.moved(nil, in: ids, by: 1), 2)
+        XCTAssertEqual(ListKeyboardSelection.moved(2, in: ids, by: 1), 3)
+        XCTAssertEqual(ListKeyboardSelection.moved(3, in: ids, by: 1), 3)
+        XCTAssertEqual(ListKeyboardSelection.moved(1, in: ids, by: -1), 1)
+        XCTAssertEqual(ListKeyboardSelection.moved(9, in: ids, by: -1), 1)
+        XCTAssertNil(ListKeyboardSelection.moved(nil, in: [Int](), by: 1))
+    }
+
+    func testOnlyMouseEventsCountAsClicks() throws {
+        let click = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        let key = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "",
+            isARepeat: false, keyCode: 125))
+        XCTAssertTrue(ListKeyboardSelection.isPointerEvent(click))
+        XCTAssertFalse(ListKeyboardSelection.isPointerEvent(key))
+        XCTAssertFalse(ListKeyboardSelection.isPointerEvent(nil))
+    }
+
+    func testFindsNestedWorkspaceNodeBySelectedURL() {
+        let root = URL(fileURLWithPath: "/tmp/workspace")
+        let nested = WorkspaceNode(url: root.appendingPathComponent("a/b.md"), name: "b.md", children: nil)
+        let nodes = [
+            WorkspaceNode(url: root.appendingPathComponent("top.md"), name: "top.md", children: nil),
+            WorkspaceNode(url: root.appendingPathComponent("a"), name: "a", children: [nested])
+        ]
+        XCTAssertEqual(WorkspaceNode.first(at: URL(fileURLWithPath: "/tmp/workspace/a/./b.md"), in: nodes), nested)
+        XCTAssertNil(WorkspaceNode.first(at: root.appendingPathComponent("missing.md"), in: nodes))
+    }
+
+    func testKeyboardNavigationLeavesFocusInTheList() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        let list = FocusableView(frame: NSRect(x: 0, y: 0, width: 100, height: 200))
+        let editor = EditorTextView(frame: NSRect(x: 100, y: 0, width: 200, height: 200))
+        editor.string = "# A\n\n# B\n"
+        window.contentView?.addSubview(list)
+        window.contentView?.addSubview(editor)
+        let model = MarkdownEditorModel()
+        model.connect(editor)
+        XCTAssertTrue(window.makeFirstResponder(list))
+
+        model.navigate(to: 5, focusesEditor: false)
+        XCTAssertEqual(editor.selectedRange(), NSRange(location: 5, length: 0))
+        XCTAssertTrue(window.firstResponder === list)
+        model.navigate(to: 0)
+        XCTAssertTrue(window.firstResponder === editor)
+    }
+
+    func testPaletteFieldsMoveTheListSelection() throws {
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/MKTownEditor")
+        for name in ["WorkspaceQuickOpenSheet.swift", "WorkspaceWikiLinkSheet.swift", "GoToHeadingSheet.swift"] {
+            let text = try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+            XCTAssertTrue(text.contains(".movesListSelection("), name)
+            XCTAssertTrue(text.contains("selection:"), name)
+        }
+    }
+}

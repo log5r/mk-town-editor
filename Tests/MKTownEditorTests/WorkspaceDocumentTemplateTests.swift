@@ -3,9 +3,12 @@ import XCTest
 @testable import MKTownEditor
 
 final class WorkspaceDocumentTemplateTests: XCTestCase {
-    func testTemplatesHaveDistinctBodiesAndDocumentDefaultUsesStarter() {
+    /// A new document starts empty; guidance is a placeholder, not saved text (#28).
+    func testTemplatesHaveDistinctBodiesAndNewDocumentIsEmpty() {
         XCTAssertEqual(WorkspaceDocumentTemplate.blank.text, "")
-        XCTAssertEqual(MarkdownDocument().text, WorkspaceDocumentTemplate.starter.text)
+        XCTAssertEqual(MarkdownDocument().text, "")
+        XCTAssertEqual(MarkdownDocument().encodedData(), Data())
+        XCTAssertFalse(WorkspaceDocumentTemplate.starter.text.isEmpty)
         XCTAssertTrue(WorkspaceDocumentTemplate.meetingNotes.text.contains("## 決定事項"))
         XCTAssertTrue(WorkspaceDocumentTemplate.article.text.contains("## 本文"))
     }

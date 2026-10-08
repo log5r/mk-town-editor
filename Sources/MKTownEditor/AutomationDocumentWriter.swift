@@ -126,6 +126,8 @@ final class MarkdownSelectionService: NSObject {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = String(localized: "選択テキスト.md")
         panel.allowedContentTypes = [MarkdownDocument.markdownType]
+        // A service request arrives from another app with no window of ours to attach to, and
+        // `serviceError` is only valid until this method returns, so the panel stays modal here.
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try AutomationDocumentWriter.save(text, at: url)

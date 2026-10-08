@@ -114,6 +114,8 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var tableGridDraft: MarkdownTableGridDraft?
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
+    /// A recoverable problem shown briefly in the window instead of an alert (#29).
+    @Published var notice: EditorNotice?
     weak var textView: NSTextView?
     var sharedSnapshot: DocumentSnapshot? {
         didSet {
@@ -434,7 +436,9 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
-    func navigate(to sourceLocation: Int) {
+    /// `focusesEditor` is false when a list's selection follows the arrow keys, so the list
+    /// keeps the keyboard focus while the editor shows the selected place.
+    func navigate(to sourceLocation: Int, focusesEditor: Bool = true) {
         let location = max(0, sourceLocation)
         guard let textView else {
             selectedRange = NSRange(location: location, length: 0)
@@ -447,7 +451,7 @@ final class MarkdownEditorModel: ObservableObject {
         (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
-        textView.window?.makeFirstResponder(textView)
+        if focusesEditor { textView.window?.makeFirstResponder(textView) }
         selectedRange = range
         selectedRanges = [range]
     }
@@ -812,6 +816,13 @@ final class MarkdownEditorModel: ObservableObject {
         return true
     }
 
+    func showNotice(_ message: String) {
+        // A new identity restarts the banner's timer even when the message repeats.
+        notice = EditorNotice(message: message)
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+
     func convertClipboardTable() {
         guard canExecuteCommand, let textView,
               let clipboard = tablePasteboard.string(forType: .string) else { return }
@@ -819,12 +830,7 @@ final class MarkdownEditorModel: ObservableObject {
         let selection = textView.selectedRange()
         guard let conversion = MarkdownTableInsertion.conversion(in: original,
             selection: selection, delimitedText: clipboard) else {
-            if let window = textView.window {
-                let alert = NSAlert()
-                alert.messageText = String(localized: "TSV・CSVを表に変換できません")
-                alert.informativeText = String(localized: "区切り文字、引用符、行の内容を確認してください。")
-                alert.beginSheetModal(for: window)
-            }
+            showNotice(String(localized: "TSV・CSVを表に変換できません。区切り文字、引用符、行の内容を確認してください。"))
             return
         }
         let applyConversion = { [weak self, weak textView] in
@@ -971,4 +977,9 @@ final class MarkdownEditorModel: ObservableObject {
         item.tag = action.rawValue
         textView.performTextFinderAction(item)
     }
+}
+
+struct EditorNotice: Identifiable, Equatable {
+    let id = UUID()
+    let message: String
 }

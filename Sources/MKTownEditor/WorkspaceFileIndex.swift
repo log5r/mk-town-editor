@@ -3,6 +3,18 @@ import Foundation
 import CoreServices
 
 struct WorkspaceNode: Identifiable, Sendable, Equatable {
+    /// The node for `url` anywhere under `nodes`, matched by standardized file path.
+    static func first(at url: URL, in nodes: [WorkspaceNode]) -> WorkspaceNode? {
+        let path = url.standardizedFileURL.path
+        var pending = nodes[...]
+        var stack: [WorkspaceNode] = []
+        while let node = pending.popFirst() ?? stack.popLast() {
+            if node.url.standardizedFileURL.path == path { return node }
+            stack.append(contentsOf: node.children ?? [])
+        }
+        return nil
+    }
+
     let url: URL
     let name: String
     let children: [WorkspaceNode]?
@@ -425,7 +437,7 @@ final class WorkspaceStore: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.prompt = String(localized: "開く")
         if let rootURL { panel.directoryURL = rootURL.deletingLastPathComponent() }
-        panel.begin { [weak self] response in
+        panel.beginAttached { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
             self.setRoot(url)
             do { try self.saveBookmark(for: url) }

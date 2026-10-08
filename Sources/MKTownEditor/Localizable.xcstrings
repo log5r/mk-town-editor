@@ -10636,6 +10636,346 @@
           }
         }
       }
+    },
+    "Markdown で書き始めましょう。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start writing in Markdown."
+          }
+        }
+      }
+    },
+    "プレビューは一時停止中 — 未反映の変更あり" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview paused — changes not shown yet"
+          }
+        }
+      }
+    },
+    "プレビューは一時停止中 — 最新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview paused — up to date"
+          }
+        }
+      }
+    },
+    "再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
+    "一時停止したまま最新の内容を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the latest content without resuming"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume Automatic Preview Updates"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を一時停止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause Automatic Preview Updates"
+          }
+        }
+      }
+    },
+    "一時停止中のプレビューを更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Paused Preview"
+          }
+        }
+      }
+    },
+    "TSV・CSVを表に変換できません。区切り文字、引用符、行の内容を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't convert the TSV or CSV to a table. Check the delimiters, quotes, and rows."
+          }
+        }
+      }
+    },
+    "ドラッグで大きさを調整、ダブルクリックで均等に分割" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag to resize. Double-click to split evenly."
+          }
+        }
+      }
+    },
+    "↑↓キーで選び、Returnで移動します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use ↑ and ↓ to choose a heading, then press Return to go to it."
+          }
+        }
+      }
+    },
+    "書き出し・公開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export & Publish"
+          }
+        }
+      }
+    },
+    "分割の方向と並び順" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split direction and order"
+          }
+        }
+      }
+    },
+    "プレビューの自動更新を一時停止・再開" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause or resume automatic preview updates"
+          }
+        }
+      }
+    },
+    "ブログ・静的サイトへ公開…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish to Blog or Static Site…"
+          }
+        }
+      }
+    },
+    "共同編集とコメント…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Collaboration and Comments…"
+          }
+        }
+      }
+    },
+    "書き出し・公開・共有" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export, publish, and share"
+          }
+        }
+      }
+    },
+    "明示スナップショット…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Named Snapshots…"
+          }
+        }
+      }
+    },
+    "Gitの差分と履歴…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Diff and History…"
+          }
+        }
+      }
+    },
+    "Gitのステージとコミット…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Git Stage and Commit…"
+          }
+        }
+      }
+    },
+    "スナップショット・Git・iCloudの履歴" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Snapshot, Git, and iCloud history"
+          }
+        }
+      }
+    },
+    "選択範囲をAIで推敲・翻訳…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proofread or Translate Selection with AI…"
+          }
+        }
+      }
+    },
+    "リンク・Markdown診断、用語確認、自動整形、AI推敲" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link and Markdown checks, terminology, auto-format, and AI proofreading"
+          }
+        }
+      }
+    },
+    "一般" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        }
+      }
+    },
+    "エディタ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor"
+          }
+        }
+      }
+    },
+    "ネットワーク" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network"
+          }
+        }
+      }
+    },
+    "文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "行番号を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show line numbers"
+          }
+        }
+      }
+    },
+    "字下げと表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indentation and Tables"
+          }
+        }
+      }
+    },
+    "クリックしてからキーを押すと割り当てます。Deleteで解除、Escで中止します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click, then press a key combination to assign it. Press Delete to remove it or Esc to cancel."
+          }
+        }
+      }
+    },
+    "キーを入力…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type Shortcut…"
+          }
+        }
+      }
+    },
+    "%@のショートカット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shortcut for %@"
+          }
+        }
+      }
+    },
+    "%@を既定に戻す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Default Shortcut for %@"
+          }
+        }
+      }
+    },
+    "欄をクリックしてキーを押すと割り当てます。重複する操作やmacOSの予約操作は割り当てられません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click a field and press a key combination to assign it. Shortcuts already in use or reserved by macOS can't be assigned."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
