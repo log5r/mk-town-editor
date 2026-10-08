@@ -93,8 +93,11 @@ final class EditorShortcutsTests: XCTestCase {
             let menu = NSMenu()
             let item = NSMenuItem(title: "Quote", action: #selector(ShortcutTarget.perform(_:)), keyEquivalent: key)
             item.keyEquivalentModifierMask = shift ? [.command, .shift] : .command
-            item.target = ShortcutTarget()
+            // NSMenuItem holds its target weakly.
+            let target = ShortcutTarget()
+            item.target = target
             menu.addItem(item)
+            defer { withExtendedLifetime(target) {} }
             let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
                                          timestamp: 0, windowNumber: 0, context: nil, characters: characters,
                                          charactersIgnoringModifiers: characters, isARepeat: false, keyCode: 47)!
