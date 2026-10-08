@@ -113,7 +113,7 @@ CIと同じチェック（Pythonのスクリプトテスト、Swiftの全ユニ�
 bash Tools/ci.sh
 ```
 
-CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)はpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
+CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
 
 ## 開発用ファイル
 
