@@ -256,6 +256,19 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(values.contains { $0 == ("return", .keyword) })
     }
 
+    func testVariableWidthRawStringDelimiters() {
+        let csharp = tokens("var a = \"\"\"\"text \"\"\" still text\"\"\"\"; return 1;\nvar b = \"\"\"\"\"\n\"\"\"\" if\n\"\"\"\"\";", "csharp")
+        XCTAssertTrue(csharp.contains { $0 == ("\"\"\"\"text \"\"\" still text\"\"\"\"", .string) })
+        XCTAssertTrue(csharp.contains { $0 == ("\"\"\"\"\"\n\"\"\"\" if\n\"\"\"\"\"", .string) })
+        XCTAssertTrue(csharp.contains { $0 == ("return", .keyword) })
+        XCTAssertFalse(csharp.contains { $0.0 == "if" })
+
+        let swift = tokens("let s = ##\"\"\"\n  a \"## return\n  \"\"\"##\nlet e = #\"\"#; return", "swift")
+        XCTAssertTrue(swift.contains { $0 == ("##\"\"\"\n  a \"## return\n  \"\"\"##", .string) })
+        XCTAssertTrue(swift.contains { $0 == ("#\"\"#", .string) })
+        XCTAssertEqual(swift.filter { $0.0 == "return" }.count, 1)
+    }
+
     func testPHPAttributesAreNotComments() {
         let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
         XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })
