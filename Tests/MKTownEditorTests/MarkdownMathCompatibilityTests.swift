@@ -108,6 +108,17 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         XCTAssertEqual(normalized("\\begin{pmatrix}\\underbrace{a}_b & \\text{x & y}\\end{pmatrix}", display: true),
                        "\\begin{pmatrix}{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}} & \\text{x & y}\\end{pmatrix}")
         builds("\\begin{aligned}\\scriptstyle a&=b\\end{aligned}\\underbrace{x}_y")
+        // 既存の \\atop・\\over・\\choose を含むグループは分数なので、中身は一段小さい書体にする。
+        XCTAssertEqual(normalized("{\\underbrace{a}_b \\atop c}", display: true),
+                       "{{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}} \\atop c}")
+        XCTAssertEqual(normalized("\\underbrace{a}_b \\over c", display: false),
+                       "{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}} \\over c")
+        XCTAssertEqual(normalized("{n \\choose \\underbrace{k}_m} \\underbrace{a}_b", display: true),
+                       "{n \\choose {{\\textstyle\\underline{k}} \\atop {\\scriptstyle m}}} {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        // 入れ子のグループや環境・\\left の中の \\atop は、外側のグループを分数にしない。
+        XCTAssertEqual(normalized("{{x \\atop y} \\begin{aligned}p \\atop q\\end{aligned} \\left( r \\atop s \\right) \\underbrace{a}_b}", display: true),
+                       "{{x \\atop y} \\begin{aligned}p \\atop q&\\end{aligned} \\left( r \\atop s \\right) {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}}}")
+        builds("{\\underbrace{a}_b \\atop c} + {n \\choose \\underbrace{k}_m}")
         // 添字と分数の引数では一段小さい書体を使い、周囲より大きくならないようにする。
         XCTAssertEqual(normalized("x_{\\underbrace{a}_b}", display: false),
                        "x_{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
