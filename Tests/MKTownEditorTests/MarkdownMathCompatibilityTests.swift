@@ -135,8 +135,12 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         // \\sqrt の任意引数は根号の一部として添字トークンに含める。
         XCTAssertEqual(normalized("x_\\sqrt[3]{\\underbrace{a}_b}", display: false),
                        "x_\\sqrt[3]{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
-        XCTAssertEqual(normalized("\\sqrt[\\underbrace{a}_b]{c}", display: false),
-                       "\\sqrt[{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}]{c}")
+        // 根号の指数は最小の書体、被開法数は元の書体のまま。
+        XCTAssertEqual(normalized("\\sqrt[\\underbrace{a}_b]{\\underbrace{c}_d}", display: true),
+                       "\\sqrt[{{\\scriptscriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}]{{{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}}")
+        XCTAssertEqual(normalized("\\sqrt [3] {\\underbrace{c}_d} \\lt", display: false),
+                       "\\sqrt[3] {{{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}} <")
+        builds("\\sqrt[\\underbrace{a}_b]{\\underbrace{c}_d}")
         // 書体を固定する分数は、SwiftMathにある \\frac・\\binom に書体命令を付けて置き換え、
         // 引数の書体はその固定書体から導く。
         XCTAssertEqual(normalized("\\tfrac{\\underbrace{a}_b}{c}", display: true),
