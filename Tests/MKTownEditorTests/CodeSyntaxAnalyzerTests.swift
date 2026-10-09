@@ -33,12 +33,6 @@ final class CodeSyntaxAnalyzerTests: XCTestCase {
         XCTAssertEqual(CodeSyntaxAnalyzer.tokens(in: "const a = 1", language: "text"), [])
     }
 
-    func testTokenizerLanguageLookupStillReturnsScannerDefinitions() {
-        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "ts")?.name, "typescript")
-        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "tsx")?.name, "tsx")
-        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "rb")?.name, "ruby")
-    }
-
     func testAnalyzerUsesTreeSitterForMigratedLanguages() {
         // 旧走査器は行頭の `/` を正規表現と読んだが、JavaScript には改行での文の終端がなく、Tree-sitter は除算と読む。
         let tokens = CodeSyntaxAnalyzer.tokens(in: "y = a\n/ 2 / 3", language: "js", cache: CodeSyntaxTokenCache())

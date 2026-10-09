@@ -51,12 +51,8 @@ enum CodeSyntaxLanguages {
     /// 色分けしない指定。未対応の言語と同じく原文の色で表示する。
     static let plainText: Set<String> = ["text", "txt", "plain", "plaintext", "none", "nohighlight", "output"]
 
-    static let all: [String: CodeSyntaxLanguage] = {
-        var result = Dictionary(uniqueKeysWithValues: definitions.map { ($0.name, $0) })
-        // TSX は TypeScript と同じ字句規則（走査器の定義は移行が終わるまでの暫定）。
-        result["tsx"] = CodeSyntaxLanguage("tsx", basedOn: result["typescript"]!) { _ in }
-        return result
-    }()
+    /// 走査器で解析する言語。JavaScript・TypeScript・TSX・Ruby は Tree-sitter で解析するので含まない。
+    static let all: [String: CodeSyntaxLanguage] = Dictionary(uniqueKeysWithValues: definitions.map { ($0.name, $0) })
 
     private static func words(_ text: String) -> Set<String> {
         Set(text.split(whereSeparator: \.isWhitespace).map(String.init))
@@ -82,12 +78,6 @@ enum CodeSyntaxLanguages {
         char double float int long short signed unsigned void bool _Bool _Complex size_t ssize_t ptrdiff_t \
         intptr_t uintptr_t int8_t int16_t int32_t int64_t uint8_t uint16_t uint32_t uint64_t wchar_t FILE
         """
-    private static let javaScriptKeywords = """
-        await break case catch class const continue debugger default delete do else export extends false \
-        finally for function if import in instanceof let new null of return static super switch this throw \
-        true try typeof undefined var void while with yield async get set from as
-        """
-
     private static let sql = CodeSyntaxLanguage("sql") {
         $0.keywords = words("""
             select from where and or not insert into values update set delete create table drop alter add \
@@ -339,31 +329,6 @@ enum CodeSyntaxLanguages {
             $0.rawStringPrefixes = ["r"]
             $0.prefixedIdentifiers = [at: .attribute]
         },
-        CodeSyntaxLanguage("javascript") {
-            $0.regexLiterals = true
-            $0.keywords = words(javaScriptKeywords)
-            $0.capitalizedTypes = true
-            $0.lineComments = cStyleComments.line
-            $0.blockComments = cStyleComments.block
-            $0.strings = [Delimiter("`")] + quotedStrings
-            $0.identifierExtras = [dollar]
-            $0.prefixedIdentifiers = [at: .attribute]
-        },
-        CodeSyntaxLanguage("typescript") {
-            $0.regexLiterals = true
-            $0.nonNullAssertions = true
-            $0.keywords = words(javaScriptKeywords + " " + """
-                abstract as asserts declare enum implements infer interface is keyof module namespace private \
-                protected public readonly require satisfies type unique override accessor
-                """)
-            $0.types = words("any bigint boolean never number object string symbol unknown void")
-            $0.capitalizedTypes = true
-            $0.lineComments = cStyleComments.line
-            $0.blockComments = cStyleComments.block
-            $0.strings = [Delimiter("`")] + quotedStrings
-            $0.identifierExtras = [dollar]
-            $0.prefixedIdentifiers = [at: .attribute]
-        },
         CodeSyntaxLanguage("python") {
             $0.keywords = words("""
                 False None True and as assert async await break class continue def del elif else except finally \
@@ -376,22 +341,6 @@ enum CodeSyntaxLanguages {
             $0.strings = [Delimiter("\"\"\""), Delimiter("'''")] + quotedStrings
             $0.stringPrefixes = words("r u b f rb br fr rf R U B F Rb bR Fr fR RB BR FR RF t T")
             $0.prefixedIdentifiers = [at: .attribute]
-        },
-        CodeSyntaxLanguage("ruby") {
-            $0.regexLiterals = true
-            $0.newlineEndsStatements = true
-            $0.commandRegexArguments = true
-            $0.keywords = words("""
-                BEGIN END alias and begin break case class def defined? do else elsif end ensure false for if in \
-                module next nil not or redo rescue retry return self super then true undef unless until when \
-                while yield require require_relative attr_accessor attr_reader attr_writer private protected \
-                public include extend raise lambda proc
-                """)
-            $0.capitalizedTypes = true
-            $0.lineComments = units("#")
-            $0.blockComments = [Delimiter("=begin", "=end", atLineStart: true)]
-            $0.strings = [Delimiter("\""), Delimiter("'"), Delimiter("`")]
-            $0.prefixedIdentifiers = [at: .variable, dollar: .variable, ascii(":"): .variable]
         },
         CodeSyntaxLanguage("php") {
             $0.keywords = words("""
@@ -421,6 +370,7 @@ enum CodeSyntaxLanguages {
             $0.strings = quotedStrings
         },
         CodeSyntaxLanguage("perl") {
+            // 正規表現リテラルは単純な規則だけで判定する（`CodeSyntaxScanner.scanRegexLiteral` を参照）。
             $0.regexLiterals = true
             $0.commandRegexArguments = true
             $0.hashComments = .notAfterDollar
