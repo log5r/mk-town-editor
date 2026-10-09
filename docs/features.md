@@ -232,4 +232,4 @@ $$
 
 プレビューとHTML／PDF出力で数式を表示します。通信は不要です。インライン数式の開始の `$` の直後と終了の `$` の直前には空白を置かず、文字として表示する `$` は `\$` と書いてください。コード内、未完成の式、SwiftMathが対応しないLaTeXコマンドは原文を表示します。MathJaxの全コマンドに対応するものではありません。基本Markdownでは数式記法を原文表示します。
 
-KaTeXやMathJax向けに書いた式のうち、次の記法はSwiftMathが解釈できる形に読み替えてから描画します。`equation`・`align`・`gather*` の各環境、`&` を含まない `aligned`・`cases`、揃え位置が複数ある `align`（最初の組だけを揃える）、末尾の `\\`、`\lt`・`\gt`・`\plusmn`・`\exist`、`\therefore`・`\because`・`\gtrless`・`\lessgtr`、`\argmax`・`\argmin`、`\underbrace`・`\overbrace`・`\underset`・`\overset` が対象です。下括弧・上括弧は幅に合わせて伸ばせないため、下線・上線と小さな注釈で代用します。HTMLの代替テキストとVoiceOverには元の式を使います。詳細は[KaTeX・MathJax向けの数式がプレビューで原文表示になる問題](math-katex-compatibility.md)を参照してください。
+KaTeXやMathJax向けに書いた式のうち、次の記法はSwiftMathが解釈できる形に読み替えてから描画します。`equation`・`align`・`gather*` の各環境、`&` を含まない `aligned`・`cases`、揃え位置が複数ある `align`（最初の組だけを揃える）、末尾の `\\`、`\lt`・`\gt`・`\plusmn`・`\exist`、`\therefore`・`\because`・`\gtrless`・`\lessgtr`、`\argmax`・`\argmin`、`\tfrac`・`\dfrac`・`\tbinom`・`\dbinom`、`\underbrace`・`\overbrace`・`\underset`・`\overset` が対象です。下括弧・上括弧は幅に合わせて伸ばせないため、下線・上線と小さな注釈で代用します。HTMLの代替テキストとVoiceOverには元の式を使います。詳細は[KaTeX・MathJax向けの数式がプレビューで原文表示になる問題](math-katex-compatibility.md)を参照してください。

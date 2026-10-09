@@ -132,6 +132,22 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         XCTAssertEqual(normalized("\\lim_{n\\to\\infty}{^n{x}} \\underbrace{a}_b", display: false),
                        "\\lim_{n\\to\\infty}{^n{x}} {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
         XCTAssertEqual(normalized("\\text{a \\lt b}_\\sqrt", display: false), "\\text{a < b}_\\sqrt")
+        // \\sqrt の任意引数は根号の一部として添字トークンに含める。
+        XCTAssertEqual(normalized("x_\\sqrt[3]{\\underbrace{a}_b}", display: false),
+                       "x_\\sqrt[3]{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
+        XCTAssertEqual(normalized("\\sqrt[\\underbrace{a}_b]{c}", display: false),
+                       "\\sqrt[{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}]{c}")
+        // 書体を固定する分数は、SwiftMathにある \\frac・\\binom に書体命令を付けて置き換え、
+        // 引数の書体はその固定書体から導く。
+        XCTAssertEqual(normalized("\\tfrac{\\underbrace{a}_b}{c}", display: true),
+                       "{\\textstyle\\frac{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}{c}}")
+        XCTAssertEqual(normalized("\\dfrac{\\underbrace{a}_b}{c}", display: false),
+                       "{\\displaystyle\\frac{{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}}{c}}")
+        XCTAssertEqual(normalized("\\tbinom{n}{\\underbrace{k}_m} \\underbrace{a}_b", display: true),
+                       "{\\textstyle\\binom{n}{{{\\scriptstyle\\underline{k}} \\atop {\\scriptscriptstyle m}}}} {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        XCTAssertEqual(normalized("x_\\tfrac{a}{b} \\dbinom12", display: false),
+                       "x_{\\textstyle\\frac{a}{b}} {\\displaystyle\\binom12}")
+        builds("\\tfrac{\\underbrace{a}_b}{c} + \\dfrac{1}{2} + \\tbinom{n}{k} + \\dbinom{n}{k} + x_\\sqrt[3]{\\underbrace{a}_b}")
         builds("x_\\sqrt{\\underbrace{a}_b} + x^\\frac{\\underbrace{a}_b}{c} + \\frac\\sqrt{\\underbrace{a}_b}{c}")
         // 波括弧のない引数（`\\frac1{...}`・`\\frac\\alpha{...}`）の後も、残りの引数は分数の書体にする。
         XCTAssertEqual(normalized("\\frac1{\\underbrace{b}_c}", display: true),

@@ -37,6 +37,7 @@ SwiftMathへ渡す前にLaTeXを書き換える。`MarkdownMath.Formula` は元�
 | `\lt`・`\gt`・`\plusmn`・`\exist` | `<`・`>`・`\pm`・`\exists` |
 | `\therefore`・`\because`・`\gtrless`・`\lessgtr` | `MTMathAtomFactory.add(latexSymbol:)` で記号を登録 |
 | `\argmax`・`\argmin` | 添字を下に置く演算子として登録 |
+| `\tfrac`・`\dfrac`・`\tbinom`・`\dbinom` | `{\textstyle\frac...}` のように書体命令を付けた `\frac`・`\binom` |
 | `\underbrace{式}_{注釈}` | `{{\underline{式}} \atop {\scriptstyle 注釈}}` |
 | `\overbrace{式}^{注釈}` | `{{\scriptstyle 注釈} \atop {\overline{式}}}` |
 | `\underset{下}{本体}`・`\overset{上}{本体}` | 同様に `\atop` で縦積み |
