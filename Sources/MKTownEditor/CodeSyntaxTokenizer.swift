@@ -196,8 +196,10 @@ private struct CodeSyntaxScanner {
     private var previousToken = PreviousToken.start
     /// 直前の語が `if` などで、次の `(` が制御文の条件を開く。コメントをはさんでも保つ。
     private var pendingControl = false
-    /// 開いている `{` ごとに、文のブロックかどうか。
-    private var braceBlocks: [Bool] = []
+    /// 開いている `{` の種類。
+    private var braceKinds: [BraceKind] = []
+    /// 式の位置にある `function`・`class` の本体を、次のブロックの `{` が開く。
+    private var pendingExpressionBody = false
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -413,7 +415,16 @@ private struct CodeSyntaxScanner {
         case arrow
     }
 
+    private enum BraceKind {
+        /// 文のブロック。閉じた後ろは文の始まり。
+        case block
+        case object
+        /// `= function() {…}`、`() => {…}` のような式の中の本体。閉じた後ろは値。
+        case expressionBody
+    }
+
     private static let controlKeywords: Set<String> = ["if", "while", "for", "with"]
+    private static let functionKeywords: Set<String> = ["function", "class"]
     private static let blockWords: Set<String> = ["else", "do", "try", "finally"]
     private static let statementEnds = Set(")};{".utf16)
 
@@ -432,15 +443,38 @@ private struct CodeSyntaxScanner {
         case 0x29: // )
             regexAllowed = parenthesisControlHeaders.popLast() ?? false
         case Unit.openBrace:
-            braceBlocks.append(braceStartsBlock)
+            let kind: BraceKind
+            if !braceStartsBlock {
+                kind = .object
+            } else if previousToken == .arrow || pendingExpressionBody {
+                kind = .expressionBody
+            } else {
+                kind = .block
+            }
+            pendingExpressionBody = false
+            braceKinds.append(kind)
             regexAllowed = true
         case Unit.closeBrace:
-            regexAllowed = braceBlocks.popLast() ?? true
+            let kind = braceKinds.popLast() ?? .block
+            regexAllowed = kind == .block
+            pendingControl = false
+            // 式の中の `{…}`（オブジェクト、関数式の本体）は値として閉じる。
+            previousToken = kind == .block ? .punctuation(value) : .value
+            return
         default:
             regexAllowed = !Self.valueClosingPunctuation.contains(value)
         }
         pendingControl = false
         previousToken = value == Unit.greater && unit(index - 1) == Unit.equal ? .arrow : .punctuation(value)
+    }
+
+    /// 直前の字句が文の区切りか（文書の先頭、`;`、`{`、`}`、`)`、`else` など）。
+    private var atStatementStart: Bool {
+        switch previousToken {
+        case .start, .statementWord: true
+        case .punctuation(let previous): Self.statementEnds.contains(previous)
+        case .value, .expressionWord, .arrow: false
+        }
     }
 
     /// `{` が文のブロックを開くか。`x = {`、`return {`、`f({` のような式の中ならオブジェクト。
@@ -777,8 +811,13 @@ private struct CodeSyntaxScanner {
         let isMember = previousToken == .punctuation(Unit.dot)
         let name = String(decoding: units[start..<end], as: UTF16.self)
         let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+        if !isMember, Self.functionKeywords.contains(name) {
+            // 文の始まりの `function f() {}` は宣言、`= function() {}` や `(class {})` は式。
+            pendingExpressionBody = regexAllowed && !atStatementStart
+        }
         regexAllowed = isExpressionWord
-        pendingControl = !isMember && Self.controlKeywords.contains(name)
+        // `for await (…)` の `await` は制御文の条件を途切れさせない。
+        pendingControl = !isMember && (Self.controlKeywords.contains(name) || (pendingControl && name == "await"))
         previousToken = isMember ? .value
             : Self.blockWords.contains(name) ? .statementWord : isExpressionWord ? .expressionWord : .value
         let prefix = String(decoding: units[start..<end], as: UTF16.self)
@@ -913,7 +952,17 @@ private struct CodeSyntaxScanner {
                 || first == Unit.quote || first == Unit.apostrophe || first >= 0x80 else { return false }
         var cursor = index
         while cursor < end && units[cursor] != Unit.equal && units[cursor] != Unit.hash
-                && units[cursor] != Unit.semicolon { cursor += 1 }
+                && units[cursor] != Unit.semicolon {
+            // 引用符付きのキー（`'a=b'`、`a."b#c"`）の中の `=`・`#` は区切りではない。
+            let value = units[cursor]
+            if value == Unit.quote || value == Unit.apostrophe {
+                cursor += 1
+                while cursor < end && units[cursor] != value {
+                    cursor += value == Unit.quote && units[cursor] == Unit.backslash ? 2 : 1
+                }
+            }
+            cursor += 1
+        }
         guard cursor < end, units[cursor] == Unit.equal else { return false }
         var keyEnd = cursor
         while keyEnd > index && Self.isWhitespace(units[keyEnd - 1]) { keyEnd -= 1 }

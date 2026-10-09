@@ -352,6 +352,12 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
                 XCTAssertTrue(control.contains { $0 == (regex, .string) }, "\(name) \(regex)")
             }
             XCTAssertTrue(control.contains { $0 == ("return", .keyword) }, name)
+            // 式の中の関数本体・クラス本体の後ろは値なので除算。宣言の後ろは文の始まり。
+            let bodies = tokens("const p = function() {} / b / g\nconst q = () => {} / c / g\nconst r = (class {}) / d / g\nfunction s() {} /re/.test(x)", name)
+            XCTAssertEqual(bodies.filter { $0.1 == .string }.map(\.0), ["/re/"], name)
+            // `for await (…)` の後ろも文の始まり。
+            XCTAssertTrue(tokens("async function f(xs) { for await (const x of xs) /[//]/.test(x) }", name)
+                .contains { $0 == ("/[//]/", .string) }, name)
             // オブジェクトリテラルや呼び出しの閉じ括弧の後ろは除算。
             XCTAssertFalse(control.contains { $0.0.hasPrefix("/ b") || $0.0.hasPrefix("/ h") || $0.0.hasPrefix("/ j") }, name)
             XCTAssertEqual(control.filter { $0.1 == .comment }.map(\.0), ["/* note */"], name)
@@ -370,6 +376,15 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("/a#b/", .string) })
         XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("if", .keyword) })
         XCTAssertTrue(tokens("if ($x =~ /a#b/) { print 1 }", "perl").contains { $0 == ("print", .keyword) })
+    }
+
+    func testTOMLQuotedKeysMayContainEqualsAndHash() {
+        let values = tokens("'a=b' = 1\n\"c#d\" = 2\na.\"e=f\".g = 3 # note", "toml")
+        for key in ["'a=b'", "\"c#d\"", "a.\"e=f\".g"] {
+            XCTAssertTrue(values.contains { $0 == (key, .attribute) }, key)
+        }
+        XCTAssertTrue(values.contains { $0 == ("# note", .comment) })
+        XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1)
     }
 
     func testTOMLBareKeysStartingWithDigitsOrDashes() {
