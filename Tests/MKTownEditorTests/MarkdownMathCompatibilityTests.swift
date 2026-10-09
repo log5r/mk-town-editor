@@ -151,6 +151,12 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
                        "x_\\left({{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}\\right) {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
         XCTAssertEqual(normalized("x_\\left\\{ \\left( a \\right) \\underbrace{b}_c \\right\\} \\underbrace{d}_e", display: true),
                        "x_\\left\\{ \\left( a \\right) {{\\scriptstyle\\underline{b}} \\atop {\\scriptscriptstyle c}} \\right\\} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")
+        // 環境も \\end までを添字トークンとして読む。
+        XCTAssertEqual(normalized("x_\\begin{aligned}\\underbrace{a}_b&=c\\end{aligned} \\underbrace{d}_e", display: true),
+                       "x_\\begin{aligned}{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}&=c\\end{aligned} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")
+        XCTAssertEqual(normalized("x^\\begin{cases}\\underbrace{a}_b & c\\end{cases}", display: true),
+                       "x^\\begin{cases}{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}} & c\\end{cases}")
+        builds("x_\\begin{aligned}\\underbrace{a}_b&=c\\end{aligned}")
         // \\right がない \\left は括弧だけを添字として扱い、残りは元の書体のまま。
         XCTAssertEqual(normalized("x_\\left( \\underbrace{a}_b", display: false),
                        "x_\\left( {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")

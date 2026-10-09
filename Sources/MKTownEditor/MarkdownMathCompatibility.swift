@@ -412,6 +412,11 @@ enum MarkdownMathCompatibility {
                 // `\left( ... \right)` は対になる `\right` までが1つのまとまり。
                 end = pairedDelimiterEnd(from: end, in: chars)
             }
+            if name == "begin", let found = environmentRange(from: end, in: chars),
+               let close = matchingEnd(for: found.name, after: found.end, in: chars) {
+                // 環境は `\end` までが1つのまとまり。
+                end = close.end
+            }
             for _ in 0..<(argumentCounts[name] ?? 0) {
                 guard let argument = token(from: end, in: chars) else { break }
                 end = argument.end
