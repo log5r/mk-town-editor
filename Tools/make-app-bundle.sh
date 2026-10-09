@@ -8,7 +8,9 @@
 # scheme, the Markdown document type, the Services menu item and the local network keys.
 # The SwiftPM resource bundles go into Contents/Resources, where the generated `Bundle.module`
 # accessor looks first (`Bundle.main.resourceURL`), and the compiled string tables are copied
-# next to them for the UI language. See docs/production-launcher.md.
+# next to them for the UI language. actool compiles the Icon Composer document Support/AppIcon.icon
+# into Assets.car and a fallback AppIcon.icns, as the Xcode build does. See docs/production-launcher.md
+# and docs/app-icon.md.
 set -euo pipefail
 
 if [[ $# -ne 2 || -z "$1" || -z "$2" ]]; then
@@ -20,6 +22,7 @@ products=$1
 app=${2%/}
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 template="$root/Support/Info.plist"
+app_icon="$root/Support/AppIcon.icon"
 
 # Build settings of the MKTownEditor target in MKTownEditor.xcodeproj.
 # Tools/test_make_app_bundle.py fails when these drift from the Xcode project.
@@ -27,6 +30,7 @@ executable_name=MKTownEditor
 product_name=MKTownEditor
 bundle_identifier=com.mktown.editor
 deployment_target=14.0
+app_icon_name=AppIcon
 # The source language of Localizable.xcstrings. Its strings are the keys, so no ja.lproj exists;
 # naming it the development region lets Japanese systems fall back to the keys instead of English.
 development_language=ja
@@ -74,6 +78,21 @@ for table in "$module_resources"/Contents/Resources/*.lproj "$module_resources"/
     [[ "$localization" == "$development_language" ]] || localizations+=("$localization")
 done
 shopt -u nullglob
+
+# actool reports the icon keys it generated in a partial Info.plist, which Xcode merges the same way.
+partial_info="$staging/actool-info.plist"
+if ! actool_log=$(xcrun actool --compile "$bundle/Contents/Resources" --platform macosx \
+        --minimum-deployment-target "$deployment_target" --app-icon "$app_icon_name" \
+        --output-partial-info-plist "$partial_info" --output-format human-readable-text \
+        --errors --warnings "$app_icon" 2>&1); then
+    echo "$0: actool could not compile $app_icon:" >&2
+    echo "$actool_log" >&2
+    exit 1
+fi
+for key in CFBundleIconFile CFBundleIconName; do
+    value=$(plutil -extract "$key" raw -o - "$partial_info")
+    plutil -replace "$key" -string "$value" "$bundle/Contents/Info.plist"
+done
 /usr/libexec/PlistBuddy -c "Delete :CFBundleLocalizations" "$bundle/Contents/Info.plist" \
     > /dev/null 2>&1 || true
 /usr/libexec/PlistBuddy -c "Add :CFBundleLocalizations array" "$bundle/Contents/Info.plist"
