@@ -362,6 +362,9 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
             // 引数に `{}` を含む関数式も値として閉じる。`export default` の宣言は文として閉じる。
             let declarations = tokens("const f = function(a = {}) {} / b / g\nconst h = ({x}) => {} / c / g\nexport default function() {}\n/[//]/.test(x)\nexport default class {}\n/e/.test(x)", name)
             XCTAssertEqual(declarations.filter { $0.1 == .string }.map(\.0), ["/[//]/", "/e/"], name)
+            // セミコロンのない `import` は改行で終わる。`async` と `function` の間の改行は別の文。
+            let lines = tokens("import fs from \"node:fs\"\n/[//]/.test(x)\nimport {\n  a,\n  b\n} from \"y\"\n/c/.test(x)\nconst async = 1; const z = async\nfunction f() {}\n/d/.test(x)", name)
+            XCTAssertEqual(lines.filter { $0.1 == .string && $0.0.hasPrefix("/") }.map(\.0), ["/[//]/", "/c/", "/d/"], name)
             // 変数名の `of`、非 null アサーション `x!` の後ろは除算。`for (x of /re/)` と前置の `!` の後ろは正規表現。
             let contextual = tokens("const of = 12; const q = of / b / g\nconst r = x! / c / g\nfor (const m of /[ab]/.exec(s)) {}\nconst n = !/d/.test(s)", name)
             // 非 null アサーションは TypeScript だけ。JavaScript の `x!` の後ろは式の途中。
@@ -391,6 +394,9 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         // 複合代入の左辺もローカル変数。`!` で終わるメソッドは呼び出し。ブロックの引数はブロックの中だけ。
         let more = tokens("a ||= 12; x = a /2/3\nb += 1; y = b /2/1\nfoo! /a#b/; z = 1\n1.times { |puts| }\nputs /c#d/\n[1].each do |puts| end\nputs /e#f/\nc <= 2; puts c /g#h/", "ruby")
         XCTAssertEqual(more.filter { $0.1 == .string }.map(\.0), ["/a#b/", "/c#d/", "/e#f/", "/g#h/"])
+        // 多重代入の左辺はすべて変数。ハッシュの `{}` はスコープを作らない。
+        let assignments = tokens("a, b = 12, 3; y = a /2/3\nc, *d = 1, 2\nz = c /2/1\nh = { x: (e = 12) }; w = e /2/3\nputs /f#g/", "ruby")
+        XCTAssertEqual(assignments.filter { $0.1 == .string }.map(\.0), ["/f#g/"])
         // メソッドの中のローカル変数は、外側の同じ名前のメソッド呼び出しに影響しない。
         let scopes = tokens("def f\n  puts = 1\n  if puts > 0\n    x = puts /2/1\n  end\n  y = 3 if puts\nend\nputs /a#b/\nclass C\n  def g; puts = 2; end\nend\nputs /c#d/", "ruby")
         XCTAssertEqual(scopes.filter { $0.1 == .string }.map(\.0), ["/a#b/", "/c#d/"])
