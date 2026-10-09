@@ -151,6 +151,14 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
                        "x_\\left({{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}\\right) {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
         XCTAssertEqual(normalized("x_\\left\\{ \\left( a \\right) \\underbrace{b}_c \\right\\} \\underbrace{d}_e", display: true),
                        "x_\\left\\{ \\left( a \\right) {{\\scriptstyle\\underline{b}} \\atop {\\scriptscriptstyle c}} \\right\\} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")
+        // \\left ... \\right の中で宣言した書体は、その中だけに効く。
+        XCTAssertEqual(normalized("\\left(\\scriptstyle a\\right)\\underbrace{x}_y", display: true),
+                       "\\left(\\scriptstyle a\\right){{\\displaystyle\\underline{x}} \\atop {\\scriptstyle y}}")
+        XCTAssertEqual(normalized("\\left( \\scriptstyle \\left[ b \\right] \\underbrace{p}_q \\right) \\underbrace{x}_y", display: true),
+                       "\\left( \\scriptstyle \\left[ b \\right] {{\\scriptstyle\\underline{p}} \\atop {\\scriptscriptstyle q}} \\right) {{\\displaystyle\\underline{x}} \\atop {\\scriptstyle y}}")
+        XCTAssertEqual(normalized("\\left\\{ \\scriptstyle a \\right. \\underbrace{x}_y \\left( \\scriptstyle b", display: false),
+                       "\\left\\{ \\scriptstyle a \\right. {{\\textstyle\\underline{x}} \\atop {\\scriptstyle y}} \\left( \\scriptstyle b")
+        builds("\\left(\\scriptstyle a\\right)\\underbrace{x}_y")
         // 環境も \\end までを添字トークンとして読む。
         XCTAssertEqual(normalized("x_\\begin{aligned}\\underbrace{a}_b&=c\\end{aligned} \\underbrace{d}_e", display: true),
                        "x_\\begin{aligned}{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}&=c\\end{aligned} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")

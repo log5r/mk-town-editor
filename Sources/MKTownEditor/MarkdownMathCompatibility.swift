@@ -229,6 +229,14 @@ enum MarkdownMathCompatibility {
                 index = end.end
                 continue
             }
+            if name == "left", let pair = pairedDelimiters(from: next, in: chars) {
+                // `\left ... \right` の中も独立したスコープなので、中で宣言した書体を外へ漏らさない。
+                output += String(chars[index..<pair.bodyStart])
+                output += rewriteCommands(chars[pair.bodyStart..<pair.rightStart], style: style)
+                output += String(chars[pair.rightStart..<pair.end])
+                index = pair.end
+                continue
+            }
             if styleCommands.contains(name) {
                 style = "\\" + name
             } else if let replacement = aliases[name] {
@@ -409,8 +417,8 @@ enum MarkdownMathCompatibility {
                 end = root.end
             }
             if name == "left" {
-                // `\left( ... \right)` は対になる `\right` までが1つのまとまり。
-                end = pairedDelimiterEnd(from: end, in: chars)
+                // `\left( ... \right)` は対になる `\right` までが1つのまとまり。対がなければ括弧まで。
+                end = pairedDelimiters(from: end, in: chars)?.end ?? delimiterEnd(from: end, in: chars)
             }
             if name == "begin", let found = environmentRange(from: end, in: chars),
                let close = matchingEnd(for: found.name, after: found.end, in: chars) {
@@ -434,15 +442,17 @@ enum MarkdownMathCompatibility {
         return Token(content: chars[cursor..<(cursor + 1)], end: cursor + 1, braced: false)
     }
 
-    /// `\left` の直後から、対応する `\right` とその括弧までの終了位置。対がなければ括弧の直後。
-    private static func pairedDelimiterEnd(from index: Int, in chars: ArraySlice<Character>) -> Int {
-        var cursor = delimiterEnd(from: index, in: chars)
-        let fallback = cursor
+    /// `\left` の直後から見た、括弧の次（中身の先頭）、対応する `\right` の位置、その括弧の直後。
+    private static func pairedDelimiters(from index: Int, in chars: ArraySlice<Character>)
+        -> (bodyStart: Int, rightStart: Int, end: Int)? {
+        let bodyStart = delimiterEnd(from: index, in: chars)
+        var cursor = bodyStart
         var nesting = 1
         while cursor < chars.endIndex {
             guard chars[cursor] == "\\" else { cursor += 1; continue }
             let length = commandLength(at: cursor, in: chars)
             let name = String(chars[(cursor + 1)..<(cursor + 1 + length)])
+            let commandStart = cursor
             cursor += 1 + length
             if name == "left" {
                 nesting += 1
@@ -450,10 +460,10 @@ enum MarkdownMathCompatibility {
             } else if name == "right" {
                 nesting -= 1
                 cursor = delimiterEnd(from: cursor, in: chars)
-                if nesting == 0 { return cursor }
+                if nesting == 0 { return (bodyStart, commandStart, cursor) }
             }
         }
-        return fallback
+        return nil
     }
 
     /// `\left`・`\right` に続く括弧（1文字または `\{` などのコマンド）の終了位置。
