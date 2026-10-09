@@ -119,6 +119,7 @@
 		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
 		A10000000000000000000089 /* Resources/mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* Resources/mermaid.min.js */; };
 		A1000000000000000000008A /* Resources/Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */; };
+		A100000000000000000000B0 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B0 /* AppIcon.icon */; };
 		A1000000000000000000008B /* ExternalDiagramRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008A /* ExternalDiagramRenderer.swift */; };
 		A1000000000000000000008C /* ExternalDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008B /* ExternalDiagramView.swift */; };
 		A1000000000000000000008D /* MarkdownCitations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008C /* MarkdownCitations.swift */; };
@@ -183,6 +184,7 @@
 		A2000000000000000000000A /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A200000000000000000000B0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000E /* MarkdownPositionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPositionMap.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* MarkdownAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownAnalysis.swift; sourceTree = "<group>"; };
@@ -516,6 +518,7 @@
 			isa = PBXGroup;
 			children = (
 				A2000000000000000000000C /* Info.plist */,
+				A200000000000000000000B0 /* AppIcon.icon */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -633,6 +636,7 @@
 				A10000000000000000000061 /* Localizable.xcstrings in Resources */,
 				A10000000000000000000089 /* Resources/mermaid.min.js in Resources */,
 				A1000000000000000000008A /* Resources/Mermaid-LICENSE.txt in Resources */,
+				A100000000000000000000B0 /* AppIcon.icon in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -844,6 +848,7 @@
 		B10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -862,6 +867,7 @@
 		B10000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;

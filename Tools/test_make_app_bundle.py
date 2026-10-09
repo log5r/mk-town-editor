@@ -96,7 +96,8 @@ class MakeAppBundleTests(unittest.TestCase):
         self.assertTrue(os.access(executable, os.X_OK))
         resources = self.app / "Contents" / "Resources"
         self.assertEqual(sorted(path.name for path in resources.iterdir()),
-                         ["MKTownEditor_MKTownEditor.bundle", "SwiftMath_SwiftMath.bundle", "en.lproj"])
+                         ["AppIcon.icns", "Assets.car", "MKTownEditor_MKTownEditor.bundle",
+                          "SwiftMath_SwiftMath.bundle", "en.lproj"])
         self.assertEqual(
             (resources / "SwiftMath_SwiftMath.bundle" / "Contents" / "Resources" / "resource.txt")
             .read_text(), "SwiftMath_SwiftMath")
@@ -117,6 +118,34 @@ class MakeAppBundleTests(unittest.TestCase):
         self.assertEqual(self.run_script(str(self.products), str(self.app)).returncode, 0)
         self.assertEqual((self.app / "Contents" / "Resources" / "en.lproj" / "Localizable.strings")
                          .read_text(), "flat")
+
+    def test_compiles_the_app_icon_as_the_xcode_build_does(self):
+        """Finder and the Dock read Assets.car on macOS 26 and later and AppIcon.icns before that."""
+        self.assertEqual(self.run_script(str(self.products), str(self.app)).returncode, 0)
+        name = app_target_build_settings()["ASSETCATALOG_COMPILER_APPICON_NAME"]
+        info = self.info()
+        self.assertEqual(info["CFBundleIconName"], name)
+        self.assertEqual(info["CFBundleIconFile"], name)
+        resources = self.app / "Contents" / "Resources"
+        self.assertGreater((resources / f"{name}.icns").stat().st_size, 0)
+        self.assertGreater((resources / "Assets.car").stat().st_size, 0)
+        assets = subprocess.run(["xcrun", "assetutil", "--info", str(resources / "Assets.car")],
+                                capture_output=True, text=True)
+        self.assertEqual(assets.returncode, 0, assets.stderr)
+        self.assertIn(f'"Name" : "{name}"', assets.stdout)
+
+    def test_missing_app_icon_fails_without_creating_a_bundle(self):
+        project = self.root / "project"
+        (project / "Tools").mkdir(parents=True)
+        (project / "Support").mkdir()
+        script = project / "Tools" / "make-app-bundle.sh"
+        shutil.copy2(SCRIPT, script)
+        shutil.copy2(REPOSITORY / "Support" / "Info.plist", project / "Support" / "Info.plist")
+        result = self.run_script(str(self.products), str(self.app), script=script)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("actool could not compile", result.stderr)
+        self.assertFalse(self.app.exists())
+        self.assertEqual(list(self.app.parent.iterdir()), [])
 
     def test_signs_the_bundle_ad_hoc(self):
         self.assertEqual(self.run_script(str(self.products), str(self.app)).returncode, 0)
