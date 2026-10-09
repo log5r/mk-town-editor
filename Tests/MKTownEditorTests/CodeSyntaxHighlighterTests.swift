@@ -347,12 +347,14 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         }
         for name in ["js", "ts"] {
             // 制御文の条件の後ろは文の始まりなので正規表現。ただの括弧の後ろは除算。
-            let control = tokens("if (ok) /[//]/.test(x); return 1\nwhile (a) /b/g.exec(s)\nfor (;;) /c/.test(t)\nz = (a) / b / c", name)
-            for regex in ["/[//]/", "/b/g", "/c/"] {
+            let control = tokens("if (ok) /[//]/.test(x); return 1\nwhile (a) /b/g.exec(s)\nfor (;;) /c/.test(t)\nz = (a) / b / c\nif /* note */ (ok) /d/.test(x)\nif (ok) {} /e/.test(x)\nfunction f() {} /f/.test(x)\nelse {} /g/.test(x)\nv = {a: 1} / h / i\nw = f({}) / j / k", name)
+            for regex in ["/[//]/", "/b/g", "/c/", "/d/", "/e/", "/f/", "/g/"] {
                 XCTAssertTrue(control.contains { $0 == (regex, .string) }, "\(name) \(regex)")
             }
             XCTAssertTrue(control.contains { $0 == ("return", .keyword) }, name)
-            XCTAssertFalse(control.contains { $0.1 == .comment || $0.0 == "/ b /" }, name)
+            // オブジェクトリテラルや呼び出しの閉じ括弧の後ろは除算。
+            XCTAssertFalse(control.contains { $0.0.hasPrefix("/ b") || $0.0.hasPrefix("/ h") || $0.0.hasPrefix("/ j") }, name)
+            XCTAssertEqual(control.filter { $0.1 == .comment }.map(\.0), ["/* note */"], name)
         }
         // Ruby・Perl のコマンド呼び出しの引数。`a / b`、`$x /2` は除算。
         let command = tokens("puts /a#b/\nx = a / b / c\ny = @n /2 # note", "ruby")

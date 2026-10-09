@@ -193,6 +193,11 @@ private struct CodeSyntaxScanner {
     private var braceDepth = 0
     /// 次の `/` が正規表現を始められるか。値（識別子、数値、文字列、`)` など）の直後では除算。
     private var regexAllowed = true
+    private var previousToken = PreviousToken.start
+    /// 直前の語が `if` などで、次の `(` が制御文の条件を開く。コメントをはさんでも保つ。
+    private var pendingControl = false
+    /// 開いている `{` ごとに、文のブロックかどうか。
+    private var braceBlocks: [Bool] = []
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -352,22 +357,22 @@ private struct CodeSyntaxScanner {
             if scanMarker() { continue }
             // コメントは式の文脈を変えない（`= /* c */ /re/` の `/` は正規表現）。
             if scanRegexLiteral() || scanLongBracket() || scanSwiftRawString() || scanVerbatimString() {
-                regexAllowed = false
+                noteValue()
                 continue
             }
             if scanBlockComment() || scanLineComment() { continue }
             if scanString() {
-                regexAllowed = false
+                noteValue()
                 continue
             }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
                 scanNumber()
-                regexAllowed = false
+                noteValue()
                 continue
             }
             if scanPrefixedIdentifier() || scanBracketAttribute() {
-                regexAllowed = false
+                noteValue()
                 continue
             }
             if isIdentifierStart(index) {
@@ -387,30 +392,64 @@ private struct CodeSyntaxScanner {
                 index += 2
                 continue
             }
-            if value == 0x28 {
-                // `if (…)` の閉じ括弧の後ろは文の始まり。
-                parenthesisControlHeaders.append(followsControlKeyword(at: index))
-                regexAllowed = true
-            } else if value == 0x29 {
-                regexAllowed = parenthesisControlHeaders.popLast() ?? false
-            } else {
-                regexAllowed = !Self.valueClosingPunctuation.contains(value)
-            }
+            notePunctuation(value)
             index += 1
         }
     }
 
-    private static let controlKeywords: Set<String> = ["if", "while", "for", "with"]
+    // MARK: - 正規表現を始められる位置の追跡
 
-    /// `offset` の `(` が `if`・`while`・`for`・`with` の条件を開くか。`obj.if (` のようなメンバー名は除く。
-    private func followsControlKeyword(at offset: Int) -> Bool {
-        guard language.regexLiterals else { return false }
-        var end = offset
-        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
-        var start = end
-        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
-        guard start < end, unit(start - 1) != Unit.dot else { return false }
-        return Self.controlKeywords.contains(String(decoding: units[start..<end], as: UTF16.self))
+    /// 直前の字句の種類。コメントと空白は変えない。
+    private enum PreviousToken: Equatable {
+        case start
+        /// 識別子、数値、文字列など
+        case value
+        /// `return`、`typeof` など、後ろに式が続く語
+        case expressionWord
+        /// `else`、`do`、`try`、`finally` など、後ろにブロックが続く語
+        case statementWord
+        case punctuation(UInt16)
+        /// `=>`
+        case arrow
+    }
+
+    private static let controlKeywords: Set<String> = ["if", "while", "for", "with"]
+    private static let blockWords: Set<String> = ["else", "do", "try", "finally"]
+    private static let statementEnds = Set(")};{".utf16)
+
+    private mutating func noteValue() {
+        regexAllowed = false
+        pendingControl = false
+        previousToken = .value
+    }
+
+    /// 括弧の対応で文脈を決める。`if (…)` の `)` とブロックの `}` の後ろは文の始まりなので正規表現を認める。
+    private mutating func notePunctuation(_ value: UInt16) {
+        switch value {
+        case 0x28: // (
+            parenthesisControlHeaders.append(pendingControl)
+            regexAllowed = true
+        case 0x29: // )
+            regexAllowed = parenthesisControlHeaders.popLast() ?? false
+        case Unit.openBrace:
+            braceBlocks.append(braceStartsBlock)
+            regexAllowed = true
+        case Unit.closeBrace:
+            regexAllowed = braceBlocks.popLast() ?? true
+        default:
+            regexAllowed = !Self.valueClosingPunctuation.contains(value)
+        }
+        pendingControl = false
+        previousToken = value == Unit.greater && unit(index - 1) == Unit.equal ? .arrow : .punctuation(value)
+    }
+
+    /// `{` が文のブロックを開くか。`x = {`、`return {`、`f({` のような式の中ならオブジェクト。
+    private var braceStartsBlock: Bool {
+        switch previousToken {
+        case .start, .value, .statementWord, .arrow: true
+        case .expressionWord: false
+        case .punctuation(let previous): Self.statementEnds.contains(previous)
+        }
     }
 
     private static let valueClosingPunctuation = Set(")]}".utf16)
@@ -734,11 +773,14 @@ private struct CodeSyntaxScanner {
         let start = index
         let end = identifierEnd(from: index)
         index = end
-        var before = start - 1
-        while let value = unit(before), value == Unit.space || value == Unit.tab { before -= 1 }
-        let isMember = unit(before) == Unit.dot
-        regexAllowed = language.regexLiterals && !isMember
-            && Self.regexPrecedingWords.contains(String(decoding: units[start..<end], as: UTF16.self))
+        // `obj.in` や `a?.if` のようなメンバー名は値。
+        let isMember = previousToken == .punctuation(Unit.dot)
+        let name = String(decoding: units[start..<end], as: UTF16.self)
+        let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+        regexAllowed = isExpressionWord
+        pendingControl = !isMember && Self.controlKeywords.contains(name)
+        previousToken = isMember ? .value
+            : Self.blockWords.contains(name) ? .statementWord : isExpressionWord ? .expressionWord : .value
         let prefix = String(decoding: units[start..<end], as: UTF16.self)
         switch language.rawStrings {
         case .rust where ["r", "br", "cr"].contains(prefix) && (unit(end) == Unit.hash || unit(end) == Unit.quote):
