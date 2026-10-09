@@ -145,6 +145,21 @@ enum CodeSyntaxAnalyzer {
         return CodeSyntaxLanguageSelection(name: canonical, engine: .scanner(language))
     }
 
+    /// 解析結果に含まれる、色分け対象のコードブロックすべての字句を求める。鍵は `MarkdownBlock.id`。
+    /// 対応言語のブロックは字句が空でも項目を持つ（項目がある＝解析済み）。
+    /// 背景スレッドから呼ぶ。ブロックの合間に `checkCancellation` を呼び、古い解析を早く打ち切る。
+    static func tokens<Failure>(forCodeBlocksIn analysis: MarkdownAnalysis,
+                                cache: CodeSyntaxTokenCache = sharedCache,
+                                checkCancellation: () throws(Failure) -> Void) throws(Failure) -> [Int: [CodeSyntaxTokenRange]] {
+        var result: [Int: [CodeSyntaxTokenRange]] = [:]
+        for block in analysis.blocks where block.kind == .codeBlock {
+            try checkCancellation()
+            guard let selection = language(named: block.codeLanguage) else { continue }
+            result[block.id] = tokens(in: block.content, language: selection, cache: cache)
+        }
+        return result
+    }
+
     static func tokens(in source: String, language name: String?, cache: CodeSyntaxTokenCache = sharedCache) -> [CodeSyntaxTokenRange] {
         guard let selection = language(named: name) else { return [] }
         return tokens(in: source, language: selection, cache: cache)

@@ -118,6 +118,8 @@ enum MarkdownHTMLExporter {
         })
         var context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         context.crossReferences = analysis.crossReferences
+        // コードブロックの字句は書き出し1回につき1度だけ求め、PDF・印刷・スライドなどでも同じ結果を使う。
+        context.codeSyntaxTokens = CodeSyntaxAnalyzer.tokens(forCodeBlocksIn: analysis, checkCancellation: {})
         // 参考文献は書き出し1回につき1度だけ解決し、段落ごとに読み直さない。
         context.citationCatalog = dialect == .extended && analysis.containsCitationSyntax
             ? MarkdownCitationCatalog.load(documentURL: documentURL) ?? .empty : .empty
@@ -307,7 +309,7 @@ enum MarkdownHTMLExporter {
             return "<blockquote>\n\(content)</blockquote>\n"
         case .codeBlock:
             let language = block.codeLanguage.map { " class=\"language-\(escape($0))\"" } ?? ""
-            return "<pre><code\(language)>\(highlightedCode(block.content, language: block.codeLanguage))</code></pre>\n"
+            return "<pre><code\(language)>\(highlightedCode(block.content, language: block.codeLanguage, tokens: context.codeSyntaxTokens?[block.id]))</code></pre>\n"
         case .horizontalRule: return "<hr>\n"
         case .table:
             guard let table = block.table else { return "" }
@@ -521,8 +523,9 @@ enum MarkdownHTMLExporter {
     }
 
     /// コードを字句ごとの `<span class="tok-…">` で囲む。色はスタイルシートの `codeTokenStyles` で指定する。
-    static func highlightedCode(_ code: String, language: String?) -> String {
-        let tokens = CodeSyntaxTokenizer.tokens(in: code, language: language)
+    static func highlightedCode(_ code: String, language: String?,
+                                tokens precomputed: [CodeSyntaxTokenRange]? = nil) -> String {
+        let tokens = precomputed ?? CodeSyntaxAnalyzer.tokens(in: code, language: language)
         guard !tokens.isEmpty else { return escape(code) }
         let text = code as NSString
         var html = ""
