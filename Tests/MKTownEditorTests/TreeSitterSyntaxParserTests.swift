@@ -20,6 +20,39 @@ final class TreeSitterSyntaxParserTests: XCTestCase {
 
     private func range(_ lo: Int, _ len: Int) -> NSRange { NSRange(location: lo, length: len) }
 
+    // MARK: 依存の版
+
+    /// `packageVersion` はキャッシュ鍵に入る。依存を更新したのに値を上げ忘れると、古い解析結果を返し続ける。
+    func testPackageVersionsMatchPackageResolved() throws {
+        var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        while !FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) {
+            let parent = directory.deletingLastPathComponent()
+            try XCTSkipIf(parent == directory, "Package.swift が見つからない")
+            directory = parent
+        }
+        let data = try Data(contentsOf: directory.appendingPathComponent("Package.resolved"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let pins = try XCTUnwrap(json["pins"] as? [[String: Any]])
+        var versions: [String: String] = [:]
+        for pin in pins {
+            if let identity = pin["identity"] as? String,
+               let state = pin["state"] as? [String: Any],
+               let version = state["version"] as? String {
+                versions[identity] = version
+            }
+        }
+        let packages: [TreeSitterGrammar: String] = [
+            .javascript: "tree-sitter-javascript",
+            .typescript: "tree-sitter-typescript",
+            .tsx: "tree-sitter-typescript",
+            .ruby: "tree-sitter-ruby",
+        ]
+        XCTAssertEqual(Set(packages.keys), Set(TreeSitterGrammar.allCases), "文法を追加したらここにも加える")
+        for (grammar, package) in packages {
+            XCTAssertEqual(grammar.packageVersion, versions[package], "\(grammar.rawValue): Package.resolved の \(package)")
+        }
+    }
+
     // MARK: クエリ
 
     func testEveryGrammarQueryCompiles() {

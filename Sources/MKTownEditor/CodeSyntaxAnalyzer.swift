@@ -6,10 +6,11 @@ enum CodeSyntaxEngine: Sendable {
     case scanner(CodeSyntaxLanguage)
 
     /// キャッシュ鍵に入れる版。解析結果が変わりうる更新（文法・クエリ・走査規則）で値を変える。
+    /// 走査器の版は、JavaScript・TypeScript・Ruby の定義と推定を取り除いた時点で 2 にした。走査規則を変えたら上げる。
     var cacheVersion: String {
         switch self {
         case .treeSitter(let grammar): grammar.cacheVersion
-        case .scanner: "scanner:1"
+        case .scanner: "scanner:2"
         }
     }
 }

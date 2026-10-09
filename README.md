@@ -18,7 +18,7 @@ macOS向けの、ローカルファイルを扱うMarkdownエディタです。�
 | 取り込み・書き出す | HTML・RTFの取り込み、HTML・PDF・テキスト出力、印刷、添付を含むZIP出力 |
 | 連携する | Gitの差分・履歴・コミット、iCloudの競合確認、共同編集、公開、AI推敲・翻訳 |
 
-細かな操作、対応構文、機能ごとの制約は[機能ガイド](docs/features.md)にまとめています。
+細かな操作、対応構文、機能ごとの制約は[機能ガイド](docs/features.md)にまとめています。コードブロックの色分けに使うTree-sitterの依存と更新手順は[Tree-sitterの導入](docs/tree-sitter-integration.md)にあります。
 
 ## 動作環境
 
@@ -128,3 +128,4 @@ CIでは`Package.resolved`に固定した依存ライブラリを使い、テス
 ## ライセンス
 
 [MIT License](LICENSE)。同梱する[Mermaid](Sources/MKTownEditor/Resources/Mermaid-LICENSE.txt)と依存ライブラリの[SwiftMath](https://github.com/mgriebling/SwiftMath)もMIT Licenseです。
+コードブロックの色分けには、[swift-tree-sitter](https://github.com/tree-sitter/swift-tree-sitter)（BSD 3-Clause License）、[tree-sitter](https://github.com/tree-sitter/tree-sitter)、[tree-sitter-javascript](https://github.com/tree-sitter/tree-sitter-javascript)、[tree-sitter-typescript](https://github.com/tree-sitter/tree-sitter-typescript)、[tree-sitter-ruby](https://github.com/tree-sitter/tree-sitter-ruby)（いずれもMIT License）を使っています。著作権表示とライセンス全文は[サードパーティのライセンス](docs/third-party-licenses.md)にあります。
