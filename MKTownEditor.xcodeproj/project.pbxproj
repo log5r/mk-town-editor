@@ -115,6 +115,7 @@
 		A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */; };
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
 		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
+		A100000000000000000000B1 /* MarkdownMathCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B1 /* MarkdownMathCompatibility.swift */; };
 		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
 		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
 		A10000000000000000000089 /* Resources/mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* Resources/mermaid.min.js */; };
@@ -283,6 +284,7 @@
 		A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceNamedLayoutSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000085 /* WorkspaceLayoutActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000086 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
+		A200000000000000000000B1 /* MarkdownMathCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMathCompatibility.swift; sourceTree = "<group>"; };
 		A20000000000000000000087 /* MermaidDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidDiagramView.swift; sourceTree = "<group>"; };
 		A20000000000000000000088 /* Resources/mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/mermaid.min.js; sourceTree = "<group>"; };
 		A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Resources/Mermaid-LICENSE.txt"; sourceTree = "<group>"; };
@@ -482,6 +484,7 @@
 				A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */,
 				A20000000000000000000085 /* WorkspaceLayoutActivation.swift */,
 				A20000000000000000000086 /* MarkdownMath.swift */,
+				A200000000000000000000B1 /* MarkdownMathCompatibility.swift */,
 				A20000000000000000000087 /* MermaidDiagramView.swift */,
 				A20000000000000000000088 /* Resources/mermaid.min.js */,
 				A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */,
@@ -771,6 +774,7 @@
 				A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */,
 				A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */,
 				A10000000000000000000086 /* MarkdownMath.swift in Sources */,
+				A100000000000000000000B1 /* MarkdownMathCompatibility.swift in Sources */,
 				A10000000000000000000088 /* MermaidDiagramView.swift in Sources */,
 				A1000000000000000000008B /* ExternalDiagramRenderer.swift in Sources */,
 				A1000000000000000000008C /* ExternalDiagramView.swift in Sources */,
