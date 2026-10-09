@@ -114,6 +114,25 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         // 分数の引数が終わった後や、添字でない波括弧の中は元の書体に戻る。
         XCTAssertEqual(normalized("\\frac{a}{b} \\underbrace{c}_d", display: true),
                        "\\frac{a}{b} {{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        // 添字の直後がコマンドなら、その引数グループにも添字の書体を使う。
+        XCTAssertEqual(normalized("x_\\sqrt{\\underbrace{a}_b}", display: false),
+                       "x_\\sqrt{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
+        XCTAssertEqual(normalized("x^\\frac{\\underbrace{a}_b}{\\underbrace{c}_d}", display: false),
+                       "x^\\frac{{{\\scriptscriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}{{{\\scriptscriptstyle\\underline{c}} \\atop {\\scriptscriptstyle d}}}")
+        XCTAssertEqual(normalized("x_\\mathbb{R} \\underbrace{a}_b", display: false),
+                       "x_\\mathbb{R} {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        XCTAssertEqual(normalized("x_\\alpha \\underbrace{a}_b", display: false),
+                       "x_\\alpha {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        XCTAssertEqual(normalized("\\frac{a}\\sqrt{\\underbrace{b}_c}", display: true),
+                       "\\frac{a}\\sqrt{{{\\textstyle\\underline{b}} \\atop {\\scriptstyle c}}}")
+        XCTAssertEqual(normalized("\\frac\\sqrt{\\underbrace{a}_b}{\\underbrace{c}_d}", display: true),
+                       "\\frac\\sqrt{{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}}{{{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}}")
+        XCTAssertEqual(normalized("x_\\underbrace{a}_b^{\\underbrace{c}_d}", display: false),
+                       "x_{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}^{{{\\scriptstyle\\underline{c}} \\atop {\\scriptscriptstyle d}}}")
+        XCTAssertEqual(normalized("\\lim_{n\\to\\infty}{^n{x}} \\underbrace{a}_b", display: false),
+                       "\\lim_{n\\to\\infty}{^n{x}} {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        XCTAssertEqual(normalized("\\text{a \\lt b}_\\sqrt", display: false), "\\text{a < b}_\\sqrt")
+        builds("x_\\sqrt{\\underbrace{a}_b} + x^\\frac{\\underbrace{a}_b}{c} + \\frac\\sqrt{\\underbrace{a}_b}{c}")
         // 波括弧のない引数（`\\frac1{...}`・`\\frac\\alpha{...}`）の後も、残りの引数は分数の書体にする。
         XCTAssertEqual(normalized("\\frac1{\\underbrace{b}_c}", display: true),
                        "\\frac1{{{\\textstyle\\underline{b}} \\atop {\\scriptstyle c}}}")

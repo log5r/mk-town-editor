@@ -173,42 +173,38 @@ enum MarkdownMathCompatibility {
     /// 分子・分母を持つコマンド。引数の書体は一段小さくなる。
     private static let fractionCommands: Set<String> = ["frac", "tfrac", "binom", "tbinom"]
 
+    /// 引数を取るコマンドとその数。添字や分数の引数に波括弧なしで置かれたとき、引数ごと同じ書体にする。
+    private static let argumentCounts: [String: Int] = [
+        "frac": 2, "tfrac": 2, "binom": 2, "tbinom": 2, "underset": 2, "overset": 2,
+        "sqrt": 1, "underbrace": 1, "overbrace": 1, "overline": 1, "underline": 1,
+        "text": 1, "textbf": 1, "textit": 1, "textrm": 1, "operatorname": 1,
+        "mathbb": 1, "mathcal": 1, "mathrm": 1, "mathbf": 1, "mathit": 1, "mathsf": 1, "mathtt": 1,
+        "mathfrak": 1, "mathscr": 1, "boldsymbol": 1,
+        "hat": 1, "bar": 1, "vec": 1, "tilde": 1, "dot": 1, "ddot": 1, "widehat": 1, "widetilde": 1,
+    ]
+
     /// 別名を置き換え、上下に積む命令を `\atop` で組み立てる。
     /// `style` は現在の書体サイズ命令で、積む本体の大きさを元の式と揃えるために使う。
-    /// 添字と分数の引数では、TeXの規則に従って一段小さい書体を現在の書体とみなす。
+    /// 添字（`_`・`^`）の引数と分数の引数は、TeXの規則に従って一段小さい書体で再帰的に処理する。
     private static func rewriteCommands(_ chars: ArraySlice<Character>, style: String) -> String {
         var output = ""
-        var styles = [style]
-        /// 直前に `_` か `^` があり、次のトークンが添字になる。
-        var scriptNext = false
-        /// `\frac` などの後に残っている引数の数。波括弧に入る間は退避し、出るときに戻す。
-        var pendingFractionArguments = 0
-        var savedFractionArguments: [Int] = []
-        func effectiveStyle() -> String {
-            let current = styles[styles.count - 1]
-            if scriptNext { return scriptStyle(of: current) }
-            if pendingFractionArguments > 0 { return fractionStyle(of: current) }
-            return current
-        }
+        var style = style
         var index = chars.startIndex
         while index < chars.endIndex {
             let char = chars[index]
-            if char == "{" {
-                styles.append(effectiveStyle())
-                savedFractionArguments.append(max(pendingFractionArguments - 1, 0))
-                pendingFractionArguments = 0
-                scriptNext = false
-            } else if char == "}" {
-                if styles.count > 1 {
-                    styles.removeLast()
-                    pendingFractionArguments = savedFractionArguments.removeLast()
+            if char == "{", let group = token(from: index, in: chars) {
+                output += "{" + rewriteCommands(group.content, style: style) + "}"
+                index = group.end
+                continue
+            }
+            if char == "_" || char == "^" {
+                output.append(char)
+                index += 1
+                if let script = token(from: index, in: chars) {
+                    output += rewritten(script, style: scriptStyle(of: style))
+                    index = script.end
                 }
-            } else if char == "_" || char == "^" {
-                scriptNext = true
-            } else if !char.isWhitespace && char != "\\" {
-                // 波括弧のない1文字も添字や分数の引数を1つ消費する。
-                scriptNext = false
-                pendingFractionArguments = max(pendingFractionArguments - 1, 0)
+                continue
             }
             guard char == "\\" else {
                 output.append(char)
@@ -218,11 +214,8 @@ enum MarkdownMathCompatibility {
             let length = commandLength(at: index, in: chars)
             let name = String(chars[(index + 1)..<(index + 1 + length)])
             let next = index + 1 + length
-            let style = effectiveStyle()
-            scriptNext = false
-            pendingFractionArguments = fractionCommands.contains(name) ? 2 : max(pendingFractionArguments - 1, 0)
             if styleCommands.contains(name) {
-                styles[styles.count - 1] = "\\" + name
+                style = "\\" + name
             } else if let replacement = aliases[name] {
                 output += replacement
                 index = next
@@ -234,8 +227,20 @@ enum MarkdownMathCompatibility {
             }
             output += String(chars[index..<next])
             index = next
+            if fractionCommands.contains(name) {
+                for _ in 0..<2 {
+                    guard let argument = token(from: index, in: chars) else { break }
+                    output += rewritten(argument, style: fractionStyle(of: style))
+                    index = argument.end
+                }
+            }
         }
         return output
+    }
+
+    private static func rewritten(_ token: Token, style: String) -> String {
+        let inner = rewriteCommands(token.content, style: style)
+        return token.braced ? "{\(inner)}" : inner
     }
 
     /// 添字に入ったときの書体。
@@ -259,14 +264,14 @@ enum MarkdownMathCompatibility {
         let small = scriptStyle(of: style)
         switch command {
         case "underbrace", "overbrace":
-            guard let body = argument(from: index, in: chars) else { return nil }
+            guard let body = token(from: index, in: chars) else { return nil }
             let line = command == "underbrace" ? "\\underline" : "\\overline"
             let marker: Character = command == "underbrace" ? "_" : "^"
             let lined = "\(line){\(rewriteCommands(body.content, style: style))}"
             var cursor = body.end
             while cursor < chars.endIndex, chars[cursor].isWhitespace { cursor += 1 }
             guard cursor < chars.endIndex, chars[cursor] == marker,
-                  let label = argument(from: cursor + 1, in: chars) else {
+                  let label = token(from: cursor + 1, in: chars) else {
                 return (lined, body.end)
             }
             let main = style + lined
@@ -274,8 +279,8 @@ enum MarkdownMathCompatibility {
             return (command == "underbrace" ? "{{\(main)} \\atop {\(annotation)}}"
                                             : "{{\(annotation)} \\atop {\(main)}}", label.end)
         case "underset", "overset":
-            guard let annotation = argument(from: index, in: chars),
-                  let body = argument(from: annotation.end, in: chars) else { return nil }
+            guard let annotation = token(from: index, in: chars),
+                  let body = token(from: annotation.end, in: chars) else { return nil }
             let main = "\(style) " + rewriteCommands(body.content, style: style)
             let label = "\(small) " + rewriteCommands(annotation.content, style: small)
             return (command == "underset" ? "{{\(main)} \\atop {\(label)}}"
@@ -285,9 +290,15 @@ enum MarkdownMathCompatibility {
         }
     }
 
-    /// `{...}` の引数、または1つのコマンドか1文字を読む。
-    private static func argument(from index: Int, in chars: ArraySlice<Character>)
-        -> (content: ArraySlice<Character>, end: Int)? {
+    /// 引数として読めるひとまとまり。`{...}` の中身、引数を含めたコマンド、または1文字。
+    private struct Token {
+        let content: ArraySlice<Character>
+        let end: Int
+        let braced: Bool
+    }
+
+    /// `{...}`、引数を含めたコマンド（`\sqrt{x}`、`\underbrace{x}_{n}`）、または1文字を読む。
+    private static func token(from index: Int, in chars: ArraySlice<Character>) -> Token? {
         var cursor = index
         while cursor < chars.endIndex, chars[cursor].isWhitespace { cursor += 1 }
         guard cursor < chars.endIndex else { return nil }
@@ -303,17 +314,31 @@ enum MarkdownMathCompatibility {
                 if char == "{" { depth += 1 }
                 if char == "}" {
                     depth -= 1
-                    if depth == 0 { return (chars[(cursor + 1)..<scan], scan + 1) }
+                    if depth == 0 { return Token(content: chars[(cursor + 1)..<scan], end: scan + 1, braced: true) }
                 }
                 scan += 1
             }
             return nil
         }
         if chars[cursor] == "\\" {
-            let end = cursor + 1 + commandLength(at: cursor, in: chars)
-            return (chars[cursor..<end], end)
+            let length = commandLength(at: cursor, in: chars)
+            let name = String(chars[(cursor + 1)..<(cursor + 1 + length)])
+            var end = cursor + 1 + length
+            for _ in 0..<(argumentCounts[name] ?? 0) {
+                guard let argument = token(from: end, in: chars) else { break }
+                end = argument.end
+            }
+            if name == "underbrace" || name == "overbrace" {
+                var scan = end
+                while scan < chars.endIndex, chars[scan].isWhitespace { scan += 1 }
+                if scan < chars.endIndex, chars[scan] == (name == "underbrace" ? "_" : "^"),
+                   let label = token(from: scan + 1, in: chars) {
+                    end = label.end
+                }
+            }
+            return Token(content: chars[cursor..<end], end: end, braced: false)
         }
-        return (chars[cursor..<(cursor + 1)], cursor + 1)
+        return Token(content: chars[cursor..<(cursor + 1)], end: cursor + 1, braced: false)
     }
 
     /// `\` に続くコマンド名の長さ。英字の並びはその長さ、`\\` や `\{` などの制御記号は1、末尾の `\` は0。
