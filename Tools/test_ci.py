@@ -1,11 +1,44 @@
 """Verify CI failure propagation without compiling or launching the app."""
 
+import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+
+
+class WorkflowConfigurationTests(unittest.TestCase):
+    def workflow(self, name):
+        # Use macOS's built-in YAML parser so CI needs no third-party Python modules.
+        path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / name
+        result = subprocess.run(
+            ["/usr/bin/ruby", "-rjson", "-ryaml", "-e",
+             "puts JSON.generate(YAML.load_file(ARGV.fetch(0)))", str(path)],
+            capture_output=True, text=True, check=True)
+        return json.loads(result.stdout)
+
+    def test_runner_context_is_not_used_in_workflow_or_job_environment(self):
+        for name in ("ci.yml", "release.yml"):
+            workflow = self.workflow(name)
+            environments = [workflow.get("env", {})]
+            environments.extend(job.get("env", {}) for job in workflow["jobs"].values())
+            for environment in environments:
+                for key, value in environment.items():
+                    with self.subTest(workflow=name, variable=key):
+                        self.assertNotRegex(str(value), r"\$\{\{[^}]*\brunner\s*\.")
+
+    def test_release_build_publish_and_diagnostics_share_the_output_directory(self):
+        job = self.workflow("release.yml")["jobs"]["release"]
+        output = "${{ runner.temp }}/release-output"
+        for command in ("bash Tools/build-release.sh", "bash Tools/publish-release.sh"):
+            step = next(step for step in job["steps"] if step.get("run") == command)
+            self.assertEqual(step["env"]["RELEASE_OUTPUT_DIR"], output)
+        upload = next(step for step in job["steps"]
+                      if step.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertTrue(upload["with"]["path"].startswith(output + "/notarization-"))
+        self.assertEqual(upload["if"], "${{ always() }}")
 
 
 class CIScriptTests(unittest.TestCase):
