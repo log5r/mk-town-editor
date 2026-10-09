@@ -112,6 +112,63 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         assertSpan(.link, "[real](path)", in: source, spans: spans)
     }
 
+    func testLanguageCodeBlockColorsTokensAndKeepsFencesAsCode() {
+        let text = "# T\n```swift\nlet x = \"a\" // note\n```\nlet y"
+        let source = text as NSString
+        let spans = MarkdownSyntaxHighlighter.spans(in: text)
+
+        assertSpan(.code, "```swift\n", in: source, spans: spans)
+        assertExactSpan(.codeToken(.keyword), at: source.range(of: "let"), spans: spans)
+        assertExactSpan(.codeToken(.string), at: source.range(of: "\"a\""), spans: spans)
+        assertExactSpan(.codeToken(.comment), at: source.range(of: "// note"), spans: spans)
+        let closing = source.range(of: "```", options: .backwards)
+        XCTAssertTrue(spans.contains { $0.role == .code && NSLocationInRange(closing.location, $0.range) })
+        // 本文の識別子はコード色にせず、フェンスの外の文は色分けしない。
+        let identifier = source.range(of: "x =")
+        XCTAssertFalse(spans.contains { NSLocationInRange(identifier.location, $0.range) })
+        let outside = source.range(of: "let y")
+        XCTAssertFalse(spans.contains { NSLocationInRange(outside.location, $0.range) })
+    }
+
+    func testCodeTokensInQuotesAndListsMapPastBlockPrefixes() {
+        let text = "> ```c\n> /* a\n> b */ int x;\n> ```\n- item\n\n  ```py\n  def f(): pass\n  ```"
+        let source = text as NSString
+        let spans = MarkdownSyntaxHighlighter.spans(in: text)
+
+        // 複数行のコメントは行ごとに分かれ、行頭の `> ` には色を付けない。
+        assertExactSpan(.codeToken(.comment), at: source.range(of: "/* a"), spans: spans)
+        assertExactSpan(.codeToken(.comment), at: source.range(of: "b */"), spans: spans)
+        assertExactSpan(.codeToken(.type), at: source.range(of: "int"), spans: spans)
+        assertExactSpan(.codeToken(.keyword), at: source.range(of: "def"), spans: spans)
+        assertExactSpan(.codeToken(.keyword), at: source.range(of: "pass"), spans: spans)
+        let quotePrefix = source.range(of: "> b")
+        XCTAssertFalse(spans.contains { $0.role == .codeToken(.comment) &&
+            NSLocationInRange(quotePrefix.location, $0.range) })
+    }
+
+    func testUnknownOrPlainLanguageCodeBlockStaysSingleCodeSpan() {
+        for info in ["", "text", "unknown"] {
+            let text = "```\(info)\nlet x = 1\n```"
+            let spans = MarkdownSyntaxHighlighter.spans(in: text)
+            XCTAssertEqual(spans, [MarkdownSyntaxSpan(range: NSRange(location: 0, length: (text as NSString).length),
+                                                      role: .code)], info)
+        }
+    }
+
+    func testUnclosedLanguageCodeBlockColorsToDocumentEnd() {
+        let text = "```js\nconst a = 1\n"
+        let source = text as NSString
+        let spans = MarkdownSyntaxHighlighter.spans(in: text)
+        assertExactSpan(.codeToken(.keyword), at: source.range(of: "const"), spans: spans)
+        assertExactSpan(.codeToken(.number), at: source.range(of: "1"), spans: spans)
+        XCTAssertTrue(spans.allSatisfy { NSMaxRange($0.range) <= source.length })
+    }
+
+    func testCodeTokenColorsUseSharedPalette() {
+        XCTAssertEqual(color(for: .codeToken(.keyword)), CodeSyntaxPalette.color(for: .keyword))
+        XCTAssertEqual(color(for: .codeToken(.string)), CodeSyntaxPalette.color(for: .string))
+    }
+
     func testEscapedAndInlineCodeMarkersAreNotStyled() {
         let text = #"\*literal* `**code**` **real** \[escaped](url)"#
         let source = text as NSString
@@ -236,6 +293,14 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         MarkdownSyntaxHighlighter.apply(to: view, spans: [MarkdownSyntaxSpan(
             range: NSRange(location: 0, length: 1), role: role)])
         return self.color(at: 0, in: view)!
+    }
+
+    private func assertExactSpan(_ role: MarkdownSyntaxSpan.Role, at range: NSRange,
+                                 spans: [MarkdownSyntaxSpan],
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertNotEqual(range.location, NSNotFound, file: file, line: line)
+        XCTAssertTrue(spans.contains(MarkdownSyntaxSpan(range: range, role: role)),
+                      "Missing \(role) at \(range): \(spans)", file: file, line: line)
     }
 
     private func assertSpan(_ role: MarkdownSyntaxSpan.Role, _ token: String,
