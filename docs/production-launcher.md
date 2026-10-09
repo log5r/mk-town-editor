@@ -40,6 +40,7 @@ Swift Packageの実行ファイルはアプリバンドルではなく、Info.pl
 | `Contents/MacOS/MKTownEditor` | Releaseビルドの実行ファイル |
 | `Contents/Resources/*.bundle` | SwiftPMのリソースバンドル（`MKTownEditor_MKTownEditor.bundle` と `SwiftMath_SwiftMath.bundle`） |
 | `Contents/Resources/*.lproj` | アプリのリソースバンドルからコピーした文字列テーブル |
+| `Contents/Resources/Assets.car`、`AppIcon.icns` | `Support/AppIcon.icon` を `actool` で変換したアプリアイコン（[アプリアイコン](app-icon.md)） |
 
 Info.plistの変数は、Xcodeプロジェクトのアプリターゲットと同じ値に展開する。`$(EXECUTABLE_NAME)` と `$(PRODUCT_NAME)` は `MKTownEditor`、`$(PRODUCT_BUNDLE_IDENTIFIER)` は `com.mktown.editor`、`$(MACOSX_DEPLOYMENT_TARGET)` は `14.0` になる。スクリプトが知らない変数が `Support/Info.plist` に増えた場合は、展開漏れのまま登録されないように、バンドルを作らずに失敗する。値がXcodeプロジェクトとずれた場合は `Tools/test_make_app_bundle.py` が失敗する。
 

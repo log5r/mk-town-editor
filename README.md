@@ -127,6 +127,7 @@ Xcodeプロジェクトの書式変更やワークフロー定義が原因で失
 | --- | --- |
 | [`Sources/MKTownEditor`](Sources/MKTownEditor) | アプリ本体と同梱リソース |
 | [`Tests/MKTownEditorTests`](Tests/MKTownEditorTests) | Swiftのユニットテスト |
+| [`Support`](Support) | Info.plistとアプリアイコン（Icon Composerの書類。[アプリアイコン](docs/app-icon.md)を参照） |
 | [`Tools`](Tools) | CI、アプリバンドルの組み立て、スクリプトのテスト、書類を開くCLI |
 | [`Package.swift`](Package.swift) | Swift Packageの構成と依存ライブラリ |
 | [`docs`](docs) | 機能ガイドなどの公開ドキュメント |

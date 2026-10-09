@@ -42,6 +42,28 @@ class XcodeProjectTests(unittest.TestCase):
         package_sources = sorted(path.name for path in (REPOSITORY / "Sources" / "MKTownEditor").glob("*.swift"))
         self.assertEqual(sorted(self.app_sources()), package_sources)
 
+    def test_app_target_compiles_the_icon_composer_document(self):
+        """Tools/make-app-bundle.sh compiles the same document; the two builds must name the same icon."""
+        target = self.target("MKTownEditor")
+        phases = [self.objects[identifier] for identifier in target["buildPhases"]]
+        resources = [phase for phase in phases if phase["isa"] == "PBXResourcesBuildPhase"]
+        self.assertEqual(len(resources), 1)
+        icons = [self.objects[self.objects[identifier]["fileRef"]] for identifier in resources[0]["files"]
+                 if self.objects[self.objects[identifier]["fileRef"]].get("path") == "AppIcon.icon"]
+        self.assertEqual(len(icons), 1)
+        self.assertEqual(icons[0]["lastKnownFileType"], "folder.iconcomposer.icon")
+        support = [obj for obj in self.objects.values() if obj.get("isa") == "PBXGroup" and obj.get("path") == "Support"]
+        self.assertEqual(len(support), 1)
+        self.assertIn(icons[0], [self.objects[identifier] for identifier in support[0]["children"]])
+        self.assertTrue((REPOSITORY / "Support" / "AppIcon.icon" / "icon.json").is_file())
+        configurations = self.objects[target["buildConfigurationList"]]["buildConfigurations"]
+        self.assertEqual(len(configurations), 2)
+        for identifier in configurations:
+            self.assertEqual(self.objects[identifier]["buildSettings"]["ASSETCATALOG_COMPILER_APPICON_NAME"],
+                             "AppIcon")
+        script = (REPOSITORY / "Tools" / "make-app-bundle.sh").read_text()
+        self.assertIn("app_icon_name=AppIcon\n", script)
+
     def test_unit_test_target_compiles_the_package_tests_hosted_by_the_app(self):
         target = self.target("MKTownEditorTests")
         self.assertEqual(target["productType"], "com.apple.product-type.bundle.unit-test")
