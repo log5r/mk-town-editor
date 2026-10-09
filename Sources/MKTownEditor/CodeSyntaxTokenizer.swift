@@ -96,6 +96,8 @@ struct CodeSyntaxLanguage: Sendable {
     var regexLiterals = false
     /// Ruby・Perl の `puts /a#b/` のように、空白で区切ったコマンド呼び出しの引数も正規表現とする。
     var commandRegexArguments = false
+    /// TypeScript の非 null アサーション `x!`。
+    var nonNullAssertions = false
     /// Ruby のように改行で文が終わる。値で終わった行の次の行頭の `/` も正規表現とする。
     var newlineEndsStatements = false
     /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
@@ -213,11 +215,14 @@ private struct CodeSyntaxScanner {
     /// Ruby・Perl で代入や引数で現れたローカル変数。後ろの `/` をコマンド呼び出しの引数とみなさない。
     private var knownLocals: Set<String> = []
     private var lastIdentifier: String?
+    /// 直前の語。値や記号の後ろでは `nil`。
+    private var previousWord: String?
     private var collectingParameters: ParameterList?
     private var definition: DefinitionState?
     /// 開いている Ruby のブロック。`def` などのスコープは外側のローカル変数を持つ。
     private var rubyBlocks: [Set<String>?] = []
     private var loopAwaitingDo = false
+    private var rubyBraceLocals: [Set<String>] = []
     private var jumpStatement: JumpStatement?
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
@@ -430,7 +435,7 @@ private struct CodeSyntaxScanner {
                 index += 2
                 continue
             }
-            if language.regexLiterals, value == Unit.bang, previousToken == .value,
+            if language.nonNullAssertions, value == Unit.bang, previousToken == .value,
                unit(index - 1).map(Self.isWhitespace) == false, unit(index + 1) != Unit.equal {
                 // TypeScript の非 null アサーション `x!` は値のまま。前置の `!x` は式の途中。
                 index += 1
@@ -475,8 +480,17 @@ private struct CodeSyntaxScanner {
     /// `a = 1` の左辺、`|a, b|`、`def f(a)` の引数をローカル変数として記録する。
     private mutating func noteLocals(_ value: UInt16) {
         let next = unit(index + 1)
-        if value == Unit.equal, let name = lastIdentifier, next != Unit.equal, next != 0x7E, next != Unit.greater {
-            knownLocals.insert(name)
+        if value == Unit.equal, next != Unit.equal, next != 0x7E, next != Unit.greater {
+            if let name = lastIdentifier {
+                knownLocals.insert(name)
+            } else if let name = compoundAssignmentTarget(before: index) {
+                knownLocals.insert(name)
+            }
+        }
+        if language.newlineEndsStatements {
+            // `{ |x| … }` の引数とブロック内の代入はブロックの中だけ。
+            if value == Unit.openBrace { rubyBraceLocals.append(knownLocals) }
+            if value == Unit.closeBrace, let outer = rubyBraceLocals.popLast() { knownLocals = outer }
         }
         if value == 0x7C {
             if collectingParameters == .pipes {
@@ -494,8 +508,26 @@ private struct CodeSyntaxScanner {
         if value != Unit.dot { definition = nil }
     }
 
+    private static let compoundOperators: Set<String> = ["||", "&&", "+", "-", "*", "/", "%", "**", "^", "|", "&", "<<", ">>"]
+    private static let compoundOperatorUnits = Set("|&+-*/%^<>".utf16)
+
+    /// `a ||= 1`、`a += 1` の左辺。`a <= 1`、`a != 1` のような比較は除く。
+    private func compoundAssignmentTarget(before equal: Int) -> String? {
+        var start = equal
+        while let value = unit(start - 1), Self.compoundOperatorUnits.contains(value), equal - start < 3 { start -= 1 }
+        guard Self.compoundOperators.contains(String(decoding: units[start..<equal], as: UTF16.self)) else { return nil }
+        var end = start
+        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
+        var nameStart = end
+        while nameStart > 0, isIdentifierPart(units[nameStart - 1]) { nameStart -= 1 }
+        guard nameStart < end, !Self.isDigit(units[nameStart]) else { return nil }
+        if let sigil = unit(nameStart - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return nil }
+        return String(decoding: units[nameStart..<end], as: UTF16.self)
+    }
+
     private mutating func noteValue() {
         lastIdentifier = nil
+        previousWord = nil
         jumpStatement = nil
         regexAllowed = false
         pendingControl = false
@@ -508,6 +540,7 @@ private struct CodeSyntaxScanner {
     private mutating func notePunctuation(_ value: UInt16) {
         if language.commandRegexArguments { noteLocals(value) }
         lastIdentifier = nil
+        previousWord = nil
         jumpStatement = nil
         switch value {
         case 0x28: // (
@@ -524,7 +557,8 @@ private struct CodeSyntaxScanner {
             } else {
                 kind = .block
             }
-            pendingExpressionBody = false
+            // `function(a = {}) {` の引数の `{}` は関数の本体ではない。
+            if kind != .object { pendingExpressionBody = false }
             braceKinds.append(kind)
             regexAllowed = true
         case Unit.closeBrace:
@@ -695,9 +729,13 @@ private struct CodeSyntaxScanner {
         }
         var end = offset - 1
         while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
-        var start = end
+        var nameEnd = end
+        if language.newlineEndsStatements, let suffix = unit(nameEnd - 1), suffix == Unit.bang || suffix == Unit.question {
+            nameEnd -= 1
+        }
+        var start = nameEnd
         while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
-        guard start < end, !Self.isDigit(units[start]) else { return false }
+        guard start < nameEnd, !Self.isDigit(units[start]) else { return false }
         // 変数（`$x`、`@x`）やメンバー（`a.b`）は値。
         if let sigil = unit(start - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return false }
         // Ruby と同じく、代入済みのローカル変数の後ろは除算（`a = 12; a /2/3`）。
@@ -725,7 +763,8 @@ private struct CodeSyntaxScanner {
             if name == "do", loopAwaitingDo {
                 loopAwaitingDo = false
             } else {
-                rubyBlocks.append(nil)
+                // `do |x| … end` の引数とブロック内の代入はブロックの中だけ。
+                rubyBlocks.append(name == "do" ? knownLocals : nil)
             }
         } else if Self.rubyStatementOpeners.contains(name), atStatementStart {
             rubyBlocks.append(nil)
@@ -933,7 +972,12 @@ private struct CodeSyntaxScanner {
 
     private mutating func scanIdentifier() {
         let start = index
-        let end = identifierEnd(from: index)
+        var end = identifierEnd(from: index)
+        // Ruby のメソッド名は `!`・`?` で終わってよい（`save!`、`empty?`）。`a != b` は除く。
+        if language.newlineEndsStatements, let suffix = unit(end), suffix == Unit.bang || suffix == Unit.question,
+           unit(end + 1) != Unit.equal {
+            end += 1
+        }
         index = end
         // `obj.in` や `a?.if` のようなメンバー名は値。
         let isMember = previousToken == .punctuation(Unit.dot)
@@ -956,7 +1000,9 @@ private struct CodeSyntaxScanner {
         jumpStatement = isMember ? nil : ["break", "continue"].contains(name) ? .keyword
             : jumpStatement == .keyword && !Self.regexPrecedingWords.contains(name) ? .label : nil
         lastIdentifier = isMember ? nil : name
-        let inExpression = regexAllowed && !atStatementStart
+        defer { previousWord = isMember ? nil : name }
+        // `export default function() {}` と `export default class {}` は宣言として閉じる。
+        let inExpression = regexAllowed && !atStatementStart && previousWord != "default"
         if !isMember, Self.functionKeywords.contains(name) {
             // 文の始まりの `function f() {}` は宣言、`= function() {}` や `(class {})` は式。
             // `= async function` は `async` の前の位置で判断する。
