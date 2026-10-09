@@ -239,6 +239,11 @@ enum MarkdownMathCompatibility {
             }
             output += String(chars[index..<next])
             index = next
+            if name == "sqrt", let root = rootIndex(from: index, in: chars) {
+                // 根号の指数はTeXでは最小の書体になる。被開法数は現在の書体のまま続けて処理する。
+                output += "[" + rewriteCommands(root.content, style: "\\scriptscriptstyle") + "]"
+                index = root.end
+            }
             if fractionCommands.contains(name) {
                 let (arguments, end) = fractionArguments(from: index, in: chars, style: style)
                 output += arguments
@@ -347,13 +352,9 @@ enum MarkdownMathCompatibility {
             let length = commandLength(at: cursor, in: chars)
             let name = String(chars[(cursor + 1)..<(cursor + 1 + length)])
             var end = cursor + 1 + length
-            if name == "sqrt" {
+            if name == "sqrt", let root = rootIndex(from: end, in: chars) {
                 // `\sqrt[3]{x}` の任意引数は根号の一部なので、被開法数と一緒に読む。
-                var scan = end
-                while scan < chars.endIndex, chars[scan].isWhitespace { scan += 1 }
-                if scan < chars.endIndex, chars[scan] == "[", let close = chars[scan...].firstIndex(of: "]") {
-                    end = close + 1
-                }
+                end = root.end
             }
             for _ in 0..<(argumentCounts[name] ?? 0) {
                 guard let argument = token(from: end, in: chars) else { break }
@@ -370,6 +371,16 @@ enum MarkdownMathCompatibility {
             return Token(content: chars[cursor..<end], end: end, braced: false)
         }
         return Token(content: chars[cursor..<(cursor + 1)], end: cursor + 1, braced: false)
+    }
+
+    /// `\sqrt` の直後にある任意引数 `[...]` の中身と終了位置。
+    private static func rootIndex(from index: Int, in chars: ArraySlice<Character>)
+        -> (content: ArraySlice<Character>, end: Int)? {
+        var cursor = index
+        while cursor < chars.endIndex, chars[cursor].isWhitespace { cursor += 1 }
+        guard cursor < chars.endIndex, chars[cursor] == "[",
+              let close = chars[cursor...].firstIndex(of: "]") else { return nil }
+        return (chars[(cursor + 1)..<close], close + 1)
     }
 
     /// `\` に続くコマンド名の長さ。英字の並びはその長さ、`\\` や `\{` などの制御記号は1、末尾の `\` は0。
