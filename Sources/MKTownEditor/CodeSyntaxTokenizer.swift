@@ -210,6 +210,11 @@ private struct CodeSyntaxScanner {
     private var pendingCaseColon = false
     /// 閉じていない三項演算子 `?` の数。対応する `:` は式の中のコロン。
     private var ternaryDepth = 0
+    /// Ruby・Perl で代入や引数で現れたローカル変数。後ろの `/` をコマンド呼び出しの引数とみなさない。
+    private var knownLocals: Set<String> = []
+    private var lastIdentifier: String?
+    private var collectingParameters: ParameterList?
+    private var definition: DefinitionState?
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -445,7 +450,28 @@ private struct CodeSyntaxScanner {
     private static let blockWords: Set<String> = ["else", "do", "try", "finally"]
     private static let statementEnds = Set(")};{".utf16)
 
+    /// `a = 1` の左辺、`|a, b|`、`def f(a)` の引数をローカル変数として記録する。
+    private mutating func noteLocals(_ value: UInt16) {
+        let next = unit(index + 1)
+        if value == Unit.equal, let name = lastIdentifier, next != Unit.equal, next != 0x7E, next != Unit.greater {
+            knownLocals.insert(name)
+        }
+        if value == 0x7C {
+            if collectingParameters == .pipes {
+                collectingParameters = nil
+            } else if previousToken == .punctuation(Unit.openBrace) || previousToken == .statementWord {
+                collectingParameters = .pipes
+            }
+        } else if value == 0x28, definition == .parameters {
+            collectingParameters = .parentheses
+        } else if value == 0x29, collectingParameters == .parentheses {
+            collectingParameters = nil
+        }
+        if value != Unit.dot { definition = nil }
+    }
+
     private mutating func noteValue() {
+        lastIdentifier = nil
         regexAllowed = false
         pendingControl = false
         previousToken = .value
@@ -455,6 +481,8 @@ private struct CodeSyntaxScanner {
 
     /// 括弧の対応で文脈を決める。`if (…)` の `)` とブロックの `}` の後ろは文の始まりなので正規表現を認める。
     private mutating func notePunctuation(_ value: UInt16) {
+        if language.commandRegexArguments { noteLocals(value) }
+        lastIdentifier = nil
         switch value {
         case 0x28: // (
             parenthesisControlHeaders.append(pendingControl)
@@ -646,8 +674,13 @@ private struct CodeSyntaxScanner {
         guard start < end, !Self.isDigit(units[start]) else { return false }
         // 変数（`$x`、`@x`）やメンバー（`a.b`）は値。
         if let sigil = unit(start - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return false }
-        return true
+        // Ruby と同じく、代入済みのローカル変数の後ろは除算（`a = 12; a /2/3`）。
+        return !knownLocals.contains(String(decoding: units[start..<end], as: UTF16.self))
     }
+
+    /// Ruby のメソッド定義とブロックの引数を集める範囲。
+    private enum ParameterList { case parentheses, pipes }
+    private enum DefinitionState { case name, parameters }
 
     private mutating func scanBlockComment() -> Bool {
         guard let delimiter = language.blockComments.first(where: {
@@ -854,6 +887,13 @@ private struct CodeSyntaxScanner {
         let isMember = previousToken == .punctuation(Unit.dot)
         let name = String(decoding: units[start..<end], as: UTF16.self)
         let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+        if language.commandRegexArguments {
+            if collectingParameters != nil { knownLocals.insert(name) }
+            // `def name(a, b)` と `def self.name(a)` の引数
+            definition = name == "def" ? .name : definition == .name && name != "self" ? .parameters
+                : definition == .name ? .name : nil
+        }
+        lastIdentifier = isMember ? nil : name
         let inExpression = regexAllowed && !atStatementStart
         if !isMember, Self.functionKeywords.contains(name) {
             // 文の始まりの `function f() {}` は宣言、`= function() {}` や `(class {})` は式。
