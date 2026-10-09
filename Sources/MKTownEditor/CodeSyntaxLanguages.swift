@@ -374,6 +374,7 @@ enum CodeSyntaxLanguages {
         },
         CodeSyntaxLanguage("ruby") {
             $0.regexLiterals = true
+            $0.newlineEndsStatements = true
             $0.commandRegexArguments = true
             $0.keywords = words("""
                 BEGIN END alias and begin break case class def defined? do else elsif end ensure false for if in \
