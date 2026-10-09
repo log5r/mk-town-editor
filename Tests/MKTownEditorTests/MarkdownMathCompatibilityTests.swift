@@ -44,6 +44,14 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         // 一部の行だけに & があるときはSwiftMathがそのまま2列として扱うので変更しない。
         XCTAssertEqual(normalized("\\begin{aligned}a &= b\\\\ccc = d\\end{aligned}"),
                        "\\begin{aligned}a &= b\\\\ccc = d\\end{aligned}")
+        // 複数の揃え位置は最初の & だけを残し、組の区切りは \qquad に、組の中の揃え位置は取り除く。
+        XCTAssertEqual(normalized("\\begin{align}a&=b & c&=d\\\\ e&=f & g&=h\\end{align}"),
+                       "\\begin{aligned}a&=b \\qquad  c=d\\\\ e&=f \\qquad  g=h\\end{aligned}")
+        XCTAssertEqual(normalized("\\begin{aligned}a &= b \\\\ c &= d & e &= f \\end{aligned}"),
+                       "\\begin{aligned}a &= b \\\\ c &= d \\qquad  e = f \\end{aligned}")
+        XCTAssertEqual(normalized("\\begin{cases}a & b & c\\end{cases}"), "\\begin{cases}a & b \\qquad  c\\end{cases}")
+        builds("\\begin{align}a&=b & c&=d\\\\ e&=f & g&=h\\end{align}")
+        builds("\\begin{aligned}x &= 1 & y &= 2 & z &= 3\\end{aligned}")
         // 入れ子の環境の & は外側の列として数えない。
         XCTAssertEqual(normalized("\\begin{aligned}\\begin{cases}a & b\\end{cases}\\end{aligned}"),
                        "\\begin{aligned}\\begin{cases}a & b\\end{cases}&\\end{aligned}")
