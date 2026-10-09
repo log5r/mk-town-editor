@@ -22,7 +22,6 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       RELEASE_TAG: ${{ github.ref_name }}
       RELEASE_BUILD_NUMBER: ${{ github.run_number }}
-      RELEASE_OUTPUT_DIR: ${{ runner.temp }}/release-output
     defaults:
       run:
         shell: bash
@@ -44,6 +43,7 @@ jobs:
 
       - name: Build signed Universal app and notarize
         env:
+          RELEASE_OUTPUT_DIR: ${{ runner.temp }}/release-output
           APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -53,6 +53,7 @@ jobs:
 
       - name: Create or update draft release
         env:
+          RELEASE_OUTPUT_DIR: ${{ runner.temp }}/release-output
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: bash Tools/publish-release.sh

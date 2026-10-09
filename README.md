@@ -24,7 +24,7 @@ macOS向けの、ローカルファイルを扱うMarkdownエディタです。�
 
 - **アプリの実行**：macOS 14以降
 - **ビルド・開発**：Xcode 27 / Swift 6.4（CIで検証している環境）
-- **CIと同じチェックを実行する場合**：Python 3
+- **CIと同じチェックを実行する場合**：Python 3（設定検査にはmacOS標準の`plutil`と`/usr/bin/ruby`も使用）
 
 Swift Packageの定義はSwift tools 6.0です。初回ビルドでは、依存ライブラリの取得にネットワーク接続が必要です。
 
@@ -114,6 +114,8 @@ bash Tools/ci.sh
 ```
 
 CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
+
+Xcodeプロジェクトの書式変更やワークフロー定義が原因で失敗した場合は、[CIの設定検査と検証方法](docs/ci-configuration-failures.md)を参照してください。
 
 ## リリース配布
 
