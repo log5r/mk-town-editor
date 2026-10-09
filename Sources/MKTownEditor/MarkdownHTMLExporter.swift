@@ -170,6 +170,7 @@ enum MarkdownHTMLExporter {
                font: \(preset.fontSize)px/1.65 \(preset.font.cssFamily); overflow-wrap: anywhere; }
         pre { overflow-x: auto; padding: 16px; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); }
         code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        \(codeTokenStyles(printLayout: printLayout))
         img { max-width: 100%; height: auto; }
         figure { margin: 1em 0; }
         figcaption { color: color-mix(in srgb, currentColor 70%, transparent); font-size: 0.85em; }
@@ -306,7 +307,7 @@ enum MarkdownHTMLExporter {
             return "<blockquote>\n\(content)</blockquote>\n"
         case .codeBlock:
             let language = block.codeLanguage.map { " class=\"language-\(escape($0))\"" } ?? ""
-            return "<pre><code\(language)>\(escape(block.content))</code></pre>\n"
+            return "<pre><code\(language)>\(highlightedCode(block.content, language: block.codeLanguage))</code></pre>\n"
         case .horizontalRule: return "<hr>\n"
         case .table:
             guard let table = block.table else { return "" }
@@ -517,6 +518,31 @@ enum MarkdownHTMLExporter {
         }
         return Bundle.main.preferredLocalizations.first(where: { $0 != "Base" })
             ?? Bundle.main.developmentLocalization ?? "ja"
+    }
+
+    /// コードを字句ごとの `<span class="tok-…">` で囲む。色はスタイルシートの `codeTokenStyles` で指定する。
+    static func highlightedCode(_ code: String, language: String?) -> String {
+        let tokens = CodeSyntaxTokenizer.tokens(in: code, language: language)
+        guard !tokens.isEmpty else { return escape(code) }
+        let text = code as NSString
+        var html = ""
+        var cursor = 0
+        for token in tokens {
+            html += escape(text.substring(with: NSRange(location: cursor, length: token.range.location - cursor)))
+            html += "<span class=\"tok-\(token.token.rawValue)\">\(escape(text.substring(with: token.range)))</span>"
+            cursor = NSMaxRange(token.range)
+        }
+        return html + escape(text.substring(from: cursor))
+    }
+
+    /// 字句の色。PDF と印刷は紙に出すため、暗い外観の色を含めない。
+    static func codeTokenStyles(printLayout: Bool) -> String {
+        func rules(_ palette: [CodeSyntaxToken: String]) -> String {
+            CodeSyntaxToken.allCases.map { ".tok-\($0.rawValue) { color: \(palette[$0]!); }" }.joined(separator: " ")
+        }
+        let light = rules(CodeSyntaxPalette.light)
+        if printLayout { return light }
+        return light + "\n@media screen and (prefers-color-scheme: dark) { \(rules(CodeSyntaxPalette.dark)) }"
     }
 
     private static func escape(_ text: String) -> String {
