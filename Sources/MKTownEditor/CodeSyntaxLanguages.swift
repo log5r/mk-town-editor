@@ -469,7 +469,7 @@ enum CodeSyntaxLanguages {
         scss,
         CodeSyntaxLanguage("diff") { $0.mode = .diff },
         CodeSyntaxLanguage("dockerfile") {
-            $0.hashComments = .wordStart
+            $0.hashComments = .lineStart
             $0.keywords = words("""
                 from as run cmd label maintainer expose env add copy entrypoint volume user workdir arg onbuild \
                 stopsignal healthcheck shell

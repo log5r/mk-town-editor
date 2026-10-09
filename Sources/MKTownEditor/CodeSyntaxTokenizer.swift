@@ -35,6 +35,8 @@ struct CodeSyntaxLanguage: Sendable {
         case wordStart
         /// Perl：`$#array` 以外はコメント。
         case notAfterDollar
+        /// Dockerfile：行の最初の空白以外の文字の場合だけ。`ENV A b # c` の `#` は引数。
+        case lineStart
     }
     /// `--` の行コメントが成り立つ条件。
     enum DashComments: Sendable {
@@ -286,6 +288,13 @@ private struct CodeSyntaxScanner {
         case .afterWhitespace: return Self.isWhitespace(previous)
         case .wordStart: return Self.isWhitespace(previous) || Self.shellOperators.contains(previous)
         case .notAfterDollar: return previous != Unit.dollar
+        case .lineStart:
+            var cursor = offset - 1
+            while let value = unit(cursor), value != Unit.newline {
+                if !Self.isWhitespace(value) { return false }
+                cursor -= 1
+            }
+            return true
         }
     }
 
@@ -574,22 +583,38 @@ private struct CodeSyntaxScanner {
         var open = index + 1
         if unit(open) == Unit.bang { open += 1 }
         guard unit(open) == Unit.openBracket else { return false }
-        var depth = 0
-        var end = open
-        while end < count && units[end] != Unit.newline {
-            if units[end] == Unit.openBracket { depth += 1 }
-            if units[end] == Unit.closeBracket {
-                depth -= 1
-                if depth == 0 {
-                    end += 1
-                    break
-                }
-            }
-            end += 1
-        }
+        // 属性は複数行にわたってよい。閉じ括弧がなければ行末までとする。
+        let end = matchingBracketEnd(from: open, limit: count) ?? lineEnd(from: index)
         emit(index, end, .attribute)
         index = end
         return true
+    }
+
+    /// `open` の `[` に対応する `]` の直後の位置。引用符の中の括弧は数えない。見つからなければ `nil`。
+    private func matchingBracketEnd(from open: Int, limit: Int) -> Int? {
+        var depth = 0
+        var quote: UInt16?
+        var cursor = open
+        while cursor < limit {
+            let value = units[cursor]
+            if let current = quote {
+                if value == Unit.backslash {
+                    cursor += 2
+                    continue
+                }
+                // 引用符の中の文字列は行をまたがない。
+                if value == current || value == Unit.newline { quote = nil }
+            } else if value == Unit.quote || value == Unit.apostrophe {
+                quote = value
+            } else if value == Unit.openBracket {
+                depth += 1
+            } else if value == Unit.closeBracket {
+                depth -= 1
+                if depth == 0 { return cursor + 1 }
+            }
+            cursor += 1
+        }
+        return nil
     }
 
     private mutating func scanIdentifier() {
@@ -704,9 +729,8 @@ private struct CodeSyntaxScanner {
     private mutating func scanINIKey() -> Bool {
         let end = lineEnd(from: index)
         if units[index] == Unit.openBracket {
-            var close = index + 1
-            while close < end && units[close] != Unit.closeBracket { close += 1 }
-            while close < end && units[close] == Unit.closeBracket { close += 1 }
+            // `[section]`、`[[array]]`、`["a]b"]`
+            let close = matchingBracketEnd(from: index, limit: end) ?? end
             emit(index, close, .type)
             index = close
             return true

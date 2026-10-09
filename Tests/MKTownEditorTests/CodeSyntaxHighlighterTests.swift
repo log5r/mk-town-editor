@@ -269,6 +269,31 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(swift.filter { $0.0 == "return" }.count, 1)
     }
 
+    func testBracketsInsideQuotedArgumentsDoNotCloseAttributesOrSections() {
+        let rust = tokens("#[doc = \"]\"]\nfn f() {}", "rust")
+        XCTAssertTrue(rust.contains { $0 == ("#[doc = \"]\"]", .attribute) })
+        XCTAssertTrue(rust.contains { $0 == ("fn", .keyword) })
+
+        let php = tokens("#[Route(\"/a]b\")] public function f() {}\n#[Attr(\n  'x'\n)]\nclass C {}", "php")
+        XCTAssertTrue(php.contains { $0 == ("#[Route(\"/a]b\")]", .attribute) })
+        XCTAssertTrue(php.contains { $0 == ("#[Attr(\n  'x'\n)]", .attribute) })
+        XCTAssertTrue(php.contains { $0 == ("public", .keyword) })
+        XCTAssertTrue(php.contains { $0 == ("class", .keyword) })
+
+        let toml = tokens("[\"a]b\".c]\n[[items]]\nk = 1", "toml")
+        XCTAssertTrue(toml.contains { $0 == ("[\"a]b\".c]", .type) })
+        XCTAssertTrue(toml.contains { $0 == ("[[items]]", .type) })
+        XCTAssertTrue(toml.contains { $0 == ("k", .attribute) })
+    }
+
+    func testDockerfileCommentsOnlyAtLineStart() {
+        let values = tokens("# syntax\n  # indented\nENV FOO value # literal\nCOPY source #destination", "dockerfile")
+        XCTAssertTrue(values.contains { $0 == ("# syntax", .comment) })
+        XCTAssertTrue(values.contains { $0 == ("# indented", .comment) })
+        XCTAssertEqual(values.filter { $0.1 == .comment }.count, 2)
+        XCTAssertTrue(values.contains { $0 == ("COPY", .keyword) })
+    }
+
     func testPHPAttributesAreNotComments() {
         let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
         XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })
