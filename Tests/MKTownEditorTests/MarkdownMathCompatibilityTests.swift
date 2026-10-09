@@ -114,6 +114,16 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         // 分数の引数が終わった後や、添字でない波括弧の中は元の書体に戻る。
         XCTAssertEqual(normalized("\\frac{a}{b} \\underbrace{c}_d", display: true),
                        "\\frac{a}{b} {{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        // 波括弧のない引数（`\\frac1{...}`・`\\frac\\alpha{...}`）の後も、残りの引数は分数の書体にする。
+        XCTAssertEqual(normalized("\\frac1{\\underbrace{b}_c}", display: true),
+                       "\\frac1{{{\\textstyle\\underline{b}} \\atop {\\scriptstyle c}}}")
+        XCTAssertEqual(normalized("\\frac\\alpha{\\underbrace{b}_c}", display: true),
+                       "\\frac\\alpha{{{\\textstyle\\underline{b}} \\atop {\\scriptstyle c}}}")
+        XCTAssertEqual(normalized("\\frac{a}\\underbrace{b}_c", display: true),
+                       "\\frac{a}{{\\textstyle\\underline{b}} \\atop {\\scriptstyle c}}")
+        XCTAssertEqual(normalized("\\frac12{\\underbrace{b}_c}", display: true),
+                       "\\frac12{{{\\displaystyle\\underline{b}} \\atop {\\scriptstyle c}}}")
+        builds("\\frac1{\\underbrace{b}_c} + \\frac{a}\\underbrace{b}_c")
         XCTAssertEqual(normalized("\\frac12 \\underbrace{c}_d", display: false),
                        "\\frac12 {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
         XCTAssertEqual(normalized("\\sqrt{\\underbrace{c}_d}", display: false),
