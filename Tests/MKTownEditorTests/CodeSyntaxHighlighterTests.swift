@@ -131,7 +131,7 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(values.contains { $0 == ("k\\:x", .attribute) })
         // 継続行と値は色分けしない。
         XCTAssertFalse(values.contains { $0.0 == "b" || $0.0 == "true" || $0.0 == "8080" })
-        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "ini")?.name, "toml")
+        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "ini")?.name, "ini")
     }
 
     func testMySQLHashCommentsAreDialectSpecific() {
@@ -191,6 +191,63 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(values.contains { $0 == ("true", .keyword) })
         // 素の JSON は従来どおり。
         XCTAssertFalse(tokens("{count: 1}", "json").contains { $0.1 == .attribute })
+    }
+
+    func testTOMLHashCommentsWithoutWhitespaceButINIKeepsValues() {
+        XCTAssertTrue(tokens("key=1#comment", "toml").contains { $0 == ("#comment", .comment) })
+        XCTAssertFalse(tokens("key=a;b", "toml").contains { $0.1 == .comment })
+        XCTAssertFalse(tokens("key=a#b;c", "ini").contains { $0.1 == .comment })
+        XCTAssertTrue(tokens("; note\nkey=1 ; tail", "ini").contains { $0 == ("; tail", .comment) })
+        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "cfg")?.name, "ini")
+    }
+
+    func testRawAndVerbatimStringsIgnoreBackslashEscapes() {
+        let dart = tokens("var s = r\"C:\\\"; return 1;\nvar t = r'''a\\''';", "dart")
+        XCTAssertTrue(dart.contains { $0 == ("r\"C:\\\"", .string) })
+        XCTAssertTrue(dart.contains { $0 == ("return", .keyword) })
+        XCTAssertTrue(dart.contains { $0 == ("r'''a\\'''", .string) })
+        // 通常の文字列は従来どおりエスケープを扱う。
+        XCTAssertTrue(tokens("var s = \"a\\\" b\";", "dart").contains { $0 == ("\"a\\\" b\"", .string) })
+
+        let csharp = tokens("var p = @\"C:\\\"; return $@\"a \"\"q\"\" {x}\"; var e = \"\\\"\";", "cs")
+        XCTAssertTrue(csharp.contains { $0 == ("@\"C:\\\"", .string) })
+        XCTAssertTrue(csharp.contains { $0 == ("return", .keyword) })
+        XCTAssertTrue(csharp.contains { $0 == ("$@\"a \"\"q\"\" {x}\"", .string) })
+        XCTAssertTrue(csharp.contains { $0 == ("\"\\\"\"", .string) })
+    }
+
+    func testYAMLBlockScalarBodiesAreNotTokenized() {
+        let yaml = """
+            message: |
+              true # literal
+              key: value
+            folded: >-
+              1 # text
+
+              - item: x
+            items:
+              - |
+                null
+            after: true # real
+            """
+        let values = tokens(yaml, "yaml")
+        XCTAssertTrue(values.contains { $0 == ("message", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("folded", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("after", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("true", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("# real", .comment) })
+        XCTAssertEqual(values.filter { $0.1 == .keyword }.count, 1)
+        XCTAssertFalse(values.contains { $0.0 == "# literal" || $0.0 == "# text" || $0.0 == "key" || $0.0 == "1" })
+        XCTAssertFalse(values.contains { $0.0 == "item" || $0.0 == "null" })
+    }
+
+    func testSQLQuotedIdentifiersAreNotTokenized() {
+        let values = tokens("SELECT \"select\" FROM \"from\" WHERE a = 'x'", "sql")
+        XCTAssertEqual(values.filter { $0.1 == .keyword }.map(\.0), ["SELECT", "FROM", "WHERE"])
+        XCTAssertFalse(values.contains { $0.0.contains("\"") })
+        let mysql = tokens("SELECT `select`, \"text\" FROM t", "mysql")
+        XCTAssertEqual(mysql.filter { $0.1 == .keyword }.map(\.0), ["SELECT", "FROM"])
+        XCTAssertTrue(mysql.contains { $0 == ("\"text\"", .string) })
     }
 
     func testSQLKeywordsIgnoreCase() {

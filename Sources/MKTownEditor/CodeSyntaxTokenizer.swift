@@ -39,12 +39,16 @@ struct CodeSyntaxLanguage: Sendable {
         let close: [UInt16]
         var escapes = true
         var multiline = true
+        /// `nil` は SQL の `"name"` のような引用符付き識別子。中を色分けせず、字句も付けない。
+        var token: CodeSyntaxToken?
 
-        init(_ open: String, _ close: String? = nil, escapes: Bool = true, multiline: Bool = true) {
+        init(_ open: String, _ close: String? = nil, escapes: Bool = true, multiline: Bool = true,
+             token: CodeSyntaxToken? = .string) {
             self.open = Array(open.utf16)
             self.close = Array((close ?? open).utf16)
             self.escapes = escapes
             self.multiline = multiline
+            self.token = token
         }
     }
 
@@ -65,6 +69,10 @@ struct CodeSyntaxLanguage: Sendable {
     var charLiterals = false
     /// 直後の引用符と合わせて文字列とする接頭辞（Python の `f"..."` など）。
     var stringPrefixes: Set<String> = []
+    /// 直後の引用符と合わせて、バックスラッシュをエスケープとしない文字列にする接頭辞（Dart の `r"..."`）。
+    var rawStringPrefixes: Set<String> = []
+    /// C# の逐語的文字列 `@"..."`（`$@"..."` を含む）。`""` が引用符を表す。
+    var verbatimStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
     var prefixedIdentifiers: [UInt16: CodeSyntaxToken] = [:]
     /// 行頭の `#include` などのプリプロセッサ指令。
@@ -160,6 +168,9 @@ private struct CodeSyntaxScanner {
     var result: [CodeSyntaxTokenRange] = []
     private var index = 0
     private var braceDepth = 0
+    private var lineStartOffset = 0
+    /// YAML のブロックスカラー（`|`・`>`）を始めた行の字下げ。これより深い行は本文として色分けしない。
+    private var yamlBlockIndent: Int?
 
     init(units: [UInt16], language: CodeSyntaxLanguage) {
         self.units = units
@@ -268,6 +279,7 @@ private struct CodeSyntaxScanner {
             if value == Unit.newline {
                 atLineStart = true
                 index += 1
+                lineStartOffset = index
                 continue
             }
             if Self.isWhitespace(value) {
@@ -276,13 +288,22 @@ private struct CodeSyntaxScanner {
             }
             let lineStart = atLineStart
             atLineStart = false
+            if lineStart, language.lineKeys == .yaml {
+                let indent = index - lineStartOffset
+                let end = lineEnd(from: index)
+                if let blockIndent = yamlBlockIndent, indent > blockIndent {
+                    index = end
+                    continue
+                }
+                yamlBlockIndent = startsYAMLBlockScalar(from: index, to: end) ? indent : nil
+            }
             if lineStart, language.lineKeys != .none, scanLineKey() { continue }
             if lineStart, language.preprocessor, value == Unit.hash {
                 scanPreprocessor()
                 continue
             }
             if scanMarker() || scanLongBracket() || scanBlockComment() || scanLineComment()
-                || scanSwiftRawString() || scanString() { continue }
+                || scanSwiftRawString() || scanVerbatimString() || scanString() { continue }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
                 scanNumber()
@@ -398,7 +419,9 @@ private struct CodeSyntaxScanner {
         return true
     }
 
-    private mutating func scanString(from prefixStart: Int? = nil) -> Bool {
+    /// `raw` はバックスラッシュをエスケープとしない。`doubledQuotes` は閉じ記号を2つ重ねると文字として扱う。
+    private mutating func scanString(from prefixStart: Int? = nil, raw: Bool = false,
+                                     doubledQuotes: Bool = false) -> Bool {
         if language.charLiterals, units[index] == Unit.apostrophe {
             return scanCharLiteral()
         }
@@ -406,20 +429,37 @@ private struct CodeSyntaxScanner {
         let start = prefixStart ?? index
         index += delimiter.open.count
         while index < count {
-            if delimiter.escapes && units[index] == Unit.backslash {
+            if delimiter.escapes && !raw && units[index] == Unit.backslash {
                 index = min(count, index + 2)
                 continue
             }
             if matches(delimiter.close, at: index) {
                 index += delimiter.close.count
+                if doubledQuotes && matches(delimiter.close, at: index) {
+                    index += delimiter.close.count
+                    continue
+                }
                 break
             }
-            if !delimiter.multiline && units[index] == Unit.newline { break }
+            // C# の逐語的文字列は改行を含められる。
+            if !delimiter.multiline && !doubledQuotes && units[index] == Unit.newline { break }
             index += 1
         }
+        guard let token = delimiter.token else { return true }
         let isKey = language.stringKeys && unit(nextNonSpace(from: index)) == Unit.colon
-        emit(start, index, isKey ? .attribute : .string)
+        emit(start, index, isKey ? .attribute : token)
         return true
+    }
+
+    private mutating func scanVerbatimString() -> Bool {
+        guard language.verbatimStrings else { return false }
+        let start = index
+        var quote = index
+        // `@"`、`$@"`、`@$"`、`$$@"` など
+        while let value = unit(quote), value == Unit.at || value == Unit.dollar, quote - start < 4 { quote += 1 }
+        guard quote > start, unit(quote) == Unit.quote, units[start..<quote].contains(Unit.at) else { return false }
+        index = quote
+        return scanString(from: start, raw: true, doubledQuotes: true)
     }
 
     private mutating func scanCharLiteral() -> Bool {
@@ -535,9 +575,9 @@ private struct CodeSyntaxScanner {
         default: break
         }
         if let next = unit(end), next == Unit.quote || next == Unit.apostrophe,
-           language.stringPrefixes.contains(String(decoding: units[start..<end], as: UTF16.self)),
+           language.stringPrefixes.contains(prefix) || language.rawStringPrefixes.contains(prefix),
            language.strings.contains(where: { matches($0.open, at: end) }) {
-            _ = scanString(from: start)
+            _ = scanString(from: start, raw: language.rawStringPrefixes.contains(prefix))
             return
         }
         let text = word(start, end)
@@ -691,6 +731,19 @@ private struct CodeSyntaxScanner {
             cursor -= 1
         }
         return backslashes % 2 == 1
+    }
+
+    /// `key: |`、`- >-`、`|2` のようにブロックスカラーを始める行か。行末のコメントは除いて判定する。
+    private func startsYAMLBlockScalar(from start: Int, to end: Int) -> Bool {
+        var text = String(decoding: units[start..<end], as: UTF16.self)
+        if let comment = text.range(of: " #") { text = String(text[..<comment.lowerBound]) }
+        let parts = text.split(whereSeparator: { $0 == " " || $0 == "\t" })
+        guard let indicator = parts.last, let first = indicator.first, first == "|" || first == ">",
+              indicator.dropFirst().count <= 2,
+              indicator.dropFirst().allSatisfy({ $0 == "+" || $0 == "-" || $0.isNumber }) else { return false }
+        guard parts.count > 1 else { return true }
+        let previous = parts[parts.count - 2]
+        return previous == "-" || previous.hasSuffix(":")
     }
 
     private mutating func scanYAMLKey() -> Bool {
