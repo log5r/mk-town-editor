@@ -359,6 +359,12 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
             let more = tokens("const f = async function() {} / b / g\nasync function h() {} /e/.test(x)\nlabel: {} /[//]/.test(x); return 1\nswitch (v) { case 1: {} /c/.test(x); default: {} /d/.test(x) }\nconst o = {a: {}} / i / j\nconst t = c ? {} : {} / k / l", name)
             XCTAssertEqual(more.filter { $0.1 == .string }.map(\.0), ["/e/", "/[//]/", "/c/", "/d/"], name)
             XCTAssertTrue(more.contains { $0 == ("return", .keyword) }, name)
+            // 変数名の `of`、非 null アサーション `x!` の後ろは除算。`for (x of /re/)` と前置の `!` の後ろは正規表現。
+            let contextual = tokens("const of = 12; const q = of / b / g\nconst r = x! / c / g\nfor (const m of /[ab]/.exec(s)) {}\nconst n = !/d/.test(s)", name)
+            XCTAssertEqual(contextual.filter { $0.1 == .string }.map(\.0), ["/[ab]/", "/d/"], name)
+            // `break`・`continue` は改行で文が終わる。
+            let jumps = tokens("while (x) { break\n/[//]/.test(x) }\nouter: for (;;) { continue outer\n/e/.test(x) }\ny = a\n/ 2 / 3", name)
+            XCTAssertEqual(jumps.filter { $0.1 == .string }.map(\.0), ["/[//]/", "/e/"], name)
             // `for await (…)` の後ろも文の始まり。
             XCTAssertTrue(tokens("async function f(xs) { for await (const x of xs) /[//]/.test(x) }", name)
                 .contains { $0 == ("/[//]/", .string) }, name)
@@ -375,8 +381,11 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(tokens("my $y = $x /2; # note", "perl").contains { $0 == ("# note", .comment) })
         // Ruby と Perl の正規表現の中の `#` はコメントではない。
         // 代入済みのローカル変数、ブロック・メソッドの引数の後ろは除算。
-        let locals = tokens("a = 12; x = a /2/3\nitems.each { |n| y = n /2/1 }\ndef f(k) k /2/1 end\nputs /a#b/", "ruby")
+        let locals = tokens("a = 12; x = a /2/3\nitems.each { |n| y = n /2/1 }\ndef f(k) k /2/1 end\ndef g k; k /2/1 end\nputs /a#b/", "ruby")
         XCTAssertEqual(locals.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
+        // メソッドの中のローカル変数は、外側の同じ名前のメソッド呼び出しに影響しない。
+        let scopes = tokens("def f\n  puts = 1\n  if puts > 0\n    x = puts /2/1\n  end\n  y = 3 if puts\nend\nputs /a#b/\nclass C\n  def g; puts = 2; end\nend\nputs /c#d/", "ruby")
+        XCTAssertEqual(scopes.filter { $0.1 == .string }.map(\.0), ["/a#b/", "/c#d/"])
         // Ruby は改行で文が終わる。括弧の中や行末の `\` は継続。
         let lines = tokens("x = 1\n/a#b/.match(s)\ny = (2\n/ 3)\nz = 4 \\\n/ 5 # note", "ruby")
         XCTAssertEqual(lines.filter { $0.1 == .string }.map(\.0), ["/a#b/"])

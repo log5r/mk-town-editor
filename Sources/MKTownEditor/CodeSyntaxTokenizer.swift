@@ -215,6 +215,10 @@ private struct CodeSyntaxScanner {
     private var lastIdentifier: String?
     private var collectingParameters: ParameterList?
     private var definition: DefinitionState?
+    /// 開いている Ruby のブロック。`def` などのスコープは外側のローカル変数を持つ。
+    private var rubyBlocks: [Set<String>?] = []
+    private var loopAwaitingDo = false
+    private var jumpStatement: JumpStatement?
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -350,6 +354,18 @@ private struct CodeSyntaxScanner {
                 if language.newlineEndsStatements, !regexAllowed, parenthesisControlHeaders.isEmpty,
                    unit(index - 1) != Unit.backslash {
                     regexAllowed = true
+                    // 後置の `if` と区別するため、次の行の始まりを文の始まりとする。
+                    previousToken = .punctuation(Unit.semicolon)
+                }
+                if language.newlineEndsStatements {
+                    loopAwaitingDo = false
+                    if collectingParameters == .line { collectingParameters = nil }
+                    if definition == .parameters { definition = nil }
+                }
+                if jumpStatement != nil {
+                    // `break\n/re/` は改行で文が終わる。
+                    regexAllowed = true
+                    jumpStatement = nil
                 }
                 atLineStart = true
                 index += 1
@@ -414,6 +430,12 @@ private struct CodeSyntaxScanner {
                 index += 2
                 continue
             }
+            if language.regexLiterals, value == Unit.bang, previousToken == .value,
+               unit(index - 1).map(Self.isWhitespace) == false, unit(index + 1) != Unit.equal {
+                // TypeScript の非 null アサーション `x!` は値のまま。前置の `!x` は式の途中。
+                index += 1
+                continue
+            }
             notePunctuation(value)
             index += 1
         }
@@ -466,12 +488,15 @@ private struct CodeSyntaxScanner {
             collectingParameters = .parentheses
         } else if value == 0x29, collectingParameters == .parentheses {
             collectingParameters = nil
+        } else if value == Unit.semicolon, collectingParameters == .line {
+            collectingParameters = nil
         }
         if value != Unit.dot { definition = nil }
     }
 
     private mutating func noteValue() {
         lastIdentifier = nil
+        jumpStatement = nil
         regexAllowed = false
         pendingControl = false
         previousToken = .value
@@ -483,6 +508,7 @@ private struct CodeSyntaxScanner {
     private mutating func notePunctuation(_ value: UInt16) {
         if language.commandRegexArguments { noteLocals(value) }
         lastIdentifier = nil
+        jumpStatement = nil
         switch value {
         case 0x28: // (
             parenthesisControlHeaders.append(pendingControl)
@@ -679,7 +705,33 @@ private struct CodeSyntaxScanner {
     }
 
     /// Ruby のメソッド定義とブロックの引数を集める範囲。
-    private enum ParameterList { case parentheses, pipes }
+    private enum ParameterList { case parentheses, pipes, line }
+    private enum JumpStatement { case keyword, label }
+
+    private static let rubyScopeOpeners: Set<String> = ["def", "class", "module"]
+    private static let rubyBlockOpeners: Set<String> = ["do", "begin", "case"]
+    private static let rubyStatementOpeners: Set<String> = ["if", "unless", "while", "until", "for"]
+
+    /// Ruby の `def`・`class`・`module` ごとにローカル変数を分け、`end` で外側に戻す。
+    /// `x = 1 if y` のような後置の `if` は、文の始まりにないので数えない。
+    private mutating func noteRubyBlock(_ name: String) {
+        if name == "end" {
+            if let scope = rubyBlocks.popLast(), let outer = scope { knownLocals = outer }
+        } else if Self.rubyScopeOpeners.contains(name), atStatementStart {
+            rubyBlocks.append(knownLocals)
+            knownLocals = []
+        } else if Self.rubyBlockOpeners.contains(name) {
+            // `while x do` の `do` は `while` の一部。
+            if name == "do", loopAwaitingDo {
+                loopAwaitingDo = false
+            } else {
+                rubyBlocks.append(nil)
+            }
+        } else if Self.rubyStatementOpeners.contains(name), atStatementStart {
+            rubyBlocks.append(nil)
+            loopAwaitingDo = name == "while" || name == "until" || name == "for"
+        }
+    }
     private enum DefinitionState { case name, parameters }
 
     private mutating func scanBlockComment() -> Bool {
@@ -886,13 +938,23 @@ private struct CodeSyntaxScanner {
         // `obj.in` や `a?.if` のようなメンバー名は値。
         let isMember = previousToken == .punctuation(Unit.dot)
         let name = String(decoding: units[start..<end], as: UTF16.self)
+        // `of` は `for (x of xs)` の中だけ式を導く語。`const of = 1; of / 2` の `of` は変数。
         let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+            && (name != "of" || parenthesisControlHeaders.last == true)
         if language.commandRegexArguments {
+            if definition == .parameters {
+                // 括弧のない引数 `def f k, l`
+                collectingParameters = .line
+            }
             if collectingParameters != nil { knownLocals.insert(name) }
+            if language.newlineEndsStatements, !isMember { noteRubyBlock(name) }
             // `def name(a, b)` と `def self.name(a)` の引数
             definition = name == "def" ? .name : definition == .name && name != "self" ? .parameters
                 : definition == .name ? .name : nil
         }
+        // `break`・`continue`（ラベル付きを含む）は改行で文が終わる。
+        jumpStatement = isMember ? nil : ["break", "continue"].contains(name) ? .keyword
+            : jumpStatement == .keyword && !Self.regexPrecedingWords.contains(name) ? .label : nil
         lastIdentifier = isMember ? nil : name
         let inExpression = regexAllowed && !atStatementStart
         if !isMember, Self.functionKeywords.contains(name) {
