@@ -170,18 +170,44 @@ enum MarkdownMathCompatibility {
 
     // MARK: - コマンド
 
+    /// 分子・分母を持つコマンド。引数の書体は一段小さくなる。
+    private static let fractionCommands: Set<String> = ["frac", "tfrac", "binom", "tbinom"]
+
     /// 別名を置き換え、上下に積む命令を `\atop` で組み立てる。
     /// `style` は現在の書体サイズ命令で、積む本体の大きさを元の式と揃えるために使う。
+    /// 添字と分数の引数では、TeXの規則に従って一段小さい書体を現在の書体とみなす。
     private static func rewriteCommands(_ chars: ArraySlice<Character>, style: String) -> String {
         var output = ""
         var styles = [style]
+        /// 直前に `_` か `^` があり、次のトークンが添字になる。
+        var scriptNext = false
+        /// `\frac` などの後に残っている引数の数。波括弧に入る間は退避し、出るときに戻す。
+        var pendingFractionArguments = 0
+        var savedFractionArguments: [Int] = []
+        func effectiveStyle() -> String {
+            let current = styles[styles.count - 1]
+            if scriptNext { return scriptStyle(of: current) }
+            if pendingFractionArguments > 0 { return fractionStyle(of: current) }
+            return current
+        }
         var index = chars.startIndex
         while index < chars.endIndex {
             let char = chars[index]
             if char == "{" {
-                styles.append(styles[styles.count - 1])
+                styles.append(effectiveStyle())
+                savedFractionArguments.append(max(pendingFractionArguments - 1, 0))
+                pendingFractionArguments = 0
+                scriptNext = false
             } else if char == "}" {
-                if styles.count > 1 { styles.removeLast() }
+                if styles.count > 1 {
+                    styles.removeLast()
+                    pendingFractionArguments = savedFractionArguments.removeLast()
+                }
+            } else if char == "_" || char == "^" {
+                scriptNext = true
+            } else if !char.isWhitespace && char != "\\" {
+                scriptNext = false
+                pendingFractionArguments = 0
             }
             guard char == "\\" else {
                 output.append(char)
@@ -191,13 +217,16 @@ enum MarkdownMathCompatibility {
             let length = commandLength(at: index, in: chars)
             let name = String(chars[(index + 1)..<(index + 1 + length)])
             let next = index + 1 + length
+            let style = effectiveStyle()
+            scriptNext = false
+            pendingFractionArguments = fractionCommands.contains(name) ? 2 : 0
             if styleCommands.contains(name) {
                 styles[styles.count - 1] = "\\" + name
             } else if let replacement = aliases[name] {
                 output += replacement
                 index = next
                 continue
-            } else if let stacked = stack(command: name, from: next, in: chars, style: styles[styles.count - 1]) {
+            } else if let stacked = stack(command: name, from: next, in: chars, style: style) {
                 output += stacked.text
                 index = stacked.end
                 continue
@@ -208,10 +237,25 @@ enum MarkdownMathCompatibility {
         return output
     }
 
+    /// 添字に入ったときの書体。
+    private static func scriptStyle(of style: String) -> String {
+        style == "\\scriptstyle" || style == "\\scriptscriptstyle" ? "\\scriptscriptstyle" : "\\scriptstyle"
+    }
+
+    /// 分子・分母に入ったときの書体。
+    private static func fractionStyle(of style: String) -> String {
+        switch style {
+        case "\\displaystyle": return "\\textstyle"
+        case "\\textstyle": return "\\scriptstyle"
+        default: return "\\scriptscriptstyle"
+        }
+    }
+
     /// `\underbrace{式}_{注釈}`、`\overbrace{式}^{注釈}`、`\underset{下}{本体}`、`\overset{上}{本体}` を
     /// `\atop` による縦積みに置き換える。SwiftMathは括弧を横に伸ばせないので、括弧は下線・上線で代用する。
     private static func stack(command: String, from index: Int, in chars: ArraySlice<Character>, style: String)
         -> (text: String, end: Int)? {
+        let small = scriptStyle(of: style)
         switch command {
         case "underbrace", "overbrace":
             guard let body = argument(from: index, in: chars) else { return nil }
@@ -225,14 +269,14 @@ enum MarkdownMathCompatibility {
                 return (lined, body.end)
             }
             let main = style + lined
-            let annotation = "\\scriptstyle " + rewriteCommands(label.content, style: "\\scriptstyle")
+            let annotation = "\(small) " + rewriteCommands(label.content, style: small)
             return (command == "underbrace" ? "{{\(main)} \\atop {\(annotation)}}"
                                             : "{{\(annotation)} \\atop {\(main)}}", label.end)
         case "underset", "overset":
             guard let annotation = argument(from: index, in: chars),
                   let body = argument(from: annotation.end, in: chars) else { return nil }
             let main = "\(style) " + rewriteCommands(body.content, style: style)
-            let label = "\\scriptstyle " + rewriteCommands(annotation.content, style: "\\scriptstyle")
+            let label = "\(small) " + rewriteCommands(annotation.content, style: small)
             return (command == "underset" ? "{{\(main)} \\atop {\(label)}}"
                                           : "{{\(label)} \\atop {\(main)}}", body.end)
         default:

@@ -98,6 +98,30 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
                        "\\displaystyle {{\\displaystyle\\underline{x^2}} \\atop {\\scriptstyle n}} = 2")
         XCTAssertEqual(normalized("{\\displaystyle a} \\underbrace{x}_{n}", display: false),
                        "{\\displaystyle a} {{\\textstyle\\underline{x}} \\atop {\\scriptstyle n}}")
+        // 添字と分数の引数では一段小さい書体を使い、周囲より大きくならないようにする。
+        XCTAssertEqual(normalized("x_{\\underbrace{a}_b}", display: false),
+                       "x_{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
+        XCTAssertEqual(normalized("x^{\\overset{a}{b}}", display: true),
+                       "x^{{{\\scriptscriptstyle a} \\atop {\\scriptstyle b}}}")
+        XCTAssertEqual(normalized("x_\\underbrace{a}_b", display: false),
+                       "x_{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}")
+        XCTAssertEqual(normalized("\\frac{\\underbrace{a}_b}{c}", display: true),
+                       "\\frac{{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}}{c}")
+        XCTAssertEqual(normalized("\\frac{a}{\\underbrace{b}_c}", display: false),
+                       "\\frac{a}{{{\\scriptstyle\\underline{b}} \\atop {\\scriptscriptstyle c}}}")
+        XCTAssertEqual(normalized("x_{a}^{\\underbrace{b}_c} \\underbrace{d}_e", display: false),
+                       "x_{a}^{{{\\scriptstyle\\underline{b}} \\atop {\\scriptscriptstyle c}}} {{\\textstyle\\underline{d}} \\atop {\\scriptstyle e}}")
+        // 分数の引数が終わった後や、添字でない波括弧の中は元の書体に戻る。
+        XCTAssertEqual(normalized("\\frac{a}{b} \\underbrace{c}_d", display: true),
+                       "\\frac{a}{b} {{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        XCTAssertEqual(normalized("\\frac12 \\underbrace{c}_d", display: false),
+                       "\\frac12 {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        XCTAssertEqual(normalized("\\sqrt{\\underbrace{c}_d}", display: false),
+                       "\\sqrt{{{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}}")
+        for latex in ["x_{\\underbrace{a}_b}", "\\frac{\\underbrace{a}_{b}}{c} + x^{\\overset{a}{b}}"] {
+            builds(latex)
+            builds(latex, display: false)
+        }
         XCTAssertEqual(normalized("\\underbrace{x^2}", display: false), "\\underline{x^2}")
         XCTAssertEqual(normalized("\\underbrace{x^2}^{a}", display: false), "\\underline{x^2}^{a}")
         XCTAssertEqual(normalized("\\overbrace{x+y}^{\\text{sum}}"),
