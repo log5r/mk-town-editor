@@ -27,7 +27,8 @@ enum CodeSyntaxLanguages {
             "powershell": ["powershell", "ps1", "psm1", "pwsh", "ps"],
             "sql": ["sql", "postgresql", "postgres", "psql", "sqlite", "plsql", "tsql"],
             "mysql": ["mysql", "mariadb"],
-            "json": ["json", "jsonc", "json5", "geojson"],
+            "json": ["json", "jsonc", "geojson"],
+            "json5": ["json5"],
             "yaml": ["yaml", "yml"],
             "toml": ["toml", "ini", "cfg", "editorconfig"],
             "properties": ["properties"],
@@ -105,7 +106,23 @@ enum CodeSyntaxLanguages {
     /// MySQL は `#` もコメントにする（PostgreSQL では演算子のため既定の SQL には含めない）。
     private static let mysql = CodeSyntaxLanguage("mysql", basedOn: sql) {
         $0.lineComments = units("--", "#")
+        $0.dashComments = .whitespaceAfter
         $0.strings = [Delimiter("'"), Delimiter("\"")]
+    }
+
+    private static let json = CodeSyntaxLanguage("json") {
+        $0.keywords = ["true", "false", "null"]
+        $0.lineComments = cStyleComments.line
+        $0.blockComments = cStyleComments.block
+        $0.strings = [Delimiter("\"", multiline: false)]
+        $0.stringKeys = true
+    }
+
+    /// JSON5 は単一引用符の文字列と、引用符のないキーを書ける。
+    private static let json5 = CodeSyntaxLanguage("json5", basedOn: json) {
+        $0.keywords.formUnion(["Infinity", "NaN"])
+        $0.strings = [Delimiter("\""), Delimiter("'")]
+        $0.identifierKeys = true
     }
 
     private static let css = CodeSyntaxLanguage("css") {
@@ -150,7 +167,8 @@ enum CodeSyntaxLanguages {
             $0.blockComments = cStyleComments.block
             $0.strings = [Delimiter("\"", multiline: false)]
             $0.charLiterals = true
-            $0.stringPrefixes = ["L", "u", "U", "u8", "R", "LR", "uR", "UR", "u8R"]
+            $0.stringPrefixes = ["L", "u", "U", "u8"]
+            $0.rawStrings = .cpp
             $0.preprocessor = true
         },
         CodeSyntaxLanguage("csharp") {
@@ -233,6 +251,7 @@ enum CodeSyntaxLanguages {
             $0.blockComments = cStyleComments.block
             $0.nestedBlockComments = true
             $0.strings = [Delimiter("\"\"\""), Delimiter("\"", multiline: false)]
+            $0.rawStrings = .swift
             $0.prefixedIdentifiers = [at: .attribute, hash: .attribute]
         },
         CodeSyntaxLanguage("objectivec") {
@@ -275,7 +294,8 @@ enum CodeSyntaxLanguages {
             $0.nestedBlockComments = true
             $0.strings = [Delimiter("\"")]
             $0.charLiterals = true
-            $0.stringPrefixes = ["b", "r", "br", "c"]
+            $0.stringPrefixes = ["b", "c"]
+            $0.rawStrings = .rust
             $0.bracketAttributes = true
             $0.macroBang = true
         },
@@ -366,8 +386,8 @@ enum CodeSyntaxLanguages {
                 true until while
                 """)
             $0.lineComments = units("--")
-            $0.blockComments = [Delimiter("--[[", "]]")]
-            $0.strings = [Delimiter("[[", "]]", escapes: false)] + quotedStrings
+            $0.longBrackets = true
+            $0.strings = quotedStrings
         },
         CodeSyntaxLanguage("perl") {
             $0.commentsNeedWordBoundary = true
@@ -405,13 +425,8 @@ enum CodeSyntaxLanguages {
         },
         sql,
         mysql,
-        CodeSyntaxLanguage("json") {
-            $0.keywords = ["true", "false", "null"]
-            $0.lineComments = cStyleComments.line
-            $0.blockComments = cStyleComments.block
-            $0.strings = [Delimiter("\"", multiline: false)]
-            $0.stringKeys = true
-        },
+        json,
+        json5,
         CodeSyntaxLanguage("yaml") {
             $0.commentsNeedWordBoundary = true
             $0.keywords = ["true", "false", "null", "yes", "no", "on", "off", "~"]
@@ -456,6 +471,7 @@ enum CodeSyntaxLanguages {
                 """)
             $0.capitalizedTypes = true
             $0.lineComments = units("--")
+            $0.dashComments = .notOperator
             $0.blockComments = [Delimiter("{-", "-}")]
             $0.nestedBlockComments = true
             $0.strings = [Delimiter("\"", multiline: false)]

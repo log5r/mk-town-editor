@@ -15,6 +15,24 @@ struct CodeSyntaxLanguage: Sendable {
     enum Mode: Sendable { case code, markup, diff }
     /// 行頭のキーを属性として扱う形式。
     enum LineKeys: Sendable { case none, yaml, ini, properties }
+    /// 区切りを選べる生文字列。中の引用符で文字列を終えない。
+    enum RawStrings: Sendable {
+        case none
+        /// `r"..."`、`r#"..."#`、`br##"..."##`
+        case rust
+        /// `#"..."#`、`##"""..."""##`
+        case swift
+        /// `R"(...)"`、`R"tag(...)tag"`
+        case cpp
+    }
+    /// `--` の行コメントが成り立つ条件。
+    enum DashComments: Sendable {
+        case always
+        /// MySQL：`--` の直後に空白か制御文字が必要（`1--2` は式）。
+        case whitespaceAfter
+        /// Haskell：`-->` のように記号が続く場合は演算子。
+        case notOperator
+    }
 
     struct Delimiter: Sendable {
         let open: [UInt16]
@@ -61,6 +79,12 @@ struct CodeSyntaxLanguage: Sendable {
     /// `#` と `;` の行コメントを単語の先頭でだけ認める（シェルの `$#` や `a#b` はコメントではない）。
     /// Python などは識別子の直後でもコメントになるため、シェル系の言語だけで有効にする。
     var commentsNeedWordBoundary = false
+    var dashComments = DashComments.always
+    var rawStrings = RawStrings.none
+    /// Lua の `[[...]]`、`[==[...]==]` と、`--` を前に付けた長いコメント。
+    var longBrackets = false
+    /// JSON5 のように、`:` が続く識別子をキーとして扱う。
+    var identifierKeys = false
     var lineKeys = LineKeys.none
     /// JSON のように、`:` が続く文字列をキーとして扱う。
     var stringKeys = false
@@ -209,8 +233,21 @@ private struct CodeSyntaxScanner {
         return cursor
     }
 
+    private static let haskellSymbols = Set("!#$%&*+./<=>?@\\^|~:".utf16)
+
     /// `commentsNeedWordBoundary` の言語では、`#` や `;` の行コメントは識別子や `$` の直後では始まらない。
     private func commentBoundary(at offset: Int, marker: [UInt16]) -> Bool {
+        if marker == [Unit.minus, Unit.minus] {
+            switch language.dashComments {
+            case .always: return true
+            case .whitespaceAfter:
+                return unit(offset + 2).map { $0 <= Unit.space } ?? true
+            case .notOperator:
+                var cursor = offset
+                while unit(cursor) == Unit.minus { cursor += 1 }
+                return unit(cursor).map { !Self.haskellSymbols.contains($0) } ?? true
+            }
+        }
         if language.css, marker.first == Unit.slash {
             // `url(http://…)` の `//` はコメントではない。
             return unit(offset - 1) != Unit.colon
@@ -244,7 +281,8 @@ private struct CodeSyntaxScanner {
                 scanPreprocessor()
                 continue
             }
-            if scanMarker() || scanBlockComment() || scanLineComment() || scanString() { continue }
+            if scanMarker() || scanLongBracket() || scanBlockComment() || scanLineComment()
+                || scanSwiftRawString() || scanString() { continue }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
                 scanNumber()
@@ -267,6 +305,63 @@ private struct CodeSyntaxScanner {
         guard let marker = language.markers.first(where: { matches($0.text, at: index) }) else { return false }
         emit(index, index + marker.text.count, marker.token)
         index += marker.text.count
+        return true
+    }
+
+    /// Lua の長い括弧。`--` が前にあればコメント、なければ文字列。
+    private mutating func scanLongBracket() -> Bool {
+        guard language.longBrackets else { return false }
+        let isComment = units[index] == Unit.minus && unit(index + 1) == Unit.minus
+        var cursor = isComment ? index + 2 : index
+        guard unit(cursor) == Unit.openBracket else { return false }
+        cursor += 1
+        var level = 0
+        while unit(cursor) == Unit.equal {
+            level += 1
+            cursor += 1
+        }
+        guard unit(cursor) == Unit.openBracket else { return false }
+        let close = [Unit.closeBracket] + Array(repeating: Unit.equal, count: level) + [Unit.closeBracket]
+        let start = index
+        index = cursor + 1
+        while index < count && !matches(close, at: index) { index += 1 }
+        index = min(count, index + close.count)
+        emit(start, index, isComment ? .comment : .string)
+        return true
+    }
+
+    /// `#` の数で区切りを選ぶ生文字列。`hashStart` から `#` を数え、直後の `"` から同じ数の `#` が続く `"` までを文字列にする。
+    private mutating func scanHashDelimitedString(from start: Int, hashStart: Int) -> Bool {
+        var quote = hashStart
+        while unit(quote) == Unit.hash { quote += 1 }
+        guard unit(quote) == Unit.quote else { return false }
+        let close = [Unit.quote] + Array(repeating: Unit.hash, count: quote - hashStart)
+        index = quote + 1
+        while index < count && !matches(close, at: index) { index += 1 }
+        index = min(count, index + close.count)
+        emit(start, index, .string)
+        return true
+    }
+
+    private mutating func scanSwiftRawString() -> Bool {
+        guard language.rawStrings == .swift, units[index] == Unit.hash else { return false }
+        return scanHashDelimitedString(from: index, hashStart: index)
+    }
+
+    /// C++ の `R"tag(...)tag"`。区切りは最大16文字。
+    private mutating func scanCppRawString(from start: Int, quote: Int) -> Bool {
+        var paren = quote + 1
+        while paren < min(count, quote + 18), units[paren] != 0x28 {
+            let value = units[paren]
+            if value == Unit.space || value == Unit.backslash || value == 0x29 || value == Unit.newline { return false }
+            paren += 1
+        }
+        guard unit(paren) == 0x28 else { return false }
+        let close = [0x29] + Array(units[(quote + 1)..<paren]) + [Unit.quote]
+        index = paren + 1
+        while index < count && !matches(close, at: index) { index += 1 }
+        index = min(count, index + close.count)
+        emit(start, index, .string)
         return true
     }
 
@@ -429,6 +524,16 @@ private struct CodeSyntaxScanner {
         let start = index
         let end = identifierEnd(from: index)
         index = end
+        let prefix = String(decoding: units[start..<end], as: UTF16.self)
+        switch language.rawStrings {
+        case .rust where ["r", "br", "cr"].contains(prefix) && (unit(end) == Unit.hash || unit(end) == Unit.quote):
+            if scanHashDelimitedString(from: start, hashStart: end) { return }
+            index = end
+        case .cpp where prefix.hasSuffix("R") && unit(end) == Unit.quote:
+            if scanCppRawString(from: start, quote: end) { return }
+            index = end
+        default: break
+        }
         if let next = unit(end), next == Unit.quote || next == Unit.apostrophe,
            language.stringPrefixes.contains(String(decoding: units[start..<end], as: UTF16.self)),
            language.strings.contains(where: { matches($0.open, at: end) }) {
@@ -441,6 +546,8 @@ private struct CodeSyntaxScanner {
             index = end + 1
         } else if language.css {
             classifyCSSIdentifier(start, end, text)
+        } else if language.identifierKeys, unit(nextNonSpace(from: end)) == Unit.colon {
+            emit(start, end, .attribute)
         } else if language.keywords.contains(text) {
             emit(start, end, .keyword)
         } else if language.types.contains(text) {
@@ -711,23 +818,52 @@ private struct CodeSyntaxScanner {
 
     // MARK: - 差分
 
+    /// ファイル見出し（`---`・`+++`）は、ハンクの外でだけ認める。ハンク内の `--- x` は削除行。
     mutating func scanDiff() {
         let headers = ["+++", "---", "diff ", "index "].map { Array($0.utf16) }
+        let fileStart = Array("diff ".utf16)
         let hunk = Array("@@".utf16)
+        var oldRemaining = 0, newRemaining = 0
         while index < count {
             let end = lineEnd(from: index)
-            if headers.contains(where: { matches($0, at: index) }) {
+            let inHunk = oldRemaining > 0 || newRemaining > 0
+            if matches(fileStart, at: index) {
+                oldRemaining = 0
+                newRemaining = 0
                 emit(index, end, .keyword)
             } else if matches(hunk, at: index) {
+                (oldRemaining, newRemaining) = hunkLengths(from: index, to: end)
                 emit(index, end, .attribute)
+            } else if !inHunk, headers.contains(where: { matches($0, at: index) }) {
+                emit(index, end, .keyword)
             } else if units[index] == Unit.plus {
+                newRemaining = max(0, newRemaining - 1)
                 emit(index, end, .inserted)
             } else if units[index] == Unit.minus {
+                oldRemaining = max(0, oldRemaining - 1)
                 emit(index, end, .deleted)
             } else if units[index] == Unit.backslash {
                 emit(index, end, .comment)
+            } else if inHunk {
+                oldRemaining = max(0, oldRemaining - 1)
+                newRemaining = max(0, newRemaining - 1)
             }
             index = end + 1
         }
+    }
+
+    /// `@@ -1,3 +1,4 @@` の旧・新の行数。数を省略した範囲は1行。読めない場合は見出しの判定を続けないよう大きな値にする。
+    private func hunkLengths(from start: Int, to end: Int) -> (Int, Int) {
+        let header = String(decoding: units[start..<end], as: UTF16.self)
+        func length(after marker: Character) -> Int? {
+            guard let range = header.split(separator: " ").first(where: { $0.first == marker })?.dropFirst() else {
+                return nil
+            }
+            let parts = range.split(separator: ",", omittingEmptySubsequences: false)
+            guard Int(parts[0]) != nil else { return nil }
+            return parts.count > 1 ? Int(parts[1]) : 1
+        }
+        guard let old = length(after: "-"), let new = length(after: "+") else { return (.max, .max) }
+        return (old, new)
     }
 }
