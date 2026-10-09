@@ -25,6 +25,17 @@ struct CodeSyntaxLanguage: Sendable {
         /// `R"(...)"`、`R"tag(...)tag"`
         case cpp
     }
+    /// `#`・`;` の行コメントが成り立つ条件。
+    enum HashComments: Sendable {
+        /// Python、Ruby、PHP、TOML など：文字列の外ならどこでもコメント（`x=1#note`）。
+        case anywhere
+        /// YAML、INI：直前が空白か行頭の場合だけ（`https://host/#frag` はコメントではない）。
+        case afterWhitespace
+        /// シェル、Dockerfile：単語の先頭（空白か `;&|()<>` の直後）だけ（`$#`、`a#b` はコメントではない）。
+        case wordStart
+        /// Perl：`$#array` 以外はコメント。
+        case notAfterDollar
+    }
     /// `--` の行コメントが成り立つ条件。
     enum DashComments: Sendable {
         case always
@@ -38,15 +49,18 @@ struct CodeSyntaxLanguage: Sendable {
         let open: [UInt16]
         let close: [UInt16]
         var escapes = true
+        /// エスケープに使う文字。PowerShell は `` ` ``。
+        var escape = UInt16(0x5C)
         var multiline = true
         /// `nil` は SQL の `"name"` のような引用符付き識別子。中を色分けせず、字句も付けない。
         var token: CodeSyntaxToken?
 
-        init(_ open: String, _ close: String? = nil, escapes: Bool = true, multiline: Bool = true,
-             token: CodeSyntaxToken? = .string) {
+        init(_ open: String, _ close: String? = nil, escapes: Bool = true, escape: Unicode.Scalar = "\\",
+             multiline: Bool = true, token: CodeSyntaxToken? = .string) {
             self.open = Array(open.utf16)
             self.close = Array((close ?? open).utf16)
             self.escapes = escapes
+            self.escape = UInt16(escape.value)
             self.multiline = multiline
             self.token = token
         }
@@ -84,9 +98,7 @@ struct CodeSyntaxLanguage: Sendable {
     /// シェルの `$1`、`${name}` など。
     var shellVariables = false
     var identifierExtras: Set<UInt16> = []
-    /// `#` と `;` の行コメントを単語の先頭でだけ認める（シェルの `$#` や `a#b` はコメントではない）。
-    /// Python などは識別子の直後でもコメントになるため、シェル系の言語だけで有効にする。
-    var commentsNeedWordBoundary = false
+    var hashComments = HashComments.anywhere
     var dashComments = DashComments.always
     var rawStrings = RawStrings.none
     /// Lua の `[[...]]`、`[==[...]==]` と、`--` を前に付けた長いコメント。
@@ -246,7 +258,7 @@ private struct CodeSyntaxScanner {
 
     private static let haskellSymbols = Set("!#$%&*+./<=>?@\\^|~:".utf16)
 
-    /// `commentsNeedWordBoundary` の言語では、`#` や `;` の行コメントは識別子や `$` の直後では始まらない。
+    /// 行コメントが `offset` から始まるか。方言ごとの `--`・`//`・`#`・`;` の条件を確かめる。
     private func commentBoundary(at offset: Int, marker: [UInt16]) -> Bool {
         if marker == [Unit.minus, Unit.minus] {
             switch language.dashComments {
@@ -263,12 +275,19 @@ private struct CodeSyntaxScanner {
             // `url(http://…)` の `//` はコメントではない。
             return unit(offset - 1) != Unit.colon
         }
-        guard language.commentsNeedWordBoundary, marker.count == 1,
-              marker[0] == Unit.hash || marker[0] == Unit.semicolon else { return true }
+        guard marker.count == 1, marker[0] == Unit.hash || marker[0] == Unit.semicolon else { return true }
+        // PHP 8 と Rust の `#[...]` は属性。
+        if marker[0] == Unit.hash, language.bracketAttributes, unit(offset + 1) == Unit.openBracket { return false }
         guard let previous = unit(offset - 1) else { return true }
-        return Self.isWhitespace(previous) || (marker[0] == Unit.hash && !isIdentifierPart(previous)
-            && previous != Unit.dollar && previous != Unit.closeBrace)
+        switch language.hashComments {
+        case .anywhere: return true
+        case .afterWhitespace: return Self.isWhitespace(previous)
+        case .wordStart: return Self.isWhitespace(previous) || Self.shellOperators.contains(previous)
+        case .notAfterDollar: return previous != Unit.dollar
+        }
     }
+
+    private static let shellOperators = Set(";&|()<>".utf16)
 
     // MARK: - プログラミング言語
 
@@ -429,7 +448,7 @@ private struct CodeSyntaxScanner {
         let start = prefixStart ?? index
         index += delimiter.open.count
         while index < count {
-            if delimiter.escapes && !raw && units[index] == Unit.backslash {
+            if delimiter.escapes && !raw && units[index] == delimiter.escape {
                 index = min(count, index + 2)
                 continue
             }

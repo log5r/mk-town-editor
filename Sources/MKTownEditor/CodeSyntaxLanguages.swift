@@ -139,7 +139,7 @@ enum CodeSyntaxLanguages {
     /// INI は `;` もコメントだが、値の途中の `a;b` や `a#b` はコメントにしない。
     private static let ini = CodeSyntaxLanguage("ini", basedOn: toml) {
         $0.lineComments = units("#", ";")
-        $0.commentsNeedWordBoundary = true
+        $0.hashComments = .afterWhitespace
     }
 
     private static let css = CodeSyntaxLanguage("css") {
@@ -202,7 +202,8 @@ enum CodeSyntaxLanguages {
             $0.capitalizedTypes = true
             $0.lineComments = cStyleComments.line
             $0.blockComments = cStyleComments.block
-            $0.strings = [Delimiter("\"\"\""), Delimiter("\"", multiline: false)]
+            // `"""` の生文字列はバックスラッシュをエスケープとしない。
+            $0.strings = [Delimiter("\"\"\"", escapes: false), Delimiter("\"", multiline: false)]
             $0.verbatimStrings = true
             $0.charLiterals = true
             $0.preprocessor = true
@@ -393,6 +394,7 @@ enum CodeSyntaxLanguages {
             $0.types = words("int float string bool object mixed void never iterable")
             $0.caseInsensitive = true
             $0.lineComments = units("//", "#")
+            $0.bracketAttributes = true
             $0.blockComments = cStyleComments.block
             $0.strings = [Delimiter("\""), Delimiter("'"), Delimiter("`")]
             $0.prefixedIdentifiers = [dollar: .variable]
@@ -408,7 +410,7 @@ enum CodeSyntaxLanguages {
             $0.strings = quotedStrings
         },
         CodeSyntaxLanguage("perl") {
-            $0.commentsNeedWordBoundary = true
+            $0.hashComments = .notAfterDollar
             $0.keywords = words("""
                 my our local sub if elsif else unless while until for foreach do last next redo return use no \
                 package require undef and or not eq ne lt gt le ge cmp qw print die
@@ -418,7 +420,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [dollar: .variable, at: .variable]
         },
         CodeSyntaxLanguage("shell") {
-            $0.commentsNeedWordBoundary = true
+            $0.hashComments = .wordStart
             $0.keywords = words("""
                 if then else elif fi for in do done case esac while until function select return break continue \
                 export local readonly declare unset shift source alias exit set eval exec trap time
@@ -437,7 +439,8 @@ enum CodeSyntaxLanguages {
             $0.caseInsensitive = true
             $0.lineComments = units("#")
             $0.blockComments = [Delimiter("<#", "#>")]
-            $0.strings = [Delimiter("\""), Delimiter("'", escapes: false)]
+            // 二重引用符の中は `` ` `` でエスケープする。バックスラッシュは普通の文字。
+            $0.strings = [Delimiter("\"", escape: "`"), Delimiter("'", escapes: false)]
             $0.prefixedIdentifiers = [dollar: .variable]
             $0.shellVariables = true
         },
@@ -446,7 +449,7 @@ enum CodeSyntaxLanguages {
         json,
         json5,
         CodeSyntaxLanguage("yaml") {
-            $0.commentsNeedWordBoundary = true
+            $0.hashComments = .afterWhitespace
             $0.keywords = ["true", "false", "null", "yes", "no", "on", "off", "~"]
             $0.caseInsensitive = true
             $0.lineComments = units("#")
@@ -465,7 +468,7 @@ enum CodeSyntaxLanguages {
         scss,
         CodeSyntaxLanguage("diff") { $0.mode = .diff },
         CodeSyntaxLanguage("dockerfile") {
-            $0.commentsNeedWordBoundary = true
+            $0.hashComments = .wordStart
             $0.keywords = words("""
                 from as run cmd label maintainer expose env add copy entrypoint volume user workdir arg onbuild \
                 stopsignal healthcheck shell
