@@ -46,7 +46,8 @@ enum MarkdownHTMLExporter {
         return $mathImages.withValue(resources) {
             $activeImages.withValue(images) {
                 $activeOutputURL.withValue(outputURL) {
-                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+                    renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout,
+                                   dialect: dialect, checkCancellation: {})
                 }
             }
         }
@@ -67,10 +68,11 @@ enum MarkdownHTMLExporter {
         }
         let prepared = resources
         return try await DocumentWork.perform {
-            $mathImages.withValue(prepared) {
-                $activeImages.withValue(images) {
-                    $activeOutputURL.withValue(outputURL) {
-                        renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout, dialect: dialect)
+            try $mathImages.withValue(prepared) {
+                try $activeImages.withValue(images) {
+                    try $activeOutputURL.withValue(outputURL) {
+                        try renderPrepared(analysis, documentURL: documentURL, preset: preset, printLayout: printLayout,
+                                           dialect: dialect, checkCancellation: { try Task.checkCancellation() })
                     }
                 }
             }
@@ -110,14 +112,18 @@ enum MarkdownHTMLExporter {
         mathImages["\(fontSize):\(formula.latex)"]
     }
 
-    private static func renderPrepared(_ analysis: MarkdownAnalysis, documentURL: URL?,
-                                      preset: MarkdownExportPreset, printLayout: Bool,
-                                      dialect: MarkdownDialect) -> String {
+    /// `checkCancellation` は非同期の書き出しでだけ取り消しを確かめる。同期の描画は確認しない（`{}`）。
+    static func renderPrepared<Failure>(_ analysis: MarkdownAnalysis, documentURL: URL?,
+                                        preset: MarkdownExportPreset, printLayout: Bool,
+                                        dialect: MarkdownDialect,
+                                        checkCancellation: () throws(Failure) -> Void) throws(Failure) -> String {
         let anchors = Dictionary(uniqueKeysWithValues: MarkdownHeadingIndex(analysis: analysis).anchors.map {
             ($0.entry.id, $0.slug)
         })
         var context = DocumentContext(fileURL: documentURL, markdownDialect: dialect)
         context.crossReferences = analysis.crossReferences
+        // コードブロックの字句は書き出し1回につき1度だけ求め、PDF・印刷・スライドなどでも同じ結果を使う。
+        context.codeSyntaxTokens = try CodeSyntaxAnalyzer.tokens(forCodeBlocksIn: analysis, checkCancellation: checkCancellation)
         // 参考文献は書き出し1回につき1度だけ解決し、段落ごとに読み直さない。
         context.citationCatalog = dialect == .extended && analysis.containsCitationSyntax
             ? MarkdownCitationCatalog.load(documentURL: documentURL) ?? .empty : .empty
@@ -307,7 +313,7 @@ enum MarkdownHTMLExporter {
             return "<blockquote>\n\(content)</blockquote>\n"
         case .codeBlock:
             let language = block.codeLanguage.map { " class=\"language-\(escape($0))\"" } ?? ""
-            return "<pre><code\(language)>\(highlightedCode(block.content, language: block.codeLanguage))</code></pre>\n"
+            return "<pre><code\(language)>\(highlightedCode(block.content, language: block.codeLanguage, tokens: context.codeSyntaxTokens?[block.id]))</code></pre>\n"
         case .horizontalRule: return "<hr>\n"
         case .table:
             guard let table = block.table else { return "" }
@@ -521,8 +527,9 @@ enum MarkdownHTMLExporter {
     }
 
     /// コードを字句ごとの `<span class="tok-…">` で囲む。色はスタイルシートの `codeTokenStyles` で指定する。
-    static func highlightedCode(_ code: String, language: String?) -> String {
-        let tokens = CodeSyntaxTokenizer.tokens(in: code, language: language)
+    static func highlightedCode(_ code: String, language: String?,
+                                tokens precomputed: [CodeSyntaxTokenRange]? = nil) -> String {
+        let tokens = precomputed ?? CodeSyntaxAnalyzer.tokens(in: code, language: language)
         guard !tokens.isEmpty else { return escape(code) }
         let text = code as NSString
         var html = ""
