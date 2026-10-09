@@ -486,9 +486,21 @@ enum MarkdownMathCompatibility {
         -> (content: ArraySlice<Character>, end: Int)? {
         var cursor = index
         while cursor < chars.endIndex, chars[cursor].isWhitespace { cursor += 1 }
-        guard cursor < chars.endIndex, chars[cursor] == "[",
-              let close = chars[cursor...].firstIndex(of: "]") else { return nil }
-        return (chars[(cursor + 1)..<close], close + 1)
+        guard cursor < chars.endIndex, chars[cursor] == "[" else { return nil }
+        // 波括弧の中の `]` や `\]` は終端ではない。
+        var depth = 0
+        var scan = cursor + 1
+        while scan < chars.endIndex {
+            let char = chars[scan]
+            if char == "\\" {
+                scan += 1 + commandLength(at: scan, in: chars)
+                continue
+            }
+            if char == "{" { depth += 1 } else if char == "}" { depth = max(0, depth - 1) }
+            if char == "]", depth == 0 { return (chars[(cursor + 1)..<scan], scan + 1) }
+            scan += 1
+        }
+        return nil
     }
 
     /// `\` に続くコマンド名の長さ。英字の並びはその長さ、`\\` や `\{` などの制御記号は1、末尾の `\` は0。

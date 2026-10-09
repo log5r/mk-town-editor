@@ -182,6 +182,14 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         // 根号の指数は最小の書体、被開法数は元の書体のまま。
         XCTAssertEqual(normalized("\\sqrt[\\underbrace{a}_b]{\\underbrace{c}_d}", display: true),
                        "\\sqrt[{{\\scriptscriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}]{{{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}}")
+        // 指数の中の波括弧に守られた ] や \\] は終端ではない。
+        XCTAssertEqual(normalized("\\sqrt[{]}+\\underbrace{a}_b]{x} \\underbrace{c}_d", display: true),
+                       "\\sqrt[{]}+{{\\scriptscriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}]{x} {{\\displaystyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        XCTAssertEqual(normalized("x_\\sqrt[\\]\\underbrace{a}_b]{\\underbrace{c}_d}", display: true),
+                       "x_\\sqrt[\\]{{\\scriptscriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}]{{{\\scriptstyle\\underline{c}} \\atop {\\scriptscriptstyle d}}}")
+        // 閉じない [ は指数として扱わず、残りは元の書体のまま。
+        XCTAssertEqual(normalized("\\sqrt[3 \\underbrace{a}_b", display: false),
+                       "\\sqrt[3 {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
         XCTAssertEqual(normalized("\\sqrt [3] {\\underbrace{c}_d} \\lt", display: false),
                        "\\sqrt[3] {{{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}} <")
         builds("\\sqrt[\\underbrace{a}_b]{\\underbrace{c}_d}")
