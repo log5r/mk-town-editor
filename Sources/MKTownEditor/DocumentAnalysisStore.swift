@@ -11,6 +11,9 @@ struct DocumentSnapshot: Sendable {
     let wordCounts: [WordCountMode: Int]
     let outlineEntries: [MarkdownOutlineEntry]
     let sectionActions: [Int: MarkdownSectionActions]
+    /// コードブロックの字句。鍵は `MarkdownBlock.id`で、この版の `analysis` に対してだけ意味を持つ。
+    /// 項目があれば解析済み（字句が無くても `[]`）。エディタ・プレビュー・書き出しで同じ結果を使い回す。
+    let codeSyntaxTokens: [Int: [CodeSyntaxTokenRange]]
     let syntaxSpans: [MarkdownSyntaxSpan]
     let blockPresentationIDs: [Int: String]
     let hoverLinks: [MarkdownHoverLink]
@@ -50,7 +53,10 @@ struct DocumentSnapshot: Sendable {
                       .japanese: try WordCountMode.japanese.count(in: source, checkCancellation: checkCancellation),
                       .english: try WordCountMode.english.count(in: source, checkCancellation: checkCancellation)]
         try checkCancellation()
-        syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed)
+        let codeTokens = try CodeSyntaxAnalyzer.tokens(forCodeBlocksIn: parsed, checkCancellation: checkCancellation)
+        codeSyntaxTokens = codeTokens
+        try checkCancellation()
+        syntaxSpans = MarkdownSyntaxHighlighter.spans(in: source, analysis: parsed, codeSyntaxTokens: codeTokens)
         try checkCancellation()
         hoverLinks = MarkdownLinkHover.links(in: source, analysis: parsed)
         try checkCancellation()

@@ -50,6 +50,8 @@
 		A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* CodeSyntaxHighlighter.swift */; };
 		A100000000000000000000A6 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A6 /* CodeSyntaxLanguages.swift */; };
 		A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */; };
+		A100000000000000000000A9 /* TreeSitterSyntaxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */; };
+		A100000000000000000000A8 /* CodeSyntaxAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */; };
 		A10000000000000000000033 /* PreviewRenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* PreviewRenderCache.swift */; };
 		A10000000000000000000034 /* RegexSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* RegexSearch.swift */; };
 		A10000000000000000000035 /* RegexSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* RegexSearchSheet.swift */; };
@@ -123,6 +125,10 @@
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
 		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
 		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
+		A10000000000000000000202 /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000002 /* SwiftTreeSitter */; };
+		A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000003 /* TreeSitterJavaScript */; };
+		A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000004 /* TreeSitterTypeScript */; };
+		A10000000000000000000205 /* TreeSitterRuby in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000005 /* TreeSitterRuby */; };
 		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
 		A10000000000000000000089 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* mermaid.min.js */; };
 		A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Mermaid-LICENSE.txt */; };
@@ -200,6 +206,8 @@
 		A20000000000000000000032 /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
 		A200000000000000000000A6 /* CodeSyntaxLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLanguages.swift; sourceTree = "<group>"; };
 		A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxTokenizer.swift; sourceTree = "<group>"; };
+		A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterSyntaxParser.swift; sourceTree = "<group>"; };
+		A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxAnalyzer.swift; sourceTree = "<group>"; };
 		A20000000000000000000033 /* PreviewRenderCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderCache.swift; sourceTree = "<group>"; };
 		A20000000000000000000034 /* RegexSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000035 /* RegexSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearchSheet.swift; sourceTree = "<group>"; };
@@ -322,7 +330,7 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000087 /* SwiftMath in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000087 /* SwiftMath in Frameworks */,A10000000000000000000202 /* SwiftTreeSitter in Frameworks */,A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */,A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */,A10000000000000000000205 /* TreeSitterRuby in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		D30000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
@@ -384,6 +392,8 @@
 				A20000000000000000000032 /* CodeSyntaxHighlighter.swift */,
 				A200000000000000000000A6 /* CodeSyntaxLanguages.swift */,
 				A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */,
+				A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */,
+				A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */,
 				A20000000000000000000033 /* PreviewRenderCache.swift */,
 				A20000000000000000000034 /* RegexSearch.swift */,
 				A20000000000000000000035 /* RegexSearchSheet.swift */,
@@ -514,7 +524,7 @@
 			buildRules = ();
 			dependencies = ();
 			name = MKTownEditor;
-			packageProductDependencies = (C10000000000000000000001 /* SwiftMath */,);
+			packageProductDependencies = (C10000000000000000000001 /* SwiftMath */,C10000000000000000000002 /* SwiftTreeSitter */,C10000000000000000000003 /* TreeSitterJavaScript */,C10000000000000000000004 /* TreeSitterTypeScript */,C10000000000000000000005 /* TreeSitterRuby */,);
 			productName = MKTownEditor;
 			productReference = A2000000000000000000000D /* MKTownEditor.app */;
 			productType = "com.apple.product-type.application";
@@ -557,7 +567,7 @@
 			knownRegions = (ja, en, Base);
 			mainGroup = A40000000000000000000001;
 			productRefGroup = A40000000000000000000004 /* Products */;
-			packageReferences = (C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,);
+			packageReferences = (C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */,C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */,C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */,C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */,);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (A50000000000000000000001 /* MKTownEditor */, D40000000000000000000001 /* MKTownEditorTests */,);
@@ -618,6 +628,8 @@
 				A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */,
 				A100000000000000000000A6 /* CodeSyntaxLanguages.swift in Sources */,
 				A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */,
+				A100000000000000000000A9 /* TreeSitterSyntaxParser.swift in Sources */,
+				A100000000000000000000A8 /* CodeSyntaxAnalyzer.swift in Sources */,
 				A10000000000000000000033 /* PreviewRenderCache.swift in Sources */,
 				A10000000000000000000034 /* RegexSearch.swift in Sources */,
 				A10000000000000000000035 /* RegexSearchSheet.swift in Sources */,
@@ -806,6 +818,26 @@
 			repositoryURL = "https://github.com/mgriebling/SwiftMath.git";
 			requirement = { kind = exactVersion; version = 1.7.3; };
 		};
+		C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tree-sitter/swift-tree-sitter.git";
+			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.25.0; };
+		};
+		C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tree-sitter/tree-sitter-javascript.git";
+			requirement = { kind = exactVersion; version = 0.23.1; };
+		};
+		C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tree-sitter/tree-sitter-typescript.git";
+			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.23.2; };
+		};
+		C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tree-sitter/tree-sitter-ruby.git";
+			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.23.1; };
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -813,6 +845,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */;
 			productName = SwiftMath;
+		};
+		C10000000000000000000002 /* SwiftTreeSitter */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */;
+			productName = SwiftTreeSitter;
+		};
+		C10000000000000000000003 /* TreeSitterJavaScript */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */;
+			productName = TreeSitterJavaScript;
+		};
+		C10000000000000000000004 /* TreeSitterTypeScript */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */;
+			productName = TreeSitterTypeScript;
+		};
+		C10000000000000000000005 /* TreeSitterRuby */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */;
+			productName = TreeSitterRuby;
 		};
 /* End XCSwiftPackageProductDependency section */
 
