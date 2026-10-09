@@ -261,6 +261,11 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var protectedProofingRanges: [MarkdownProofingContext.ProtectedRange] = []
         /// The ranges exactly as analysed for `proofingSource`, before any edit shifted them.
         private var proofingSourceRanges: [MarkdownProofingContext.ProtectedRange] = []
+        /// Whether the text changed since `proofingSource`, so new inline code is not yet in the ranges.
+        private var proofingRangesArePending = false
+        /// Set when an edit replaced all of the previous text (a reload or select-all paste): no
+        /// range of the old text says where code is, so checking waits for a matching analysis.
+        private var proofingRangesWereDiscarded = false
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
@@ -421,8 +426,45 @@ struct MarkdownTextEditor: NSViewRepresentable {
         @MainActor @objc private func proofingStorageDidProcessEditing(_ notification: Notification) {
             guard let storage = notification.object as? NSTextStorage,
                   storage.editedMask.contains(.editedCharacters) else { return }
+            let previousLength = storage.length - storage.changeInLength
+            if previousLength > 0, storage.editedRange.location == 0,
+               storage.editedRange.length == storage.length {
+                proofingRangesWereDiscarded = true
+            }
+            proofingRangesArePending = true
             protectedProofingRanges = MarkdownProofingContext.shifted(protectedProofingRanges,
                 editedRange: storage.editedRange, changeInLength: storage.changeInLength)
+        }
+
+        /// Continuous spell and grammar checking covers the whole visible text, not only the
+        /// caret's context, so code and URLs must be excluded here as each marker is set.
+        func textView(_ textView: NSTextView, shouldSetSpellingState value: Int,
+                      range affectedCharRange: NSRange) -> Int {
+            guard value != 0, textView === self.textView else { return value }
+            if MarkdownProofingContext.intersects(affectedCharRange, protectedProofingRanges) { return 0 }
+            if proofingRangesArePending,
+               MarkdownProofingContext.intersectsInParagraph(affectedCharRange, of: textView.editorSource) {
+                return 0
+            }
+            return value
+        }
+
+        /// Removes markers set before a range was known to be code, e.g. words that were prose
+        /// until a fence or backtick was typed around them while the analysis was pending.
+        private func clearSpellingMarkers(in ranges: [MarkdownProofingContext.ProtectedRange]) {
+            guard let textView else { return }
+            let length = (textView.string as NSString).length
+            for item in ranges {
+                let range = NSIntersectionRange(item.range, NSRange(location: 0, length: length))
+                guard range.length > 0 else { continue }
+                if let layoutManager = textView.layoutManager {
+                    var effective = NSRange()
+                    let state = layoutManager.temporaryAttribute(.spellingState,
+                        atCharacterIndex: range.location, longestEffectiveRange: &effective, in: range)
+                    if state == nil && NSMaxRange(effective) >= NSMaxRange(range) { continue }
+                }
+                textView.setSpellingState(0, range: range)
+            }
         }
 
         @MainActor func applyProofing() {
@@ -430,12 +472,14 @@ struct MarkdownTextEditor: NSViewRepresentable {
             let source = textView.editorSource
             let dialect = model.markdownDialect
             let needsRanges = proofingSource != source || proofingDialect != dialect
+            var analysedRanges = false
             if usesSharedAnalysis {
                 if let snapshot = sharedSnapshot, snapshot.matches(source: source, dialect: dialect) {
                     if needsRanges {
                         proofingSource = source
                         proofingDialect = snapshot.dialect
                         proofingSourceRanges = snapshot.proofingRanges
+                        analysedRanges = true
                     }
                 }
             } else if needsRanges {
@@ -443,10 +487,16 @@ struct MarkdownTextEditor: NSViewRepresentable {
                 proofingDialect = dialect
                 proofingSourceRanges = MarkdownProofingContext.protectedRanges(in: source,
                     analysis: MarkdownAnalysis(source, dialect: dialect))
+                analysedRanges = true
             }
             // Shifting drops ranges cut by an edit. When the text is back to the analysed source
             // (an undo, or the edit retyped before a new snapshot arrived), use the exact ranges.
-            if proofingSource == source { protectedProofingRanges = proofingSourceRanges }
+            if proofingSource == source {
+                protectedProofingRanges = proofingSourceRanges
+                proofingRangesArePending = false
+                proofingRangesWereDiscarded = false
+            }
+            if analysedRanges { clearSpellingMarkers(in: protectedProofingRanges) }
             let location = textView.selectedRange().location
             // While the snapshot for an edited source is pending, the previous ranges stay
             // aligned through proofingStorageDidProcessEditing, and inline code or URLs typed
@@ -455,7 +505,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             // correction: it can change which regions are protected anywhere in the document.
             let sourcePending = usesSharedAnalysis && proofingSource != source
             let dialectPending = usesSharedAnalysis && proofingDialect != dialect
-            let protected = dialectPending
+            let protected = dialectPending || proofingRangesWereDiscarded
                 || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
                 || (sourcePending && MarkdownProofingContext.isProtectedInParagraph(location, of: source))
             textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
@@ -514,6 +564,23 @@ enum MarkdownProofingContext {
         let urls = urlPattern.matches(in: source, range: full)
             .map { ProtectedRange(range: $0.range, includesEnd: true) }
         return inline + urls
+    }
+
+    /// Whether a checked word or phrase overlaps code or a URL.
+    static func intersects(_ range: NSRange, _ ranges: [ProtectedRange]) -> Bool {
+        ranges.contains { NSIntersectionRange(range, $0.range).length > 0 }
+    }
+
+    /// `intersects` for inline code and URLs of the paragraph containing `range`, used while
+    /// whole-document analysis is pending.
+    static func intersectsInParagraph(_ range: NSRange, of source: String) -> Bool {
+        let text = source as NSString
+        guard range.location >= 0, NSMaxRange(range) <= text.length else { return false }
+        let paragraph = text.paragraphRange(for: range)
+        return inlineProtectedRanges(in: text.substring(with: paragraph)).contains {
+            NSIntersectionRange(range, NSRange(location: $0.range.location + paragraph.location,
+                                               length: $0.range.length)).length > 0
+        }
     }
 
     static func isProtected(_ location: Int, in ranges: [ProtectedRange]) -> Bool {
