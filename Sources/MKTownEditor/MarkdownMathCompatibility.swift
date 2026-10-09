@@ -36,7 +36,8 @@ enum MarkdownMathCompatibility {
         "eqnarray*": "eqnarray",
     ]
 
-    /// SwiftMathがちょうど2列を要求する環境。`&` のない本体には空の2列目を補う。
+    /// SwiftMathがちょうど2列を要求する環境。`&` のない本体には空の2列目を補い、
+    /// 2つ目以降の `&` は揃え位置にせず、間隔と文字の並びに置き換える。
     private static let twoColumnEnvironments: Set<String> = ["aligned", "split", "eqalign", "cases"]
 
     static func normalize(_ latex: String, display: Bool) -> String {
@@ -66,7 +67,8 @@ enum MarkdownMathCompatibility {
     /// `environment` が nil のときは式全体を扱う。
     private static func rewriteBody(_ chars: ArraySlice<Character>, environment: String?) -> [Character] {
         var rows: [[Character]] = [[]]
-        var columns: [Int] = [0]
+        /// 各行で、波括弧と環境の外にある `&` の位置。
+        var separators: [[Int]] = [[]]
         var depth = 0
         var index = chars.startIndex
         while index < chars.endIndex {
@@ -76,7 +78,7 @@ enum MarkdownMathCompatibility {
                 let name = String(chars[(index + 1)..<(index + 1 + length)])
                 if name == "\\", depth == 0 {
                     rows.append([])
-                    columns.append(0)
+                    separators.append([])
                     index += 2
                     continue
                 }
@@ -92,20 +94,33 @@ enum MarkdownMathCompatibility {
                 continue
             }
             if char == "{" { depth += 1 } else if char == "}" { depth = max(0, depth - 1) }
-            if char == "&", depth == 0 { columns[columns.count - 1] += 1 }
+            if char == "&", depth == 0 { separators[separators.count - 1].append(rows[rows.count - 1].count) }
             rows[rows.count - 1].append(char)
             index += 1
         }
         // 末尾の `\\` は空の行を作るだけなので取り除く。
         while rows.count > 1, rows[rows.count - 1].allSatisfy(\.isWhitespace) {
             rows.removeLast()
-            columns.removeLast()
+            separators.removeLast()
         }
-        if let environment, twoColumnEnvironments.contains(swiftMathName(for: environment)),
-           columns.allSatisfy({ $0 == 0 }) {
-            rows = rows.map { $0.allSatisfy(\.isWhitespace) ? $0 : $0 + ["&"] }
+        if let environment, twoColumnEnvironments.contains(swiftMathName(for: environment)) {
+            if separators.allSatisfy(\.isEmpty) {
+                rows = rows.map { $0.allSatisfy(\.isWhitespace) ? $0 : $0 + ["&"] }
+            } else {
+                rows = zip(rows, separators).map { reducedToTwoColumns($0, separators: $1) }
+            }
         }
         return Array(rows.joined(separator: ["\\", "\\"]))
+    }
+
+    /// `align` の複数の揃え位置（`a &= b & c &= d`）はSwiftMathでは列が多すぎる。
+    /// 最初の `&` だけを揃え位置として残し、組の区切りは `\qquad`、組の中の揃え位置は取り除く。
+    private static func reducedToTwoColumns(_ row: [Character], separators: [Int]) -> [Character] {
+        var row = row
+        for (order, position) in separators.enumerated().reversed() where order > 0 {
+            row.replaceSubrange(position...position, with: order % 2 == 1 ? Array("\\qquad ") : [])
+        }
+        return row
     }
 
     private static func swiftMathName(for environment: String) -> String {

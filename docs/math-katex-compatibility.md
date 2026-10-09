@@ -32,6 +32,7 @@ SwiftMathへ渡す前にLaTeXを書き換える。`MarkdownMath.Formula` は元�
 | `\begin{equation}`・`equation*` | 外して本体だけ渡す |
 | `align`・`align*`、`gather*`、`eqnarray*` | `aligned`・`gather`・`eqnarray` |
 | `aligned`・`split`・`eqalign`・`cases` で全行に `&` がない | 各行の末尾へ `&` を補い、空の2列目を作る |
+| 同じ環境で1行に `&` が2つ以上ある（`a &= b & c &= d`） | 最初の `&` だけ残し、組の区切りは `\qquad`、組の中の揃え位置は取り除く |
 | 末尾や `\end` 直前の `\\` | 取り除く（途中の空行は残す） |
 | `\lt`・`\gt`・`\plusmn`・`\exist` | `<`・`>`・`\pm`・`\exists` |
 | `\therefore`・`\because`・`\gtrless`・`\lessgtr` | `MTMathAtomFactory.add(latexSymbol:)` で記号を登録 |
@@ -39,6 +40,9 @@ SwiftMathへ渡す前にLaTeXを書き換える。`MarkdownMath.Formula` は元�
 | `\underbrace{式}_{注釈}` | `{{\underline{式}} \atop {\scriptstyle 注釈}}` |
 | `\overbrace{式}^{注釈}` | `{{\scriptstyle 注釈} \atop {\overline{式}}}` |
 | `\underset{下}{本体}`・`\overset{上}{本体}` | 同様に `\atop` で縦積み |
+
+SwiftMathは `aligned` 系の環境をちょうど2列に限定するため、`align` の複数の揃え位置は
+最初の組だけを揃え、残りの組は同じ行に間隔を空けて並べる近似にした。
 
 SwiftMathは下括弧 `⏟` を式の幅に伸ばせず、小さな記号が1つ描かれるだけだったので、
 括弧は下線・上線で代用した。縦積みは1列の `gather` 表より `\atop` のほうが行間が詰まり、
