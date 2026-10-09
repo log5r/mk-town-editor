@@ -171,11 +171,17 @@ enum MarkdownMathCompatibility {
     // MARK: - コマンド
 
     /// 分子・分母を持つコマンド。引数の書体は一段小さくなる。
-    private static let fractionCommands: Set<String> = ["frac", "tfrac", "binom", "tbinom"]
+    private static let fractionCommands: Set<String> = ["frac", "binom"]
+
+    /// 書体を固定する分数。SwiftMathにはないので、書体命令を付けた `\frac`・`\binom` に置き換える。
+    private static let forcedFractions: [String: (command: String, style: String)] = [
+        "tfrac": ("frac", "\\textstyle"), "dfrac": ("frac", "\\displaystyle"),
+        "tbinom": ("binom", "\\textstyle"), "dbinom": ("binom", "\\displaystyle"),
+    ]
 
     /// 引数を取るコマンドとその数。添字や分数の引数に波括弧なしで置かれたとき、引数ごと同じ書体にする。
     private static let argumentCounts: [String: Int] = [
-        "frac": 2, "tfrac": 2, "binom": 2, "tbinom": 2, "underset": 2, "overset": 2,
+        "frac": 2, "tfrac": 2, "dfrac": 2, "binom": 2, "tbinom": 2, "dbinom": 2, "underset": 2, "overset": 2,
         "sqrt": 1, "underbrace": 1, "overbrace": 1, "overline": 1, "underline": 1,
         "text": 1, "textbf": 1, "textit": 1, "textrm": 1, "operatorname": 1,
         "mathbb": 1, "mathcal": 1, "mathrm": 1, "mathbf": 1, "mathit": 1, "mathsf": 1, "mathtt": 1,
@@ -225,17 +231,34 @@ enum MarkdownMathCompatibility {
                 index = stacked.end
                 continue
             }
+            if let forced = forcedFractions[name] {
+                let (arguments, end) = fractionArguments(from: next, in: chars, style: forced.style)
+                output += "{\(forced.style)\\\(forced.command)\(arguments)}"
+                index = end
+                continue
+            }
             output += String(chars[index..<next])
             index = next
             if fractionCommands.contains(name) {
-                for _ in 0..<2 {
-                    guard let argument = token(from: index, in: chars) else { break }
-                    output += rewritten(argument, style: fractionStyle(of: style))
-                    index = argument.end
-                }
+                let (arguments, end) = fractionArguments(from: index, in: chars, style: style)
+                output += arguments
+                index = end
             }
         }
         return output
+    }
+
+    /// 分数の2つの引数を、分数の書体 `style` から一段小さい書体で書き換える。
+    private static func fractionArguments(from index: Int, in chars: ArraySlice<Character>, style: String)
+        -> (text: String, end: Int) {
+        var output = ""
+        var index = index
+        for _ in 0..<2 {
+            guard let argument = token(from: index, in: chars) else { break }
+            output += rewritten(argument, style: fractionStyle(of: style))
+            index = argument.end
+        }
+        return (output, index)
     }
 
     private static func rewritten(_ token: Token, style: String) -> String {
@@ -324,6 +347,14 @@ enum MarkdownMathCompatibility {
             let length = commandLength(at: cursor, in: chars)
             let name = String(chars[(cursor + 1)..<(cursor + 1 + length)])
             var end = cursor + 1 + length
+            if name == "sqrt" {
+                // `\sqrt[3]{x}` の任意引数は根号の一部なので、被開法数と一緒に読む。
+                var scan = end
+                while scan < chars.endIndex, chars[scan].isWhitespace { scan += 1 }
+                if scan < chars.endIndex, chars[scan] == "[", let close = chars[scan...].firstIndex(of: "]") {
+                    end = close + 1
+                }
+            }
             for _ in 0..<(argumentCounts[name] ?? 0) {
                 guard let argument = token(from: end, in: chars) else { break }
                 end = argument.end
