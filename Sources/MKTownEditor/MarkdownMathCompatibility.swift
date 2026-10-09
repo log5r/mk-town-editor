@@ -206,8 +206,9 @@ enum MarkdownMathCompatibility {
             } else if char == "_" || char == "^" {
                 scriptNext = true
             } else if !char.isWhitespace && char != "\\" {
+                // 波括弧のない1文字も添字や分数の引数を1つ消費する。
                 scriptNext = false
-                pendingFractionArguments = 0
+                pendingFractionArguments = max(pendingFractionArguments - 1, 0)
             }
             guard char == "\\" else {
                 output.append(char)
@@ -219,7 +220,7 @@ enum MarkdownMathCompatibility {
             let next = index + 1 + length
             let style = effectiveStyle()
             scriptNext = false
-            pendingFractionArguments = fractionCommands.contains(name) ? 2 : 0
+            pendingFractionArguments = fractionCommands.contains(name) ? 2 : max(pendingFractionArguments - 1, 0)
             if styleCommands.contains(name) {
                 styles[styles.count - 1] = "\\" + name
             } else if let replacement = aliases[name] {
