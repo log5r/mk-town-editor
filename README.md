@@ -115,6 +115,10 @@ bash Tools/ci.sh
 
 CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
 
+## リリース配布
+
+`v1.0.0`などのタグをpushすると、[Releaseワークフロー](.github/workflows/release.yml)が全ユニットテストを実行し、Developer ID署名・Appleの公証済みUniversalアプリをZIPにしてGitHub Releasesのドラフトへ登録します。初回に証明書と5項目のGitHub Secretsを設定し、リリースごとにダウンロードしたアプリを確認して公開します。
+
 ## 開発用ファイル
 
 | 場所 | 内容 |

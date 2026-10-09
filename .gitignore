@@ -6,3 +6,5 @@ xcuserdata/
 .claude/
 .swiftpm/
 /docs-local/
+*.p12
+*.keychain-db
