@@ -159,7 +159,7 @@ struct MarkdownPreview: View {
                                                 .accessibilityHidden(true)
                                             inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
                                                 MarkdownRenderer.renderCallout(block, in: analysis,
-                                                                               documentContext: renderContext)
+                                                                               documentContext: renderContext(for: analysis))
                                             })
                                         }
                                         .padding(12)
