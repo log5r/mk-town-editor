@@ -113,6 +113,51 @@ final class CodeSyntaxSharingTests: XCTestCase {
         XCTAssertTrue(withTokens.isEqual(to: without))
     }
 
+    private func tokenKinds(_ rendered: NSAttributedString) -> [CodeSyntaxToken] {
+        var kinds: [CodeSyntaxToken] = []
+        rendered.enumerateAttribute(.codeSyntaxToken, in: NSRange(location: 0, length: rendered.length)) { value, _, _ in
+            if let raw = value as? String, let kind = CodeSyntaxToken(rawValue: raw) { kinds.append(kind) }
+        }
+        return kinds
+    }
+
+    /// 解析の打ち切りで色のない字句（`[]`）を描画した後、別の版で色付きの字句が届いたら描画し直す。
+    func testPreviewCacheRerendersCodeBlockWhenSnapshotTokensChange() throws {
+        let analysis = MarkdownAnalysis("```js\nlet a = 1;\n```\n")
+        let block = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
+        let renderCache = PreviewRenderCache()
+        var interrupted = DocumentContext(fileURL: nil)
+        interrupted.codeSyntaxTokens = [block.id: []]
+        let plain = renderCache.render(block, in: analysis, context: interrupted, zoom: 1)
+        XCTAssertTrue(tokenKinds(plain).isEmpty)
+
+        var parsed = interrupted
+        parsed.codeSyntaxTokens = [block.id: [CodeSyntaxTokenRange(range: NSRange(location: 0, length: 3), token: .keyword)]]
+        XCTAssertEqual(interrupted, parsed, "文脈の同値判定は字句を見ない")
+        let colored = renderCache.render(block, in: analysis, context: parsed, zoom: 1)
+        XCTAssertEqual(tokenKinds(colored), [.keyword])
+        XCTAssertEqual(renderCache.renderCount, 2)
+
+        let reused = renderCache.render(block, in: analysis, context: parsed, zoom: 1)
+        XCTAssertTrue(reused === colored, "同じ字句なら描画結果を再利用する")
+        XCTAssertEqual(renderCache.renderCount, 2)
+    }
+
+    /// コールアウト内のコードブロックも、渡した字句で描画し、メインスレッドで再解析しない。
+    func testCalloutRenderingUsesGivenTokensWithoutAnalyzing() throws {
+        let analysis = MarkdownAnalysis("> [!NOTE]\n> ```js\n> let callout = 1;\n> ```\n")
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+        let code = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
+        var context = DocumentContext(fileURL: nil)
+        context.codeSyntaxTokens = [code.id: [CodeSyntaxTokenRange(range: NSRange(location: 0, length: 3), token: .type)]]
+        let cache = CodeSyntaxAnalyzer.sharedCache
+        cache.removeAll()
+        cache.resetCounters()
+        let rendered = MarkdownRenderer.renderCallout(callout, in: analysis, documentContext: context)
+        XCTAssertEqual(tokenKinds(rendered), [.type])
+        XCTAssertEqual(cache.misses + cache.hits, 0)
+    }
+
     func testDocumentContextEqualityIgnoresTokens() {
         var a = DocumentContext(fileURL: nil)
         let b = a
@@ -192,6 +237,33 @@ final class CodeSyntaxSharingTests: XCTestCase {
     }
 
     // MARK: 版と取り消し
+
+    /// 非同期の書き出しを取り消したら、残りのコードブロックを解析せずに止まる。
+    func testHTMLRenderingStopsAnalyzingCodeBlocksWhenCancelled() {
+        let source = (0..<5).map { "```js\nlet value\($0) = \($0);\n```" }.joined(separator: "\n\n")
+        let analysis = MarkdownAnalysis(source)
+        let cache = CodeSyntaxAnalyzer.sharedCache
+        cache.removeAll()
+        cache.resetCounters()
+        struct Stop: Error {}
+        var calls = 0
+        XCTAssertThrowsError(try MarkdownHTMLExporter.renderPrepared(analysis, documentURL: nil, preset: .standard,
+                                                                     printLayout: false, dialect: .extended) {
+            calls += 1
+            if calls > 2 { throw Stop() }
+        }) { XCTAssertTrue($0 is Stop) }
+        XCTAssertEqual(cache.misses, 2, "取り消し後のブロックは解析しない")
+    }
+
+    func testCancelledAsyncHTMLRenderingThrowsCancellation() async {
+        let source = (0..<50).map { "```js\nlet value\($0) = \($0);\n```" }.joined(separator: "\n\n")
+        let task = Task { try await MarkdownHTMLExporter.renderAsync(source) }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("取り消されるはず") }
+        catch is CancellationError {}
+        catch { XCTFail("\(error)") }
+    }
+
 
     func testCancellationInsideCodeBlockLoopAbortsSnapshot() {
         let block = "```js\nlet a = 1;\n```\n\n"

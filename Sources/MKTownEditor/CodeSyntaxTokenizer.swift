@@ -5,7 +5,7 @@ enum CodeSyntaxToken: String, CaseIterable, Sendable {
     case keyword, type, string, comment, number, attribute, variable, inserted, deleted
 }
 
-struct CodeSyntaxTokenRange: Equatable, Sendable {
+struct CodeSyntaxTokenRange: Hashable, Sendable {
     let range: NSRange
     let token: CodeSyntaxToken
 }

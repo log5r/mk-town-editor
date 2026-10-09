@@ -52,6 +52,12 @@ macOS 14とswift-tools-version 6.0は変えない。swift-tree-sitterはmacOS 10
 - タイムアウトの実装：`Parser.timeout` はSwiftTreeSitterが `ts_parser_set_timeout_micros` で実装している。tree-sitter 0.25 はこの関数を非推奨とし、進捗コールバック付きの解析オプションを勧めている。swift-tree-sitter の版を上げるときは、タイムアウトが効くかを確かめる（長さの上限が恒久的な防御である）。
 - 構文木は解析のたびに解放する。保持するのは `CodeSyntaxTokenRange` だけである。
 
+## 字句を受け渡すときの注意（PR #68 のレビューで見つかった不具合）
+
+- タイムアウトした解析は `[]` を返し、共有キャッシュに保存しない。そのため同じブロックでも、版によって字句が `[]` から色付きに変わる。`DocumentContext` の同値判定は字句を見ないので、`PreviewRenderCache` はコードブロックの鍵に字句そのものを含める。含めないと、色のない描画結果が残り続ける。検証は `CodeSyntaxSharingTests.testPreviewCacheRerendersCodeBlockWhenSnapshotTokensChange`。
+- プレビューで描画関数に文脈を渡すときは、コードブロックを含み得る経路（通常のブロック・コールアウト）では `renderContext(for: analysis)` を使う。引数なしの `renderContext` はスナップショットの字句を渡さず、メインアクター上での解析に戻る。
+- 非同期の書き出し（`renderAsync`）は、コードブロックの解析ループに `Task.checkCancellation` を渡す。`{}` を渡すと、取り消した書き出しが全ブロックの解析を終えるまでCPUを使い続ける。同期の `render` だけが `{}` を渡す。
+
 ## 言語を足す手順
 
 1. 文法パッケージを `Package.swift`、`Package.resolved`、`project.pbxproj` に加える。

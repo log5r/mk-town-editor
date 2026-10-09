@@ -128,6 +128,9 @@ final class PreviewRenderCache: ObservableObject {
     private struct BlockKey: Hashable {
         let block: BlockSignature
         let resourceRevision: Int?
+        /// コードブロックの字句。文脈の同値判定は字句を見ないため、解析の打ち切りで色のない字句を受け取った後に
+        /// 色付きの字句が届いた場合に描画し直せるよう、ブロックごとの鍵に含める。
+        let codeSyntaxTokens: [CodeSyntaxTokenRange]?
     }
 
     func render(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
@@ -138,7 +141,8 @@ final class PreviewRenderCache: ObservableObject {
         // 画像の読み込み状況は画像を含み得るブロックの表示だけに影響する。
         let key = BlockKey(block: BlockSignature(block, showsTaskPrefix: showsTaskPrefix),
                            resourceRevision: Self.mayContainImage(block.content) ||
-                            block.table.map { Self.mayContainImage($0) } == true ? remoteRevision : nil)
+                            block.table.map { Self.mayContainImage($0) } == true ? remoteRevision : nil,
+                           codeSyntaxTokens: block.kind == .codeBlock ? context.codeSyntaxTokens?[block.id] : nil)
         clock += 1
         if var cached = blocks[key] {
             cached.lastUse = clock
