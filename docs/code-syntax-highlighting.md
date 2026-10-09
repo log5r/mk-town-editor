@@ -51,12 +51,15 @@ int main() { return 0; }
 | Haskell | `haskell`、`hs` |
 | シェル | `shell`、`sh`、`bash`、`zsh` |
 | PowerShell | `powershell`、`ps1`、`pwsh` |
-| SQL | `sql`、`mysql`、`postgresql`、`sqlite` |
+| SQL | `sql`、`postgresql`、`sqlite` |
+| MySQL | `mysql`、`mariadb`（`#`のコメントにも対応） |
 | JSON | `json`、`jsonc`、`json5` |
 | YAML | `yaml`、`yml` |
-| TOML・INI | `toml`、`ini`、`properties` |
+| TOML・INI | `toml`、`ini`、`cfg` |
+| Java properties | `properties`（`#`・`!`のコメント、`=`・`:`・空白の区切り） |
 | HTML・XML | `html`、`xml`、`svg`、`plist`、`vue` |
-| CSS | `css`、`scss`、`less` |
+| CSS | `css` |
+| SCSS・Less | `scss`、`less`（`//`の行コメントにも対応） |
 | Diff | `diff`、`patch` |
 | Dockerfile | `dockerfile`、`docker` |
 
@@ -83,6 +86,7 @@ HTML書き出しでは字句を`<span class="tok-keyword">`のように囲み、
 
 - 字句解析は `CodeSyntaxTokenizer` が行う。正規表現を使わず、UTF-16単位で1回だけ走査し、`NSRange`の字句列を返す。メインアクター外の文書解析（`DocumentSnapshot`）からも呼べる。
 - 言語ごとの差は `CodeSyntaxLanguage` の設定値（キーワード、コメント記号、文字列の区切り、接頭辞付き識別子など）で表す。HTML・XMLとDiffだけは専用の走査を使う。
+- コメントの書き方が違う方言（SCSS・Less、MySQL）は、別名でまとめず `CodeSyntaxLanguage(_:basedOn:)` で元の言語から派生させる。Java propertiesはTOML・INIと区切りもコメントも違うため、専用の行頭規則を使う。
 - 正確な構文解析はしない。目的は読みやすさの補助であり、誤った色分けで原文や書き出しの内容が変わることはない。
   - Rustのライフタイム `'a` やHaskellの `x'` を文字列にしないよう、Cの系統の言語では `'` を1文字の文字リテラルとしてだけ扱う。
   - シェル、Perl、YAML、TOML・INI、Dockerfileの `#`（TOML・INIは `;` も）は、単語の先頭にある場合だけコメントとする（`$#`、`a#b` はコメントではない）。Python、Ruby、PHP、PowerShellは識別子や数値の直後の `#` もコメントとする（`x=1#note`）。

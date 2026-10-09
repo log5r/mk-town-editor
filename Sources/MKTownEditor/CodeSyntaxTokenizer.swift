@@ -14,7 +14,7 @@ struct CodeSyntaxTokenRange: Equatable, Sendable {
 struct CodeSyntaxLanguage: Sendable {
     enum Mode: Sendable { case code, markup, diff }
     /// 行頭のキーを属性として扱う形式。
-    enum LineKeys: Sendable { case none, yaml, ini }
+    enum LineKeys: Sendable { case none, yaml, ini, properties }
 
     struct Delimiter: Sendable {
         let open: [UInt16]
@@ -30,7 +30,7 @@ struct CodeSyntaxLanguage: Sendable {
         }
     }
 
-    let name: String
+    private(set) var name: String
     var mode = Mode.code
     var keywords: Set<String> = []
     var types: Set<String> = []
@@ -69,6 +69,13 @@ struct CodeSyntaxLanguage: Sendable {
     var markers: [(text: [UInt16], token: CodeSyntaxToken)] = []
 
     init(_ name: String, configure: (inout CodeSyntaxLanguage) -> Void = { _ in }) {
+        self.name = name
+        configure(&self)
+    }
+
+    /// 方言のように、既存の言語の規則を一部だけ変えた言語を作る。
+    init(_ name: String, basedOn base: CodeSyntaxLanguage, configure: (inout CodeSyntaxLanguage) -> Void) {
+        self = base
         self.name = name
         configure(&self)
     }
@@ -204,6 +211,10 @@ private struct CodeSyntaxScanner {
 
     /// `commentsNeedWordBoundary` の言語では、`#` や `;` の行コメントは識別子や `$` の直後では始まらない。
     private func commentBoundary(at offset: Int, marker: [UInt16]) -> Bool {
+        if language.css, marker.first == Unit.slash {
+            // `url(http://…)` の `//` はコメントではない。
+            return unit(offset - 1) != Unit.colon
+        }
         guard language.commentsNeedWordBoundary, marker.count == 1,
               marker[0] == Unit.hash || marker[0] == Unit.semicolon else { return true }
         guard let previous = unit(offset - 1) else { return true }
@@ -506,6 +517,7 @@ private struct CodeSyntaxScanner {
         switch language.lineKeys {
         case .none: return false
         case .ini: return scanINIKey()
+        case .properties: return scanPropertiesKey()
         case .yaml: return scanYAMLKey()
         }
     }
@@ -530,6 +542,48 @@ private struct CodeSyntaxScanner {
         emit(index, keyEnd, .attribute)
         index = cursor
         return true
+    }
+
+    private mutating func scanPropertiesKey() -> Bool {
+        let end = lineEnd(from: index)
+        if continuesPreviousLine(at: index) {
+            index = end
+            return true
+        }
+        if units[index] == Unit.hash || units[index] == Unit.bang {
+            emit(index, end, .comment)
+            index = end
+            return true
+        }
+        var cursor = index
+        while cursor < end {
+            let value = units[cursor]
+            if value == Unit.backslash {
+                cursor += 2
+                continue
+            }
+            if value == Unit.equal || value == Unit.colon || Self.isWhitespace(value) { break }
+            cursor += 1
+        }
+        cursor = min(cursor, end)
+        emit(index, cursor, .attribute)
+        // 値は区切りの後ろから行末までの文字列。
+        index = end
+        return true
+    }
+
+    /// 前の行が奇数個の `\` で終わる継続行か。
+    private func continuesPreviousLine(at offset: Int) -> Bool {
+        var cursor = offset - 1
+        while cursor >= 0 && units[cursor] != Unit.newline { cursor -= 1 }
+        var backslashes = 0
+        cursor -= 1
+        if unit(cursor) == Unit.carriageReturn { cursor -= 1 }
+        while cursor >= 0 && units[cursor] == Unit.backslash {
+            backslashes += 1
+            cursor -= 1
+        }
+        return backslashes % 2 == 1
     }
 
     private mutating func scanYAMLKey() -> Bool {
