@@ -10,6 +10,16 @@ enum MarkdownMath {
         let source: String
         let latex: String
         let display: Bool
+        /// SwiftMathが解釈できる形へ書き換えたLaTeX。描画と妥当性判定にはこちらを使い、
+        /// 代替テキストや読み上げには元の `latex` を使う。
+        let swiftMathLaTeX: String
+
+        init(source: String, latex: String, display: Bool) {
+            self.source = source
+            self.latex = latex
+            self.display = display
+            swiftMathLaTeX = MarkdownMathCompatibility.normalize(latex, display: display)
+        }
     }
 
     enum Segment: Equatable {
@@ -111,7 +121,7 @@ enum MarkdownMath {
 enum MarkdownMathRenderer {
     static func label(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> MTMathUILabel? {
         let label = MTMathUILabel(frame: .zero)
-        label.latex = formula.latex
+        label.latex = formula.swiftMathLaTeX
         guard label.error == nil else { return nil }
         label.fontSize = fontSize
         label.textColor = .labelColor
@@ -180,8 +190,8 @@ struct MarkdownMathView: NSViewRepresentable {
             view.effectiveAppearance.performAsCurrentDrawingAppearance { view.textColor = .labelColor }
         }
         // latexの再設定は再解析を伴うため、式が変わった時だけ行う。
-        guard view.latex != formula.latex else { return }
-        view.latex = formula.latex
+        guard view.latex != formula.swiftMathLaTeX else { return }
+        view.latex = formula.swiftMathLaTeX
         view.invalidateIntrinsicContentSize()
     }
 
