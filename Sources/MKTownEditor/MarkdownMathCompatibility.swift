@@ -201,7 +201,8 @@ enum MarkdownMathCompatibility {
     /// 添字（`_`・`^`）の引数と分数の引数は、TeXの規則に従って一段小さい書体で再帰的に処理する。
     private static func rewriteCommands(_ chars: ArraySlice<Character>, style: String) -> String {
         var output = ""
-        var style = style
+        // `{a \atop b}` のようにグループ全体が分数になるときは、中身を分数の書体で処理する。
+        var style = containsInfixFraction(chars) ? fractionStyle(of: style) : style
         var index = chars.startIndex
         while index < chars.endIndex {
             let char = chars[index]
@@ -336,6 +337,38 @@ enum MarkdownMathCompatibility {
     private static func rewritten(_ token: Token, style: String) -> String {
         let inner = rewriteCommands(token.content, style: style)
         return token.braced ? "{\(inner)}" : inner
+    }
+
+    /// SwiftMathが分数として組む中置コマンド。
+    private static let infixFractionCommands: Set<String> = ["atop", "over", "choose"]
+
+    /// 波括弧・環境・`\left` の外側に `\atop` などの中置コマンドがあるか。
+    private static func containsInfixFraction(_ chars: ArraySlice<Character>) -> Bool {
+        var depth = 0
+        var index = chars.startIndex
+        while index < chars.endIndex {
+            let char = chars[index]
+            if char == "\\" {
+                let length = commandLength(at: index, in: chars)
+                let name = String(chars[(index + 1)..<(index + 1 + length)])
+                let next = index + 1 + length
+                if depth == 0, infixFractionCommands.contains(name) { return true }
+                if name == "begin", let found = environmentRange(from: next, in: chars),
+                   let end = matchingEnd(for: found.name, after: found.end, in: chars) {
+                    index = end.end
+                    continue
+                }
+                if name == "left", let pair = pairedDelimiters(from: next, in: chars) {
+                    index = pair.end
+                    continue
+                }
+                index = next
+                continue
+            }
+            if char == "{" { depth += 1 } else if char == "}" { depth = max(0, depth - 1) }
+            index += 1
+        }
+        return false
     }
 
     /// 添字に入ったときの書体。
