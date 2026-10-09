@@ -189,6 +189,8 @@ private struct CodeSyntaxScanner {
     var result: [CodeSyntaxTokenRange] = []
     private var index = 0
     private var braceDepth = 0
+    /// 次の `/` が正規表現を始められるか。値（識別子、数値、文字列、`)` など）の直後では除算。
+    private var regexAllowed = true
     private var lineStartOffset = 0
     /// YAML のフローコレクション（`{…}`・`[…]`）の深さ。中では `:` が続く識別子をキーとする。
     private var flowDepth = 0
@@ -343,14 +345,27 @@ private struct CodeSyntaxScanner {
                 scanPreprocessor()
                 continue
             }
-            if scanMarker() || scanRegexLiteral() || scanLongBracket() || scanBlockComment() || scanLineComment()
-                || scanSwiftRawString() || scanVerbatimString() || scanString() { continue }
+            if scanMarker() { continue }
+            // コメントは式の文脈を変えない（`= /* c */ /re/` の `/` は正規表現）。
+            if scanRegexLiteral() || scanLongBracket() || scanSwiftRawString() || scanVerbatimString() {
+                regexAllowed = false
+                continue
+            }
+            if scanBlockComment() || scanLineComment() { continue }
+            if scanString() {
+                regexAllowed = false
+                continue
+            }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
                 scanNumber()
+                regexAllowed = false
                 continue
             }
-            if scanPrefixedIdentifier() || scanBracketAttribute() { continue }
+            if scanPrefixedIdentifier() || scanBracketAttribute() {
+                regexAllowed = false
+                continue
+            }
             if isIdentifierStart(index) {
                 scanIdentifier()
                 continue
@@ -363,9 +378,17 @@ private struct CodeSyntaxScanner {
                 if value == Unit.openBrace || value == Unit.openBracket { flowDepth += 1 }
                 if value == Unit.closeBrace || value == Unit.closeBracket { flowDepth = max(0, flowDepth - 1) }
             }
+            if (value == Unit.plus || value == Unit.minus) && unit(index + 1) == value {
+                // 値の後ろの `x++` は値のまま、`++x` の前は式の途中のまま。
+                index += 2
+                continue
+            }
+            regexAllowed = !Self.valueClosingPunctuation.contains(value)
             index += 1
         }
     }
+
+    private static let valueClosingPunctuation = Set(")]}".utf16)
 
     private mutating func scanMarker() -> Bool {
         guard let marker = language.markers.first(where: { matches($0.text, at: index) }) else { return false }
@@ -435,18 +458,17 @@ private struct CodeSyntaxScanner {
         return true
     }
 
-    /// 正規表現の前に置ける語。`this` や `nil` のような値の語の後ろの `/` は除算。
+    /// 正規表現の前に置ける語。`this` や `nil` のような値の語、`obj.in` のようなメンバー名の後ろの `/` は除算。
     private static let regexPrecedingWords: Set<String> = [
-        "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else",
-        "yield", "await", "if", "elsif", "unless", "while", "until", "when", "and", "or", "not", "split", "grep"
+        "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "default", "do",
+        "else", "yield", "await", "if", "elsif", "unless", "while", "until", "when", "then", "and", "or", "not",
+        "split", "grep"
     ]
-    private static let regexPrecedingPunctuation = Set("(,=:[!&|?{};+-*%<>~^".utf16)
 
-    /// 値の後ろでない `/` から始まる1行の正規表現リテラル。文字クラス `[...]` の中の `/` では閉じない。
+    /// 式の始まりにある `/` から始まる1行の正規表現リテラル。文字クラス `[...]` の中の `/` では閉じない。
     private mutating func scanRegexLiteral() -> Bool {
-        guard language.regexLiterals, units[index] == Unit.slash,
-              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline,
-              regexMayStart(at: index) else { return false }
+        guard language.regexLiterals, regexAllowed, units[index] == Unit.slash,
+              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline else { return false }
         var cursor = index + 1
         var inClass = false
         while cursor < count {
@@ -467,17 +489,6 @@ private struct CodeSyntaxScanner {
         emit(index, cursor, .string)
         index = cursor
         return true
-    }
-
-    private func regexMayStart(at offset: Int) -> Bool {
-        var cursor = offset - 1
-        while let value = unit(cursor), value == Unit.space || value == Unit.tab { cursor -= 1 }
-        guard let previous = unit(cursor), previous != Unit.newline else { return true }
-        if Self.regexPrecedingPunctuation.contains(previous) { return true }
-        guard isIdentifierPart(previous) else { return false }
-        var start = cursor
-        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
-        return Self.regexPrecedingWords.contains(String(decoding: units[start...cursor], as: UTF16.self))
     }
 
     private mutating func scanBlockComment() -> Bool {
@@ -681,6 +692,11 @@ private struct CodeSyntaxScanner {
         let start = index
         let end = identifierEnd(from: index)
         index = end
+        var before = start - 1
+        while let value = unit(before), value == Unit.space || value == Unit.tab { before -= 1 }
+        let isMember = unit(before) == Unit.dot
+        regexAllowed = language.regexLiterals && !isMember
+            && Self.regexPrecedingWords.contains(String(decoding: units[start..<end], as: UTF16.self))
         let prefix = String(decoding: units[start..<end], as: UTF16.self)
         switch language.rawStrings {
         case .rust where ["r", "br", "cr"].contains(prefix) && (unit(end) == Unit.hash || unit(end) == Unit.quote):

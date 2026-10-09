@@ -333,7 +333,22 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
             XCTAssertTrue(values.contains { $0 == ("/\\/\\*/", .string) }, name)
             XCTAssertFalse(values.contains { $0.0.hasPrefix("/ b") }, name)
         }
+        for name in ["js", "ts"] {
+            // コメントの後ろ、`default` の後ろ、前置 `++` の後ろは正規表現。
+            let regex = tokens("const r = /* note */ /[//]/g; return 1\nexport default /[//]/g; const x = 1\ny = ++/a/.lastIndex", name)
+            XCTAssertEqual(regex.filter { $0 == ("/[//]/g", .string) }.count, 2, name)
+            XCTAssertTrue(regex.contains { $0 == ("/* note */", .comment) }, name)
+            XCTAssertTrue(regex.contains { $0 == ("return", .keyword) }, name)
+            XCTAssertTrue(regex.contains { $0 == ("const", .keyword) }, name)
+            XCTAssertEqual(regex.filter { $0.1 == .comment }.count, 1, name)
+            // 後置 `++`・`--`、メンバー名 `obj.in` の後ろは除算。
+            let division = tokens("a = x++ / b/g\nc = y-- / d/g\nconst q = obj.in / b/g", name)
+            XCTAssertFalse(division.contains { $0.1 == .string }, name)
+        }
         // Ruby と Perl の正規表現の中の `#` はコメントではない。
+        let ruby = tokens("if cond then /a#b/ else nil end", "ruby")
+        XCTAssertTrue(ruby.contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(ruby.contains { $0 == ("end", .keyword) })
         XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("/a#b/", .string) })
         XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("if", .keyword) })
         XCTAssertTrue(tokens("if ($x =~ /a#b/) { print 1 }", "perl").contains { $0 == ("print", .keyword) })
