@@ -250,6 +250,39 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(mysql.contains { $0 == ("\"text\"", .string) })
     }
 
+    func testCSharpTripleQuotedRawStringsIgnoreBackslashes() {
+        let values = tokens("var path = \"\"\"C:\\\"\"\"; return 1;", "csharp")
+        XCTAssertTrue(values.contains { $0 == ("\"\"\"C:\\\"\"\"", .string) })
+        XCTAssertTrue(values.contains { $0 == ("return", .keyword) })
+    }
+
+    func testPHPAttributesAreNotComments() {
+        let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
+        XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("public", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("# note", .comment) })
+    }
+
+    func testPowerShellBacktickEscapes() {
+        let values = tokens("$m = \"message: `\"return`\"\"; $p = \"C:\\\"; if ($x) {}", "powershell")
+        XCTAssertTrue(values.contains { $0 == ("\"message: `\"return`\"\"", .string) })
+        XCTAssertTrue(values.contains { $0 == ("\"C:\\\"", .string) })
+        XCTAssertTrue(values.contains { $0 == ("if", .keyword) })
+        XCTAssertFalse(values.contains { $0.0 == "return" })
+    }
+
+    func testHashCommentBoundariesPerDialect() {
+        // YAML と INI は直前に空白が必要。
+        XCTAssertFalse(tokens("url: https://host/#fragment", "yaml").contains { $0.1 == .comment })
+        XCTAssertTrue(tokens("url: https://host/ #note", "yaml").contains { $0 == ("#note", .comment) })
+        XCTAssertFalse(tokens("key=a/#b", "ini").contains { $0.1 == .comment })
+        // シェルは単語の先頭なら演算子の直後でもコメント。
+        XCTAssertTrue(tokens("ls;#note", "bash").contains { $0 == ("#note", .comment) })
+        XCTAssertFalse(tokens("echo a/#b ${#x}", "bash").contains { $0.1 == .comment })
+        // Perl は `$#` 以外。
+        XCTAssertTrue(tokens("print a#note", "perl").contains { $0 == ("#note", .comment) })
+    }
+
     func testSQLKeywordsIgnoreCase() {
         let values = tokens("SELECT id FROM users WHERE name = 'a' -- note", "sql")
 
