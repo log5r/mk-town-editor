@@ -345,6 +345,22 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
             let division = tokens("a = x++ / b/g\nc = y-- / d/g\nconst q = obj.in / b/g", name)
             XCTAssertFalse(division.contains { $0.1 == .string }, name)
         }
+        for name in ["js", "ts"] {
+            // 制御文の条件の後ろは文の始まりなので正規表現。ただの括弧の後ろは除算。
+            let control = tokens("if (ok) /[//]/.test(x); return 1\nwhile (a) /b/g.exec(s)\nfor (;;) /c/.test(t)\nz = (a) / b / c", name)
+            for regex in ["/[//]/", "/b/g", "/c/"] {
+                XCTAssertTrue(control.contains { $0 == (regex, .string) }, "\(name) \(regex)")
+            }
+            XCTAssertTrue(control.contains { $0 == ("return", .keyword) }, name)
+            XCTAssertFalse(control.contains { $0.1 == .comment || $0.0 == "/ b /" }, name)
+        }
+        // Ruby・Perl のコマンド呼び出しの引数。`a / b`、`$x /2` は除算。
+        let command = tokens("puts /a#b/\nx = a / b / c\ny = @n /2 # note", "ruby")
+        XCTAssertTrue(command.contains { $0 == ("/a#b/", .string) })
+        XCTAssertEqual(command.filter { $0.1 == .string }.count, 1)
+        XCTAssertTrue(command.contains { $0 == ("# note", .comment) })
+        XCTAssertTrue(tokens("print /a#b/;\nmy $y = $x /2; # note", "perl").contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(tokens("my $y = $x /2; # note", "perl").contains { $0 == ("# note", .comment) })
         // Ruby と Perl の正規表現の中の `#` はコメントではない。
         let ruby = tokens("if cond then /a#b/ else nil end", "ruby")
         XCTAssertTrue(ruby.contains { $0 == ("/a#b/", .string) })

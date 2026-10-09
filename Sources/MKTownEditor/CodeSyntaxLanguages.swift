@@ -374,6 +374,7 @@ enum CodeSyntaxLanguages {
         },
         CodeSyntaxLanguage("ruby") {
             $0.regexLiterals = true
+            $0.commandRegexArguments = true
             $0.keywords = words("""
                 BEGIN END alias and begin break case class def defined? do else elsif end ensure false for if in \
                 module next nil not or redo rescue retry return self super then true undef unless until when \
@@ -415,6 +416,7 @@ enum CodeSyntaxLanguages {
         },
         CodeSyntaxLanguage("perl") {
             $0.regexLiterals = true
+            $0.commandRegexArguments = true
             $0.hashComments = .notAfterDollar
             $0.keywords = words("""
                 my our local sub if elsif else unless while until for foreach do last next redo return use no \

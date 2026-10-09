@@ -94,6 +94,8 @@ struct CodeSyntaxLanguage: Sendable {
     var verbatimStrings = false
     /// JavaScript・Ruby・Perl の正規表現リテラル `/[//]/`。値の後ろの `/` は除算とする。
     var regexLiterals = false
+    /// Ruby・Perl の `puts /a#b/` のように、空白で区切ったコマンド呼び出しの引数も正規表現とする。
+    var commandRegexArguments = false
     /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
     var quoteRunStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
@@ -191,6 +193,8 @@ private struct CodeSyntaxScanner {
     private var braceDepth = 0
     /// 次の `/` が正規表現を始められるか。値（識別子、数値、文字列、`)` など）の直後では除算。
     private var regexAllowed = true
+    /// 開いている `(` ごとに、制御文の条件かどうか。
+    private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
     /// YAML のフローコレクション（`{…}`・`[…]`）の深さ。中では `:` が続く識別子をキーとする。
     private var flowDepth = 0
@@ -383,9 +387,30 @@ private struct CodeSyntaxScanner {
                 index += 2
                 continue
             }
-            regexAllowed = !Self.valueClosingPunctuation.contains(value)
+            if value == 0x28 {
+                // `if (…)` の閉じ括弧の後ろは文の始まり。
+                parenthesisControlHeaders.append(followsControlKeyword(at: index))
+                regexAllowed = true
+            } else if value == 0x29 {
+                regexAllowed = parenthesisControlHeaders.popLast() ?? false
+            } else {
+                regexAllowed = !Self.valueClosingPunctuation.contains(value)
+            }
             index += 1
         }
+    }
+
+    private static let controlKeywords: Set<String> = ["if", "while", "for", "with"]
+
+    /// `offset` の `(` が `if`・`while`・`for`・`with` の条件を開くか。`obj.if (` のようなメンバー名は除く。
+    private func followsControlKeyword(at offset: Int) -> Bool {
+        guard language.regexLiterals else { return false }
+        var end = offset
+        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
+        var start = end
+        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
+        guard start < end, unit(start - 1) != Unit.dot else { return false }
+        return Self.controlKeywords.contains(String(decoding: units[start..<end], as: UTF16.self))
     }
 
     private static let valueClosingPunctuation = Set(")]}".utf16)
@@ -467,8 +492,9 @@ private struct CodeSyntaxScanner {
 
     /// 式の始まりにある `/` から始まる1行の正規表現リテラル。文字クラス `[...]` の中の `/` では閉じない。
     private mutating func scanRegexLiteral() -> Bool {
-        guard language.regexLiterals, regexAllowed, units[index] == Unit.slash,
-              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline else { return false }
+        guard language.regexLiterals, units[index] == Unit.slash,
+              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline,
+              regexAllowed || isCommandRegexArgument(at: index) else { return false }
         var cursor = index + 1
         var inClass = false
         while cursor < count {
@@ -488,6 +514,22 @@ private struct CodeSyntaxScanner {
         while let flag = unit(cursor), Self.isASCIILetter(flag) { cursor += 1 }
         emit(index, cursor, .string)
         index = cursor
+        return true
+    }
+
+    /// `puts /a#b/` のように、識別子の後ろに空白があり、`/` の直後に空白がない。`a / b`、`a /= 2`、`$x /2` は除算。
+    private func isCommandRegexArgument(at offset: Int) -> Bool {
+        guard language.commandRegexArguments, let next = unit(offset + 1), !Self.isWhitespace(next),
+              next != Unit.equal, let before = unit(offset - 1), before == Unit.space || before == Unit.tab else {
+            return false
+        }
+        var end = offset - 1
+        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
+        var start = end
+        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
+        guard start < end, !Self.isDigit(units[start]) else { return false }
+        // 変数（`$x`、`@x`）やメンバー（`a.b`）は値。
+        if let sigil = unit(start - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return false }
         return true
     }
 
