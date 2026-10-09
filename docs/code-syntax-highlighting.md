@@ -51,12 +51,13 @@ int main() { return 0; }
 | Haskell | `haskell`、`hs` |
 | シェル | `shell`、`sh`、`bash`、`zsh` |
 | PowerShell | `powershell`、`ps1`、`pwsh` |
-| SQL | `sql`、`postgresql`、`sqlite` |
-| MySQL | `mysql`、`mariadb`（`#`のコメントにも対応） |
+| SQL | `sql`、`postgresql`、`sqlite`（`"name"`は識別子として色分けしない） |
+| MySQL | `mysql`、`mariadb`（`#`のコメント、`` `name` ``の識別子にも対応） |
 | JSON | `json`、`jsonc` |
 | JSON5 | `json5`（単一引用符の文字列、引用符のないキー） |
 | YAML | `yaml`、`yml` |
-| TOML・INI | `toml`、`ini`、`cfg` |
+| TOML | `toml` |
+| INI | `ini`、`cfg`、`editorconfig`（`;`のコメントにも対応） |
 | Java properties | `properties`（`#`・`!`のコメント、`=`・`:`・空白の区切り） |
 | HTML・XML | `html`、`xml`、`svg`、`plist`、`vue` |
 | CSS | `css` |
@@ -87,11 +88,13 @@ HTML書き出しでは字句を`<span class="tok-keyword">`のように囲み、
 
 - 字句解析は `CodeSyntaxTokenizer` が行う。正規表現を使わず、UTF-16単位で1回だけ走査し、`NSRange`の字句列を返す。メインアクター外の文書解析（`DocumentSnapshot`）からも呼べる。
 - 言語ごとの差は `CodeSyntaxLanguage` の設定値（キーワード、コメント記号、文字列の区切り、接頭辞付き識別子など）で表す。HTML・XMLとDiffだけは専用の走査を使う。
-- コメントや文字列の書き方が違う方言（SCSS・Less、MySQL、JSON5）は、別名でまとめず `CodeSyntaxLanguage(_:basedOn:)` で元の言語から派生させる。Java propertiesはTOML・INIと区切りもコメントも違うため、専用の行頭規則を使う。
+- コメントや文字列の書き方が違う方言（SCSS・Less、MySQL、JSON5、INI）は、別名でまとめず `CodeSyntaxLanguage(_:basedOn:)` で元の言語から派生させる。Java propertiesはTOML・INIと区切りもコメントも違うため、専用の行頭規則を使う。
 - 正確な構文解析はしない。目的は読みやすさの補助であり、誤った色分けで原文や書き出しの内容が変わることはない。
   - Rustのライフタイム `'a` やHaskellの `x'` を文字列にしないよう、Cの系統の言語では `'` を1文字の文字リテラルとしてだけ扱う。
-  - シェル、Perl、YAML、TOML・INI、Dockerfileの `#`（TOML・INIは `;` も）は、単語の先頭にある場合だけコメントとする（`$#`、`a#b` はコメントではない）。Python、Ruby、PHP、PowerShellは識別子や数値の直後の `#` もコメントとする（`x=1#note`）。
+  - シェル、Perl、YAML、INI、Dockerfileの `#`（INIは `;` も）は、単語の先頭にある場合だけコメントとする（`$#`、`a#b` はコメントではない）。Python、Ruby、PHP、PowerShell、TOMLは識別子や数値の直後の `#` もコメントとする（`x=1#note`）。
   - 閉じていない文字列やコメントは、行末（複数行の文字列・コメントはブロック末尾）までとする。
+  - Dartの`r"…"`とC#の`@"…"`はバックスラッシュをエスケープとしない（`r"C:\"`で文字列が終わる）。C#の逐語的文字列は`""`を引用符として扱う。Pythonの`r"…"`は`\"`で文字列が終わらないため、エスケープを考慮して走査する。
+  - YAMLのブロックスカラー（`key: |`、`- >-`）の本文は、開始行より深く字下げされた間は色分けしない。
   - 区切りを選べる生文字列（Rustの`r#"…"#`、Swiftの`#"…"#`、C++の`R"tag(…)tag"`）とLuaの長い括弧（`[==[…]==]`）は、同じ区切りが現れるまでを1つの字句とする。中の引用符で文字列を終えない。
   - `--` の行コメントは方言ごとに条件が違う。MySQLは直後に空白か制御文字が必要（`1--2`は式）で、Haskellは`-->`のように記号が続くと演算子になる。
   - Diffの`---`・`+++`は、ハンクの外でだけファイル見出しとする。ハンク見出し（`@@ -1,2 +1,2 @@`）の行数を数え、ハンク内の`--- x`は削除行として扱う。

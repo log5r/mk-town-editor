@@ -30,7 +30,8 @@ enum CodeSyntaxLanguages {
             "json": ["json", "jsonc", "geojson"],
             "json5": ["json5"],
             "yaml": ["yaml", "yml"],
-            "toml": ["toml", "ini", "cfg", "editorconfig"],
+            "toml": ["toml"],
+            "ini": ["ini", "cfg", "editorconfig"],
             "properties": ["properties"],
             "markup": ["html", "htm", "xhtml", "xml", "svg", "plist", "xsl", "xslt", "rss", "atom", "vue", "storyboard", "xib"],
             "css": ["css"],
@@ -100,14 +101,15 @@ enum CodeSyntaxLanguages {
         $0.caseInsensitive = true
         $0.lineComments = units("--")
         $0.blockComments = cStyleComments.block
-        $0.strings = [Delimiter("'", escapes: false)]
+        // 標準 SQL の `"name"` は識別子。中のキーワードを色分けしない。
+        $0.strings = [Delimiter("'", escapes: false), Delimiter("\"", token: nil)]
     }
 
     /// MySQL は `#` もコメントにする（PostgreSQL では演算子のため既定の SQL には含めない）。
     private static let mysql = CodeSyntaxLanguage("mysql", basedOn: sql) {
         $0.lineComments = units("--", "#")
         $0.dashComments = .whitespaceAfter
-        $0.strings = [Delimiter("'"), Delimiter("\"")]
+        $0.strings = [Delimiter("'"), Delimiter("\""), Delimiter("`", token: nil)]
     }
 
     private static let json = CodeSyntaxLanguage("json") {
@@ -123,6 +125,21 @@ enum CodeSyntaxLanguages {
         $0.keywords.formUnion(["Infinity", "NaN"])
         $0.strings = [Delimiter("\""), Delimiter("'")]
         $0.identifierKeys = true
+    }
+
+    /// TOML は文字列の外の `#` を、直前の文字によらずコメントにする（`key=1#note`）。
+    private static let toml = CodeSyntaxLanguage("toml") {
+        $0.keywords = ["true", "false"]
+        $0.lineComments = units("#")
+        $0.strings = [Delimiter("\"\"\""), Delimiter("'''", escapes: false),
+                      Delimiter("\"", multiline: false), Delimiter("'", escapes: false, multiline: false)]
+        $0.lineKeys = .ini
+    }
+
+    /// INI は `;` もコメントだが、値の途中の `a;b` や `a#b` はコメントにしない。
+    private static let ini = CodeSyntaxLanguage("ini", basedOn: toml) {
+        $0.lineComments = units("#", ";")
+        $0.commentsNeedWordBoundary = true
     }
 
     private static let css = CodeSyntaxLanguage("css") {
@@ -186,6 +203,7 @@ enum CodeSyntaxLanguages {
             $0.lineComments = cStyleComments.line
             $0.blockComments = cStyleComments.block
             $0.strings = [Delimiter("\"\"\""), Delimiter("\"", multiline: false)]
+            $0.verbatimStrings = true
             $0.charLiterals = true
             $0.preprocessor = true
         },
@@ -312,7 +330,7 @@ enum CodeSyntaxLanguages {
             $0.lineComments = cStyleComments.line
             $0.blockComments = cStyleComments.block
             $0.strings = [Delimiter("'''"), Delimiter("\"\"\"")] + quotedStrings
-            $0.stringPrefixes = ["r"]
+            $0.rawStringPrefixes = ["r"]
             $0.prefixedIdentifiers = [at: .attribute]
         },
         CodeSyntaxLanguage("javascript") {
@@ -436,14 +454,8 @@ enum CodeSyntaxLanguages {
             $0.lineKeys = .yaml
             $0.prefixedIdentifiers = [ascii("&"): .variable, ascii("*"): .variable]
         },
-        CodeSyntaxLanguage("toml") {
-            $0.commentsNeedWordBoundary = true
-            $0.keywords = ["true", "false"]
-            $0.lineComments = units("#", ";")
-            $0.strings = [Delimiter("\"\"\""), Delimiter("'''", escapes: false),
-                          Delimiter("\"", multiline: false), Delimiter("'", escapes: false, multiline: false)]
-            $0.lineKeys = .ini
-        },
+        toml,
+        ini,
         CodeSyntaxLanguage("properties") {
             // Java の properties。行頭の `#`・`!` がコメントで、キーは `=`・`:`・空白で区切る。
             $0.lineKeys = .properties
