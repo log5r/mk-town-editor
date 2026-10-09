@@ -132,6 +132,19 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         XCTAssertEqual(normalized("\\lim_{n\\to\\infty}{^n{x}} \\underbrace{a}_b", display: false),
                        "\\lim_{n\\to\\infty}{^n{x}} {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
         XCTAssertEqual(normalized("\\text{a \\lt b}_\\sqrt", display: false), "\\text{a < b}_\\sqrt")
+        // 色指定と \\left ... \\right の対も、添字トークンとしてひとまとまりに読む。
+        XCTAssertEqual(normalized("x_\\color{red}{\\underbrace{a}_b}", display: false),
+                       "x_\\color{red}{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
+        XCTAssertEqual(normalized("x^\\textcolor{red}{\\underbrace{a}_b} \\underbrace{c}_d", display: false),
+                       "x^\\textcolor{red}{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}} {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        XCTAssertEqual(normalized("x_\\left(\\underbrace{a}_b\\right) \\underbrace{c}_d", display: false),
+                       "x_\\left({{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}\\right) {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}")
+        XCTAssertEqual(normalized("x_\\left\\{ \\left( a \\right) \\underbrace{b}_c \\right\\} \\underbrace{d}_e", display: true),
+                       "x_\\left\\{ \\left( a \\right) {{\\scriptstyle\\underline{b}} \\atop {\\scriptscriptstyle c}} \\right\\} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")
+        // \\right がない \\left は括弧だけを添字として扱い、残りは元の書体のまま。
+        XCTAssertEqual(normalized("x_\\left( \\underbrace{a}_b", display: false),
+                       "x_\\left( {{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        builds("x_\\color{red}{\\underbrace{a}_b} + x_\\left(\\underbrace{a}_b\\right) + x^\\colorbox{yellow}{\\underbrace{a}_b}")
         // \\sqrt の任意引数は根号の一部として添字トークンに含める。
         XCTAssertEqual(normalized("x_\\sqrt[3]{\\underbrace{a}_b}", display: false),
                        "x_\\sqrt[3]{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
