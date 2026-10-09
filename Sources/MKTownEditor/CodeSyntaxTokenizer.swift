@@ -141,25 +141,12 @@ struct CodeSyntaxLanguage: Sendable {
 }
 
 enum CodeSyntaxTokenizer {
-    /// フェンスの情報文字列から言語を求める。`ruby:app.rb`（ファイル名付き）や `{.python}` も受け付ける。
+    /// フェンスの情報文字列から走査器の言語を求める。解析は `CodeSyntaxAnalyzer.language(named:)` が行う。
+    /// Tree-sitter で解析する言語も、移行が終わるまでは走査器の定義を返す。
     /// 未対応の言語と `text` などのプレーンテキスト指定は `nil`。
     static func language(named info: String?) -> CodeSyntaxLanguage? {
-        guard var name = info?.trimmingCharacters(in: .whitespaces).lowercased(), !name.isEmpty else {
-            return nil
-        }
-        if name.hasPrefix("{") { name = String(name.dropFirst().prefix(while: { $0 != "}" })) }
-        if name.hasPrefix(".") { name.removeFirst() }
-        if name.hasPrefix("language-") { name.removeFirst("language-".count) }
-        if let colon = name.firstIndex(of: ":") { name = String(name[..<colon]) }
-        if CodeSyntaxLanguages.plainText.contains(name) { return nil }
-        if let canonical = CodeSyntaxLanguages.aliases[name] {
-            return CodeSyntaxLanguages.all[canonical]
-        }
-        // `main.cpp` のようにファイル名だけを書いた場合は拡張子で判定する。
-        if let dot = name.lastIndex(of: "."), let canonical = CodeSyntaxLanguages.aliases[String(name[name.index(after: dot)...])] {
-            return CodeSyntaxLanguages.all[canonical]
-        }
-        return nil
+        guard let selection = CodeSyntaxAnalyzer.language(named: info) else { return nil }
+        return CodeSyntaxLanguages.all[selection.name]
     }
 
     static func tokens(in source: String, language name: String?) -> [CodeSyntaxTokenRange] {
