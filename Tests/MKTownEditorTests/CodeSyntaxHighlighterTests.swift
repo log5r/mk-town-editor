@@ -141,6 +141,58 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(tokens("SELECT a # b", "postgresql").contains { $0.1 == .comment })
     }
 
+    func testRawStringsWithCustomDelimitersKeepEmbeddedQuotes() {
+        let rust = tokens("let s = r#\"a \" if x { return } \" b\"#; let t = br##\"\"#\"##; let p = r\"C:\\\";", "rust")
+        XCTAssertTrue(rust.contains { $0 == ("r#\"a \" if x { return } \" b\"#", .string) })
+        XCTAssertTrue(rust.contains { $0 == ("br##\"\"#\"##", .string) })
+        XCTAssertTrue(rust.contains { $0 == ("r\"C:\\\"", .string) })
+        XCTAssertFalse(rust.contains { $0.0 == "if" || $0.0 == "return" })
+
+        let swift = tokens("let s = #\"a \" if \"#\nlet m = ##\"\"\"\n\"# return\n\"\"\"##\n#if DEBUG", "swift")
+        XCTAssertTrue(swift.contains { $0 == ("#\"a \" if \"#", .string) })
+        XCTAssertTrue(swift.contains { $0 == ("##\"\"\"\n\"# return\n\"\"\"##", .string) })
+        XCTAssertTrue(swift.contains { $0 == ("#if", .attribute) })
+        XCTAssertFalse(swift.contains { $0.0 == "if" || $0.0 == "return" })
+
+        let cpp = tokens("auto s = R\"x(a \" if )\" return)x\"; auto t = u8R\"(q)\";", "cpp")
+        XCTAssertTrue(cpp.contains { $0 == ("R\"x(a \" if )\" return)x\"", .string) })
+        XCTAssertTrue(cpp.contains { $0 == ("u8R\"(q)\"", .string) })
+        XCTAssertFalse(cpp.contains { $0.0 == "if" || $0.0 == "return" })
+    }
+
+    func testLuaLongBracketsUseTheirLevel() {
+        let values = tokens("--[==[ a ]] if ]==]\nlocal s = [=[ x ]] return ]=]\n-- [x\nlocal t = 1", "lua")
+        XCTAssertTrue(values.contains { $0 == ("--[==[ a ]] if ]==]", .comment) })
+        XCTAssertTrue(values.contains { $0 == ("[=[ x ]] return ]=]", .string) })
+        XCTAssertTrue(values.contains { $0 == ("-- [x", .comment) })
+        XCTAssertFalse(values.contains { $0.0 == "if" || $0.0 == "return" })
+        XCTAssertTrue(values.contains { $0 == ("local", .keyword) })
+    }
+
+    func testDashCommentRulesPerDialect() {
+        // MySQL は `--` の直後に空白が必要。
+        XCTAssertFalse(tokens("SELECT 1--2 AS n", "mysql").contains { $0.1 == .comment })
+        XCTAssertTrue(tokens("SELECT 1 --\tnote", "mysql").contains { $0 == ("--\tnote", .comment) })
+        XCTAssertTrue(tokens("SELECT 1 --", "mysql").contains { $0 == ("--", .comment) })
+        XCTAssertTrue(tokens("SELECT 1--2", "sql").contains { $0 == ("--2", .comment) })
+        // Haskell の `-->` は演算子、`---` はコメント。
+        XCTAssertFalse(tokens("a --> b", "haskell").contains { $0.1 == .comment })
+        XCTAssertTrue(tokens("x = 1 --- note", "haskell").contains { $0 == ("--- note", .comment) })
+        XCTAssertTrue(tokens("x = 1 -- | doc", "haskell").contains { $0 == ("-- | doc", .comment) })
+    }
+
+    func testJSON5SingleQuotedStringsAndUnquotedKeys() {
+        let values = tokens("{'value': 'true', count: 1, \"q\": Infinity}", "json5")
+        XCTAssertTrue(values.contains { $0 == ("'value'", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("'true'", .string) })
+        XCTAssertTrue(values.contains { $0 == ("count", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("\"q\"", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("Infinity", .keyword) })
+        XCTAssertFalse(values.contains { $0 == ("true", .keyword) })
+        // 素の JSON は従来どおり。
+        XCTAssertFalse(tokens("{count: 1}", "json").contains { $0.1 == .attribute })
+    }
+
     func testSQLKeywordsIgnoreCase() {
         let values = tokens("SELECT id FROM users WHERE name = 'a' -- note", "sql")
 
@@ -198,6 +250,32 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(values.contains { $0 == ("-old", .deleted) })
         XCTAssertTrue(values.contains { $0 == ("+new", .inserted) })
         XCTAssertFalse(values.contains { $0.0 == " same" })
+    }
+
+    func testDiffHunkLinesStartingWithDashesAreChangesNotHeaders() {
+        let diff = """
+            diff --git a/q.sql b/q.sql
+            --- a/q.sql
+            +++ b/q.sql
+            @@ -1,2 +1,2 @@
+            --- old comment
+            +++ new line
+             same
+            --- a/next.sql
+            +++ b/next.sql
+            @@ -3 +3 @@
+            -x
+            +y
+            """
+        let values = tokens(diff, "diff")
+        XCTAssertTrue(values.contains { $0 == ("--- a/q.sql", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("--- old comment", .deleted) })
+        XCTAssertTrue(values.contains { $0 == ("+++ new line", .inserted) })
+        // ハンクの行数を使い切った後は、次のファイルの見出しとして扱う。
+        XCTAssertTrue(values.contains { $0 == ("--- a/next.sql", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("+++ b/next.sql", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("-x", .deleted) })
+        XCTAssertTrue(values.contains { $0 == ("+y", .inserted) })
     }
 
     func testUnterminatedConstructsStopAtBlockEndAndRangesStayInBounds() {
