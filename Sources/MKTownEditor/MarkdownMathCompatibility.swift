@@ -220,6 +220,15 @@ enum MarkdownMathCompatibility {
             let length = commandLength(at: index, in: chars)
             let name = String(chars[(index + 1)..<(index + 1 + length)])
             let next = index + 1 + length
+            if name == "begin", let found = environmentRange(from: next, in: chars),
+               let end = matchingEnd(for: found.name, after: found.end, in: chars) {
+                // 環境の各セルは独立したスコープなので、中で宣言した書体を外へ漏らさない。
+                output += String(chars[index..<found.end])
+                output += rewriteCells(chars[found.end..<end.start], style: cellStyle(for: found.name, outer: style))
+                output += String(chars[end.start..<end.end])
+                index = end.end
+                continue
+            }
             if styleCommands.contains(name) {
                 style = "\\" + name
             } else if let replacement = aliases[name] {
@@ -264,6 +273,49 @@ enum MarkdownMathCompatibility {
             index = argument.end
         }
         return (output, index)
+    }
+
+    /// `cases` と行列の各セルはSwiftMathが文字サイズで組むので、そのほかの環境だけ外側の書体を引き継ぐ。
+    private static func cellStyle(for environment: String, outer: String) -> String {
+        let textStyled: Set<String> = ["cases", "matrix", "pmatrix", "bmatrix", "Bmatrix", "vmatrix", "Vmatrix"]
+        return textStyled.contains(environment) ? "\\textstyle" : outer
+    }
+
+    /// 環境の本体を `&` と `\\` で区切ったセルごとに書き換える。入れ子の環境は1つのセルの一部として扱う。
+    private static func rewriteCells(_ chars: ArraySlice<Character>, style: String) -> String {
+        var output = ""
+        var cellStart = chars.startIndex
+        var depth = 0
+        var index = chars.startIndex
+        func flush(upTo end: Int, separator: ArraySlice<Character>) {
+            output += rewriteCommands(chars[cellStart..<end], style: style) + String(separator)
+        }
+        while index < chars.endIndex {
+            let char = chars[index]
+            if char == "\\" {
+                let length = commandLength(at: index, in: chars)
+                let name = String(chars[(index + 1)..<(index + 1 + length)])
+                let next = index + 1 + length
+                if name == "\\", depth == 0 {
+                    flush(upTo: index, separator: chars[index..<next])
+                    cellStart = next
+                } else if name == "begin", let found = environmentRange(from: next, in: chars),
+                          let end = matchingEnd(for: found.name, after: found.end, in: chars) {
+                    index = end.end
+                    continue
+                }
+                index = next
+                continue
+            }
+            if char == "{" { depth += 1 } else if char == "}" { depth = max(0, depth - 1) }
+            if char == "&", depth == 0 {
+                flush(upTo: index, separator: chars[index..<(index + 1)])
+                cellStart = index + 1
+            }
+            index += 1
+        }
+        flush(upTo: chars.endIndex, separator: [])
+        return output
     }
 
     private static func rewritten(_ token: Token, style: String) -> String {

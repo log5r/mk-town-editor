@@ -98,6 +98,16 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
                        "\\displaystyle {{\\displaystyle\\underline{x^2}} \\atop {\\scriptstyle n}} = 2")
         XCTAssertEqual(normalized("{\\displaystyle a} \\underbrace{x}_{n}", display: false),
                        "{\\displaystyle a} {{\\textstyle\\underline{x}} \\atop {\\scriptstyle n}}")
+        // 環境の中で宣言した書体はそのセルだけに効き、\\end の後や次のセルには漏れない。
+        XCTAssertEqual(normalized("\\begin{aligned}\\scriptstyle a&=b\\end{aligned}\\underbrace{x}_y", display: true),
+                       "\\begin{aligned}\\scriptstyle a&=b\\end{aligned}{{\\displaystyle\\underline{x}} \\atop {\\scriptstyle y}}")
+        XCTAssertEqual(normalized("\\begin{aligned}\\scriptstyle a &= \\underbrace{x}_y \\\\ \\underbrace{p}_q &= r\\end{aligned}", display: true),
+                       "\\begin{aligned}\\scriptstyle a &= {{\\displaystyle\\underline{x}} \\atop {\\scriptstyle y}} \\\\ {{\\displaystyle\\underline{p}} \\atop {\\scriptstyle q}} &= r\\end{aligned}")
+        XCTAssertEqual(normalized("\\begin{aligned}\\scriptstyle \\underbrace{a}_b & \\begin{cases}\\underbrace{c}_d & e\\end{cases}\\end{aligned}", display: true),
+                       "\\begin{aligned}\\scriptstyle {{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}} & \\begin{cases}{{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}} & e\\end{cases}\\end{aligned}")
+        XCTAssertEqual(normalized("\\begin{pmatrix}\\underbrace{a}_b & \\text{x & y}\\end{pmatrix}", display: true),
+                       "\\begin{pmatrix}{{\\textstyle\\underline{a}} \\atop {\\scriptstyle b}} & \\text{x & y}\\end{pmatrix}")
+        builds("\\begin{aligned}\\scriptstyle a&=b\\end{aligned}\\underbrace{x}_y")
         // 添字と分数の引数では一段小さい書体を使い、周囲より大きくならないようにする。
         XCTAssertEqual(normalized("x_{\\underbrace{a}_b}", display: false),
                        "x_{{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}}")
