@@ -187,6 +187,7 @@ private enum Unit {
     static let at: UInt16 = 0x40, openBracket: UInt16 = 0x5B, backslash: UInt16 = 0x5C, closeBracket: UInt16 = 0x5D
     static let underscore: UInt16 = 0x5F, backtick: UInt16 = 0x60, openBrace: UInt16 = 0x7B, closeBrace: UInt16 = 0x7D
     static let percent: UInt16 = 0x25
+    static let comma: UInt16 = 0x2C
 }
 
 private struct CodeSyntaxScanner {
@@ -222,8 +223,11 @@ private struct CodeSyntaxScanner {
     /// 開いている Ruby のブロック。`def` などのスコープは外側のローカル変数を持つ。
     private var rubyBlocks: [Set<String>?] = []
     private var loopAwaitingDo = false
-    private var rubyBraceLocals: [Set<String>] = []
+    /// 開いている Ruby の `{`。ブロックは外側のローカル変数を持ち、ハッシュは `nil`。
+    private var rubyBraceLocals: [Set<String>?] = []
     private var jumpStatement: JumpStatement?
+    /// 文の始まりの `import`・`export … from` を読んでいる間の `{` の深さ。
+    private var importBraceDepth: Int?
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -372,6 +376,13 @@ private struct CodeSyntaxScanner {
                     regexAllowed = true
                     jumpStatement = nil
                 }
+                if let depth = importBraceDepth, braceKinds.count == depth, previousToken == .value {
+                    // セミコロンのない `import fs from "x"` は、モジュール名の後ろの改行で終わる。
+                    regexAllowed = true
+                    importBraceDepth = nil
+                }
+                // `async` と `function` の間に改行は置けない。
+                asyncInExpression = nil
                 atLineStart = true
                 index += 1
                 lineStartOffset = index
@@ -483,14 +494,17 @@ private struct CodeSyntaxScanner {
         if value == Unit.equal, next != Unit.equal, next != 0x7E, next != Unit.greater {
             if let name = lastIdentifier {
                 knownLocals.insert(name)
+                knownLocals.formUnion(multipleAssignmentTargets(before: index))
             } else if let name = compoundAssignmentTarget(before: index) {
                 knownLocals.insert(name)
             }
         }
         if language.newlineEndsStatements {
             // `{ |x| … }` の引数とブロック内の代入はブロックの中だけ。
-            if value == Unit.openBrace { rubyBraceLocals.append(knownLocals) }
-            if value == Unit.closeBrace, let outer = rubyBraceLocals.popLast() { knownLocals = outer }
+            // `items.each {`・`f(x) {` はブロック、`h = {`・`[{` はハッシュ（スコープを作らない）。
+            let isBlock = previousToken == .value || previousToken == .punctuation(0x29)
+            if value == Unit.openBrace { rubyBraceLocals.append(isBlock ? knownLocals : nil) }
+            if value == Unit.closeBrace, let scope = rubyBraceLocals.popLast(), let outer = scope { knownLocals = outer }
         }
         if value == 0x7C {
             if collectingParameters == .pipes {
@@ -506,6 +520,34 @@ private struct CodeSyntaxScanner {
             collectingParameters = nil
         }
         if value != Unit.dot { definition = nil }
+    }
+
+    /// 文の始まりの `a, b = 1, 2`・`a, *b = …` の左辺のうち、最後の1つより前の変数。
+    private func multipleAssignmentTargets(before equal: Int) -> [String] {
+        var names: [String] = []
+        var cursor = equal
+        func skipSpaces() { while let value = unit(cursor - 1), value == Unit.space || value == Unit.tab { cursor -= 1 } }
+        func identifier() -> String? {
+            let end = cursor
+            while cursor > 0, isIdentifierPart(units[cursor - 1]) { cursor -= 1 }
+            guard cursor < end, !Self.isDigit(units[cursor]) else { return nil }
+            if unit(cursor - 1) == 0x2A { cursor -= 1 } // `*rest`
+            return String(decoding: units[cursor..<end], as: UTF16.self).trimmingCharacters(in: ["*"])
+        }
+        skipSpaces()
+        guard identifier() != nil else { return [] }
+        while true {
+            skipSpaces()
+            guard unit(cursor - 1) == Unit.comma else { break }
+            cursor -= 1
+            skipSpaces()
+            guard let name = identifier() else { return [] }
+            names.append(name)
+        }
+        // `foo a, b = 1` のような引数ではなく、文の始まりにある場合だけ。
+        skipSpaces()
+        guard cursor == 0 || [Unit.newline, Unit.semicolon].contains(units[cursor - 1]) else { return [] }
+        return names
     }
 
     private static let compoundOperators: Set<String> = ["||", "&&", "+", "-", "*", "/", "%", "**", "^", "|", "&", "<<", ">>"]
@@ -538,6 +580,7 @@ private struct CodeSyntaxScanner {
 
     /// 括弧の対応で文脈を決める。`if (…)` の `)` とブロックの `}` の後ろは文の始まりなので正規表現を認める。
     private mutating func notePunctuation(_ value: UInt16) {
+        if value == Unit.semicolon { importBraceDepth = nil }
         if language.commandRegexArguments { noteLocals(value) }
         lastIdentifier = nil
         previousWord = nil
@@ -996,6 +1039,7 @@ private struct CodeSyntaxScanner {
             definition = name == "def" ? .name : definition == .name && name != "self" ? .parameters
                 : definition == .name ? .name : nil
         }
+        if language.regexLiterals, !isMember, name == "import", atStatementStart { importBraceDepth = braceKinds.count }
         // `break`・`continue`（ラベル付きを含む）は改行で文が終わる。
         jumpStatement = isMember ? nil : ["break", "continue"].contains(name) ? .keyword
             : jumpStatement == .keyword && !Self.regexPrecedingWords.contains(name) ? .label : nil
