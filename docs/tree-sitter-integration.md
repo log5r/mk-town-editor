@@ -49,6 +49,7 @@ macOS 14とswift-tools-version 6.0は変えない。swift-tree-sitterはmacOS 10
 - 述語を使わない理由：`QueryCursor` は述語を評価しない。述語を書いても条件が効かず、全件に一致する。
 - 呼び出しごとに `Parser` を作る：`Parser` は同時に使えない。共有すると排他が要り、`DocumentSnapshot` の並行生成の妨げになる。
 - 長さの上限（100万UTF-16単位）とタイムアウト（0.5秒）：巨大な本文や文法の病的な入力で、解析が終わらないのを防ぐ。超えたブロックは単色にする。
+- タイムアウトの実装：`Parser.timeout` はSwiftTreeSitterが `ts_parser_set_timeout_micros` で実装している。tree-sitter 0.25 はこの関数を非推奨とし、進捗コールバック付きの解析オプションを勧めている。swift-tree-sitter の版を上げるときは、タイムアウトが効くかを確かめる（長さの上限が恒久的な防御である）。
 - 構文木は解析のたびに解放する。保持するのは `CodeSyntaxTokenRange` だけである。
 
 ## 言語を足す手順

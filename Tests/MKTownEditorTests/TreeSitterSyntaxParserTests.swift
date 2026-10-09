@@ -319,6 +319,28 @@ final class TreeSitterSyntaxParserTests: XCTestCase {
         XCTAssertEqual(CodeSyntaxAnalyzer.tokens(in: source, language: "js", cache: cache), [])
     }
 
+    func testOversizeSourceIsUnsupportedAndCached() {
+        let source = String(repeating: "a", count: TreeSitterSyntaxParser.maximumSourceLength + 1)
+        XCTAssertEqual(TreeSitterSyntaxParser.parse(source, grammar: .javascript), .unsupported)
+        let cache = CodeSyntaxTokenCache()
+        XCTAssertEqual(CodeSyntaxAnalyzer.tokens(in: source, language: "js", cache: cache), [])
+        XCTAssertEqual(cache.count, 1)
+    }
+
+    func testTimeoutIsInterruptedAndNotCached() {
+        let line = "const v = foo(1, 'a') + `t${x}`; // c\n"
+        let source = String(repeating: line, count: 20_000)
+        XCTAssertEqual(TreeSitterSyntaxParser.parse(source, grammar: .javascript, timeout: 0.000_001), .interrupted)
+        let cache = CodeSyntaxTokenCache()
+        let selection = CodeSyntaxAnalyzer.language(named: "js")!
+        XCTAssertEqual(CodeSyntaxAnalyzer.tokens(in: source, language: selection, cache: cache, parseTimeout: 0.000_001), [])
+        XCTAssertEqual(cache.count, 0)
+        // 通常の上限なら解析できる（タイムアウトは一時的な失敗で、入力のせいではない）。
+        if case .tokens = TreeSitterSyntaxParser.parse(source, grammar: .javascript, timeout: 30) {} else {
+            XCTFail("十分な時間があれば解析できる")
+        }
+    }
+
     func testLargeSourceFinishesWithinTimeout() {
         let line = "const v = foo(1, 'a') + `t${x}`; // c\n"
         let source = String(repeating: line, count: 5_000)

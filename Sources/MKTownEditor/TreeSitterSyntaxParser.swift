@@ -67,23 +67,25 @@ private final class TreeSitterQueryStore: @unchecked Sendable {
     private let lock = NSLock()
     private var queries: [TreeSitterGrammar: Result<Query, Error>] = [:]
 
+    /// コンパイル結果（成功も失敗も）。初回だけコンパイルし、以降は同じ結果を返す。ロックを保持して呼ぶこと。
+    private func result(for grammar: TreeSitterGrammar) -> Result<Query, Error> {
+        if let cached = queries[grammar] { return cached }
+        let result = Result { try Query(language: grammar.language, data: Data(grammar.highlightsQuery.utf8)) }
+        queries[grammar] = result
+        return result
+    }
+
     func query(for grammar: TreeSitterGrammar) -> Query? {
         lock.lock()
         defer { lock.unlock() }
-        if let cached = queries[grammar] { return try? cached.get() }
-        let result = Result { try Query(language: grammar.language, data: Data(grammar.highlightsQuery.utf8)) }
-        queries[grammar] = result
-        return try? result.get()
+        return try? result(for: grammar).get()
     }
 
-    /// テスト用。コンパイルエラーの内容を調べる。
+    /// テスト用。コンパイルエラーの内容を調べる。`query(for:)` と同じコンパイル結果を使う。
     func compileError(for grammar: TreeSitterGrammar) -> Error? {
         lock.lock()
         defer { lock.unlock() }
-        if queries[grammar] == nil {
-            queries[grammar] = Result { try Query(language: grammar.language, data: Data(grammar.highlightsQuery.utf8)) }
-        }
-        if case .failure(let error) = queries[grammar]! { return error }
+        if case .failure(let error) = result(for: grammar) { return error }
         return nil
     }
 }
@@ -97,18 +99,35 @@ enum TreeSitterSyntaxParser {
 
     typealias Capture = (range: NSRange, token: CodeSyntaxToken, patternIndex: Int)
 
+    /// 解析の結果。
+    enum Outcome: Equatable {
+        /// 解析できた。何も該当しなければ `[]`。
+        case tokens([CodeSyntaxTokenRange])
+        /// 入力が長すぎる、またはクエリをコンパイルできない。同じ入力では必ず同じ結果になるので、単色として保存してよい。
+        case unsupported
+        /// タイムアウト、解析の失敗、結果の検証失敗。負荷などで一時的に起きうるので、単色にするが保存しない（次回やり直す）。
+        case interrupted
+    }
+
     /// 色分けの結果。解析できなかった場合（長すぎる、タイムアウト、クエリの不具合）は `nil`。
-    /// 解析できて何も該当しなければ `[]`。
+    /// 解析できて何も該当しなければ `[]`。失敗の種類を区別したい場合は `parse(_:grammar:timeout:)` を使う。
     static func tokens(in source: String, grammar: TreeSitterGrammar) -> [CodeSyntaxTokenRange]? {
+        if case .tokens(let tokens) = parse(source, grammar: grammar) { return tokens }
+        return nil
+    }
+
+    /// 解析して、成功と、保存してよい失敗・保存してはいけない失敗を区別して返す。
+    /// - Parameter timeout: 解析にかける時間の上限（秒）。テストで小さくして `.interrupted` を起こす。
+    static func parse(_ source: String, grammar: TreeSitterGrammar, timeout: TimeInterval = parseTimeout) -> Outcome {
         let text = source as NSString
         let length = text.length
-        guard length <= maximumSourceLength else { return nil }
-        guard let query = TreeSitterQueryStore.shared.query(for: grammar) else { return nil }
+        guard length <= maximumSourceLength else { return .unsupported }
+        guard let query = TreeSitterQueryStore.shared.query(for: grammar) else { return .unsupported }
         // Parser はスレッド間で共有できないので毎回作る。
         let parser = Parser()
-        parser.timeout = parseTimeout
+        parser.timeout = timeout
         guard (try? parser.setLanguage(grammar.language)) != nil,
-              let tree = parser.parse(source), let root = tree.rootNode else { return nil }
+              let tree = parser.parse(source), let root = tree.rootNode else { return .interrupted }
 
         var captures: [Capture] = []
         let cursor = query.execute(node: root, in: tree)
@@ -117,7 +136,8 @@ enum TreeSitterSyntaxParser {
                   let token = token(forCapture: name, range: capture.range, text: text, grammar: grammar) else { continue }
             captures.append((capture.range, token, capture.patternIndex))
         }
-        return normalize(captures, length: length)
+        guard let normalized = normalize(captures, length: length) else { return .interrupted }
+        return .tokens(normalized)
     }
 
     /// キャプチャ名を字句の種類へ変換する。名前は `CodeSyntaxToken` の値と同じで、2つだけ特別扱いする。
