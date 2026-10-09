@@ -324,6 +324,7 @@ enum CodeSyntaxLanguages {
             $0.strings = [Delimiter("[[", "]]", escapes: false)] + quotedStrings
         },
         CodeSyntaxLanguage("perl") {
+            $0.commentsNeedWordBoundary = true
             $0.keywords = words("""
                 my our local sub if elsif else unless while until for foreach do last next redo return use no \
                 package require undef and or not eq ne lt gt le ge cmp qw print die
@@ -333,6 +334,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [dollar: .variable, at: .variable]
         },
         CodeSyntaxLanguage("shell") {
+            $0.commentsNeedWordBoundary = true
             $0.keywords = words("""
                 if then else elif fi for in do done case esac while until function select return break continue \
                 export local readonly declare unset shift source alias exit set eval exec trap time
@@ -382,6 +384,7 @@ enum CodeSyntaxLanguages {
             $0.stringKeys = true
         },
         CodeSyntaxLanguage("yaml") {
+            $0.commentsNeedWordBoundary = true
             $0.keywords = ["true", "false", "null", "yes", "no", "on", "off", "~"]
             $0.caseInsensitive = true
             $0.lineComments = units("#")
@@ -390,6 +393,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [ascii("&"): .variable, ascii("*"): .variable]
         },
         CodeSyntaxLanguage("toml") {
+            $0.commentsNeedWordBoundary = true
             $0.keywords = ["true", "false"]
             $0.lineComments = units("#", ";")
             $0.strings = [Delimiter("\"\"\""), Delimiter("'''", escapes: false),
@@ -410,6 +414,7 @@ enum CodeSyntaxLanguages {
         },
         CodeSyntaxLanguage("diff") { $0.mode = .diff },
         CodeSyntaxLanguage("dockerfile") {
+            $0.commentsNeedWordBoundary = true
             $0.keywords = words("""
                 from as run cmd label maintainer expose env add copy entrypoint volume user workdir arg onbuild \
                 stopsignal healthcheck shell
