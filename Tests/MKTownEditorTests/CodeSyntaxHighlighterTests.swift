@@ -110,6 +110,37 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(tokens("print $#array", "perl").contains { $0.1 == .comment })
     }
 
+    func testSCSSAndLessLineCommentsKeepURLs() {
+        for name in ["scss", "less"] {
+            let values = tokens("// return \"x\"\n.a { background: url(http://x/y.png); }", name)
+            XCTAssertTrue(values.contains { $0 == ("// return \"x\"", .comment) }, name)
+            XCTAssertFalse(values.contains { $0.1 == .comment && $0.0.contains("//x") }, name)
+        }
+        // 素の CSS には行コメントがない。
+        XCTAssertFalse(tokens("// x", "css").contains { $0.1 == .comment })
+    }
+
+    func testJavaPropertiesCommentsAndSeparators() {
+        let values = tokens("! true\n# note\nname: value\nport = 8080\nkey value\npath=a\\\n  b: c\nk\\:x=1", "properties")
+
+        XCTAssertTrue(values.contains { $0 == ("! true", .comment) })
+        XCTAssertTrue(values.contains { $0 == ("# note", .comment) })
+        XCTAssertTrue(values.contains { $0 == ("name", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("port", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("key", .attribute) })
+        XCTAssertTrue(values.contains { $0 == ("k\\:x", .attribute) })
+        // 継続行と値は色分けしない。
+        XCTAssertFalse(values.contains { $0.0 == "b" || $0.0 == "true" || $0.0 == "8080" })
+        XCTAssertEqual(CodeSyntaxTokenizer.language(named: "ini")?.name, "toml")
+    }
+
+    func testMySQLHashCommentsAreDialectSpecific() {
+        XCTAssertTrue(tokens("SELECT 1 # note", "mysql").contains { $0 == ("# note", .comment) })
+        XCTAssertTrue(tokens("SELECT 1#note", "mariadb").contains { $0 == ("#note", .comment) })
+        XCTAssertTrue(tokens("SELECT 1 -- note", "mysql").contains { $0 == ("-- note", .comment) })
+        XCTAssertFalse(tokens("SELECT a # b", "postgresql").contains { $0.1 == .comment })
+    }
+
     func testSQLKeywordsIgnoreCase() {
         let values = tokens("SELECT id FROM users WHERE name = 'a' -- note", "sql")
 

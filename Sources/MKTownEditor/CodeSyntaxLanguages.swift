@@ -25,12 +25,15 @@ enum CodeSyntaxLanguages {
             "perl": ["perl", "pl", "pm"],
             "shell": ["shell", "sh", "bash", "zsh", "ksh", "shellscript", "shell-script"],
             "powershell": ["powershell", "ps1", "psm1", "pwsh", "ps"],
-            "sql": ["sql", "mysql", "postgresql", "postgres", "psql", "sqlite", "plsql", "tsql"],
+            "sql": ["sql", "postgresql", "postgres", "psql", "sqlite", "plsql", "tsql"],
+            "mysql": ["mysql", "mariadb"],
             "json": ["json", "jsonc", "json5", "geojson"],
             "yaml": ["yaml", "yml"],
-            "toml": ["toml", "ini", "cfg", "properties", "editorconfig"],
+            "toml": ["toml", "ini", "cfg", "editorconfig"],
+            "properties": ["properties"],
             "markup": ["html", "htm", "xhtml", "xml", "svg", "plist", "xsl", "xslt", "rss", "atom", "vue", "storyboard", "xib"],
-            "css": ["css", "scss", "less"],
+            "css": ["css"],
+            "scss": ["scss", "less"],
             "diff": ["diff", "patch"],
             "dockerfile": ["dockerfile", "docker", "containerfile"],
             "haskell": ["haskell", "hs"]
@@ -78,6 +81,49 @@ enum CodeSyntaxLanguages {
         finally for function if import in instanceof let new null of return static super switch this throw \
         true try typeof undefined var void while with yield async get set from as
         """
+
+    private static let sql = CodeSyntaxLanguage("sql") {
+        $0.keywords = words("""
+            select from where and or not insert into values update set delete create table drop alter add \
+            column index view as join inner left right outer full cross on group by order having limit offset \
+            union all distinct case when then else end is null like ilike in between exists primary key \
+            foreign references default constraint unique check if begin commit rollback transaction with \
+            recursive returning asc desc true false grant revoke database schema procedure function trigger \
+            declare replace natural using over partition window
+            """)
+        $0.types = words("""
+            int integer bigint smallint tinyint decimal numeric float real double precision char varchar text \
+            nvarchar nchar date time timestamp timestamptz datetime interval boolean bool blob bytea json jsonb \
+            uuid serial bigserial
+            """)
+        $0.caseInsensitive = true
+        $0.lineComments = units("--")
+        $0.blockComments = cStyleComments.block
+        $0.strings = [Delimiter("'", escapes: false)]
+    }
+
+    /// MySQL は `#` もコメントにする（PostgreSQL では演算子のため既定の SQL には含めない）。
+    private static let mysql = CodeSyntaxLanguage("mysql", basedOn: sql) {
+        $0.lineComments = units("--", "#")
+        $0.strings = [Delimiter("'"), Delimiter("\"")]
+    }
+
+    private static let css = CodeSyntaxLanguage("css") {
+        $0.keywords = words("""
+            auto none inherit initial unset revert normal bold italic block inline flex grid absolute relative \
+            fixed sticky solid dashed hidden visible transparent
+            """)
+        $0.blockComments = cStyleComments.block
+        $0.strings = quotedStrings
+        $0.identifierExtras = [ascii("-")]
+        $0.prefixedIdentifiers = [at: .keyword, dollar: .variable]
+        $0.css = true
+    }
+
+    /// SCSS と Less は `//` の行コメントも書ける。`url(http://…)` の `//` はコメントにしない。
+    private static let scss = CodeSyntaxLanguage("scss", basedOn: css) {
+        $0.lineComments = cStyleComments.line
+    }
 
     private static let definitions: [CodeSyntaxLanguage] = [
         CodeSyntaxLanguage("c") {
@@ -357,25 +403,8 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [dollar: .variable]
             $0.shellVariables = true
         },
-        CodeSyntaxLanguage("sql") {
-            $0.keywords = words("""
-                select from where and or not insert into values update set delete create table drop alter add \
-                column index view as join inner left right outer full cross on group by order having limit offset \
-                union all distinct case when then else end is null like ilike in between exists primary key \
-                foreign references default constraint unique check if begin commit rollback transaction with \
-                recursive returning asc desc true false grant revoke database schema procedure function trigger \
-                declare replace natural using over partition window
-                """)
-            $0.types = words("""
-                int integer bigint smallint tinyint decimal numeric float real double precision char varchar text \
-                nvarchar nchar date time timestamp timestamptz datetime interval boolean bool blob bytea json jsonb \
-                uuid serial bigserial
-                """)
-            $0.caseInsensitive = true
-            $0.lineComments = units("--")
-            $0.blockComments = cStyleComments.block
-            $0.strings = [Delimiter("'", escapes: false)]
-        },
+        sql,
+        mysql,
         CodeSyntaxLanguage("json") {
             $0.keywords = ["true", "false", "null"]
             $0.lineComments = cStyleComments.line
@@ -400,18 +429,13 @@ enum CodeSyntaxLanguages {
                           Delimiter("\"", multiline: false), Delimiter("'", escapes: false, multiline: false)]
             $0.lineKeys = .ini
         },
-        CodeSyntaxLanguage("markup") { $0.mode = .markup },
-        CodeSyntaxLanguage("css") {
-            $0.keywords = words("""
-                auto none inherit initial unset revert normal bold italic block inline flex grid absolute relative \
-                fixed sticky solid dashed hidden visible transparent
-                """)
-            $0.blockComments = cStyleComments.block
-            $0.strings = quotedStrings
-            $0.identifierExtras = [ascii("-")]
-            $0.prefixedIdentifiers = [at: .keyword, dollar: .variable]
-            $0.css = true
+        CodeSyntaxLanguage("properties") {
+            // Java の properties。行頭の `#`・`!` がコメントで、キーは `=`・`:`・空白で区切る。
+            $0.lineKeys = .properties
         },
+        CodeSyntaxLanguage("markup") { $0.mode = .markup },
+        css,
+        scss,
         CodeSyntaxLanguage("diff") { $0.mode = .diff },
         CodeSyntaxLanguage("dockerfile") {
             $0.commentsNeedWordBoundary = true
