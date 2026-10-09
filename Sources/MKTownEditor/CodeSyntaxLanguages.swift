@@ -17,7 +17,8 @@ enum CodeSyntaxLanguages {
             "rust": ["rust", "rs"],
             "dart": ["dart"],
             "javascript": ["javascript", "js", "jsx", "mjs", "cjs", "node"],
-            "typescript": ["typescript", "ts", "tsx", "mts", "cts"],
+            "typescript": ["typescript", "ts", "mts", "cts"],
+            "tsx": ["tsx"],
             "python": ["python", "py", "python3", "py3", "pyw"],
             "ruby": ["ruby", "rb", "rake", "gemspec"],
             "php": ["php"],
@@ -51,7 +52,10 @@ enum CodeSyntaxLanguages {
     static let plainText: Set<String> = ["text", "txt", "plain", "plaintext", "none", "nohighlight", "output"]
 
     static let all: [String: CodeSyntaxLanguage] = {
-        Dictionary(uniqueKeysWithValues: definitions.map { ($0.name, $0) })
+        var result = Dictionary(uniqueKeysWithValues: definitions.map { ($0.name, $0) })
+        // TSX は TypeScript と同じ字句規則（走査器の定義は移行が終わるまでの暫定）。
+        result["tsx"] = CodeSyntaxLanguage("tsx", basedOn: result["typescript"]!) { _ in }
+        return result
     }()
 
     private static func words(_ text: String) -> Set<String> {
