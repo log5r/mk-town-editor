@@ -470,18 +470,22 @@ final class MarkdownEditorModelTests: XCTestCase {
         view.allowsUndo = true
         view.string = "hello"
         let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        // A test host app keeps the automatic event group open until the test returns,
+        // so each command gets an explicit group like one toolbar click.
+        let undo = ExplicitEventUndoProvider()
+        window.delegate = undo
         window.contentView = view
         window.makeFirstResponder(view)
+        defer { window.orderOut(nil) }
         let model = MarkdownEditorModel()
         model.connect(view)
         view.setSelectedRange(NSRange(location: 0, length: 5))
+        XCTAssertIdentical(view.undoManager, undo.manager)
 
-        model.apply(.bold)
+        undo.event { model.apply(.bold) }
         XCTAssertEqual(view.string, "**hello**")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
-        model.apply(.italic)
+        undo.event { model.apply(.italic) }
         XCTAssertEqual(view.string, "**_hello_**")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         view.undoManager?.undo()
         XCTAssertEqual(view.string, "**hello**")
         view.undoManager?.undo()
@@ -748,6 +752,26 @@ final class MarkdownEditorModelTests: XCTestCase {
 
         XCTAssertEqual(view.string, "本文")
         XCTAssertEqual(view.changeRequests, 0)
+    }
+}
+
+/// Supplies an undo manager whose groups close at explicit event boundaries.
+@MainActor
+private final class ExplicitEventUndoProvider: NSObject, NSWindowDelegate {
+    let manager: UndoManager = {
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        return manager
+    }()
+
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        manager
+    }
+
+    func event(_ body: () -> Void) {
+        manager.beginUndoGrouping()
+        body()
+        manager.endUndoGrouping()
     }
 }
 

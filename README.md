@@ -105,7 +105,7 @@ Mermaidと数式の描画ライブラリは同梱しています。[数式の書
 swift test
 ```
 
-Xcodeでは`MKTownEditor`スキームでProduct > Testを選ぶと、アプリをホストにして同じテストを実行できます。
+Xcodeでは`MKTownEditor`スキームでProduct > Testを選ぶと、アプリをホストにして同じテストを実行できます。アプリをホストにした実行ではイベントの区切りでUndoグループが閉じないため、複数のUndo単位を扱うテストは[テストでのUndoグループの区切り方](docs/undo-grouping-in-tests.md)に従って書きます。
 
 CIと同じチェック（Pythonのスクリプトテスト、Swiftの全ユニットテスト、Releaseビルド）を実行する場合は、次のコマンドを使います。Python 3が必要です。
 
