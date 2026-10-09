@@ -323,6 +323,30 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(values.contains { $0.0 == "a" || $0.0 == "b" })
     }
 
+    func testRegexLiteralsAreNotCommentsAndDivisionStaysCode() {
+        for name in ["js", "ts"] {
+            let values = tokens("const slash = /[//]/g; return 1;\nlet r = a / b / c; // note\nif (/\\/\\*/.test(x)) {}", name)
+            XCTAssertTrue(values.contains { $0 == ("/[//]/g", .string) }, name)
+            XCTAssertTrue(values.contains { $0 == ("return", .keyword) }, name)
+            XCTAssertTrue(values.contains { $0 == ("// note", .comment) }, name)
+            XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1, name)
+            XCTAssertTrue(values.contains { $0 == ("/\\/\\*/", .string) }, name)
+            XCTAssertFalse(values.contains { $0.0.hasPrefix("/ b") }, name)
+        }
+        // Ruby と Perl の正規表現の中の `#` はコメントではない。
+        XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("if", .keyword) })
+        XCTAssertTrue(tokens("if ($x =~ /a#b/) { print 1 }", "perl").contains { $0 == ("print", .keyword) })
+    }
+
+    func testTOMLBareKeysStartingWithDigitsOrDashes() {
+        let values = tokens("1234 = \"value\"\n- = true\nbare-key_1 = 2\n'lit' = 3", "toml")
+        for key in ["1234", "-", "bare-key_1", "'lit'"] {
+            XCTAssertTrue(values.contains { $0 == (key, .attribute) }, key)
+        }
+        XCTAssertFalse(values.contains { $0 == ("1234", .number) })
+    }
+
     func testPHPAttributesAreNotComments() {
         let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
         XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })

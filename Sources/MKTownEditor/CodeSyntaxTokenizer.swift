@@ -92,6 +92,8 @@ struct CodeSyntaxLanguage: Sendable {
     var rawStringPrefixes: Set<String> = []
     /// C# の逐語的文字列 `@"..."`（`$@"..."` を含む）。`""` が引用符を表す。
     var verbatimStrings = false
+    /// JavaScript・Ruby・Perl の正規表現リテラル `/[//]/`。値の後ろの `/` は除算とする。
+    var regexLiterals = false
     /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
     var quoteRunStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
@@ -341,7 +343,7 @@ private struct CodeSyntaxScanner {
                 scanPreprocessor()
                 continue
             }
-            if scanMarker() || scanLongBracket() || scanBlockComment() || scanLineComment()
+            if scanMarker() || scanRegexLiteral() || scanLongBracket() || scanBlockComment() || scanLineComment()
                 || scanSwiftRawString() || scanVerbatimString() || scanString() { continue }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
@@ -431,6 +433,51 @@ private struct CodeSyntaxScanner {
         index = min(count, index + close.count)
         emit(start, index, .string)
         return true
+    }
+
+    /// 正規表現の前に置ける語。`this` や `nil` のような値の語の後ろの `/` は除算。
+    private static let regexPrecedingWords: Set<String> = [
+        "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "do", "else",
+        "yield", "await", "if", "elsif", "unless", "while", "until", "when", "and", "or", "not", "split", "grep"
+    ]
+    private static let regexPrecedingPunctuation = Set("(,=:[!&|?{};+-*%<>~^".utf16)
+
+    /// 値の後ろでない `/` から始まる1行の正規表現リテラル。文字クラス `[...]` の中の `/` では閉じない。
+    private mutating func scanRegexLiteral() -> Bool {
+        guard language.regexLiterals, units[index] == Unit.slash,
+              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline,
+              regexMayStart(at: index) else { return false }
+        var cursor = index + 1
+        var inClass = false
+        while cursor < count {
+            let value = units[cursor]
+            if value == Unit.newline { return false }
+            if value == Unit.backslash {
+                cursor += 2
+                continue
+            }
+            if value == Unit.openBracket { inClass = true }
+            if value == Unit.closeBracket { inClass = false }
+            if value == Unit.slash && !inClass { break }
+            cursor += 1
+        }
+        guard cursor < count else { return false }
+        cursor += 1
+        while let flag = unit(cursor), Self.isASCIILetter(flag) { cursor += 1 }
+        emit(index, cursor, .string)
+        index = cursor
+        return true
+    }
+
+    private func regexMayStart(at offset: Int) -> Bool {
+        var cursor = offset - 1
+        while let value = unit(cursor), value == Unit.space || value == Unit.tab { cursor -= 1 }
+        guard let previous = unit(cursor), previous != Unit.newline else { return true }
+        if Self.regexPrecedingPunctuation.contains(previous) { return true }
+        guard isIdentifierPart(previous) else { return false }
+        var start = cursor
+        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
+        return Self.regexPrecedingWords.contains(String(decoding: units[start...cursor], as: UTF16.self))
     }
 
     private mutating func scanBlockComment() -> Bool {
@@ -760,7 +807,10 @@ private struct CodeSyntaxScanner {
             index = close
             return true
         }
-        guard isIdentifierStart(index) || units[index] == Unit.quote else { return false }
+        // TOML の裸のキーは英数字・`_`・`-`（`1234 = 1`、`- = true`）。引用符付きのキーも認める。
+        let first = units[index]
+        guard Self.isASCIILetter(first) || Self.isDigit(first) || first == Unit.underscore || first == Unit.minus
+                || first == Unit.quote || first == Unit.apostrophe || first >= 0x80 else { return false }
         var cursor = index
         while cursor < end && units[cursor] != Unit.equal && units[cursor] != Unit.hash
                 && units[cursor] != Unit.semicolon { cursor += 1 }
