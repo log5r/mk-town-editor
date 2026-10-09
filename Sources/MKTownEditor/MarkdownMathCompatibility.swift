@@ -202,7 +202,8 @@ enum MarkdownMathCompatibility {
     private static func rewriteCommands(_ chars: ArraySlice<Character>, style: String) -> String {
         var output = ""
         // `{a \atop b}` のようにグループ全体が分数になるときは、中身を分数の書体で処理する。
-        var style = containsInfixFraction(chars) ? fractionStyle(of: style) : style
+        let baseStyle = containsInfixFraction(chars) ? fractionStyle(of: style) : style
+        var style = baseStyle
         var index = chars.startIndex
         while index < chars.endIndex {
             let char = chars[index]
@@ -247,6 +248,9 @@ enum MarkdownMathCompatibility {
             }
             if styleCommands.contains(name) {
                 style = "\\" + name
+            } else if infixFractionCommands.contains(name) {
+                // 分子で宣言した書体は分母には及ばない。
+                style = baseStyle
             } else if let replacement = aliases[name] {
                 output += replacement
                 index = next

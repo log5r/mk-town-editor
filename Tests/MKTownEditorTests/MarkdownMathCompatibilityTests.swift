@@ -115,6 +115,11 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
                        "{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}} \\over c")
         XCTAssertEqual(normalized("{n \\choose \\underbrace{k}_m} \\underbrace{a}_b", display: true),
                        "{n \\choose {{\\textstyle\\underline{k}} \\atop {\\scriptstyle m}}} {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}}")
+        // 分子で宣言した書体は分母には及ばない。
+        XCTAssertEqual(normalized("{\\scriptstyle a \\atop \\underbrace{x}_y}", display: true),
+                       "{\\scriptstyle a \\atop {{\\textstyle\\underline{x}} \\atop {\\scriptstyle y}}}")
+        XCTAssertEqual(normalized("\\displaystyle \\underbrace{a}_b \\over \\underbrace{x}_y", display: false),
+                       "\\displaystyle {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}} \\over {{\\scriptstyle\\underline{x}} \\atop {\\scriptscriptstyle y}}")
         // 入れ子のグループや環境・\\left の中の \\atop は、外側のグループを分数にしない。
         XCTAssertEqual(normalized("{{x \\atop y} \\begin{aligned}p \\atop q\\end{aligned} \\left( r \\atop s \\right) \\underbrace{a}_b}", display: true),
                        "{{x \\atop y} \\begin{aligned}p \\atop q&\\end{aligned} \\left( r \\atop s \\right) {{\\displaystyle\\underline{a}} \\atop {\\scriptstyle b}}}")
