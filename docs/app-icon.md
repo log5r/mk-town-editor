@@ -61,5 +61,7 @@ macOS 26以降では、アイコンをライト、ダーク、クリア、ティ
 
 - `Tools/test_app_icon.py`：書類が参照する画像がそろっていること、背景色・文字色・ガラス効果の設定、ダーク外観とクリア・ティント外観の文字色を確認する。
 - `Tests/MKTownEditorTests/AppIconAppearanceTests.swift`：Icon Composerの `ictool` で6つの外観を描画し、文字と背景のコントラスト比を測る（ライトとダークは4.5:1以上、クリアとティントは大きな文字の基準の3:1以上）。Icon Composerがない環境ではスキップする。Xcode付属の `xcrun ictool` は `--export-image` を持たない別のツールなので、使えない。
+
+描画テストでは、コントラスト比を求める関数の呼び出しを `XCTAssertGreaterThanOrEqual(try stemContrast(...), 4.5)` のようにアサーションの引数に書いてはいけない。XCTestは、アサーションの引数の評価中に投げられたエラーを、`XCTSkip` であっても失敗として記録する。最初の版はこの書き方だったため、Icon ComposerのないCIで3件が失敗した。値を `let` で先に求めてからアサートすれば、スキップとして記録される。`testMissingIconComposerSkipsRendering` は、レンダラーがないときに `XCTSkip` が投げられることを確認する。
 - `Tools/test_make_app_bundle.py`：`make-app-bundle.sh` が `Assets.car` と `AppIcon.icns` を出力し、Info.plistのアイコン名がXcodeプロジェクトの設定と一致すること、書類がないと失敗することを確認する。
 - `Tools/test_xcode_project.py`：Xcodeのアプリターゲットが書類をリソースに含み、`make-app-bundle.sh` と同じアイコン名を使うことを確認する。
