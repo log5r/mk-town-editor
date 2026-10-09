@@ -347,6 +347,7 @@ enum CodeSyntaxLanguages {
         },
         CodeSyntaxLanguage("typescript") {
             $0.regexLiterals = true
+            $0.nonNullAssertions = true
             $0.keywords = words(javaScriptKeywords + " " + """
                 abstract as asserts declare enum implements infer interface is keyof module namespace private \
                 protected public readonly require satisfies type unique override accessor
