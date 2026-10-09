@@ -96,6 +96,8 @@ struct CodeSyntaxLanguage: Sendable {
     var regexLiterals = false
     /// Ruby・Perl の `puts /a#b/` のように、空白で区切ったコマンド呼び出しの引数も正規表現とする。
     var commandRegexArguments = false
+    /// Ruby のように改行で文が終わる。値で終わった行の次の行頭の `/` も正規表現とする。
+    var newlineEndsStatements = false
     /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
     var quoteRunStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
@@ -200,6 +202,14 @@ private struct CodeSyntaxScanner {
     private var braceKinds: [BraceKind] = []
     /// 式の位置にある `function`・`class` の本体を、次のブロックの `{` が開く。
     private var pendingExpressionBody = false
+    /// 直前の `async` が式の位置にあったか（`= async function`）。`async` の後ろでも引き継ぐ。
+    private var asyncInExpression: Bool?
+    /// 直前の識別子が文の始まりにあったか。続く `:` をラベルとみなす。
+    private var identifierStartedStatement = false
+    /// `case x:`・`default:` のコロンを待っている。
+    private var pendingCaseColon = false
+    /// 閉じていない三項演算子 `?` の数。対応する `:` は式の中のコロン。
+    private var ternaryDepth = 0
     /// 開いている `(` ごとに、制御文の条件かどうか。
     private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
@@ -331,6 +341,11 @@ private struct CodeSyntaxScanner {
         while index < count {
             let value = units[index]
             if value == Unit.newline {
+                // Ruby は改行で文が終わる。括弧の中と行末の `\` は継続。
+                if language.newlineEndsStatements, !regexAllowed, parenthesisControlHeaders.isEmpty,
+                   unit(index - 1) != Unit.backslash {
+                    regexAllowed = true
+                }
                 atLineStart = true
                 index += 1
                 lineStartOffset = index
@@ -413,6 +428,8 @@ private struct CodeSyntaxScanner {
         case punctuation(UInt16)
         /// `=>`
         case arrow
+        /// ラベルや `case x:` のコロン。後ろは文の始まり。
+        case statementColon
     }
 
     private enum BraceKind {
@@ -432,6 +449,8 @@ private struct CodeSyntaxScanner {
         regexAllowed = false
         pendingControl = false
         previousToken = .value
+        asyncInExpression = nil
+        identifierStartedStatement = false
     }
 
     /// 括弧の対応で文脈を決める。`if (…)` の `)` とブロックの `}` の後ろは文の始まりなので正規表現を認める。
@@ -458,20 +477,44 @@ private struct CodeSyntaxScanner {
             let kind = braceKinds.popLast() ?? .block
             regexAllowed = kind == .block
             pendingControl = false
+            asyncInExpression = nil
+            identifierStartedStatement = false
             // 式の中の `{…}`（オブジェクト、関数式の本体）は値として閉じる。
             previousToken = kind == .block ? .punctuation(value) : .value
             return
+        case Unit.question:
+            // `?.` と `??` は三項演算子ではない。
+            if unit(index + 1) != Unit.dot, unit(index + 1) != Unit.question, unit(index - 1) != Unit.question {
+                ternaryDepth += 1
+            }
+            regexAllowed = true
+        case Unit.colon:
+            regexAllowed = true
+            if ternaryDepth > 0 {
+                ternaryDepth -= 1
+            } else if pendingCaseColon || (identifierStartedStatement && previousToken == .value),
+                      braceKinds.last != .object, parenthesisControlHeaders.isEmpty {
+                // `label: {` と `case x: {` の後ろは文の始まり。
+                pendingCaseColon = false
+                pendingControl = false
+                asyncInExpression = nil
+                identifierStartedStatement = false
+                previousToken = .statementColon
+                return
+            }
         default:
             regexAllowed = !Self.valueClosingPunctuation.contains(value)
         }
         pendingControl = false
+        asyncInExpression = nil
+        identifierStartedStatement = false
         previousToken = value == Unit.greater && unit(index - 1) == Unit.equal ? .arrow : .punctuation(value)
     }
 
     /// 直前の字句が文の区切りか（文書の先頭、`;`、`{`、`}`、`)`、`else` など）。
     private var atStatementStart: Bool {
         switch previousToken {
-        case .start, .statementWord: true
+        case .start, .statementWord, .statementColon: true
         case .punctuation(let previous): Self.statementEnds.contains(previous)
         case .value, .expressionWord, .arrow: false
         }
@@ -480,7 +523,7 @@ private struct CodeSyntaxScanner {
     /// `{` が文のブロックを開くか。`x = {`、`return {`、`f({` のような式の中ならオブジェクト。
     private var braceStartsBlock: Bool {
         switch previousToken {
-        case .start, .value, .statementWord, .arrow: true
+        case .start, .value, .statementWord, .arrow, .statementColon: true
         case .expressionWord: false
         case .punctuation(let previous): Self.statementEnds.contains(previous)
         }
@@ -811,10 +854,15 @@ private struct CodeSyntaxScanner {
         let isMember = previousToken == .punctuation(Unit.dot)
         let name = String(decoding: units[start..<end], as: UTF16.self)
         let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+        let inExpression = regexAllowed && !atStatementStart
         if !isMember, Self.functionKeywords.contains(name) {
             // 文の始まりの `function f() {}` は宣言、`= function() {}` や `(class {})` は式。
-            pendingExpressionBody = regexAllowed && !atStatementStart
+            // `= async function` は `async` の前の位置で判断する。
+            pendingExpressionBody = asyncInExpression ?? inExpression
         }
+        asyncInExpression = !isMember && name == "async" ? inExpression : nil
+        if !isMember, name == "case" || name == "default", atStatementStart { pendingCaseColon = true }
+        identifierStartedStatement = !isMember && atStatementStart
         regexAllowed = isExpressionWord
         // `for await (…)` の `await` は制御文の条件を途切れさせない。
         pendingControl = !isMember && (Self.controlKeywords.contains(name) || (pendingControl && name == "await"))

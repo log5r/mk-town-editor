@@ -355,6 +355,10 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
             // 式の中の関数本体・クラス本体の後ろは値なので除算。宣言の後ろは文の始まり。
             let bodies = tokens("const p = function() {} / b / g\nconst q = () => {} / c / g\nconst r = (class {}) / d / g\nfunction s() {} /re/.test(x)", name)
             XCTAssertEqual(bodies.filter { $0.1 == .string }.map(\.0), ["/re/"], name)
+            // `async function` の式も同じ。ラベルと `case` のコロンの後ろのブロックは文。
+            let more = tokens("const f = async function() {} / b / g\nasync function h() {} /e/.test(x)\nlabel: {} /[//]/.test(x); return 1\nswitch (v) { case 1: {} /c/.test(x); default: {} /d/.test(x) }\nconst o = {a: {}} / i / j\nconst t = c ? {} : {} / k / l", name)
+            XCTAssertEqual(more.filter { $0.1 == .string }.map(\.0), ["/e/", "/[//]/", "/c/", "/d/"], name)
+            XCTAssertTrue(more.contains { $0 == ("return", .keyword) }, name)
             // `for await (…)` の後ろも文の始まり。
             XCTAssertTrue(tokens("async function f(xs) { for await (const x of xs) /[//]/.test(x) }", name)
                 .contains { $0 == ("/[//]/", .string) }, name)
@@ -370,6 +374,10 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(tokens("print /a#b/;\nmy $y = $x /2; # note", "perl").contains { $0 == ("/a#b/", .string) })
         XCTAssertTrue(tokens("my $y = $x /2; # note", "perl").contains { $0 == ("# note", .comment) })
         // Ruby と Perl の正規表現の中の `#` はコメントではない。
+        // Ruby は改行で文が終わる。括弧の中や行末の `\` は継続。
+        let lines = tokens("x = 1\n/a#b/.match(s)\ny = (2\n/ 3)\nz = 4 \\\n/ 5 # note", "ruby")
+        XCTAssertEqual(lines.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
+        XCTAssertTrue(lines.contains { $0 == ("# note", .comment) })
         let ruby = tokens("if cond then /a#b/ else nil end", "ruby")
         XCTAssertTrue(ruby.contains { $0 == ("/a#b/", .string) })
         XCTAssertTrue(ruby.contains { $0 == ("end", .keyword) })
