@@ -159,6 +159,13 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         XCTAssertEqual(normalized("\\left\\{ \\scriptstyle a \\right. \\underbrace{x}_y \\left( \\scriptstyle b", display: false),
                        "\\left\\{ \\scriptstyle a \\right. {{\\textstyle\\underline{x}} \\atop {\\scriptstyle y}} \\left( \\scriptstyle b")
         builds("\\left(\\scriptstyle a\\right)\\underbrace{x}_y")
+        // SwiftMathが解釈するアクセントと書体のコマンドは、すべて引数ごと添字トークンに含める。
+        for command in ["check", "acute", "grave", "breve", "widehat", "bm", "rm", "texttt", "mathbfit"] {
+            XCTAssertEqual(normalized("x_\\\(command){\\underbrace{a}_b} \\underbrace{c}_d", display: false),
+                           "x_\\\(command){{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}} {{\\textstyle\\underline{c}} \\atop {\\scriptstyle d}}",
+                           command)
+        }
+        builds("x_\\check{\\underbrace{a}_b} + x^\\breve{\\underbrace{a}_b} + x_\\bm{\\underbrace{a}_b}")
         // 環境も \\end までを添字トークンとして読む。
         XCTAssertEqual(normalized("x_\\begin{aligned}\\underbrace{a}_b&=c\\end{aligned} \\underbrace{d}_e", display: true),
                        "x_\\begin{aligned}{{\\scriptstyle\\underline{a}} \\atop {\\scriptscriptstyle b}}&=c\\end{aligned} {{\\displaystyle\\underline{d}} \\atop {\\scriptstyle e}}")
