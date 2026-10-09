@@ -199,7 +199,8 @@ final class PreviewRenderCache: ObservableObject {
     func canRenderDisplayFormula(_ formula: MarkdownMath.Formula) -> Bool {
         if let cached = formulaValidity[formula.latex] { return cached }
         var error: NSError?
-        let valid = MTMathListBuilder.build(fromString: formula.latex, error: &error) != nil && error == nil
+        let valid = MTMathListBuilder.build(fromString: formula.swiftMathLaTeX, error: &error) != nil
+            && error == nil
         if formulaValidity.count >= capacity { formulaValidity.removeAll(keepingCapacity: true) }
         formulaValidity[formula.latex] = valid
         return valid
