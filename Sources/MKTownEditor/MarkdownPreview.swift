@@ -86,9 +86,16 @@ struct MarkdownPreview: View {
     private var resourceRevision: Int { remoteImages.revision &+ localImages.revision }
 
     /// 描画に渡す文脈。参考文献は背景で読み込んだものを使い、描画中にディスクを読まない。
-    private var renderContext: DocumentContext {
+    private var renderContext: DocumentContext { renderContext(for: nil) }
+
+    /// `analysis` が共有スナップショット自身の解析結果なら、スナップショットの字句（バックグラウンドで求めた版）を渡す。
+    /// ブロックIDは解析結果ごとにしか意味を持たないため、別の解析結果には渡さない。
+    private func renderContext(for analysis: MarkdownAnalysis?) -> DocumentContext {
         var context = documentContext
         context.citationCatalog = citationCatalog
+        if let snapshot, let analysis, snapshot.analysis.identity === analysis.identity {
+            context.codeSyntaxTokens = snapshot.codeSyntaxTokens
+        }
         return context
     }
 
@@ -329,7 +336,7 @@ struct MarkdownPreview: View {
                     })
                 }
             } else {
-                MarkdownTextPreview(markdown: markdown, documentContext: renderContext,
+                MarkdownTextPreview(markdown: markdown, documentContext: renderContext(for: snapshot?.analysis),
                                     imageRequester: renderCache.imageRequester,
                                     analysis: snapshot?.analysis, onOpenHeading: onOpenHeading,
                                     onOpenDocument: onOpenDocument, zoom: zoom,
@@ -432,7 +439,7 @@ struct MarkdownPreview: View {
 
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let rendered = renderCache.render(block, in: analysis, context: renderContext,
+        let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
             zoom: zoom, remoteRevision: resourceRevision, theme: theme)
         if case let .heading(level) = block.kind {
             inlineText(rendered)
@@ -457,7 +464,7 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            let rendered = renderCache.render(block, in: analysis, context: renderContext,
+            let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
                                               zoom: zoom, showsTaskPrefix: false,
                                               remoteRevision: resourceRevision, theme: theme)
             inlineText(rendered)

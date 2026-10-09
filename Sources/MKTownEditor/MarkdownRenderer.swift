@@ -156,7 +156,8 @@ enum MarkdownRenderer {
                 attributes: baseAttributes(font: .systemFont(ofSize: 13), color: .separatorColor)
             )
         case .codeBlock:
-            return CodeSyntaxHighlighter.render(block.content, language: block.codeLanguage)
+            return CodeSyntaxHighlighter.render(block.content, language: block.codeLanguage,
+                                         tokens: context.codeSyntaxTokens?[block.id])
         case .table:
             guard let table = block.table else { return NSAttributedString(string: "") }
             let content = ([table.header] + table.rows)

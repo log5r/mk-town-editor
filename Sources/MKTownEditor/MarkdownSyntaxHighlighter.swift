@@ -40,7 +40,8 @@ enum MarkdownSyntaxHighlighter {
         pattern: #"(?<!!)\[[^\]\n]+\](?:\([^\n]*?\)|\[[^\]\n]*\])"#
     )
 
-    static func spans(in text: String, analysis: MarkdownAnalysis? = nil) -> [MarkdownSyntaxSpan] {
+    static func spans(in text: String, analysis: MarkdownAnalysis? = nil,
+                      codeSyntaxTokens: [Int: [CodeSyntaxTokenRange]]? = nil) -> [MarkdownSyntaxSpan] {
         let source = text as NSString
         let analysis = analysis ?? MarkdownAnalysis(text)
         // ブロックは位置順に並ぶため、コードブロックの範囲も位置順になる。包含判定は二分探索で行う。
@@ -51,7 +52,7 @@ enum MarkdownSyntaxHighlighter {
             case .heading:
                 result.append(MarkdownSyntaxSpan(range: block.sourceRange, role: .heading))
             case .codeBlock:
-                result += codeBlockSpans(block, in: source)
+                result += codeBlockSpans(block, in: source, tokens: codeSyntaxTokens?[block.id])
             case .horizontalRule:
                 result.append(MarkdownSyntaxSpan(range: block.sourceRange, role: .marker))
             case .table:
@@ -113,10 +114,12 @@ enum MarkdownSyntaxHighlighter {
 
     /// 言語を指定したフェンスのコードブロックは、フェンス行を `.code`、本文を字句ごとの色にする。
     /// 未対応の言語や、本文と原文の行が対応しない場合（タブの展開など）はブロック全体を `.code` にする。
-    static func codeBlockSpans(_ block: MarkdownBlock, in source: NSString) -> [MarkdownSyntaxSpan] {
+    /// `tokens` は解析済みの字句（`DocumentSnapshot.codeSyntaxTokens`）。`nil` の場合はここで解析する。
+    static func codeBlockSpans(_ block: MarkdownBlock, in source: NSString,
+                               tokens precomputed: [CodeSyntaxTokenRange]? = nil) -> [MarkdownSyntaxSpan] {
         let whole = [MarkdownSyntaxSpan(range: block.sourceRange, role: .code)]
         guard block.codeFenceMarker != nil, !block.content.isEmpty,
-              let language = CodeSyntaxTokenizer.language(named: block.codeLanguage) else { return whole }
+              let language = CodeSyntaxAnalyzer.language(named: block.codeLanguage) else { return whole }
         let blockEnd = NSMaxRange(block.sourceRange)
         let opening = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
         // 本文の各行が原文のどこから始まるか。引用やリストの記号を除いた本文は、原文の行の末尾部分になる。
@@ -144,7 +147,9 @@ enum MarkdownSyntaxHighlighter {
             result.append(MarkdownSyntaxSpan(range: NSRange(location: cursor, length: blockEnd - cursor), role: .code))
         }
         var lineIndex = 0
-        for token in CodeSyntaxTokenizer.tokens(in: block.content, language: language) {
+        let contentLength = (block.content as NSString).length
+        for token in precomputed ?? CodeSyntaxAnalyzer.tokens(in: block.content, language: language) {
+            guard NSMaxRange(token.range) <= contentLength else { continue }
             // 字句は位置順に並ぶ。複数行にまたがる字句（ブロックコメントなど）は行ごとに分ける。
             while lineIndex < lines.count - 1,
                   token.range.location >= lines[lineIndex].content + lines[lineIndex].length + 1 { lineIndex += 1 }

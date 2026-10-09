@@ -52,7 +52,9 @@ extension NSAttributedString.Key {
 
 @MainActor
 enum CodeSyntaxHighlighter {
-    static func render(_ source: String, language: String?) -> NSAttributedString {
+    /// `tokens` は解析済みの字句（`DocumentSnapshot.codeSyntaxTokens`）。`nil` の場合は解析キャッシュ経由で求める。
+    static func render(_ source: String, language: String?,
+                       tokens: [CodeSyntaxTokenRange]? = nil) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 3
         paragraph.paragraphSpacing = 8
@@ -62,7 +64,9 @@ enum CodeSyntaxHighlighter {
             .backgroundColor: NSColor.controlBackgroundColor,
             .paragraphStyle: paragraph
         ])
-        for token in CodeSyntaxTokenizer.tokens(in: source, language: language) {
+        let length = (source as NSString).length
+        for token in tokens ?? CodeSyntaxAnalyzer.tokens(in: source, language: language) {
+            guard NSMaxRange(token.range) <= length else { continue }
             result.addAttributes([.foregroundColor: CodeSyntaxPalette.color(for: token.token),
                                   .codeSyntaxToken: token.token.rawValue], range: token.range)
         }
