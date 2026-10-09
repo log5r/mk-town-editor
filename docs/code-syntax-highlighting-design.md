@@ -1,6 +1,6 @@
 # コード色分けの設計評価
 
-[現在の仕様](code-syntax-highlighting.md)に対する2026-10-09時点の調査。以下は提案であり、解析エンジンの変更はまだ実装していない。
+[現在の仕様](code-syntax-highlighting.md)に対する2026-10-09時点の調査。このうち第1段階（JavaScript・TypeScript・TSX・RubyのTree-sitter化と、解析結果の文書版ごとの共有）は実装済みである。旧走査器との比較は[コード色分けエンジンの比較記録](code-syntax-engine-comparison.md)、導入の手順と運用は[Tree-sitterの導入](tree-sitter-integration.md)を参照。以下の評価と提案は調査時点の記録で、現行の仕様は[コードブロックの色分け](code-syntax-highlighting.md)にある。
 
 追加調査として、[VS Code・CotEditor・Zed・Helixの構文着色方式](editor-syntax-highlighting-research.md)を比較した。CotEditor 7系はSwiftTreeSitterと従来の正規表現方式を併用しており、本提案に近い実例となる。TextMate方式も実用的な選択肢であり、構文解析の採用自体を目的とはしない。
 
