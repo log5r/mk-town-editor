@@ -1,8 +1,9 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
-	objectVersion = 77;
+	classes = {
+	};
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -48,10 +49,6 @@
 		A10000000000000000000030 /* PreviewScrollSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* PreviewScrollSync.swift */; };
 		A10000000000000000000031 /* PreviewTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* PreviewTypography.swift */; };
 		A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* CodeSyntaxHighlighter.swift */; };
-		A100000000000000000000A6 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A6 /* CodeSyntaxLanguages.swift */; };
-		A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */; };
-		A100000000000000000000A9 /* TreeSitterSyntaxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */; };
-		A100000000000000000000A8 /* CodeSyntaxAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */; };
 		A10000000000000000000033 /* PreviewRenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* PreviewRenderCache.swift */; };
 		A10000000000000000000034 /* RegexSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* RegexSearch.swift */; };
 		A10000000000000000000035 /* RegexSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000035 /* RegexSearchSheet.swift */; };
@@ -71,8 +68,6 @@
 		A10000000000000000000049 /* MarkdownEncodingConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000049 /* MarkdownEncodingConverter.swift */; };
 		A10000000000000000000050 /* MarkdownEncodingImportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000050 /* MarkdownEncodingImportSheet.swift */; };
 		A10000000000000000000051 /* MarkdownTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000051 /* MarkdownTextFormat.swift */; };
-		A100000000000000000000A5 /* DerivedValueCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A5 /* DerivedValueCache.swift */; };
-		A100000000000000000000A4 /* RegularExpressionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A4 /* RegularExpressionCache.swift */; };
 		A10000000000000000000052 /* WorkspaceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000052 /* WorkspaceSearch.swift */; };
 		A10000000000000000000053 /* WorkspaceSearchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000053 /* WorkspaceSearchSheet.swift */; };
 		A10000000000000000000054 /* WorkspaceReplace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000054 /* WorkspaceReplace.swift */; };
@@ -90,7 +85,6 @@
 		A10000000000000000000060 /* EditorShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000060 /* EditorShortcuts.swift */; };
 		A10000000000000000000061 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000061 /* Localizable.xcstrings */; };
 		A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000062 /* ExternalDocumentOpen.swift */; };
-		A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AC47 /* ApplicationActivation.swift */; };
 		A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000063 /* MarkdownSafeHTML.swift */; };
 		A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000064 /* MarkdownMultiSelection.swift */; };
 		A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000065 /* MarkdownLinkHover.swift */; };
@@ -105,9 +99,6 @@
 		A10000000000000000000074 /* WorkspaceBacklinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000074 /* WorkspaceBacklinks.swift */; };
 		A10000000000000000000075 /* WorkspaceBacklinksSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */; };
 		A10000000000000000000076 /* WorkspaceWikiLinks.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000076 /* WorkspaceWikiLinks.swift */; };
-		A1000000000000000000AD03 /* ListKeyboardSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD03 /* ListKeyboardSelection.swift */; };
-		A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD02 /* SplitDividerHandle.swift */; };
-		A1000000000000000000AD01 /* PanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD01 /* PanelPresentation.swift */; };
 		A10000000000000000000077 /* WorkspaceWikiLinkSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000077 /* WorkspaceWikiLinkSheet.swift */; };
 		A10000000000000000000078 /* WorkspaceDocumentEmbed.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000078 /* WorkspaceDocumentEmbed.swift */; };
 		A10000000000000000000079 /* WorkspaceEmbeddedDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000079 /* WorkspaceEmbeddedDocumentView.swift */; };
@@ -125,13 +116,9 @@
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
 		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
 		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
-		A10000000000000000000202 /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000002 /* SwiftTreeSitter */; };
-		A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000003 /* TreeSitterJavaScript */; };
-		A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000004 /* TreeSitterTypeScript */; };
-		A10000000000000000000205 /* TreeSitterRuby in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000005 /* TreeSitterRuby */; };
 		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
-		A10000000000000000000089 /* mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* mermaid.min.js */; };
-		A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Mermaid-LICENSE.txt */; };
+		A10000000000000000000089 /* Resources/mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* Resources/mermaid.min.js */; };
+		A1000000000000000000008A /* Resources/Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */; };
 		A1000000000000000000008B /* ExternalDiagramRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008A /* ExternalDiagramRenderer.swift */; };
 		A1000000000000000000008C /* ExternalDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008B /* ExternalDiagramView.swift */; };
 		A1000000000000000000008D /* MarkdownCitations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008C /* MarkdownCitations.swift */; };
@@ -157,7 +144,31 @@
 		A100000000000000000000A1 /* CollaborativeTextReplacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A0 /* CollaborativeTextReplacement.swift */; };
 		A100000000000000000000A2 /* AISuggestion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A1 /* AISuggestion.swift */; };
 		A100000000000000000000A3 /* AISuggestionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A2 /* AISuggestionSheet.swift */; };
+		A100000000000000000000A4 /* RegularExpressionCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A4 /* RegularExpressionCache.swift */; };
+		A100000000000000000000A5 /* DerivedValueCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A5 /* DerivedValueCache.swift */; };
+		A100000000000000000000A6 /* CodeSyntaxLanguages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A6 /* CodeSyntaxLanguages.swift */; };
+		A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */; };
+		A100000000000000000000A8 /* CodeSyntaxAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */; };
+		A100000000000000000000A9 /* TreeSitterSyntaxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */; };
+		A10000000000000000000202 /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000002 /* SwiftTreeSitter */; };
+		A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000003 /* TreeSitterJavaScript */; };
+		A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000004 /* TreeSitterTypeScript */; };
+		A10000000000000000000205 /* TreeSitterRuby in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000005 /* TreeSitterRuby */; };
+		A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AC47 /* ApplicationActivation.swift */; };
+		A1000000000000000000AD01 /* PanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD01 /* PanelPresentation.swift */; };
+		A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD02 /* SplitDividerHandle.swift */; };
+		A1000000000000000000AD03 /* ListKeyboardSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD03 /* ListKeyboardSelection.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D50000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A80000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = MKTownEditor;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* DocumentStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStatistics.swift; sourceTree = "<group>"; };
@@ -204,10 +215,6 @@
 		A20000000000000000000030 /* PreviewScrollSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewScrollSync.swift; sourceTree = "<group>"; };
 		A20000000000000000000031 /* PreviewTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTypography.swift; sourceTree = "<group>"; };
 		A20000000000000000000032 /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
-		A200000000000000000000A6 /* CodeSyntaxLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLanguages.swift; sourceTree = "<group>"; };
-		A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxTokenizer.swift; sourceTree = "<group>"; };
-		A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterSyntaxParser.swift; sourceTree = "<group>"; };
-		A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxAnalyzer.swift; sourceTree = "<group>"; };
 		A20000000000000000000033 /* PreviewRenderCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderCache.swift; sourceTree = "<group>"; };
 		A20000000000000000000034 /* RegexSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000035 /* RegexSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearchSheet.swift; sourceTree = "<group>"; };
@@ -227,8 +234,6 @@
 		A20000000000000000000049 /* MarkdownEncodingConverter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEncodingConverter.swift; sourceTree = "<group>"; };
 		A20000000000000000000050 /* MarkdownEncodingImportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEncodingImportSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000051 /* MarkdownTextFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextFormat.swift; sourceTree = "<group>"; };
-		A200000000000000000000A5 /* DerivedValueCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DerivedValueCache.swift; sourceTree = "<group>"; };
-		A200000000000000000000A4 /* RegularExpressionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegularExpressionCache.swift; sourceTree = "<group>"; };
 		A20000000000000000000052 /* WorkspaceSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000053 /* WorkspaceSearchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSearchSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000054 /* WorkspaceReplace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceReplace.swift; sourceTree = "<group>"; };
@@ -246,7 +251,6 @@
 		A20000000000000000000060 /* EditorShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorShortcuts.swift; sourceTree = "<group>"; };
 		A20000000000000000000061 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		A20000000000000000000062 /* ExternalDocumentOpen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDocumentOpen.swift; sourceTree = "<group>"; };
-		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000063 /* MarkdownSafeHTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownSafeHTML.swift; sourceTree = "<group>"; };
 		A20000000000000000000064 /* MarkdownMultiSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMultiSelection.swift; sourceTree = "<group>"; };
 		A20000000000000000000065 /* MarkdownLinkHover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkHover.swift; sourceTree = "<group>"; };
@@ -261,9 +265,6 @@
 		A20000000000000000000074 /* WorkspaceBacklinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinks.swift; sourceTree = "<group>"; };
 		A20000000000000000000075 /* WorkspaceBacklinksSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceBacklinksSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000076 /* WorkspaceWikiLinks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWikiLinks.swift; sourceTree = "<group>"; };
-		A2000000000000000000AD03 /* ListKeyboardSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardSelection.swift; sourceTree = "<group>"; };
-		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
-		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
 		A20000000000000000000077 /* WorkspaceWikiLinkSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWikiLinkSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000078 /* WorkspaceDocumentEmbed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDocumentEmbed.swift; sourceTree = "<group>"; };
 		A20000000000000000000079 /* WorkspaceEmbeddedDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceEmbeddedDocumentView.swift; sourceTree = "<group>"; };
@@ -281,8 +282,8 @@
 		A20000000000000000000085 /* WorkspaceLayoutActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000086 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
 		A20000000000000000000087 /* MermaidDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidDiagramView.swift; sourceTree = "<group>"; };
-		A20000000000000000000088 /* mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/mermaid.min.js; sourceTree = "<group>"; };
-		A20000000000000000000089 /* Mermaid-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/Mermaid-LICENSE.txt; sourceTree = "<group>"; };
+		A20000000000000000000088 /* Resources/mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/mermaid.min.js; sourceTree = "<group>"; };
+		A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Resources/Mermaid-LICENSE.txt"; sourceTree = "<group>"; };
 		A2000000000000000000008A /* ExternalDiagramRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDiagramRenderer.swift; sourceTree = "<group>"; };
 		A2000000000000000000008B /* ExternalDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDiagramView.swift; sourceTree = "<group>"; };
 		A2000000000000000000008C /* MarkdownCitations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCitations.swift; sourceTree = "<group>"; };
@@ -308,44 +309,57 @@
 		A200000000000000000000A0 /* CollaborativeTextReplacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollaborativeTextReplacement.swift; sourceTree = "<group>"; };
 		A200000000000000000000A1 /* AISuggestion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestion.swift; sourceTree = "<group>"; };
 		A200000000000000000000A2 /* AISuggestionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISuggestionSheet.swift; sourceTree = "<group>"; };
+		A200000000000000000000A4 /* RegularExpressionCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegularExpressionCache.swift; sourceTree = "<group>"; };
+		A200000000000000000000A5 /* DerivedValueCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DerivedValueCache.swift; sourceTree = "<group>"; };
+		A200000000000000000000A6 /* CodeSyntaxLanguages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxLanguages.swift; sourceTree = "<group>"; };
+		A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxTokenizer.swift; sourceTree = "<group>"; };
+		A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxAnalyzer.swift; sourceTree = "<group>"; };
+		A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterSyntaxParser.swift; sourceTree = "<group>"; };
+		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
+		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
+		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
+		A2000000000000000000AD03 /* ListKeyboardSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardSelection.swift; sourceTree = "<group>"; };
 		D10000000000000000000001 /* MKTownEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXContainerItemProxy section */
-		D50000000000000000000001 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = A80000000000000000000001 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = A50000000000000000000001;
-			remoteInfo = MKTownEditor;
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		D20000000000000000000001 /* MKTownEditorTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Tests/MKTownEditorTests;
-			sourceTree = "<group>";
-		};
+		D20000000000000000000001 /* Tests/MKTownEditorTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Tests/MKTownEditorTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A30000000000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000087 /* SwiftMath in Frameworks */,A10000000000000000000202 /* SwiftTreeSitter in Frameworks */,A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */,A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */,A10000000000000000000205 /* TreeSitterRuby in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
-		D30000000000000000000002 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000087 /* SwiftMath in Frameworks */,
+				A10000000000000000000202 /* SwiftTreeSitter in Frameworks */,
+				A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */,
+				A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */,
+				A10000000000000000000205 /* TreeSitterRuby in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D30000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A40000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				A40000000000000000000002 /* MKTownEditor */,
+				A40000000000000000000002 /* Sources/MKTownEditor */,
 				A40000000000000000000003 /* Support */,
-				D20000000000000000000001 /* MKTownEditorTests */,
+				D20000000000000000000001 /* Tests/MKTownEditorTests */,
 				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A40000000000000000000002 /* MKTownEditor */ = {
+		A40000000000000000000002 /* Sources/MKTownEditor */ = {
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000001 /* DocumentStatistics.swift */,
@@ -467,8 +481,8 @@
 				A20000000000000000000085 /* WorkspaceLayoutActivation.swift */,
 				A20000000000000000000086 /* MarkdownMath.swift */,
 				A20000000000000000000087 /* MermaidDiagramView.swift */,
-				A20000000000000000000088 /* mermaid.min.js */,
-				A20000000000000000000089 /* Mermaid-LICENSE.txt */,
+				A20000000000000000000088 /* Resources/mermaid.min.js */,
+				A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */,
 				A2000000000000000000008A /* ExternalDiagramRenderer.swift */,
 				A2000000000000000000008B /* ExternalDiagramView.swift */,
 				A2000000000000000000008C /* MarkdownCitations.swift */,
@@ -500,13 +514,18 @@
 		};
 		A40000000000000000000003 /* Support */ = {
 			isa = PBXGroup;
-			children = (A2000000000000000000000C /* Info.plist */,);
+			children = (
+				A2000000000000000000000C /* Info.plist */,
+			);
 			path = Support;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
-			children = (A2000000000000000000000D /* MKTownEditor.app */, D10000000000000000000001 /* MKTownEditorTests.xctest */,);
+			children = (
+				A2000000000000000000000D /* MKTownEditor.app */,
+				D10000000000000000000001 /* MKTownEditorTests.xctest */,
+			);
 			name = Products;
 			sourceTree = "<group>";
 		};
@@ -521,10 +540,18 @@
 				A30000000000000000000001 /* Frameworks */,
 				A60000000000000000000001 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = ();
+			buildRules = (
+			);
+			dependencies = (
+			);
 			name = MKTownEditor;
-			packageProductDependencies = (C10000000000000000000001 /* SwiftMath */,C10000000000000000000002 /* SwiftTreeSitter */,C10000000000000000000003 /* TreeSitterJavaScript */,C10000000000000000000004 /* TreeSitterTypeScript */,C10000000000000000000005 /* TreeSitterRuby */,);
+			packageProductDependencies = (
+				C10000000000000000000001 /* SwiftMath */,
+				C10000000000000000000002 /* SwiftTreeSitter */,
+				C10000000000000000000003 /* TreeSitterJavaScript */,
+				C10000000000000000000004 /* TreeSitterTypeScript */,
+				C10000000000000000000005 /* TreeSitterRuby */,
+			);
 			productName = MKTownEditor;
 			productReference = A2000000000000000000000D /* MKTownEditor.app */;
 			productType = "com.apple.product-type.application";
@@ -537,11 +564,17 @@
 				D30000000000000000000002 /* Frameworks */,
 				D30000000000000000000003 /* Resources */,
 			);
-			buildRules = ();
-			dependencies = (D60000000000000000000001 /* PBXTargetDependency */,);
-			fileSystemSynchronizedGroups = (D20000000000000000000001 /* MKTownEditorTests */,);
+			buildRules = (
+			);
+			dependencies = (
+				D60000000000000000000001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				D20000000000000000000001 /* Tests/MKTownEditorTests */,
+			);
 			name = MKTownEditorTests;
-			packageProductDependencies = ();
+			packageProductDependencies = (
+			);
 			productName = MKTownEditorTests;
 			productReference = D10000000000000000000001 /* MKTownEditorTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -556,27 +589,60 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
-					A50000000000000000000001 = { CreatedOnToolsVersion = 27.0; };
-					D40000000000000000000001 = { CreatedOnToolsVersion = 27.0; TestTargetID = A50000000000000000000001; };
+					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					D40000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A50000000000000000000001;
+					};
 				};
 			};
 			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */;
 			compatibilityVersion = "Xcode 16.0";
 			developmentRegion = ja;
 			hasScannedForEncodings = 0;
-			knownRegions = (ja, en, Base);
+			knownRegions = (
+				ja,
+				en,
+				Base,
+			);
 			mainGroup = A40000000000000000000001;
+			packageReferences = (
+				C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+				C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */,
+				C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */,
+				C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */,
+				C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */,
+			);
 			productRefGroup = A40000000000000000000004 /* Products */;
-			packageReferences = (C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */,C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */,C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */,C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */,);
 			projectDirPath = "";
 			projectRoot = "";
-			targets = (A50000000000000000000001 /* MKTownEditor */, D40000000000000000000001 /* MKTownEditorTests */,);
+			targets = (
+				A50000000000000000000001 /* MKTownEditor */,
+				D40000000000000000000001 /* MKTownEditorTests */,
+			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A60000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000061 /* Localizable.xcstrings in Resources */, A10000000000000000000089 /* mermaid.min.js in Resources */, A1000000000000000000008A /* Mermaid-LICENSE.txt in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
-		D30000000000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A60000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000061 /* Localizable.xcstrings in Resources */,
+				A10000000000000000000089 /* Resources/mermaid.min.js in Resources */,
+				A1000000000000000000008A /* Resources/Mermaid-LICENSE.txt in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D30000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -730,7 +796,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D30000000000000000000001 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		D30000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -742,8 +814,33 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		B10000000000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0; }; name = Debug; };
-		B10000000000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; }; name = Release; };
+		B10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				ENABLE_TESTABILITY = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 		B10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -751,6 +848,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = en;
+				DEVELOPMENT_TEAM = 8V3F7N3VG2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Support/Info.plist;
 				MARKETING_VERSION = 1.0;
@@ -768,6 +866,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_LANGUAGE = en;
+				DEVELOPMENT_TEAM = 8V3F7N3VG2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Support/Info.plist;
 				MARKETING_VERSION = 1.0;
@@ -812,31 +911,76 @@
 		};
 /* End XCBuildConfiguration section */
 
+/* Begin XCConfigurationList section */
+		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000001 /* Debug */,
+				B10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "MKTownEditor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000000000000000000003 /* Debug */,
+				B10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D80000000000000000000001 /* Build configuration list for PBXNativeTarget "MKTownEditorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D70000000000000000000001 /* Debug */,
+				D70000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mgriebling/SwiftMath.git";
-			requirement = { kind = exactVersion; version = 1.7.3; };
+			requirement = {
+				kind = exactVersion;
+				version = 1.7.3;
+			};
 		};
 		C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/swift-tree-sitter.git";
-			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.25.0; };
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.25.0;
+			};
 		};
 		C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/tree-sitter-javascript.git";
-			requirement = { kind = exactVersion; version = 0.23.1; };
+			requirement = {
+				kind = exactVersion;
+				version = 0.23.1;
+			};
 		};
 		C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/tree-sitter-typescript.git";
-			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.23.2; };
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.23.2;
+			};
 		};
 		C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/tree-sitter/tree-sitter-ruby.git";
-			requirement = { kind = upToNextMajorVersion; minimumVersion = 0.23.1; };
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.23.1;
+			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
@@ -867,12 +1011,6 @@
 			productName = TreeSitterRuby;
 		};
 /* End XCSwiftPackageProductDependency section */
-
-/* Begin XCConfigurationList section */
-		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000001 /* Debug */, B10000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		A90000000000000000000002 /* Build configuration list for PBXNativeTarget "MKTownEditor" */ = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000003 /* Debug */, B10000000000000000000004 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-		D80000000000000000000001 /* Build configuration list for PBXNativeTarget "MKTownEditorTests" */ = {isa = XCConfigurationList; buildConfigurations = (D70000000000000000000001 /* Debug */, D70000000000000000000002 /* Release */); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-/* End XCConfigurationList section */
 	};
 	rootObject = A80000000000000000000001 /* Project object */;
 }
