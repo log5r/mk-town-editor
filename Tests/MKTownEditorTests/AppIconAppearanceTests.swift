@@ -5,7 +5,9 @@ import XCTest
 /// Renders Support/AppIcon.icon the way the system draws each appearance and checks that "MT" stays readable.
 /// The renderer ships only inside Icon Composer.app; Xcode's `ictool` is a different tool without `--export-image`.
 final class AppIconAppearanceTests: XCTestCase {
-    private static let renderer = URL(fileURLWithPath: "/Applications/Icon Composer.app/Contents/Executables/ictool")
+    private static let installedRenderer = URL(fileURLWithPath: "/Applications/Icon Composer.app/Contents/Executables/ictool")
+    /// Replaced only by `testMissingIconComposerSkipsRendering`.
+    nonisolated(unsafe) private static var renderer = installedRenderer
     private static let size = 256
 
     private func iconDocument() -> URL {
@@ -62,20 +64,35 @@ final class AppIconAppearanceTests: XCTestCase {
         return (max(stem, background) + 0.05) / (min(stem, background) + 0.05)
     }
 
+    // Each contrast is computed before the assertion: XCTAssert reports an error thrown inside its
+    // arguments, XCTSkip included, as a failure, so a machine without Icon Composer would fail instead of skip.
     func testMonogramIsReadableInTheLightAppearance() throws {
-        XCTAssertGreaterThanOrEqual(try stemContrast("Default"), 4.5)
+        let contrast = try stemContrast("Default")
+        XCTAssertGreaterThanOrEqual(contrast, 4.5)
     }
 
     /// Without a dark fill the navy monogram sat on near-black at about 1.2:1.
     func testMonogramIsReadableInTheDarkAppearance() throws {
-        XCTAssertGreaterThanOrEqual(try stemContrast("Dark"), 4.5)
+        let contrast = try stemContrast("Dark")
+        XCTAssertGreaterThanOrEqual(contrast, 4.5)
     }
 
     /// The clear and tinted styles of macOS 26 draw the icon in one hue. Without a white fill for the tinted
     /// appearance the monogram came out between 1.0:1 and 1.8:1; 3:1 is the WCAG minimum for large glyphs.
     func testMonogramIsReadableInTheClearAndTintedAppearances() throws {
         for rendition in ["ClearLight", "ClearDark", "TintedLight", "TintedDark"] {
-            XCTAssertGreaterThanOrEqual(try stemContrast(rendition), 3, rendition)
+            let contrast = try stemContrast(rendition)
+            XCTAssertGreaterThanOrEqual(contrast, 3, rendition)
+        }
+    }
+
+    /// CI has no Icon Composer, so rendering has to end in XCTSkip there. The tests above therefore call
+    /// `stemContrast` before asserting; inside XCTAssert's arguments the same skip is recorded as a failure.
+    func testMissingIconComposerSkipsRendering() {
+        Self.renderer = URL(fileURLWithPath: "/nonexistent/Icon Composer.app/Contents/Executables/ictool")
+        defer { Self.renderer = Self.installedRenderer }
+        XCTAssertThrowsError(try stemContrast("Default")) { error in
+            XCTAssertTrue(error is XCTSkip, "\(error)")
         }
     }
 }
