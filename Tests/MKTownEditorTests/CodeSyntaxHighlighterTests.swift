@@ -374,6 +374,9 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(tokens("print /a#b/;\nmy $y = $x /2; # note", "perl").contains { $0 == ("/a#b/", .string) })
         XCTAssertTrue(tokens("my $y = $x /2; # note", "perl").contains { $0 == ("# note", .comment) })
         // Ruby と Perl の正規表現の中の `#` はコメントではない。
+        // 代入済みのローカル変数、ブロック・メソッドの引数の後ろは除算。
+        let locals = tokens("a = 12; x = a /2/3\nitems.each { |n| y = n /2/1 }\ndef f(k) k /2/1 end\nputs /a#b/", "ruby")
+        XCTAssertEqual(locals.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
         // Ruby は改行で文が終わる。括弧の中や行末の `\` は継続。
         let lines = tokens("x = 1\n/a#b/.match(s)\ny = (2\n/ 3)\nz = 4 \\\n/ 5 # note", "ruby")
         XCTAssertEqual(lines.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
