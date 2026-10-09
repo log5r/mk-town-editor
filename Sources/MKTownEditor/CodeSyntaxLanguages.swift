@@ -336,6 +336,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [at: .attribute]
         },
         CodeSyntaxLanguage("javascript") {
+            $0.regexLiterals = true
             $0.keywords = words(javaScriptKeywords)
             $0.capitalizedTypes = true
             $0.lineComments = cStyleComments.line
@@ -345,6 +346,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [at: .attribute]
         },
         CodeSyntaxLanguage("typescript") {
+            $0.regexLiterals = true
             $0.keywords = words(javaScriptKeywords + " " + """
                 abstract as asserts declare enum implements infer interface is keyof module namespace private \
                 protected public readonly require satisfies type unique override accessor
@@ -371,6 +373,7 @@ enum CodeSyntaxLanguages {
             $0.prefixedIdentifiers = [at: .attribute]
         },
         CodeSyntaxLanguage("ruby") {
+            $0.regexLiterals = true
             $0.keywords = words("""
                 BEGIN END alias and begin break case class def defined? do else elsif end ensure false for if in \
                 module next nil not or redo rescue retry return self super then true undef unless until when \
@@ -411,6 +414,7 @@ enum CodeSyntaxLanguages {
             $0.strings = quotedStrings
         },
         CodeSyntaxLanguage("perl") {
+            $0.regexLiterals = true
             $0.hashComments = .notAfterDollar
             $0.keywords = words("""
                 my our local sub if elsif else unless while until for foreach do last next redo return use no \
