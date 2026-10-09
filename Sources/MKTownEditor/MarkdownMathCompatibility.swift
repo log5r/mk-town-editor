@@ -185,7 +185,7 @@ enum MarkdownMathCompatibility {
         "sqrt": 1, "underbrace": 1, "overbrace": 1, "overline": 1, "underline": 1,
         "text": 1, "textbf": 1, "textit": 1, "textrm": 1, "operatorname": 1,
         "mathbb": 1, "mathcal": 1, "mathrm": 1, "mathbf": 1, "mathit": 1, "mathsf": 1, "mathtt": 1,
-        "mathfrak": 1, "mathscr": 1, "boldsymbol": 1,
+        "mathfrak": 1, "mathscr": 1, "boldsymbol": 1, "color": 2, "textcolor": 2, "colorbox": 2,
         "hat": 1, "bar": 1, "vec": 1, "tilde": 1, "dot": 1, "ddot": 1, "widehat": 1, "widetilde": 1,
     ]
 
@@ -356,6 +356,10 @@ enum MarkdownMathCompatibility {
                 // `\sqrt[3]{x}` の任意引数は根号の一部なので、被開法数と一緒に読む。
                 end = root.end
             }
+            if name == "left" {
+                // `\left( ... \right)` は対になる `\right` までが1つのまとまり。
+                end = pairedDelimiterEnd(from: end, in: chars)
+            }
             for _ in 0..<(argumentCounts[name] ?? 0) {
                 guard let argument = token(from: end, in: chars) else { break }
                 end = argument.end
@@ -371,6 +375,36 @@ enum MarkdownMathCompatibility {
             return Token(content: chars[cursor..<end], end: end, braced: false)
         }
         return Token(content: chars[cursor..<(cursor + 1)], end: cursor + 1, braced: false)
+    }
+
+    /// `\left` の直後から、対応する `\right` とその括弧までの終了位置。対がなければ括弧の直後。
+    private static func pairedDelimiterEnd(from index: Int, in chars: ArraySlice<Character>) -> Int {
+        var cursor = delimiterEnd(from: index, in: chars)
+        let fallback = cursor
+        var nesting = 1
+        while cursor < chars.endIndex {
+            guard chars[cursor] == "\\" else { cursor += 1; continue }
+            let length = commandLength(at: cursor, in: chars)
+            let name = String(chars[(cursor + 1)..<(cursor + 1 + length)])
+            cursor += 1 + length
+            if name == "left" {
+                nesting += 1
+                cursor = delimiterEnd(from: cursor, in: chars)
+            } else if name == "right" {
+                nesting -= 1
+                cursor = delimiterEnd(from: cursor, in: chars)
+                if nesting == 0 { return cursor }
+            }
+        }
+        return fallback
+    }
+
+    /// `\left`・`\right` に続く括弧（1文字または `\{` などのコマンド）の終了位置。
+    private static func delimiterEnd(from index: Int, in chars: ArraySlice<Character>) -> Int {
+        var cursor = index
+        while cursor < chars.endIndex, chars[cursor].isWhitespace { cursor += 1 }
+        guard cursor < chars.endIndex else { return cursor }
+        return chars[cursor] == "\\" ? cursor + 1 + commandLength(at: cursor, in: chars) : cursor + 1
     }
 
     /// `\sqrt` の直後にある任意引数 `[...]` の中身と終了位置。
