@@ -342,6 +342,9 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         // 値の後ろの `/` は除算。
         XCTAssertFalse(tokens("$n / 2 / 3", "perl").contains { $0.1 == .string })
         // キーワードの後ろは正規表現。
+        // メンバーアクセスとハッシュのキーの後ろの `/` も除算。
+        XCTAssertFalse(tokens("$obj->print / 2 / 3;", "perl").contains { $0.1 == .string })
+        XCTAssertFalse(tokens("$h{print} / 2", "perl").contains { $0.1 == .string })
         XCTAssertTrue(tokens("return /x/", "perl").contains { $0 == ("/x/", .string) })
         XCTAssertTrue(tokens("split /,/, $s", "perl").contains { $0 == ("/,/", .string) })
         // 正規表現の後ろの `#` はコメント、正規表現の中の `#` はコメントではない。

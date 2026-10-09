@@ -65,6 +65,8 @@ enum CodeSyntaxHighlighter {
             .paragraphStyle: paragraph
         ])
         let length = (source as NSString).length
+        result.beginEditing()
+        defer { result.endEditing() }
         for token in tokens ?? CodeSyntaxAnalyzer.tokens(in: source, language: language) {
             guard NSMaxRange(token.range) <= length else { continue }
             result.addAttributes([.foregroundColor: CodeSyntaxPalette.color(for: token.token),

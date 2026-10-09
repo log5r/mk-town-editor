@@ -167,15 +167,21 @@ enum CodeSyntaxAnalyzer {
     }
 
     /// キャッシュにあればそれを返し、なければエンジンで解析して保存する。
-    /// Tree-sitter が解析できなかった場合（長すぎる、タイムアウトなど）は単色（`[]`）で、その結果も保存する。
+    /// Tree-sitter が解析できなかった場合は単色（`[]`）を返す。入力が長すぎる、クエリをコンパイルできないといった
+    /// 毎回同じ結果になる失敗は保存し、タイムアウトなど一時的な失敗（`.interrupted`）は保存せず次回やり直す。
     static func tokens(in source: String, language selection: CodeSyntaxLanguageSelection,
-                       cache: CodeSyntaxTokenCache = sharedCache) -> [CodeSyntaxTokenRange] {
+                       cache: CodeSyntaxTokenCache = sharedCache,
+                       parseTimeout: TimeInterval = TreeSitterSyntaxParser.parseTimeout) -> [CodeSyntaxTokenRange] {
         let version = selection.engine.cacheVersion
         if let cached = cache.tokens(for: source, language: selection.name, version: version) { return cached }
         let result: [CodeSyntaxTokenRange]
         switch selection.engine {
         case .treeSitter(let grammar):
-            result = TreeSitterSyntaxParser.tokens(in: source, grammar: grammar) ?? []
+            switch TreeSitterSyntaxParser.parse(source, grammar: grammar, timeout: parseTimeout) {
+            case .tokens(let tokens): result = tokens
+            case .unsupported: result = []
+            case .interrupted: return []  // 一時的な失敗は保存しない。
+            }
         case .scanner(let language):
             result = CodeSyntaxTokenizer.tokens(in: source, language: language)
         }
