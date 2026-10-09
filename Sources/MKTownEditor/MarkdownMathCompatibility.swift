@@ -180,14 +180,21 @@ enum MarkdownMathCompatibility {
     ]
 
     /// 引数を取るコマンドとその数。添字や分数の引数に波括弧なしで置かれたとき、引数ごと同じ書体にする。
-    private static let argumentCounts: [String: Int] = [
-        "frac": 2, "tfrac": 2, "dfrac": 2, "binom": 2, "tbinom": 2, "dbinom": 2, "underset": 2, "overset": 2,
-        "sqrt": 1, "underbrace": 1, "overbrace": 1, "overline": 1, "underline": 1,
-        "text": 1, "textbf": 1, "textit": 1, "textrm": 1, "operatorname": 1,
-        "mathbb": 1, "mathcal": 1, "mathrm": 1, "mathbf": 1, "mathit": 1, "mathsf": 1, "mathtt": 1,
-        "mathfrak": 1, "mathscr": 1, "boldsymbol": 1, "color": 2, "textcolor": 2, "colorbox": 2,
-        "hat": 1, "bar": 1, "vec": 1, "tilde": 1, "dot": 1, "ddot": 1, "widehat": 1, "widetilde": 1,
-    ]
+    /// SwiftMath 1.7.3 が解釈する引数付きコマンドをすべて載せる（アクセントと書体は `MTMathAtomFactory` の表と同じ）。
+    private static let argumentCounts: [String: Int] = {
+        var counts: [String: Int] = [
+            "frac": 2, "tfrac": 2, "dfrac": 2, "binom": 2, "tbinom": 2, "dbinom": 2, "underset": 2, "overset": 2,
+            "color": 2, "textcolor": 2, "colorbox": 2,
+            "sqrt": 1, "underbrace": 1, "overbrace": 1, "overline": 1, "underline": 1,
+        ]
+        let accents = ["grave", "acute", "hat", "tilde", "bar", "breve", "dot", "ddot", "check", "vec",
+                       "widehat", "widetilde"]
+        let fontStyles = ["mathnormal", "mathrm", "textrm", "rm", "mathbf", "bf", "textbf", "mathcal", "cal",
+                          "mathtt", "texttt", "mathit", "textit", "mit", "mathsf", "textsf", "mathfrak", "frak",
+                          "mathbb", "mathbfit", "bm", "text"]
+        for name in accents + fontStyles { counts[name] = 1 }
+        return counts
+    }()
 
     /// 別名を置き換え、上下に積む命令を `\atop` で組み立てる。
     /// `style` は現在の書体サイズ命令で、積む本体の大きさを元の式と揃えるために使う。
