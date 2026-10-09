@@ -87,6 +87,8 @@ struct CodeSyntaxLanguage: Sendable {
     var rawStringPrefixes: Set<String> = []
     /// C# の逐語的文字列 `@"..."`（`$@"..."` を含む）。`""` が引用符を表す。
     var verbatimStrings = false
+    /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
+    var quoteRunStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
     var prefixedIdentifiers: [UInt16: CodeSyntaxToken] = [:]
     /// 行頭の `#include` などのプリプロセッサ指令。
@@ -375,13 +377,17 @@ private struct CodeSyntaxScanner {
         var quote = hashStart
         while unit(quote) == Unit.hash { quote += 1 }
         guard unit(quote) == Unit.quote else { return false }
-        let close = [Unit.quote] + Array(repeating: Unit.hash, count: quote - hashStart)
-        index = quote + 1
+        // Swift の `#"""…"""#` は閉じ側も3つの引用符。`#""#` は空文字列なので1つとして扱う。
+        let quotes = language.rawStrings == .swift && matches(Self.tripleQuote, at: quote) ? 3 : 1
+        let close = Array(repeating: Unit.quote, count: quotes) + Array(repeating: Unit.hash, count: quote - hashStart)
+        index = quote + quotes
         while index < count && !matches(close, at: index) { index += 1 }
         index = min(count, index + close.count)
         emit(start, index, .string)
         return true
     }
+
+    private static let tripleQuote = [Unit.quote, Unit.quote, Unit.quote]
 
     private mutating func scanSwiftRawString() -> Bool {
         guard language.rawStrings == .swift, units[index] == Unit.hash else { return false }
@@ -444,8 +450,15 @@ private struct CodeSyntaxScanner {
         if language.charLiterals, units[index] == Unit.apostrophe {
             return scanCharLiteral()
         }
-        guard let delimiter = language.strings.first(where: { matches($0.open, at: index) }) else { return false }
+        guard var delimiter = language.strings.first(where: { matches($0.open, at: index) }) else { return false }
         let start = prefixStart ?? index
+        if language.quoteRunStrings, delimiter.open == Self.tripleQuote {
+            // C# の生文字列は3つ以上の引用符で区切り、開きと同じ数で閉じる。
+            var run = index
+            while unit(run) == Unit.quote { run += 1 }
+            delimiter = CodeSyntaxLanguage.Delimiter(String(repeating: "\"", count: run - index), escapes: false,
+                                                     token: delimiter.token)
+        }
         index += delimiter.open.count
         while index < count {
             if delimiter.escapes && !raw && units[index] == delimiter.escape {

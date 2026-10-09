@@ -204,6 +204,7 @@ enum CodeSyntaxLanguages {
             $0.blockComments = cStyleComments.block
             // `"""` の生文字列はバックスラッシュをエスケープとしない。
             $0.strings = [Delimiter("\"\"\"", escapes: false), Delimiter("\"", multiline: false)]
+            $0.quoteRunStrings = true
             $0.verbatimStrings = true
             $0.charLiterals = true
             $0.preprocessor = true
