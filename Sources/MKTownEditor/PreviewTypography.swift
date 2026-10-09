@@ -36,6 +36,11 @@ enum PreviewTypography {
         result.addAttribute(.foregroundColor, value: color, range: range)
         if kind == .codeBlock {
             result.addAttribute(.backgroundColor, value: codeBackground, range: range)
+            result.enumerateAttribute(.codeSyntaxToken, in: range) { value, subrange, _ in
+                guard let token = (value as? String).flatMap(CodeSyntaxToken.init(rawValue:)),
+                      let tokenColor = CodeSyntaxPalette.color(for: token, theme: theme) else { return }
+                result.addAttribute(.foregroundColor, value: tokenColor, range: subrange)
+            }
         }
         result.enumerateAttribute(.link, in: range) { value, subrange, _ in
             if value != nil {

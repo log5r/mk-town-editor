@@ -11,6 +11,8 @@ struct MarkdownSyntaxSpan: Equatable, Sendable {
         case listMarker
         case taskMarker
         case tableMarker
+        /// 言語を指定したコードブロック内の字句。
+        case codeToken(CodeSyntaxToken)
     }
 
     let range: NSRange
@@ -49,7 +51,7 @@ enum MarkdownSyntaxHighlighter {
             case .heading:
                 result.append(MarkdownSyntaxSpan(range: block.sourceRange, role: .heading))
             case .codeBlock:
-                result.append(MarkdownSyntaxSpan(range: block.sourceRange, role: .code))
+                result += codeBlockSpans(block, in: source)
             case .horizontalRule:
                 result.append(MarkdownSyntaxSpan(range: block.sourceRange, role: .marker))
             case .table:
@@ -104,6 +106,59 @@ enum MarkdownSyntaxHighlighter {
                       !MarkdownInlineSyntax.intersects(closing, sortedRanges: excluded) else { continue }
                 result.append(MarkdownSyntaxSpan(range: opening, role: .marker))
                 result.append(MarkdownSyntaxSpan(range: closing, role: .marker))
+            }
+        }
+        return result
+    }
+
+    /// 言語を指定したフェンスのコードブロックは、フェンス行を `.code`、本文を字句ごとの色にする。
+    /// 未対応の言語や、本文と原文の行が対応しない場合（タブの展開など）はブロック全体を `.code` にする。
+    static func codeBlockSpans(_ block: MarkdownBlock, in source: NSString) -> [MarkdownSyntaxSpan] {
+        let whole = [MarkdownSyntaxSpan(range: block.sourceRange, role: .code)]
+        guard block.codeFenceMarker != nil, !block.content.isEmpty,
+              let language = CodeSyntaxTokenizer.language(named: block.codeLanguage) else { return whole }
+        let blockEnd = NSMaxRange(block.sourceRange)
+        let opening = source.lineRange(for: NSRange(location: block.sourceRange.location, length: 0))
+        // 本文の各行が原文のどこから始まるか。引用やリストの記号を除いた本文は、原文の行の末尾部分になる。
+        var lines: [(content: Int, source: Int, length: Int)] = []
+        var contentOffset = 0
+        var cursor = NSMaxRange(opening)
+        for line in block.content.components(separatedBy: "\n") {
+            guard cursor < blockEnd || (cursor == blockEnd && line.isEmpty && cursor == source.length) else {
+                return whole
+            }
+            let lineRange = source.lineRange(for: NSRange(location: cursor, length: 0))
+            var textEnd = NSMaxRange(lineRange)
+            if textEnd > lineRange.location, source.character(at: textEnd - 1) == 0x0A { textEnd -= 1 }
+            if textEnd > lineRange.location, source.character(at: textEnd - 1) == 0x0D { textEnd -= 1 }
+            let length = (line as NSString).length
+            let start = textEnd - length
+            guard start >= lineRange.location,
+                  source.substring(with: NSRange(location: start, length: length)) == line else { return whole }
+            lines.append((contentOffset, start, length))
+            contentOffset += length + 1
+            cursor = NSMaxRange(lineRange)
+        }
+        var result = [MarkdownSyntaxSpan(range: opening, role: .code)]
+        if cursor < blockEnd {
+            result.append(MarkdownSyntaxSpan(range: NSRange(location: cursor, length: blockEnd - cursor), role: .code))
+        }
+        var lineIndex = 0
+        for token in CodeSyntaxTokenizer.tokens(in: block.content, language: language) {
+            // 字句は位置順に並ぶ。複数行にまたがる字句（ブロックコメントなど）は行ごとに分ける。
+            while lineIndex < lines.count - 1,
+                  token.range.location >= lines[lineIndex].content + lines[lineIndex].length + 1 { lineIndex += 1 }
+            var index = lineIndex
+            while index < lines.count, lines[index].content < NSMaxRange(token.range) {
+                let line = lines[index]
+                let start = max(token.range.location, line.content)
+                let end = min(NSMaxRange(token.range), line.content + line.length)
+                if end > start {
+                    result.append(MarkdownSyntaxSpan(
+                        range: NSRange(location: line.source + start - line.content, length: end - start),
+                        role: .codeToken(token.token)))
+                }
+                index += 1
             }
         }
         return result
@@ -207,6 +262,7 @@ enum MarkdownSyntaxHighlighter {
         case .listMarker: .systemOrange
         case .taskMarker: .systemGreen
         case .tableMarker: .systemIndigo
+        case .codeToken(let token): CodeSyntaxPalette.color(for: token)
         }
     }
 

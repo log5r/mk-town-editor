@@ -90,21 +90,51 @@ enum MarkdownFormattingStyle {
 
 enum MarkdownCodeLanguage: String, CaseIterable, Hashable {
     case swift
+    case objectivec
+    case c
+    case cpp
+    case csharp
+    case java
+    case kotlin
+    case go
+    case rust
     case javascript
     case typescript
     case python
-    case json
+    case ruby
+    case php
     case bash
+    case sql
+    case html
+    case css
+    case json
+    case yaml
+    case diff
     case markdown
 
     var title: String {
         switch self {
         case .swift: "Swift"
+        case .objectivec: "Objective-C"
+        case .c: "C"
+        case .cpp: "C++"
+        case .csharp: "C#"
+        case .java: "Java"
+        case .kotlin: "Kotlin"
+        case .go: "Go"
+        case .rust: "Rust"
         case .javascript: "JavaScript"
         case .typescript: "TypeScript"
         case .python: "Python"
-        case .json: "JSON"
+        case .ruby: "Ruby"
+        case .php: "PHP"
         case .bash: "Bash"
+        case .sql: "SQL"
+        case .html: "HTML"
+        case .css: "CSS"
+        case .json: "JSON"
+        case .yaml: "YAML"
+        case .diff: "Diff"
         case .markdown: "Markdown"
         }
     }
