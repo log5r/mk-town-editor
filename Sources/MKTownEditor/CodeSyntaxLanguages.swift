@@ -379,7 +379,7 @@ enum CodeSyntaxLanguages {
                 """)
             $0.capitalizedTypes = true
             $0.lineComments = units("#")
-            $0.blockComments = [Delimiter("=begin", "=end")]
+            $0.blockComments = [Delimiter("=begin", "=end", atLineStart: true)]
             $0.strings = [Delimiter("\""), Delimiter("'"), Delimiter("`")]
             $0.prefixedIdentifiers = [at: .variable, dollar: .variable, ascii(":"): .variable]
         },
@@ -456,6 +456,9 @@ enum CodeSyntaxLanguages {
             $0.lineComments = units("#")
             $0.strings = [Delimiter("\"", multiline: false), Delimiter("'", escapes: false, multiline: false)]
             $0.lineKeys = .yaml
+            // フローマッピング `{ "a": 1, my-key: 2 }` のキー。
+            $0.stringKeys = true
+            $0.identifierExtras = [ascii("-"), ascii(".")]
             $0.prefixedIdentifiers = [ascii("&"): .variable, ascii("*"): .variable]
         },
         toml,

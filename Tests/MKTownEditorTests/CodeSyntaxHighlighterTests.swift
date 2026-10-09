@@ -294,6 +294,35 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(values.contains { $0 == ("COPY", .keyword) })
     }
 
+    func testRubyBlockCommentsOnlyAtColumnZero() {
+        let values = tokens("x =begin\n  1\nend\nputs x\n=begin\nif\n  =end\n=end\nreturn", "ruby")
+        XCTAssertTrue(values.contains { $0 == ("end", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("=begin\nif\n  =end\n=end", .comment) })
+        XCTAssertTrue(values.contains { $0 == ("return", .keyword) })
+        XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1)
+    }
+
+    func testProtocolRelativeURLsAreNotSCSSComments() {
+        for name in ["scss", "less"] {
+            let values = tokens(".a { background: url(//cdn.example/a.png); color: red; } // note", name)
+            XCTAssertTrue(values.contains { $0 == ("//cdn.example/a.png", .string) }, name)
+            XCTAssertTrue(values.contains { $0 == ("color", .attribute) }, name)
+            XCTAssertTrue(values.contains { $0 == ("// note", .comment) }, name)
+            XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1, name)
+        }
+        XCTAssertTrue(tokens("@import url(\"//x\");", "scss").contains { $0 == ("\"//x\"", .string) })
+    }
+
+    func testYAMLFlowMappingKeys() {
+        let values = tokens("value: { enabled: true, other: null, nested: { my-key: 1 } }\n{ \"top\": yes }\nlist: [a, b]", "yaml")
+        for key in ["value", "enabled", "other", "nested", "my-key", "\"top\"", "list"] {
+            XCTAssertTrue(values.contains { $0 == (key, .attribute) }, key)
+        }
+        XCTAssertTrue(values.contains { $0 == ("true", .keyword) })
+        XCTAssertTrue(values.contains { $0 == ("yes", .keyword) })
+        XCTAssertFalse(values.contains { $0.0 == "a" || $0.0 == "b" })
+    }
+
     func testPHPAttributesAreNotComments() {
         let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
         XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })

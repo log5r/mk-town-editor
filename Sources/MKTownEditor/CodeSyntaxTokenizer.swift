@@ -56,13 +56,16 @@ struct CodeSyntaxLanguage: Sendable {
         var multiline = true
         /// `nil` は SQL の `"name"` のような引用符付き識別子。中を色分けせず、字句も付けない。
         var token: CodeSyntaxToken?
+        /// Ruby の `=begin`・`=end` のように、開きと閉じが行頭（0桁目）にある場合だけ区切りとする。
+        var atLineStart = false
 
         init(_ open: String, _ close: String? = nil, escapes: Bool = true, escape: Unicode.Scalar = "\\",
-             multiline: Bool = true, token: CodeSyntaxToken? = .string) {
+             multiline: Bool = true, token: CodeSyntaxToken? = .string, atLineStart: Bool = false) {
             self.open = Array(open.utf16)
             self.close = Array((close ?? open).utf16)
             self.escapes = escapes
             self.escape = UInt16(escape.value)
+            self.atLineStart = atLineStart
             self.multiline = multiline
             self.token = token
         }
@@ -185,6 +188,8 @@ private struct CodeSyntaxScanner {
     private var index = 0
     private var braceDepth = 0
     private var lineStartOffset = 0
+    /// YAML のフローコレクション（`{…}`・`[…]`）の深さ。中では `:` が続く識別子をキーとする。
+    private var flowDepth = 0
     /// YAML のブロックスカラー（`|`・`>`）を始めた行の字下げ。これより深い行は本文として色分けしない。
     private var yamlBlockIndent: Int?
 
@@ -208,6 +213,10 @@ private struct CodeSyntaxScanner {
     private mutating func emit(_ start: Int, _ end: Int, _ token: CodeSyntaxToken) {
         guard end > start else { return }
         result.append(CodeSyntaxTokenRange(range: NSRange(location: start, length: end - start), token: token))
+    }
+
+    private func isColumnZero(_ offset: Int) -> Bool {
+        offset == 0 || units[offset - 1] == Unit.newline
     }
 
     private func lineEnd(from offset: Int) -> Int {
@@ -348,6 +357,10 @@ private struct CodeSyntaxScanner {
                 scanCSSPunctuation(value)
                 continue
             }
+            if language.lineKeys == .yaml {
+                if value == Unit.openBrace || value == Unit.openBracket { flowDepth += 1 }
+                if value == Unit.closeBrace || value == Unit.closeBracket { flowDepth = max(0, flowDepth - 1) }
+            }
             index += 1
         }
     }
@@ -421,14 +434,14 @@ private struct CodeSyntaxScanner {
     }
 
     private mutating func scanBlockComment() -> Bool {
-        guard let delimiter = language.blockComments.first(where: { matches($0.open, at: index) }) else {
-            return false
-        }
+        guard let delimiter = language.blockComments.first(where: {
+            matches($0.open, at: index) && (!$0.atLineStart || isColumnZero(index))
+        }) else { return false }
         let start = index
         var depth = 1
         index += delimiter.open.count
         while index < count {
-            if matches(delimiter.close, at: index) {
+            if matches(delimiter.close, at: index), !delimiter.atLineStart || isColumnZero(index) {
                 index += delimiter.close.count
                 depth -= 1
                 if depth == 0 || !language.nestedBlockComments { break }
@@ -643,7 +656,8 @@ private struct CodeSyntaxScanner {
             index = end + 1
         } else if language.css {
             classifyCSSIdentifier(start, end, text)
-        } else if language.identifierKeys, unit(nextNonSpace(from: end)) == Unit.colon {
+        } else if language.identifierKeys || (language.lineKeys == .yaml && flowDepth > 0),
+                  unit(nextNonSpace(from: end)) == Unit.colon {
             emit(start, end, .attribute)
         } else if language.keywords.contains(text) {
             emit(start, end, .keyword)
@@ -675,6 +689,17 @@ private struct CodeSyntaxScanner {
     // MARK: - CSS
 
     private mutating func classifyCSSIdentifier(_ start: Int, _ end: Int, _ text: String) {
+        if text.lowercased() == "url", unit(end) == 0x28 {
+            // 引用符のない `url(//cdn/a.png)` の中身は、`//` を含めて1つの文字列とする。
+            let open = nextNonSpace(from: end + 1)
+            if let first = unit(open), first != Unit.quote, first != Unit.apostrophe {
+                var close = open
+                while close < count, units[close] != 0x29, units[close] != Unit.newline { close += 1 }
+                emit(open, close, .string)
+                index = close
+            }
+            return
+        }
         if braceDepth == 0 {
             emit(start, end, .type)
         } else if unit(nextNonSpace(from: end)) == Unit.colon {
