@@ -92,6 +92,14 @@ struct CodeSyntaxLanguage: Sendable {
     var rawStringPrefixes: Set<String> = []
     /// C# の逐語的文字列 `@"..."`（`$@"..."` を含む）。`""` が引用符を表す。
     var verbatimStrings = false
+    /// JavaScript・Ruby・Perl の正規表現リテラル `/[//]/`。値の後ろの `/` は除算とする。
+    var regexLiterals = false
+    /// Ruby・Perl の `puts /a#b/` のように、空白で区切ったコマンド呼び出しの引数も正規表現とする。
+    var commandRegexArguments = false
+    /// TypeScript の非 null アサーション `x!`。
+    var nonNullAssertions = false
+    /// Ruby のように改行で文が終わる。値で終わった行の次の行頭の `/` も正規表現とする。
+    var newlineEndsStatements = false
     /// C# の生文字列 `""""…""""` のように、開きの引用符の数で閉じ記号が決まる。
     var quoteRunStrings = false
     /// 直後の識別子と合わせて色分けする記号（`@Override`、`$name` など）。
@@ -179,6 +187,7 @@ private enum Unit {
     static let at: UInt16 = 0x40, openBracket: UInt16 = 0x5B, backslash: UInt16 = 0x5C, closeBracket: UInt16 = 0x5D
     static let underscore: UInt16 = 0x5F, backtick: UInt16 = 0x60, openBrace: UInt16 = 0x7B, closeBrace: UInt16 = 0x7D
     static let percent: UInt16 = 0x25
+    static let comma: UInt16 = 0x2C
 }
 
 private struct CodeSyntaxScanner {
@@ -187,6 +196,40 @@ private struct CodeSyntaxScanner {
     var result: [CodeSyntaxTokenRange] = []
     private var index = 0
     private var braceDepth = 0
+    /// 次の `/` が正規表現を始められるか。値（識別子、数値、文字列、`)` など）の直後では除算。
+    private var regexAllowed = true
+    private var previousToken = PreviousToken.start
+    /// 直前の語が `if` などで、次の `(` が制御文の条件を開く。コメントをはさんでも保つ。
+    private var pendingControl = false
+    /// 開いている `{` の種類。
+    private var braceKinds: [BraceKind] = []
+    /// 式の位置にある `function`・`class` の本体を、次のブロックの `{` が開く。
+    private var pendingExpressionBody = false
+    /// 直前の `async` が式の位置にあったか（`= async function`）。`async` の後ろでも引き継ぐ。
+    private var asyncInExpression: Bool?
+    /// 直前の識別子が文の始まりにあったか。続く `:` をラベルとみなす。
+    private var identifierStartedStatement = false
+    /// `case x:`・`default:` のコロンを待っている。
+    private var pendingCaseColon = false
+    /// 閉じていない三項演算子 `?` の数。対応する `:` は式の中のコロン。
+    private var ternaryDepth = 0
+    /// Ruby・Perl で代入や引数で現れたローカル変数。後ろの `/` をコマンド呼び出しの引数とみなさない。
+    private var knownLocals: Set<String> = []
+    private var lastIdentifier: String?
+    /// 直前の語。値や記号の後ろでは `nil`。
+    private var previousWord: String?
+    private var collectingParameters: ParameterList?
+    private var definition: DefinitionState?
+    /// 開いている Ruby のブロック。`def` などのスコープは外側のローカル変数を持つ。
+    private var rubyBlocks: [Set<String>?] = []
+    private var loopAwaitingDo = false
+    /// 開いている Ruby の `{`。ブロックは外側のローカル変数を持ち、ハッシュは `nil`。
+    private var rubyBraceLocals: [Set<String>?] = []
+    private var jumpStatement: JumpStatement?
+    /// 文の始まりの `import`・`export … from` を読んでいる間の `{` の深さ。
+    private var importBraceDepth: Int?
+    /// 開いている `(` ごとに、制御文の条件かどうか。
+    private var parenthesisControlHeaders: [Bool] = []
     private var lineStartOffset = 0
     /// YAML のフローコレクション（`{…}`・`[…]`）の深さ。中では `:` が続く識別子をキーとする。
     private var flowDepth = 0
@@ -316,6 +359,30 @@ private struct CodeSyntaxScanner {
         while index < count {
             let value = units[index]
             if value == Unit.newline {
+                // Ruby は改行で文が終わる。括弧の中と行末の `\` は継続。
+                if language.newlineEndsStatements, !regexAllowed, parenthesisControlHeaders.isEmpty,
+                   unit(index - 1) != Unit.backslash {
+                    regexAllowed = true
+                    // 後置の `if` と区別するため、次の行の始まりを文の始まりとする。
+                    previousToken = .punctuation(Unit.semicolon)
+                }
+                if language.newlineEndsStatements {
+                    loopAwaitingDo = false
+                    if collectingParameters == .line { collectingParameters = nil }
+                    if definition == .parameters { definition = nil }
+                }
+                if jumpStatement != nil {
+                    // `break\n/re/` は改行で文が終わる。
+                    regexAllowed = true
+                    jumpStatement = nil
+                }
+                if let depth = importBraceDepth, braceKinds.count == depth, previousToken == .value {
+                    // セミコロンのない `import fs from "x"` は、モジュール名の後ろの改行で終わる。
+                    regexAllowed = true
+                    importBraceDepth = nil
+                }
+                // `async` と `function` の間に改行は置けない。
+                asyncInExpression = nil
                 atLineStart = true
                 index += 1
                 lineStartOffset = index
@@ -341,14 +408,27 @@ private struct CodeSyntaxScanner {
                 scanPreprocessor()
                 continue
             }
-            if scanMarker() || scanLongBracket() || scanBlockComment() || scanLineComment()
-                || scanSwiftRawString() || scanVerbatimString() || scanString() { continue }
+            if scanMarker() { continue }
+            // コメントは式の文脈を変えない（`= /* c */ /re/` の `/` は正規表現）。
+            if scanRegexLiteral() || scanLongBracket() || scanSwiftRawString() || scanVerbatimString() {
+                noteValue()
+                continue
+            }
+            if scanBlockComment() || scanLineComment() { continue }
+            if scanString() {
+                noteValue()
+                continue
+            }
             if Self.isDigit(value) || (value == Unit.dot && unit(index + 1).map(Self.isDigit) == true
                                        && unit(index - 1).map(isIdentifierPart) != true) {
                 scanNumber()
+                noteValue()
                 continue
             }
-            if scanPrefixedIdentifier() || scanBracketAttribute() { continue }
+            if scanPrefixedIdentifier() || scanBracketAttribute() {
+                noteValue()
+                continue
+            }
             if isIdentifierStart(index) {
                 scanIdentifier()
                 continue
@@ -361,9 +441,226 @@ private struct CodeSyntaxScanner {
                 if value == Unit.openBrace || value == Unit.openBracket { flowDepth += 1 }
                 if value == Unit.closeBrace || value == Unit.closeBracket { flowDepth = max(0, flowDepth - 1) }
             }
+            if (value == Unit.plus || value == Unit.minus) && unit(index + 1) == value {
+                // 値の後ろの `x++` は値のまま、`++x` の前は式の途中のまま。
+                index += 2
+                continue
+            }
+            if language.nonNullAssertions, value == Unit.bang, previousToken == .value,
+               unit(index - 1).map(Self.isWhitespace) == false, unit(index + 1) != Unit.equal {
+                // TypeScript の非 null アサーション `x!` は値のまま。前置の `!x` は式の途中。
+                index += 1
+                continue
+            }
+            notePunctuation(value)
             index += 1
         }
     }
+
+    // MARK: - 正規表現を始められる位置の追跡
+
+    /// 直前の字句の種類。コメントと空白は変えない。
+    private enum PreviousToken: Equatable {
+        case start
+        /// 識別子、数値、文字列など
+        case value
+        /// `return`、`typeof` など、後ろに式が続く語
+        case expressionWord
+        /// `else`、`do`、`try`、`finally` など、後ろにブロックが続く語
+        case statementWord
+        case punctuation(UInt16)
+        /// `=>`
+        case arrow
+        /// ラベルや `case x:` のコロン。後ろは文の始まり。
+        case statementColon
+    }
+
+    private enum BraceKind {
+        /// 文のブロック。閉じた後ろは文の始まり。
+        case block
+        case object
+        /// `= function() {…}`、`() => {…}` のような式の中の本体。閉じた後ろは値。
+        case expressionBody
+    }
+
+    private static let controlKeywords: Set<String> = ["if", "while", "for", "with"]
+    private static let functionKeywords: Set<String> = ["function", "class"]
+    private static let blockWords: Set<String> = ["else", "do", "try", "finally"]
+    private static let statementEnds = Set(")};{".utf16)
+
+    /// `a = 1` の左辺、`|a, b|`、`def f(a)` の引数をローカル変数として記録する。
+    private mutating func noteLocals(_ value: UInt16) {
+        let next = unit(index + 1)
+        if value == Unit.equal, next != Unit.equal, next != 0x7E, next != Unit.greater {
+            if let name = lastIdentifier {
+                knownLocals.insert(name)
+                knownLocals.formUnion(multipleAssignmentTargets(before: index))
+            } else if let name = compoundAssignmentTarget(before: index) {
+                knownLocals.insert(name)
+            }
+        }
+        if language.newlineEndsStatements {
+            // `{ |x| … }` の引数とブロック内の代入はブロックの中だけ。
+            // `items.each {`・`f(x) {` はブロック、`h = {`・`[{` はハッシュ（スコープを作らない）。
+            let isBlock = previousToken == .value || previousToken == .punctuation(0x29)
+            if value == Unit.openBrace { rubyBraceLocals.append(isBlock ? knownLocals : nil) }
+            if value == Unit.closeBrace, let scope = rubyBraceLocals.popLast(), let outer = scope { knownLocals = outer }
+        }
+        if value == 0x7C {
+            if collectingParameters == .pipes {
+                collectingParameters = nil
+            } else if previousToken == .punctuation(Unit.openBrace) || previousToken == .statementWord {
+                collectingParameters = .pipes
+            }
+        } else if value == 0x28, definition == .parameters {
+            collectingParameters = .parentheses
+        } else if value == 0x29, collectingParameters == .parentheses {
+            collectingParameters = nil
+        } else if value == Unit.semicolon, collectingParameters == .line {
+            collectingParameters = nil
+        }
+        if value != Unit.dot { definition = nil }
+    }
+
+    /// 文の始まりの `a, b = 1, 2`・`a, *b = …` の左辺のうち、最後の1つより前の変数。
+    private func multipleAssignmentTargets(before equal: Int) -> [String] {
+        var names: [String] = []
+        var cursor = equal
+        func skipSpaces() { while let value = unit(cursor - 1), value == Unit.space || value == Unit.tab { cursor -= 1 } }
+        func identifier() -> String? {
+            let end = cursor
+            while cursor > 0, isIdentifierPart(units[cursor - 1]) { cursor -= 1 }
+            guard cursor < end, !Self.isDigit(units[cursor]) else { return nil }
+            if unit(cursor - 1) == 0x2A { cursor -= 1 } // `*rest`
+            return String(decoding: units[cursor..<end], as: UTF16.self).trimmingCharacters(in: ["*"])
+        }
+        skipSpaces()
+        guard identifier() != nil else { return [] }
+        while true {
+            skipSpaces()
+            guard unit(cursor - 1) == Unit.comma else { break }
+            cursor -= 1
+            skipSpaces()
+            guard let name = identifier() else { return [] }
+            names.append(name)
+        }
+        // `foo a, b = 1` のような引数ではなく、文の始まりにある場合だけ。
+        skipSpaces()
+        guard cursor == 0 || [Unit.newline, Unit.semicolon].contains(units[cursor - 1]) else { return [] }
+        return names
+    }
+
+    private static let compoundOperators: Set<String> = ["||", "&&", "+", "-", "*", "/", "%", "**", "^", "|", "&", "<<", ">>"]
+    private static let compoundOperatorUnits = Set("|&+-*/%^<>".utf16)
+
+    /// `a ||= 1`、`a += 1` の左辺。`a <= 1`、`a != 1` のような比較は除く。
+    private func compoundAssignmentTarget(before equal: Int) -> String? {
+        var start = equal
+        while let value = unit(start - 1), Self.compoundOperatorUnits.contains(value), equal - start < 3 { start -= 1 }
+        guard Self.compoundOperators.contains(String(decoding: units[start..<equal], as: UTF16.self)) else { return nil }
+        var end = start
+        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
+        var nameStart = end
+        while nameStart > 0, isIdentifierPart(units[nameStart - 1]) { nameStart -= 1 }
+        guard nameStart < end, !Self.isDigit(units[nameStart]) else { return nil }
+        if let sigil = unit(nameStart - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return nil }
+        return String(decoding: units[nameStart..<end], as: UTF16.self)
+    }
+
+    private mutating func noteValue() {
+        lastIdentifier = nil
+        previousWord = nil
+        jumpStatement = nil
+        regexAllowed = false
+        pendingControl = false
+        previousToken = .value
+        asyncInExpression = nil
+        identifierStartedStatement = false
+    }
+
+    /// 括弧の対応で文脈を決める。`if (…)` の `)` とブロックの `}` の後ろは文の始まりなので正規表現を認める。
+    private mutating func notePunctuation(_ value: UInt16) {
+        if value == Unit.semicolon { importBraceDepth = nil }
+        if language.commandRegexArguments { noteLocals(value) }
+        lastIdentifier = nil
+        previousWord = nil
+        jumpStatement = nil
+        switch value {
+        case 0x28: // (
+            parenthesisControlHeaders.append(pendingControl)
+            regexAllowed = true
+        case 0x29: // )
+            regexAllowed = parenthesisControlHeaders.popLast() ?? false
+        case Unit.openBrace:
+            let kind: BraceKind
+            if !braceStartsBlock {
+                kind = .object
+            } else if previousToken == .arrow || pendingExpressionBody {
+                kind = .expressionBody
+            } else {
+                kind = .block
+            }
+            // `function(a = {}) {` の引数の `{}` は関数の本体ではない。
+            if kind != .object { pendingExpressionBody = false }
+            braceKinds.append(kind)
+            regexAllowed = true
+        case Unit.closeBrace:
+            let kind = braceKinds.popLast() ?? .block
+            regexAllowed = kind == .block
+            pendingControl = false
+            asyncInExpression = nil
+            identifierStartedStatement = false
+            // 式の中の `{…}`（オブジェクト、関数式の本体）は値として閉じる。
+            previousToken = kind == .block ? .punctuation(value) : .value
+            return
+        case Unit.question:
+            // `?.` と `??` は三項演算子ではない。
+            if unit(index + 1) != Unit.dot, unit(index + 1) != Unit.question, unit(index - 1) != Unit.question {
+                ternaryDepth += 1
+            }
+            regexAllowed = true
+        case Unit.colon:
+            regexAllowed = true
+            if ternaryDepth > 0 {
+                ternaryDepth -= 1
+            } else if pendingCaseColon || (identifierStartedStatement && previousToken == .value),
+                      braceKinds.last != .object, parenthesisControlHeaders.isEmpty {
+                // `label: {` と `case x: {` の後ろは文の始まり。
+                pendingCaseColon = false
+                pendingControl = false
+                asyncInExpression = nil
+                identifierStartedStatement = false
+                previousToken = .statementColon
+                return
+            }
+        default:
+            regexAllowed = !Self.valueClosingPunctuation.contains(value)
+        }
+        pendingControl = false
+        asyncInExpression = nil
+        identifierStartedStatement = false
+        previousToken = value == Unit.greater && unit(index - 1) == Unit.equal ? .arrow : .punctuation(value)
+    }
+
+    /// 直前の字句が文の区切りか（文書の先頭、`;`、`{`、`}`、`)`、`else` など）。
+    private var atStatementStart: Bool {
+        switch previousToken {
+        case .start, .statementWord, .statementColon: true
+        case .punctuation(let previous): Self.statementEnds.contains(previous)
+        case .value, .expressionWord, .arrow: false
+        }
+    }
+
+    /// `{` が文のブロックを開くか。`x = {`、`return {`、`f({` のような式の中ならオブジェクト。
+    private var braceStartsBlock: Bool {
+        switch previousToken {
+        case .start, .value, .statementWord, .arrow, .statementColon: true
+        case .expressionWord: false
+        case .punctuation(let previous): Self.statementEnds.contains(previous)
+        }
+    }
+
+    private static let valueClosingPunctuation = Set(")]}".utf16)
 
     private mutating func scanMarker() -> Bool {
         guard let marker = language.markers.first(where: { matches($0.text, at: index) }) else { return false }
@@ -432,6 +729,92 @@ private struct CodeSyntaxScanner {
         emit(start, index, .string)
         return true
     }
+
+    /// 正規表現の前に置ける語。`this` や `nil` のような値の語、`obj.in` のようなメンバー名の後ろの `/` は除算。
+    private static let regexPrecedingWords: Set<String> = [
+        "return", "typeof", "instanceof", "in", "of", "new", "delete", "void", "throw", "case", "default", "do",
+        "else", "yield", "await", "if", "elsif", "unless", "while", "until", "when", "then", "and", "or", "not",
+        "split", "grep"
+    ]
+
+    /// 式の始まりにある `/` から始まる1行の正規表現リテラル。文字クラス `[...]` の中の `/` では閉じない。
+    private mutating func scanRegexLiteral() -> Bool {
+        guard language.regexLiterals, units[index] == Unit.slash,
+              let next = unit(index + 1), next != Unit.slash, next != 0x2A, next != Unit.newline,
+              regexAllowed || isCommandRegexArgument(at: index) else { return false }
+        var cursor = index + 1
+        var inClass = false
+        while cursor < count {
+            let value = units[cursor]
+            if value == Unit.newline { return false }
+            if value == Unit.backslash {
+                cursor += 2
+                continue
+            }
+            if value == Unit.openBracket { inClass = true }
+            if value == Unit.closeBracket { inClass = false }
+            if value == Unit.slash && !inClass { break }
+            cursor += 1
+        }
+        guard cursor < count else { return false }
+        cursor += 1
+        while let flag = unit(cursor), Self.isASCIILetter(flag) { cursor += 1 }
+        emit(index, cursor, .string)
+        index = cursor
+        return true
+    }
+
+    /// `puts /a#b/` のように、識別子の後ろに空白があり、`/` の直後に空白がない。`a / b`、`a /= 2`、`$x /2` は除算。
+    private func isCommandRegexArgument(at offset: Int) -> Bool {
+        guard language.commandRegexArguments, let next = unit(offset + 1), !Self.isWhitespace(next),
+              next != Unit.equal, let before = unit(offset - 1), before == Unit.space || before == Unit.tab else {
+            return false
+        }
+        var end = offset - 1
+        while let value = unit(end - 1), value == Unit.space || value == Unit.tab { end -= 1 }
+        var nameEnd = end
+        if language.newlineEndsStatements, let suffix = unit(nameEnd - 1), suffix == Unit.bang || suffix == Unit.question {
+            nameEnd -= 1
+        }
+        var start = nameEnd
+        while start > 0, isIdentifierPart(units[start - 1]) { start -= 1 }
+        guard start < nameEnd, !Self.isDigit(units[start]) else { return false }
+        // 変数（`$x`、`@x`）やメンバー（`a.b`）は値。
+        if let sigil = unit(start - 1), sigil == Unit.dollar || sigil == Unit.at || sigil == Unit.dot { return false }
+        // Ruby と同じく、代入済みのローカル変数の後ろは除算（`a = 12; a /2/3`）。
+        return !knownLocals.contains(String(decoding: units[start..<end], as: UTF16.self))
+    }
+
+    /// Ruby のメソッド定義とブロックの引数を集める範囲。
+    private enum ParameterList { case parentheses, pipes, line }
+    private enum JumpStatement { case keyword, label }
+
+    private static let rubyScopeOpeners: Set<String> = ["def", "class", "module"]
+    private static let rubyBlockOpeners: Set<String> = ["do", "begin", "case"]
+    private static let rubyStatementOpeners: Set<String> = ["if", "unless", "while", "until", "for"]
+
+    /// Ruby の `def`・`class`・`module` ごとにローカル変数を分け、`end` で外側に戻す。
+    /// `x = 1 if y` のような後置の `if` は、文の始まりにないので数えない。
+    private mutating func noteRubyBlock(_ name: String) {
+        if name == "end" {
+            if let scope = rubyBlocks.popLast(), let outer = scope { knownLocals = outer }
+        } else if Self.rubyScopeOpeners.contains(name), atStatementStart {
+            rubyBlocks.append(knownLocals)
+            knownLocals = []
+        } else if Self.rubyBlockOpeners.contains(name) {
+            // `while x do` の `do` は `while` の一部。
+            if name == "do", loopAwaitingDo {
+                loopAwaitingDo = false
+            } else {
+                // `do |x| … end` の引数とブロック内の代入はブロックの中だけ。
+                rubyBlocks.append(name == "do" ? knownLocals : nil)
+            }
+        } else if Self.rubyStatementOpeners.contains(name), atStatementStart {
+            rubyBlocks.append(nil)
+            loopAwaitingDo = name == "while" || name == "until" || name == "for"
+        }
+    }
+    private enum DefinitionState { case name, parameters }
 
     private mutating func scanBlockComment() -> Bool {
         guard let delimiter = language.blockComments.first(where: {
@@ -632,8 +1015,51 @@ private struct CodeSyntaxScanner {
 
     private mutating func scanIdentifier() {
         let start = index
-        let end = identifierEnd(from: index)
+        var end = identifierEnd(from: index)
+        // Ruby のメソッド名は `!`・`?` で終わってよい（`save!`、`empty?`）。`a != b` は除く。
+        if language.newlineEndsStatements, let suffix = unit(end), suffix == Unit.bang || suffix == Unit.question,
+           unit(end + 1) != Unit.equal {
+            end += 1
+        }
         index = end
+        // `obj.in` や `a?.if` のようなメンバー名は値。
+        let isMember = previousToken == .punctuation(Unit.dot)
+        let name = String(decoding: units[start..<end], as: UTF16.self)
+        // `of` は `for (x of xs)` の中だけ式を導く語。`const of = 1; of / 2` の `of` は変数。
+        let isExpressionWord = language.regexLiterals && !isMember && Self.regexPrecedingWords.contains(name)
+            && (name != "of" || parenthesisControlHeaders.last == true)
+        if language.commandRegexArguments {
+            if definition == .parameters {
+                // 括弧のない引数 `def f k, l`
+                collectingParameters = .line
+            }
+            if collectingParameters != nil { knownLocals.insert(name) }
+            if language.newlineEndsStatements, !isMember { noteRubyBlock(name) }
+            // `def name(a, b)` と `def self.name(a)` の引数
+            definition = name == "def" ? .name : definition == .name && name != "self" ? .parameters
+                : definition == .name ? .name : nil
+        }
+        if language.regexLiterals, !isMember, name == "import", atStatementStart { importBraceDepth = braceKinds.count }
+        // `break`・`continue`（ラベル付きを含む）は改行で文が終わる。
+        jumpStatement = isMember ? nil : ["break", "continue"].contains(name) ? .keyword
+            : jumpStatement == .keyword && !Self.regexPrecedingWords.contains(name) ? .label : nil
+        lastIdentifier = isMember ? nil : name
+        defer { previousWord = isMember ? nil : name }
+        // `export default function() {}` と `export default class {}` は宣言として閉じる。
+        let inExpression = regexAllowed && !atStatementStart && previousWord != "default"
+        if !isMember, Self.functionKeywords.contains(name) {
+            // 文の始まりの `function f() {}` は宣言、`= function() {}` や `(class {})` は式。
+            // `= async function` は `async` の前の位置で判断する。
+            pendingExpressionBody = asyncInExpression ?? inExpression
+        }
+        asyncInExpression = !isMember && name == "async" ? inExpression : nil
+        if !isMember, name == "case" || name == "default", atStatementStart { pendingCaseColon = true }
+        identifierStartedStatement = !isMember && atStatementStart
+        regexAllowed = isExpressionWord
+        // `for await (…)` の `await` は制御文の条件を途切れさせない。
+        pendingControl = !isMember && (Self.controlKeywords.contains(name) || (pendingControl && name == "await"))
+        previousToken = isMember ? .value
+            : Self.blockWords.contains(name) ? .statementWord : isExpressionWord ? .expressionWord : .value
         let prefix = String(decoding: units[start..<end], as: UTF16.self)
         switch language.rawStrings {
         case .rust where ["r", "br", "cr"].contains(prefix) && (unit(end) == Unit.hash || unit(end) == Unit.quote):
@@ -760,10 +1186,23 @@ private struct CodeSyntaxScanner {
             index = close
             return true
         }
-        guard isIdentifierStart(index) || units[index] == Unit.quote else { return false }
+        // TOML の裸のキーは英数字・`_`・`-`（`1234 = 1`、`- = true`）。引用符付きのキーも認める。
+        let first = units[index]
+        guard Self.isASCIILetter(first) || Self.isDigit(first) || first == Unit.underscore || first == Unit.minus
+                || first == Unit.quote || first == Unit.apostrophe || first >= 0x80 else { return false }
         var cursor = index
         while cursor < end && units[cursor] != Unit.equal && units[cursor] != Unit.hash
-                && units[cursor] != Unit.semicolon { cursor += 1 }
+                && units[cursor] != Unit.semicolon {
+            // 引用符付きのキー（`'a=b'`、`a."b#c"`）の中の `=`・`#` は区切りではない。
+            let value = units[cursor]
+            if value == Unit.quote || value == Unit.apostrophe {
+                cursor += 1
+                while cursor < end && units[cursor] != value {
+                    cursor += value == Unit.quote && units[cursor] == Unit.backslash ? 2 : 1
+                }
+            }
+            cursor += 1
+        }
         guard cursor < end, units[cursor] == Unit.equal else { return false }
         var keyEnd = cursor
         while keyEnd > index && Self.isWhitespace(units[keyEnd - 1]) { keyEnd -= 1 }

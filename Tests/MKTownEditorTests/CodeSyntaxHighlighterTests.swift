@@ -323,6 +323,112 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(values.contains { $0.0 == "a" || $0.0 == "b" })
     }
 
+    func testRegexLiteralsAreNotCommentsAndDivisionStaysCode() {
+        for name in ["js", "ts"] {
+            let values = tokens("const slash = /[//]/g; return 1;\nlet r = a / b / c; // note\nif (/\\/\\*/.test(x)) {}", name)
+            XCTAssertTrue(values.contains { $0 == ("/[//]/g", .string) }, name)
+            XCTAssertTrue(values.contains { $0 == ("return", .keyword) }, name)
+            XCTAssertTrue(values.contains { $0 == ("// note", .comment) }, name)
+            XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1, name)
+            XCTAssertTrue(values.contains { $0 == ("/\\/\\*/", .string) }, name)
+            XCTAssertFalse(values.contains { $0.0.hasPrefix("/ b") }, name)
+        }
+        for name in ["js", "ts"] {
+            // コメントの後ろ、`default` の後ろ、前置 `++` の後ろは正規表現。
+            let regex = tokens("const r = /* note */ /[//]/g; return 1\nexport default /[//]/g; const x = 1\ny = ++/a/.lastIndex", name)
+            XCTAssertEqual(regex.filter { $0 == ("/[//]/g", .string) }.count, 2, name)
+            XCTAssertTrue(regex.contains { $0 == ("/* note */", .comment) }, name)
+            XCTAssertTrue(regex.contains { $0 == ("return", .keyword) }, name)
+            XCTAssertTrue(regex.contains { $0 == ("const", .keyword) }, name)
+            XCTAssertEqual(regex.filter { $0.1 == .comment }.count, 1, name)
+            // 後置 `++`・`--`、メンバー名 `obj.in` の後ろは除算。
+            let division = tokens("a = x++ / b/g\nc = y-- / d/g\nconst q = obj.in / b/g", name)
+            XCTAssertFalse(division.contains { $0.1 == .string }, name)
+        }
+        for name in ["js", "ts"] {
+            // 制御文の条件の後ろは文の始まりなので正規表現。ただの括弧の後ろは除算。
+            let control = tokens("if (ok) /[//]/.test(x); return 1\nwhile (a) /b/g.exec(s)\nfor (;;) /c/.test(t)\nz = (a) / b / c\nif /* note */ (ok) /d/.test(x)\nif (ok) {} /e/.test(x)\nfunction f() {} /f/.test(x)\nelse {} /g/.test(x)\nv = {a: 1} / h / i\nw = f({}) / j / k", name)
+            for regex in ["/[//]/", "/b/g", "/c/", "/d/", "/e/", "/f/", "/g/"] {
+                XCTAssertTrue(control.contains { $0 == (regex, .string) }, "\(name) \(regex)")
+            }
+            XCTAssertTrue(control.contains { $0 == ("return", .keyword) }, name)
+            // 式の中の関数本体・クラス本体の後ろは値なので除算。宣言の後ろは文の始まり。
+            let bodies = tokens("const p = function() {} / b / g\nconst q = () => {} / c / g\nconst r = (class {}) / d / g\nfunction s() {} /re/.test(x)", name)
+            XCTAssertEqual(bodies.filter { $0.1 == .string }.map(\.0), ["/re/"], name)
+            // `async function` の式も同じ。ラベルと `case` のコロンの後ろのブロックは文。
+            let more = tokens("const f = async function() {} / b / g\nasync function h() {} /e/.test(x)\nlabel: {} /[//]/.test(x); return 1\nswitch (v) { case 1: {} /c/.test(x); default: {} /d/.test(x) }\nconst o = {a: {}} / i / j\nconst t = c ? {} : {} / k / l", name)
+            XCTAssertEqual(more.filter { $0.1 == .string }.map(\.0), ["/e/", "/[//]/", "/c/", "/d/"], name)
+            XCTAssertTrue(more.contains { $0 == ("return", .keyword) }, name)
+            // 引数に `{}` を含む関数式も値として閉じる。`export default` の宣言は文として閉じる。
+            let declarations = tokens("const f = function(a = {}) {} / b / g\nconst h = ({x}) => {} / c / g\nexport default function() {}\n/[//]/.test(x)\nexport default class {}\n/e/.test(x)", name)
+            XCTAssertEqual(declarations.filter { $0.1 == .string }.map(\.0), ["/[//]/", "/e/"], name)
+            // セミコロンのない `import` は改行で終わる。`async` と `function` の間の改行は別の文。
+            let lines = tokens("import fs from \"node:fs\"\n/[//]/.test(x)\nimport {\n  a,\n  b\n} from \"y\"\n/c/.test(x)\nconst async = 1; const z = async\nfunction f() {}\n/d/.test(x)", name)
+            XCTAssertEqual(lines.filter { $0.1 == .string && $0.0.hasPrefix("/") }.map(\.0), ["/[//]/", "/c/", "/d/"], name)
+            // 変数名の `of`、非 null アサーション `x!` の後ろは除算。`for (x of /re/)` と前置の `!` の後ろは正規表現。
+            let contextual = tokens("const of = 12; const q = of / b / g\nconst r = x! / c / g\nfor (const m of /[ab]/.exec(s)) {}\nconst n = !/d/.test(s)", name)
+            // 非 null アサーションは TypeScript だけ。JavaScript の `x!` の後ろは式の途中。
+            XCTAssertEqual(contextual.filter { $0.1 == .string }.map(\.0),
+                           name == "ts" ? ["/[ab]/", "/d/"] : ["/ c /", "/[ab]/", "/d/"], name)
+            // `break`・`continue` は改行で文が終わる。
+            let jumps = tokens("while (x) { break\n/[//]/.test(x) }\nouter: for (;;) { continue outer\n/e/.test(x) }\ny = a\n/ 2 / 3", name)
+            XCTAssertEqual(jumps.filter { $0.1 == .string }.map(\.0), ["/[//]/", "/e/"], name)
+            // `for await (…)` の後ろも文の始まり。
+            XCTAssertTrue(tokens("async function f(xs) { for await (const x of xs) /[//]/.test(x) }", name)
+                .contains { $0 == ("/[//]/", .string) }, name)
+            // オブジェクトリテラルや呼び出しの閉じ括弧の後ろは除算。
+            XCTAssertFalse(control.contains { $0.0.hasPrefix("/ b") || $0.0.hasPrefix("/ h") || $0.0.hasPrefix("/ j") }, name)
+            XCTAssertEqual(control.filter { $0.1 == .comment }.map(\.0), ["/* note */"], name)
+        }
+        // Ruby・Perl のコマンド呼び出しの引数。`a / b`、`$x /2` は除算。
+        let command = tokens("puts /a#b/\nx = a / b / c\ny = @n /2 # note", "ruby")
+        XCTAssertTrue(command.contains { $0 == ("/a#b/", .string) })
+        XCTAssertEqual(command.filter { $0.1 == .string }.count, 1)
+        XCTAssertTrue(command.contains { $0 == ("# note", .comment) })
+        XCTAssertTrue(tokens("print /a#b/;\nmy $y = $x /2; # note", "perl").contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(tokens("my $y = $x /2; # note", "perl").contains { $0 == ("# note", .comment) })
+        // Ruby と Perl の正規表現の中の `#` はコメントではない。
+        // 代入済みのローカル変数、ブロック・メソッドの引数の後ろは除算。
+        let locals = tokens("a = 12; x = a /2/3\nitems.each { |n| y = n /2/1 }\ndef f(k) k /2/1 end\ndef g k; k /2/1 end\nputs /a#b/", "ruby")
+        XCTAssertEqual(locals.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
+        // 複合代入の左辺もローカル変数。`!` で終わるメソッドは呼び出し。ブロックの引数はブロックの中だけ。
+        let more = tokens("a ||= 12; x = a /2/3\nb += 1; y = b /2/1\nfoo! /a#b/; z = 1\n1.times { |puts| }\nputs /c#d/\n[1].each do |puts| end\nputs /e#f/\nc <= 2; puts c /g#h/", "ruby")
+        XCTAssertEqual(more.filter { $0.1 == .string }.map(\.0), ["/a#b/", "/c#d/", "/e#f/", "/g#h/"])
+        // 多重代入の左辺はすべて変数。ハッシュの `{}` はスコープを作らない。
+        let assignments = tokens("a, b = 12, 3; y = a /2/3\nc, *d = 1, 2\nz = c /2/1\nh = { x: (e = 12) }; w = e /2/3\nputs /f#g/", "ruby")
+        XCTAssertEqual(assignments.filter { $0.1 == .string }.map(\.0), ["/f#g/"])
+        // メソッドの中のローカル変数は、外側の同じ名前のメソッド呼び出しに影響しない。
+        let scopes = tokens("def f\n  puts = 1\n  if puts > 0\n    x = puts /2/1\n  end\n  y = 3 if puts\nend\nputs /a#b/\nclass C\n  def g; puts = 2; end\nend\nputs /c#d/", "ruby")
+        XCTAssertEqual(scopes.filter { $0.1 == .string }.map(\.0), ["/a#b/", "/c#d/"])
+        // Ruby は改行で文が終わる。括弧の中や行末の `\` は継続。
+        let lines = tokens("x = 1\n/a#b/.match(s)\ny = (2\n/ 3)\nz = 4 \\\n/ 5 # note", "ruby")
+        XCTAssertEqual(lines.filter { $0.1 == .string }.map(\.0), ["/a#b/"])
+        XCTAssertTrue(lines.contains { $0 == ("# note", .comment) })
+        let ruby = tokens("if cond then /a#b/ else nil end", "ruby")
+        XCTAssertTrue(ruby.contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(ruby.contains { $0 == ("end", .keyword) })
+        XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("/a#b/", .string) })
+        XCTAssertTrue(tokens("x =~ /a#b/ if y", "ruby").contains { $0 == ("if", .keyword) })
+        XCTAssertTrue(tokens("if ($x =~ /a#b/) { print 1 }", "perl").contains { $0 == ("print", .keyword) })
+    }
+
+    func testTOMLQuotedKeysMayContainEqualsAndHash() {
+        let values = tokens("'a=b' = 1\n\"c#d\" = 2\na.\"e=f\".g = 3 # note", "toml")
+        for key in ["'a=b'", "\"c#d\"", "a.\"e=f\".g"] {
+            XCTAssertTrue(values.contains { $0 == (key, .attribute) }, key)
+        }
+        XCTAssertTrue(values.contains { $0 == ("# note", .comment) })
+        XCTAssertEqual(values.filter { $0.1 == .comment }.count, 1)
+    }
+
+    func testTOMLBareKeysStartingWithDigitsOrDashes() {
+        let values = tokens("1234 = \"value\"\n- = true\nbare-key_1 = 2\n'lit' = 3", "toml")
+        for key in ["1234", "-", "bare-key_1", "'lit'"] {
+            XCTAssertTrue(values.contains { $0 == (key, .attribute) }, key)
+        }
+        XCTAssertFalse(values.contains { $0 == ("1234", .number) })
+    }
+
     func testPHPAttributesAreNotComments() {
         let values = tokens("#[Route(\"/x\")]\npublic function index() {} # note", "php")
         XCTAssertTrue(values.contains { $0 == ("#[Route(\"/x\")]", .attribute) })
