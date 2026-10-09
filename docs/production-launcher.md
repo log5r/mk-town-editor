@@ -78,14 +78,13 @@ Xcodeのテストは `SWIFT_PACKAGE` を定義しないビルドで動くため�
 - **アドホック署名**：開発者IDで署名していないため、配布には使えない。手元のMacで起動するためだけの署名である。ビルドのたびに署名が変わるので、ローカルネットワークの許可を再度求められる可能性がある。
 - **起動中のアプリ**：同じバンドルのアプリが起動中だと、`open` は既存のプロセスを前面に出すだけで、新しいビルドは起動しない。`start.sh` はこの場合に警告を表示する。新しいビルドを試すには、先にアプリを終了する。
 - **同じバンドルIDの複数登録**：Xcodeのビルド（DerivedData内）と、ワークツリーごとの `.build/MKTownEditor.app` はどれも `com.mktown.editor` として登録される。URLスキームや書類の関連付けがどのコピーに渡るかはLaunch Servicesが決めるので、複数のコピーがあると意図しないビルドが開く場合がある。
-- **アプリアイコン**：リポジトリにアイコンがないため、Dockには汎用のアプリアイコンが表示される。
 - **Info.plistの文言**：`NSLocalNetworkUsageDescription` とサービスメニューの項目名は日本語だけで、`InfoPlist.strings` による英語訳はない。
 - **Xcodeビルドの言語**：Xcodeプロジェクトの `DEVELOPMENT_LANGUAGE` は `en` のままで、Xcodeからビルドしたアプリは `-AppleLanguages '(ja)'` を指定してもメニューがすべて英語になった（2026-10-08に確認）。このリポジトリの作業範囲では `start.sh` のバンドルだけを `ja` にし、Xcode側の設定は変えていない。
 - **`swift run` の直接起動**：`swift run MKTownEditor` は引き続き実行ファイルを直接起動するので、Info.plistに依存する機能は使えない。`ApplicationActivation` によるキー入力の回避はこの起動方法のために残している。
 
 ## 検証
 
-- `python3 -B -m unittest discover -s Tools -p 'test_*.py'` で、`start.sh` の引数処理と呼び出し順、バンドルの構成、Info.plistの展開とXcodeプロジェクトとの一致、文字列テーブルのコピー、アドホック署名、テストターゲットとスキームの設定を確認する。GUIは起動しない。
+- `python3 -B -m unittest discover -s Tools -p 'test_*.py'` で、`start.sh` の引数処理と呼び出し順、バンドルの構成、Info.plistの展開とXcodeプロジェクトとの一致、アプリアイコンの変換、文字列テーブルのコピー、アドホック署名、テストターゲットとスキームの設定を確認する。GUIは起動しない。
 - `ApplicationBundleInfoTests` で、`Support/Info.plist` がURLスキーム、ローカルネットワークの利用目的、TCPとUDPの両方のBonjourサービス型、書類タイプ、サービスメニューのメッセージを宣言し、それぞれがコード側の値と一致することを確認する。
 - 2026-10-08に実機で次を確認した。
   - `./start.sh <書類>` で起動したプロセスは `lsappinfo list` で `type="Foreground"`、`bundleID="com.mktown.editor"` になり、書類のウインドウが開いた。
