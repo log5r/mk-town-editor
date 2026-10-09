@@ -97,6 +97,19 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(values.contains { $0.1 == .comment && $0.0.contains("a#b") })
     }
 
+    func testHashCommentsAfterIdentifiersOutsideShellStyleLanguages() {
+        // Python などでは識別子や数値の直後の `#` もコメントになる。
+        XCTAssertTrue(tokens("x=1#comment", "python").contains { $0 == ("#comment", .comment) })
+        XCTAssertTrue(tokens("puts x#note", "ruby").contains { $0 == ("#note", .comment) })
+        XCTAssertTrue(tokens("$a=1;#note", "php").contains { $0 == ("#note", .comment) })
+        XCTAssertTrue(tokens("$x#note", "powershell").contains { $0 == ("#note", .comment) })
+        // シェル系では単語の先頭の `#` だけをコメントにする。
+        XCTAssertFalse(tokens("echo a#b", "bash").contains { $0.1 == .comment })
+        XCTAssertFalse(tokens("url: a#b", "yaml").contains { $0.1 == .comment })
+        XCTAssertFalse(tokens("key = a;b", "ini").contains { $0.1 == .comment })
+        XCTAssertFalse(tokens("print $#array", "perl").contains { $0.1 == .comment })
+    }
+
     func testSQLKeywordsIgnoreCase() {
         let values = tokens("SELECT id FROM users WHERE name = 'a' -- note", "sql")
 

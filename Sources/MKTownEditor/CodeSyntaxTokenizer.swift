@@ -58,6 +58,9 @@ struct CodeSyntaxLanguage: Sendable {
     /// シェルの `$1`、`${name}` など。
     var shellVariables = false
     var identifierExtras: Set<UInt16> = []
+    /// `#` と `;` の行コメントを単語の先頭でだけ認める（シェルの `$#` や `a#b` はコメントではない）。
+    /// Python などは識別子の直後でもコメントになるため、シェル系の言語だけで有効にする。
+    var commentsNeedWordBoundary = false
     var lineKeys = LineKeys.none
     /// JSON のように、`:` が続く文字列をキーとして扱う。
     var stringKeys = false
@@ -199,9 +202,10 @@ private struct CodeSyntaxScanner {
         return cursor
     }
 
-    /// `#` や `;` の行コメントは、識別子や `$` の直後では始まらない（シェルの `$#` など）。
+    /// `commentsNeedWordBoundary` の言語では、`#` や `;` の行コメントは識別子や `$` の直後では始まらない。
     private func commentBoundary(at offset: Int, marker: [UInt16]) -> Bool {
-        guard marker.count == 1, marker[0] == Unit.hash || marker[0] == Unit.semicolon else { return true }
+        guard language.commentsNeedWordBoundary, marker.count == 1,
+              marker[0] == Unit.hash || marker[0] == Unit.semicolon else { return true }
         guard let previous = unit(offset - 1) else { return true }
         return Self.isWhitespace(previous) || (marker[0] == Unit.hash && !isIdentifierPart(previous)
             && previous != Unit.dollar && previous != Unit.closeBrace)
