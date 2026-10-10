@@ -380,6 +380,27 @@ final class MarkdownRendererTests: XCTestCase {
         }
         XCTAssertTrue(title.string.contains(try XCTUnwrap(callout.calloutKind).title))
 
+        // リスト項目の下に字下げしたコードブロックは項目の子になるが、これも分けて枠で囲む。
+        let listed = MarkdownAnalysis("> [!NOTE]\n> - item\n>\n>       indented code\n>\n> after\n")
+        let listedCode = try XCTUnwrap(listed.blocks.first { $0.kind == .codeBlock })
+        let listedCallout = try XCTUnwrap(listed.blocks.first { $0.calloutKind != nil })
+        XCTAssertNotNil(listedCode.parentID)
+        XCTAssertNotEqual(listedCode.parentID, listedCallout.id, "コールアウトの孫として解析される")
+        let listedSegments = MarkdownRenderer.renderCalloutSegments(listedCallout, in: listed,
+                                                                    documentContext: DocumentContext(fileURL: nil))
+        let listedCodes = listedSegments.compactMap { segment -> Int? in
+            if case let .codeBlock(block) = segment { return block.id }
+            return nil
+        }
+        XCTAssertEqual(listedCodes, [listedCode.id])
+        let listedTexts = listedSegments.compactMap { segment -> String? in
+            if case let .text(rendered) = segment { return rendered.string }
+            return nil
+        }
+        XCTAssertTrue(listedTexts.first?.contains("item") == true)
+        XCTAssertTrue(listedTexts.last?.contains("after") == true)
+        XCTAssertFalse(listedTexts.contains { $0.contains("indented code") })
+
         // 入れ子の引用の中のコードブロックは文章の部分に含め、従来どおり描画する。
         let nested = MarkdownAnalysis("> [!NOTE]\n> > ```\n> > nested\n> > ```\n")
         let nestedCallout = try XCTUnwrap(nested.blocks.first { $0.calloutKind != nil })
