@@ -146,6 +146,7 @@ struct MarkdownPreview: View {
                                 PreviewBlockRow(block: block, id: presentationIDs[block.id] ?? String(block.id))
                             }) { row in
                                 let block = row.block
+                                let matchesSearch = isSearchMatch(block)
                                 HStack(alignment: .top, spacing: 8) {
                                     ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
                                         Rectangle()
@@ -157,10 +158,7 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
-                                                MarkdownRenderer.renderCallout(block, in: analysis,
-                                                                               documentContext: renderContext(for: analysis))
-                                            })
+                                            calloutContent(block, in: analysis)
                                         }
                                         .padding(12)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,18 +206,7 @@ struct MarkdownPreview: View {
                                               let kind = ExternalDiagramKind(language: block.codeLanguage) {
                                         ExternalDiagramView(source: block.content, kind: kind)
                                     } else if block.kind == .codeBlock {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Spacer()
-                                                Button("コードをコピー", systemImage: "doc.on.doc") {
-                                                    _ = MarkdownCodeCopy.copy(block)
-                                                }
-                                                .labelStyle(.iconOnly)
-                                                .buttonStyle(.borderless)
-                                                .help("フェンスを除いたコード本文をコピー")
-                                            }
-                                            blockText(block, in: analysis)
-                                        }
+                                        codeBlockView(block, in: analysis, isSearchMatch: matchesSearch)
                                     } else if let task = block.task {
                                         taskView(block, task: task, in: analysis)
                                     } else {
@@ -227,9 +214,7 @@ struct MarkdownPreview: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(searchRange.map {
-                                    NSLocationInRange($0.location, block.sourceRange)
-                                } == true ? Color.accentColor.opacity(0.12) : Color.clear)
+                                .background(matchesSearch ? PreviewCodeBlockStyle.searchMatchTint : Color.clear)
                                 .id(row.id)
                                 .background(GeometryReader { geometry in
                                     Color.clear.preference(key: PreviewBlockOriginsKey.self,
@@ -437,6 +422,37 @@ struct MarkdownPreview: View {
         }
     }
 
+    /// コールアウトの中身。直下のコードブロックは文字列に含めず、通常のコードブロックと同じ枠で囲む。
+    private func calloutContent(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
+        let segments = MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+            MarkdownRenderer.renderCalloutSegments(block, in: analysis,
+                                                   documentContext: renderContext(for: analysis))
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(segments.indices, id: \.self) { index in
+                switch segments[index] {
+                case let .text(rendered):
+                    inlineText(rendered)
+                case let .codeBlock(code):
+                    codeBlockView(code, in: analysis, isSearchMatch: isSearchMatch(code))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func isSearchMatch(_ block: MarkdownBlock) -> Bool {
+        searchRange.map { NSLocationInRange($0.location, block.sourceRange) } == true
+    }
+
+    private func codeBlockView(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                               isSearchMatch: Bool) -> some View {
+        PreviewCodeBlockFrame(theme: theme, isSearchMatch: isSearchMatch,
+                              onCopy: { _ = MarkdownCodeCopy.copy(block) }) {
+            blockText(block, in: analysis)
+        }
+    }
+
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
@@ -608,6 +624,66 @@ private struct HoverLinkText: NSViewRepresentable {
             onOpenURL?(url)
             return true
         }
+    }
+}
+
+/// プレビューのコードブロックの枠の寸法と色。
+/// 背景と境界線は文字色を薄く重ねて作り、システム・紙・拡張テーマのどの背景でも本文から区別できるようにする。
+enum PreviewCodeBlockStyle {
+    static let cornerRadius: CGFloat = 8
+    static let padding: CGFloat = 12
+    static let copyButtonInset: CGFloat = 20
+    static let searchMatchTint = Color.accentColor.opacity(0.12)
+
+    /// 枠の面に下から順に塗る色。テーマがコード背景を定めていればそれを使い、システムでは文字色を 5% 重ねた面にする。
+    /// 枠の面は不透明になり得るため、検索の一致は行の背景とは別に面の上へ重ねる。
+    static func fillLayers(for theme: PreviewTheme, isSearchMatch: Bool) -> [Color] {
+        [theme.codeBackground.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.05)] +
+            (isSearchMatch ? [searchMatchTint] : [])
+    }
+
+    /// コピーボタンの色。ボタンはコード背景の上にあるため、テーマがあればコード背景とのコントラストを検証済みのコード色を使う。
+    /// システム配色では `nil` を返し、ボタンの標準の色にする。
+    static func copyButtonColor(for theme: PreviewTheme) -> Color? {
+        theme.codeColor.map { Color(nsColor: $0) }
+    }
+
+    static func copyButton(theme: PreviewTheme = .system, action: @escaping () -> Void) -> some View {
+        Button("コードをコピー", systemImage: "doc.on.doc", action: action)
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .foregroundStyle(copyButtonColor(for: theme).map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
+            .help("フェンスを除いたコード本文をコピー")
+    }
+}
+
+/// プレビューのコードブロックを、背景を塗った角丸の枠で囲み、右上にコピーボタンを置く。
+struct PreviewCodeBlockFrame<Content: View>: View {
+    var theme: PreviewTheme
+    var isSearchMatch = false
+    var onCopy: () -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: PreviewCodeBlockStyle.cornerRadius, style: .continuous)
+        // ボタンを重ねず同じ ZStack に置き、空のコードブロックでも枠の高さがボタンを収める。
+        ZStack(alignment: .topTrailing) {
+            content
+                // 右上のコピーボタンと1行目が重ならないよう、右側に余白を取る。
+                .padding(.trailing, PreviewCodeBlockStyle.copyButtonInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PreviewCodeBlockStyle.copyButton(theme: theme, action: onCopy)
+        }
+        .padding(PreviewCodeBlockStyle.padding)
+        .background {
+            ZStack {
+                ForEach(Array(PreviewCodeBlockStyle.fillLayers(for: theme, isSearchMatch: isSearchMatch)
+                    .enumerated()), id: \.offset) { _, color in
+                    shape.fill(color)
+                }
+            }
+        }
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
     }
 }
 

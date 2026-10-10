@@ -339,4 +339,103 @@ final class MarkdownRendererTests: XCTestCase {
                 effectiveRange: nil) as? URL, URL(string: "/url"))
         }
     }
+
+    /// 不具合: コールアウト内のコードブロックはコールアウト全体の文字列に含まれ、枠もコピーボタンもなく、
+    /// 文字ごとの背景の帯で表示されていた。直下のコードブロックは別の部分として返し、プレビューが枠で囲む。
+    @MainActor
+    func testCalloutSegmentsSeparateDirectCodeBlocks() throws {
+        let analysis = MarkdownAnalysis("> [!NOTE]\n> before\n>\n> ```swift\n> let x = 1\n> ```\n>\n> after\n")
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+        let code = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
+        let segments = MarkdownRenderer.renderCalloutSegments(callout, in: analysis,
+                                                              documentContext: DocumentContext(fileURL: nil))
+        let texts = segments.compactMap { segment -> String? in
+            if case let .text(rendered) = segment { return rendered.string }
+            return nil
+        }
+        let codes = segments.compactMap { segment -> Int? in
+            if case let .codeBlock(block) = segment { return block.id }
+            return nil
+        }
+        XCTAssertEqual(codes, [code.id])
+        XCTAssertEqual(segments.count, 3)
+        XCTAssertTrue(texts[0].contains(try XCTUnwrap(callout.calloutKind).title))
+        XCTAssertTrue(texts[0].contains("before"))
+        XCTAssertTrue(texts[1].contains("after"))
+        XCTAssertFalse(texts.contains { $0.contains("let x") })
+        // コードの前後の空行は、引用の印だけの行として残さない。
+        XCTAssertFalse(texts[0].hasSuffix("\n") || texts[0].hasSuffix("│  "))
+        XCTAssertFalse(texts[1].hasPrefix("│  \n"))
+    }
+
+    /// 不具合: コードブロックを含まないコールアウトでも、見出しの直後の空行を除いていた。
+    @MainActor
+    func testCalloutSegmentsWithoutCodeMatchRenderCallout() throws {
+        for markdown in ["> [!NOTE]\n>\n> body\n>\n> more\n", "> [!TIP]\n> - item\n>\n> tail\n>\n"] {
+            let analysis = MarkdownAnalysis(markdown)
+            let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+            let context = DocumentContext(fileURL: nil)
+            let segments = MarkdownRenderer.renderCalloutSegments(callout, in: analysis, documentContext: context)
+            XCTAssertEqual(segments.count, 1, markdown)
+            guard case let .text(rendered) = segments.first else { return XCTFail(markdown) }
+            XCTAssertEqual(rendered.string,
+                           MarkdownRenderer.renderCallout(callout, in: analysis, documentContext: context).string,
+                           markdown)
+        }
+    }
+
+    /// 見出しと本文の間の空行は、後にコードブロックがあっても残す。
+    @MainActor
+    func testCalloutSegmentsKeepBlankAfterTitleBeforeText() throws {
+        let analysis = MarkdownAnalysis("> [!NOTE]\n>\n> body\n>\n> ```\n> code\n> ```\n")
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+        let segments = MarkdownRenderer.renderCalloutSegments(callout, in: analysis,
+                                                              documentContext: DocumentContext(fileURL: nil))
+        guard case let .text(first) = segments.first else { return XCTFail("先頭は文章の部分") }
+        let title = try XCTUnwrap(callout.calloutKind).title
+        XCTAssertTrue(first.string.hasPrefix("│  \(title)\n│  \n│  body"), first.string)
+        XCTAssertFalse(first.string.hasSuffix("│  "))
+    }
+
+    @MainActor
+    func testCalloutSegmentsKeepTitleWhenCalloutStartsWithCodeAndNestedCodeInText() throws {
+        let leading = MarkdownAnalysis("> [!TIP]\n> ```\n> code\n> ```\n")
+        let callout = try XCTUnwrap(leading.blocks.first { $0.calloutKind != nil })
+        let segments = MarkdownRenderer.renderCalloutSegments(callout, in: leading,
+                                                              documentContext: DocumentContext(fileURL: nil))
+        XCTAssertEqual(segments.count, 2)
+        guard case let .text(title) = segments[0], case .codeBlock = segments[1] else {
+            return XCTFail("見出しの後にコードブロックが続く")
+        }
+        XCTAssertTrue(title.string.contains(try XCTUnwrap(callout.calloutKind).title))
+
+        // リスト項目の下に字下げしたコードブロックは項目の子になるが、これも分けて枠で囲む。
+        let listed = MarkdownAnalysis("> [!NOTE]\n> - item\n>\n>       indented code\n>\n> after\n")
+        let listedCode = try XCTUnwrap(listed.blocks.first { $0.kind == .codeBlock })
+        let listedCallout = try XCTUnwrap(listed.blocks.first { $0.calloutKind != nil })
+        XCTAssertNotNil(listedCode.parentID)
+        XCTAssertNotEqual(listedCode.parentID, listedCallout.id, "コールアウトの孫として解析される")
+        let listedSegments = MarkdownRenderer.renderCalloutSegments(listedCallout, in: listed,
+                                                                    documentContext: DocumentContext(fileURL: nil))
+        let listedCodes = listedSegments.compactMap { segment -> Int? in
+            if case let .codeBlock(block) = segment { return block.id }
+            return nil
+        }
+        XCTAssertEqual(listedCodes, [listedCode.id])
+        let listedTexts = listedSegments.compactMap { segment -> String? in
+            if case let .text(rendered) = segment { return rendered.string }
+            return nil
+        }
+        XCTAssertTrue(listedTexts.first?.contains("item") == true)
+        XCTAssertTrue(listedTexts.last?.contains("after") == true)
+        XCTAssertFalse(listedTexts.contains { $0.contains("indented code") })
+
+        // 入れ子の引用の中のコードブロックは文章の部分に含め、従来どおり描画する。
+        let nested = MarkdownAnalysis("> [!NOTE]\n> > ```\n> > nested\n> > ```\n")
+        let nestedCallout = try XCTUnwrap(nested.blocks.first { $0.calloutKind != nil })
+        let nestedSegments = MarkdownRenderer.renderCalloutSegments(nestedCallout, in: nested,
+                                                                    documentContext: DocumentContext(fileURL: nil))
+        XCTAssertNotNil(nested.blocks.first { $0.kind == .codeBlock })
+        XCTAssertFalse(nestedSegments.contains { if case .codeBlock = $0 { true } else { false } })
+    }
 }

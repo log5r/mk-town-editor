@@ -153,8 +153,9 @@ final class PreviewRenderCache: ObservableObject {
             MarkdownRenderer.renderLeaf(block, in: analysis, showTaskPrefix: showsTaskPrefix,
                                         documentContext: context)
         }
-        let rendered = PreviewTypography.themed(PreviewTypography.scaled(leaf, by: zoom),
+        let themed = PreviewTypography.themed(PreviewTypography.scaled(leaf, by: zoom),
             kind: block.kind, theme: theme)
+        let rendered = block.kind == .codeBlock ? PreviewTypography.codeBlockBody(themed) : themed
         // 読み込み中の仮表示は保持しない。次の描画で問い合わせ直し、要求が取り下げられていても
         // 読み込みをやり直せるようにする（読み込みが終わるまでの間だけ描画し直す）。
         guard !rendered.containsPendingLocalImage else {
