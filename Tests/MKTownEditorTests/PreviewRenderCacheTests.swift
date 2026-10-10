@@ -219,4 +219,28 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertFalse(DocumentSnapshot(source: "plain").needsStructuredPreview)
         XCTAssertTrue(DocumentSnapshot(source: "# Heading").needsStructuredPreview)
     }
+
+    /// 不具合: コードブロックの背景が文字ごとに塗られ、行の長さに沿った白い帯として表示されていた。
+    func testCodeBlockRenderHasNoPerCharacterBackgroundButInlineCodeKeepsIt() throws {
+        let analysis = MarkdownAnalysis("Use `inline` here.\n\n```swift\nlet x = 1\n\nprint(x)\n```")
+        let context = DocumentContext(fileURL: nil)
+        let code = try XCTUnwrap(analysis.blocks.first { $0.kind == .codeBlock })
+        let paragraph = try XCTUnwrap(analysis.blocks.first { $0.kind == .paragraph })
+
+        for theme in [PreviewTheme.system, .paper] {
+            let cache = PreviewRenderCache()
+            let rendered = cache.render(code, in: analysis, context: context, zoom: 1.25, theme: theme)
+            var backgrounds = 0
+            rendered.enumerateAttribute(.backgroundColor,
+                                        in: NSRange(location: 0, length: rendered.length)) { value, _, _ in
+                if value != nil { backgrounds += 1 }
+            }
+            XCTAssertEqual(backgrounds, 0, "\(theme)")
+            XCTAssertTrue(rendered.string.contains("print(x)"))
+
+            let inline = cache.render(paragraph, in: analysis, context: context, zoom: 1, theme: theme)
+            let location = (inline.string as NSString).range(of: "inline").location
+            XCTAssertNotNil(inline.attribute(.backgroundColor, at: location, effectiveRange: nil), "\(theme)")
+        }
+    }
 }

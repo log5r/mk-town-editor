@@ -35,7 +35,7 @@ enum PreviewTypography {
         }
         result.addAttribute(.foregroundColor, value: color, range: range)
         if kind == .codeBlock {
-            result.addAttribute(.backgroundColor, value: codeBackground, range: range)
+            // コードブロックの背景は文字ごとではなく、囲み枠（`PreviewCodeBlockFrame`）が受け持つ。
             result.enumerateAttribute(.codeSyntaxToken, in: range) { value, subrange, _ in
                 guard let token = (value as? String).flatMap(CodeSyntaxToken.init(rawValue:)),
                       let tokenColor = CodeSyntaxPalette.color(for: token, theme: theme) else { return }
@@ -55,6 +55,20 @@ enum PreviewTypography {
                 result.addAttribute(.foregroundColor, value: codeColor, range: subrange)
             }
         }
+        return result
+    }
+
+    /// プレビューのコードブロック本文から文字ごとの背景色を外す。
+    /// 背景は囲み枠が塗るため、行の長さに沿った帯が枠の中に重ならないようにする。
+    static func codeBlockBody(_ rendered: NSAttributedString) -> NSAttributedString {
+        let range = NSRange(location: 0, length: rendered.length)
+        var hasBackground = false
+        rendered.enumerateAttribute(.backgroundColor, in: range) { value, _, stop in
+            if value != nil { hasBackground = true; stop.pointee = true }
+        }
+        guard hasBackground else { return rendered }
+        let result = NSMutableAttributedString(attributedString: rendered)
+        result.removeAttribute(.backgroundColor, range: range)
         return result
     }
 

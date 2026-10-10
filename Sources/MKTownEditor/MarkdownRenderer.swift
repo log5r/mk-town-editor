@@ -84,6 +84,70 @@ enum MarkdownRenderer {
         return renderTree(block, in: analysis, context: context)
     }
 
+    /// コールアウトを、文章の部分とコードブロックに分けて描画する。
+    /// プレビューはコードブロックを文字列に含めず、通常のコードブロックと同じ枠で囲んで表示する。
+    /// リスト項目の下に字下げしたコードブロックのような子孫もたどって分ける。
+    /// 入れ子の引用の中のコードブロックは、引用ごと文章の部分に含めて `renderCallout` と同じく描画する。
+    enum CalloutSegment {
+        case text(NSAttributedString)
+        case codeBlock(MarkdownBlock)
+    }
+
+    static func renderCalloutSegments(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                                      documentContext: DocumentContext) -> [CalloutSegment] {
+        guard let callout = block.calloutKind else {
+            return [.text(renderCallout(block, in: analysis, documentContext: documentContext))]
+        }
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
+        var segments: [CalloutSegment] = []
+        // `renderTree` と同じく、ブロックを描画順に改行で区切って並べる。
+        var pending: [(isBlank: Bool, text: NSAttributedString)] = []
+        var isFirstText = true
+        func flush(beforeCodeBlock: Bool) {
+            // コードブロックの前後を区切る空行は枠の間隔で表すため、枠と接する側の端からだけ除く。
+            // 見出しと本文の間や、コードブロックを含まないコールアウトの空行は `renderCallout` と同じく残す。
+            if case .codeBlock = segments.last {
+                while pending.first?.isBlank == true { pending.removeFirst() }
+            }
+            if beforeCodeBlock {
+                while pending.last?.isBlank == true { pending.removeLast() }
+            }
+            guard isFirstText || !pending.isEmpty else { return }
+            let content = NSMutableAttributedString()
+            if isFirstText {
+                content.append(NSAttributedString(string: callout.title,
+                    attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                                               color: .labelColor)))
+                if !pending.isEmpty { content.append(NSAttributedString(string: "\n")) }
+            }
+            for (index, item) in pending.enumerated() {
+                if index > 0 { content.append(NSAttributedString(string: "\n")) }
+                content.append(item.text)
+            }
+            segments.append(.text(quote(content)))
+            pending = []
+            isFirstText = false
+        }
+        func visit(_ child: MarkdownBlock) {
+            if child.kind == .codeBlock {
+                flush(beforeCodeBlock: true)
+                segments.append(.codeBlock(child))
+            } else if child.kind == .quote {
+                pending.append((false, renderTree(child, in: analysis, context: context)))
+            } else {
+                pending.append((child.kind == .blank,
+                                render(child, references: analysis.references,
+                                       footnotes: analysis.footnotes, context: context)))
+                analysis.children(of: child).forEach(visit)
+            }
+        }
+        analysis.children(of: block).forEach(visit)
+        flush(beforeCodeBlock: false)
+        return segments
+    }
+
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
                                        context: DocumentContext) -> NSAttributedString {
         let output = NSMutableAttributedString()
