@@ -146,6 +146,7 @@ struct MarkdownPreview: View {
                                 PreviewBlockRow(block: block, id: presentationIDs[block.id] ?? String(block.id))
                             }) { row in
                                 let block = row.block
+                                let matchesSearch = isSearchMatch(block)
                                 HStack(alignment: .top, spacing: 8) {
                                     ForEach(0..<layout.quoteDepth(for: block.id), id: \.self) { _ in
                                         Rectangle()
@@ -208,19 +209,7 @@ struct MarkdownPreview: View {
                                               let kind = ExternalDiagramKind(language: block.codeLanguage) {
                                         ExternalDiagramView(source: block.content, kind: kind)
                                     } else if block.kind == .codeBlock {
-                                        blockText(block, in: analysis)
-                                            // 右上のコピーボタンと1行目が重ならないよう、右側に余白を取る。
-                                            .padding(.trailing, PreviewCodeBlockFrame.copyButtonInset)
-                                            .modifier(PreviewCodeBlockFrame(theme: theme))
-                                            .overlay(alignment: .topTrailing) {
-                                                Button("コードをコピー", systemImage: "doc.on.doc") {
-                                                    _ = MarkdownCodeCopy.copy(block)
-                                                }
-                                                .labelStyle(.iconOnly)
-                                                .buttonStyle(.borderless)
-                                                .help("フェンスを除いたコード本文をコピー")
-                                                .padding(10)
-                                            }
+                                        codeBlockView(block, in: analysis, isSearchMatch: matchesSearch)
                                     } else if let task = block.task {
                                         taskView(block, task: task, in: analysis)
                                     } else {
@@ -228,9 +217,7 @@ struct MarkdownPreview: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(searchRange.map {
-                                    NSLocationInRange($0.location, block.sourceRange)
-                                } == true ? Color.accentColor.opacity(0.12) : Color.clear)
+                                .background(matchesSearch ? PreviewCodeBlockStyle.searchMatchTint : Color.clear)
                                 .id(row.id)
                                 .background(GeometryReader { geometry in
                                     Color.clear.preference(key: PreviewBlockOriginsKey.self,
@@ -438,6 +425,18 @@ struct MarkdownPreview: View {
         }
     }
 
+    private func isSearchMatch(_ block: MarkdownBlock) -> Bool {
+        searchRange.map { NSLocationInRange($0.location, block.sourceRange) } == true
+    }
+
+    private func codeBlockView(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                               isSearchMatch: Bool) -> some View {
+        PreviewCodeBlockFrame(theme: theme, isSearchMatch: isSearchMatch,
+                              onCopy: { _ = MarkdownCodeCopy.copy(block) }) {
+            blockText(block, in: analysis)
+        }
+    }
+
     @ViewBuilder
     private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
@@ -612,27 +611,56 @@ private struct HoverLinkText: NSViewRepresentable {
     }
 }
 
-/// プレビューのコードブロックを、背景を塗った角丸の枠で囲む。
+/// プレビューのコードブロックの枠の寸法と色。
 /// 背景と境界線は文字色を薄く重ねて作り、システム・紙・拡張テーマのどの背景でも本文から区別できるようにする。
-struct PreviewCodeBlockFrame: ViewModifier {
-    var theme: PreviewTheme
-
+enum PreviewCodeBlockStyle {
     static let cornerRadius: CGFloat = 8
     static let padding: CGFloat = 12
     static let copyButtonInset: CGFloat = 20
+    static let searchMatchTint = Color.accentColor.opacity(0.12)
 
-    /// テーマがコード背景を定めていればそれを使い、システムでは文字色を 5% 重ねた面にする。
-    static func fill(for theme: PreviewTheme) -> Color {
-        theme.codeBackground.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.05)
+    /// 枠の面に下から順に塗る色。テーマがコード背景を定めていればそれを使い、システムでは文字色を 5% 重ねた面にする。
+    /// 枠の面は不透明になり得るため、検索の一致は行の背景とは別に面の上へ重ねる。
+    static func fillLayers(for theme: PreviewTheme, isSearchMatch: Bool) -> [Color] {
+        [theme.codeBackground.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.05)] +
+            (isSearchMatch ? [searchMatchTint] : [])
     }
 
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
-        content
-            .padding(Self.padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Self.fill(for: theme), in: shape)
-            .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
+    static func copyButton(action: @escaping () -> Void) -> some View {
+        Button("コードをコピー", systemImage: "doc.on.doc", action: action)
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("フェンスを除いたコード本文をコピー")
+    }
+}
+
+/// プレビューのコードブロックを、背景を塗った角丸の枠で囲み、右上にコピーボタンを置く。
+struct PreviewCodeBlockFrame<Content: View>: View {
+    var theme: PreviewTheme
+    var isSearchMatch = false
+    var onCopy: () -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: PreviewCodeBlockStyle.cornerRadius, style: .continuous)
+        // ボタンを重ねず同じ ZStack に置き、空のコードブロックでも枠の高さがボタンを収める。
+        ZStack(alignment: .topTrailing) {
+            content
+                // 右上のコピーボタンと1行目が重ならないよう、右側に余白を取る。
+                .padding(.trailing, PreviewCodeBlockStyle.copyButtonInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            PreviewCodeBlockStyle.copyButton(action: onCopy)
+        }
+        .padding(PreviewCodeBlockStyle.padding)
+        .background {
+            ZStack {
+                ForEach(Array(PreviewCodeBlockStyle.fillLayers(for: theme, isSearchMatch: isSearchMatch)
+                    .enumerated()), id: \.offset) { _, color in
+                    shape.fill(color)
+                }
+            }
+        }
+        .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
     }
 }
 
