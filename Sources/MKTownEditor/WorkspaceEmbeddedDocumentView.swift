@@ -14,7 +14,7 @@ struct WorkspaceEmbeddedDocumentView: View {
     @State private var indexedDocuments: [URL] = []
     @State private var expansion: WorkspaceEmbedExpansion?
     @State private var refreshID = 0
-    @State private var rendered = AttributedString()
+    @State private var segments: [WorkspaceEmbedSegment] = []
     @State private var fileCache = WorkspaceEmbedFileCache()
     @State private var directoryMonitor: WorkspaceDirectoryMonitor?
     @State private var dependencies: Set<URL> = []
@@ -52,8 +52,9 @@ struct WorkspaceEmbeddedDocumentView: View {
             }
             if let expansion {
                 if !expansion.text.isEmpty {
-                    Text(rendered)
-                        .textSelection(.enabled)
+                    ForEach(segments.indices, id: \.self) { index in
+                        segmentView(segments[index])
+                    }
                 }
                 ForEach(expansion.issues.indices, id: \.self) { index in
                     Label(expansion.issues[index], systemImage: "exclamationmark.triangle")
@@ -88,6 +89,20 @@ struct WorkspaceEmbeddedDocumentView: View {
         }
     }
 
+    @ViewBuilder
+    private func segmentView(_ segment: WorkspaceEmbedSegment) -> some View {
+        switch segment {
+        case let .text(text):
+            Text(text)
+                .textSelection(.enabled)
+        case let .codeBlock(block, code, quoteDepth):
+            PreviewQuotedCodeBlock(quoteDepth: quoteDepth, onCopy: { _ = MarkdownCodeCopy.copy(block) }) {
+                Text(code)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
     private func refresh(key: RefreshKey) async {
         // Discovering a dependency changes the task key. Its initial result is
         // already current, so that bookkeeping change must not encode it again.
@@ -107,8 +122,8 @@ struct WorkspaceEmbeddedDocumentView: View {
                     loaded.dependencies.map { ($0, revisions[$0, default: 0]) }), diskRevision: key.diskRevision)
             if expansion != loaded.expansion || loaded.analysis != nil {
                 if let analysis = loaded.analysis {
-                    rendered = AttributedString(MarkdownRenderer.render(analysis,
-                        documentContext: DocumentContext(fileURL: targetURL)))
+                    segments = WorkspaceEmbedSegment.render(analysis,
+                        documentContext: DocumentContext(fileURL: targetURL))
                 }
                 expansion = loaded.expansion
             }
@@ -116,6 +131,26 @@ struct WorkspaceEmbeddedDocumentView: View {
         } catch {
             // Only cancellation is thrown by the background expansion. Buffer
             // conflicts retain the existing disk fallback in the loader.
+        }
+    }
+}
+
+/// 埋め込み文書の表示単位。コードブロックは文字ごとの背景を外し、通常のプレビューと同じ
+/// `PreviewCodeBlockFrame` の枠で囲んで描く（`PreviewQuotedCodeBlock`）。
+enum WorkspaceEmbedSegment: Equatable {
+    case text(AttributedString)
+    case codeBlock(MarkdownBlock, AttributedString, quoteDepth: Int)
+
+    @MainActor
+    static func render(_ analysis: MarkdownAnalysis, documentContext: DocumentContext) -> [Self] {
+        MarkdownRenderer.renderSegments(analysis, documentContext: documentContext).map { segment in
+            switch segment {
+            case let .text(text):
+                .text(AttributedString(text))
+            case let .codeBlock(block, rendered, quoteDepth):
+                .codeBlock(block, AttributedString(PreviewTypography.codeBlockBody(rendered)),
+                           quoteDepth: quoteDepth)
+            }
         }
     }
 }

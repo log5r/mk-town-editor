@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import MKTownEditor
@@ -237,5 +238,36 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
         try plan.apply()
         XCTAssertEqual(try String(contentsOf: referring, encoding: .utf8),
             "![[new#section]]\n```\n![[old]]\n```")
+    }
+
+    /// 不具合: 埋め込み文書のコードブロックは文字ごとの背景のままで、行の長さに沿った白い帯として表示されていた。
+    @MainActor
+    func testEmbeddedCodeBlockIsFramedWithoutPerCharacterBackground() throws {
+        let analysis = MarkdownAnalysis("Use `inline` here.\n\n```swift\nlet x = 1\n\nprint(x)\n```\n\n> ```\n> quoted\n> ```",
+                                        dialect: .extended)
+        let segments = WorkspaceEmbedSegment.render(analysis, documentContext: DocumentContext(fileURL: nil))
+        let codeBlocks = segments.compactMap { segment -> (AttributedString, Int)? in
+            guard case let .codeBlock(block, code, quoteDepth) = segment else { return nil }
+            // コピーボタンが写す元のブロックを持つ。
+            XCTAssertEqual(block.kind, .codeBlock)
+            XCTAssertEqual(block.content, String(code.characters))
+            return (code, quoteDepth)
+        }
+        XCTAssertEqual(codeBlocks.map { String($0.0.characters) }, ["let x = 1\n\nprint(x)", "quoted"])
+        XCTAssertEqual(codeBlocks.map(\.1), [0, 1])
+        for (code, _) in codeBlocks {
+            let rendered = try NSAttributedString(code, including: \.appKit)
+            var backgrounds = 0
+            rendered.enumerateAttribute(.backgroundColor,
+                                        in: NSRange(location: 0, length: rendered.length)) { value, _, _ in
+                if value != nil { backgrounds += 1 }
+            }
+            XCTAssertEqual(backgrounds, 0)
+        }
+
+        guard case let .text(text) = segments.first else { return XCTFail("\(segments)") }
+        let inline = try NSAttributedString(text, including: \.appKit)
+        let location = (inline.string as NSString).range(of: "inline").location
+        XCTAssertNotNil(inline.attribute(.backgroundColor, at: location, effectiveRange: nil))
     }
 }

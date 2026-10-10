@@ -21,6 +21,36 @@ enum MarkdownRenderer {
 
     static func render(_ analysis: MarkdownAnalysis,
                        documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> NSAttributedString {
+        let context = documentRenderContext(analysis, documentContext: documentContext)
+        let output = NSMutableAttributedString(attributedString:
+            renderSequence(analysis.rootBlocks, in: analysis, context: context))
+        appendBackMatter(to: output, analysis: analysis, context: context)
+        return output
+    }
+
+    /// 文書全体を、文章の部分とコードブロックに分けて描画する。
+    /// 文書を文字列1つで描く埋め込み文書が使い、コードブロックを通常のコードブロックと同じ枠で囲んで表示する。
+    /// コードブロックを含まない部分は `render(_:documentContext:)` と同じ文字列になる（区切りの端の改行は除く）。
+    /// 引用の中のコードブロックは `quoteDepth` に深さを持ち、引用記号（`│`）は前後の文章の部分にだけ付く。
+    enum DocumentSegment {
+        case text(NSAttributedString)
+        case codeBlock(MarkdownBlock, rendered: NSAttributedString, quoteDepth: Int)
+    }
+
+    static func renderSegments(_ analysis: MarkdownAnalysis,
+                               documentContext: DocumentContext = DocumentContext(fileURL: nil)) -> [DocumentSegment] {
+        let context = documentRenderContext(analysis, documentContext: documentContext)
+        var builder = DocumentSegmentBuilder()
+        appendSegments(analysis.rootBlocks, in: analysis, context: context, quoteDepth: 0,
+                       codeContainers: codeBlockContainers(in: analysis), into: &builder)
+        let backMatter = NSMutableAttributedString()
+        appendBackMatter(to: backMatter, analysis: analysis, context: context)
+        builder.appendText(backMatter, quoteDepth: 0)
+        return builder.finish()
+    }
+
+    private static func documentRenderContext(_ analysis: MarkdownAnalysis,
+                                              documentContext: DocumentContext) -> DocumentContext {
         var context = documentContext
         context.markdownDialect = analysis.dialect
         context.crossReferences = analysis.crossReferences
@@ -28,8 +58,12 @@ enum MarkdownRenderer {
             context.citationCatalog = analysis.containsCitationSyntax
                 ? MarkdownCitationCatalog.load(documentURL: context.fileURL) ?? .empty : .empty
         }
-        let output = NSMutableAttributedString(attributedString:
-            renderSequence(analysis.rootBlocks, in: analysis, context: context))
+        return context
+    }
+
+    /// 脚注と参考文献を本文の後ろに付ける。
+    private static func appendBackMatter(to output: NSMutableAttributedString, analysis: MarkdownAnalysis,
+                                         context: DocumentContext) {
         if !analysis.footnotes.entries.isEmpty {
             output.append(NSAttributedString(string: "\n\n" + String(localized: "脚注") + "\n"))
             for note in analysis.footnotes.entries {
@@ -52,7 +86,57 @@ enum MarkdownRenderer {
                 output.append(NSAttributedString(string: "\(index + 1). \(entry.bibliographyText)\n"))
             }
         }
-        return output
+    }
+
+    private static func appendSegments(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
+                                       context: DocumentContext, quoteDepth: Int, codeContainers: Set<Int>,
+                                       into builder: inout DocumentSegmentBuilder) {
+        for (index, block) in blocks.enumerated() {
+            if index > 0 {
+                builder.appendText(NSAttributedString(string: "\n"), quoteDepth: quoteDepth)
+            }
+            // コードブロックを含まない部分木は、文字列1つの描画と同じ結果にする。
+            guard codeContainers.contains(block.id) else {
+                builder.appendText(renderTree(block, in: analysis, context: context), quoteDepth: quoteDepth)
+                continue
+            }
+            let children = analysis.children(of: block)
+            if block.kind == .quote {
+                if let callout = block.calloutKind {
+                    builder.appendText(NSAttributedString(string: "\(callout.title)\n",
+                        attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                                                   color: .labelColor)), quoteDepth: quoteDepth + 1)
+                }
+                appendSegments(children, in: analysis, context: context, quoteDepth: quoteDepth + 1,
+                               codeContainers: codeContainers, into: &builder)
+                continue
+            }
+            let rendered = render(block, references: analysis.references, footnotes: analysis.footnotes,
+                                  context: context)
+            if block.kind == .codeBlock {
+                builder.appendCodeBlock(block, rendered: rendered, quoteDepth: quoteDepth)
+            } else {
+                builder.appendText(rendered, quoteDepth: quoteDepth)
+            }
+            if !children.isEmpty {
+                builder.appendText(NSAttributedString(string: "\n"), quoteDepth: quoteDepth)
+                appendSegments(children, in: analysis, context: context, quoteDepth: quoteDepth,
+                               codeContainers: codeContainers, into: &builder)
+            }
+        }
+    }
+
+    /// コードブロックと、それを子孫に持つブロックの識別子。
+    private static func codeBlockContainers(in analysis: MarkdownAnalysis) -> Set<Int> {
+        let parents = Dictionary(analysis.blocks.map { ($0.id, $0.parentID) }) { first, _ in first }
+        var result: Set<Int> = []
+        for block in analysis.blocks where block.kind == .codeBlock {
+            var current: Int? = block.id
+            while let id = current, result.insert(id).inserted {
+                current = parents[id] ?? nil
+            }
+        }
+        return result
     }
 
     static func renderLeaf(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
@@ -184,7 +268,7 @@ enum MarkdownRenderer {
         return output
     }
 
-    private static func quote(_ content: NSAttributedString) -> NSAttributedString {
+    fileprivate static func quote(_ content: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let source = content.string as NSString
         let prefix = NSAttributedString(
@@ -609,6 +693,47 @@ enum MarkdownRenderer {
         paragraph.lineSpacing = 3
         paragraph.paragraphSpacing = 4
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
+    }
+}
+
+/// 同じ引用の深さで続く文章をまとめ、コードブロックや深さの変わり目で区切る。
+@MainActor
+private struct DocumentSegmentBuilder {
+    private var segments: [MarkdownRenderer.DocumentSegment] = []
+    private var pending = NSMutableAttributedString()
+    private var pendingDepth = 0
+
+    mutating func appendText(_ text: NSAttributedString, quoteDepth: Int) {
+        guard text.length > 0 else { return }
+        if quoteDepth != pendingDepth {
+            flush()
+            pendingDepth = quoteDepth
+        }
+        pending.append(text)
+    }
+
+    mutating func appendCodeBlock(_ block: MarkdownBlock, rendered: NSAttributedString, quoteDepth: Int) {
+        flush()
+        segments.append(.codeBlock(block, rendered: rendered, quoteDepth: quoteDepth))
+    }
+
+    mutating func finish() -> [MarkdownRenderer.DocumentSegment] {
+        flush()
+        return segments
+    }
+
+    /// 区切りの間は縦の間隔で表すため、文章の部分の先頭と末尾の改行を除く。
+    /// 除かないと、コードブロックの前後の空行が引用記号だけの行になる。
+    private mutating func flush() {
+        defer { pending = NSMutableAttributedString() }
+        let source = pending.string as NSString
+        var start = 0, end = source.length
+        while start < end, source.character(at: start) == 0x0A { start += 1 }
+        while end > start, source.character(at: end - 1) == 0x0A { end -= 1 }
+        guard start < end else { return }
+        var text = pending.attributedSubstring(from: NSRange(location: start, length: end - start))
+        for _ in 0..<pendingDepth { text = MarkdownRenderer.quote(text) }
+        segments.append(.text(text))
     }
 }
 

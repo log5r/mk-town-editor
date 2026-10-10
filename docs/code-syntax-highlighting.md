@@ -150,7 +150,11 @@ HTML書き出しでは字句を`<span class="tok-keyword">`のように囲み、
 - プレビューは描画結果に字句の種類（`.codeSyntaxToken`属性）を残し、`PreviewTypography.themed` がテーマの色に当て直す。
 - プレビューはコードブロックを角丸の枠（`PreviewCodeBlockFrame`）で囲み、枠の面に背景を塗る。`CodeSyntaxHighlighter.render` が付ける文字ごとの背景（`.backgroundColor`）は、`PreviewRenderCache` が `PreviewTypography.codeBlockBody` で外す。文字ごとの背景は行の文字がある部分だけを塗るため、行の長さに沿った帯になり、空行や行末の右側が塗られない。面の色はテーマのコード背景、システム配色では文字色（`Color.primary`）の5%で、境界線は文字色の12%である。どちらも外観とテーマの背景に合わせて濃さが変わる。コピーボタンはコード背景の上に描くため、テーマではコード背景とのコントラストを検証済みのコード色で描く（`PreviewCodeBlockStyle.copyButtonColor`）。ボタンは本文と同じ `ZStack` の右上に置き、本文の右側にボタンの幅だけ余白を取る。`overlay` で重ねると空のコードブロックで枠がボタンより低くなり、ボタンが次の行へはみ出す。プレビュー内検索の一致の色は、紙色・拡張テーマの不透明な面に隠れないよう、行の背景に加えて枠の面の上にも重ねる（`PreviewCodeBlockStyle.fillLayers`）。
 - コールアウト（`> [!NOTE]` など）は中身を1つの文字列で描くため、中のコードブロックは `MarkdownRenderer.renderCalloutSegments` で文章の部分と分け、プレビューが同じ枠で囲む。リスト項目の下に字下げしたコードブロックは項目の子（コールアウトの孫）として解析されるため、引用以外の子孫もたどる。コードブロックの前後の空行は枠の間隔と重なるので、枠と接する側の端からだけ除く。コードブロックを含まないコールアウトは `renderCallout` と同じ文字列になる。コールアウトの中の入れ子の引用に置いたコードブロックは、文章の部分に含めて文字ごとの背景で描く。
-- 埋め込み文書（`![[…]]`）と、構造化した表示を使わない文書全体の描画（`MarkdownRenderer.render`）は文字列1つで描くため、コードブロックは文字ごとの背景のままである。コードブロックを含む文書は `PreviewStructure.needsStructuredLayout` により常に構造化した表示を使うので、通常のプレビューでは後者の経路を通らない。
+- 埋め込み文書（`![[…]]`）は文書全体を文字列1つで描くため、`MarkdownRenderer.renderSegments` で文章の部分とコードブロックに分ける。コードブロックは `PreviewTypography.codeBlockBody` で文字ごとの背景を外し、`PreviewQuotedCodeBlock` が通常と同じ `PreviewCodeBlockFrame`（コピーボタン付き）で囲む。コールアウトと同じく、リスト項目の下のコードブロックのような子孫もたどる。コードブロックを含まない部分木は `render` と同じ文字列になる。
+  - 文章の部分の先頭と末尾の改行は、区切りの間隔で表すため除く。除かないと、引用の中ではコードブロックの前後の空行が引用記号だけの行になる。
+  - 引用の中のコードブロックは囲む引用の深さ（`quoteDepth`）を持つ。前後の文章の引用記号（`│  `）と同じ位置に、深さの数だけ縦線を引く。引用記号は文章の部分にだけ付く。コールアウトと異なり、入れ子の引用の中のコードブロックも枠で囲む。
+  - 埋め込み文書の文字はテーマの色を当てないため、枠もシステム配色（`PreviewTheme.system`）で塗る。
+- 構造化した表示を使わない文書全体の描画（`MarkdownRenderer.render` を `NSTextView` に流す経路）は、コードブロックが文字ごとの背景のままである。コードブロックを含む文書は `PreviewStructure.needsStructuredLayout` により常に構造化した表示を使うので、通常のプレビューではこの経路を通らない。
 
 ## 既知の制約
 
@@ -204,4 +208,5 @@ MKTOWN_PERF=1 swift test -c release --filter CodeSyntaxPerformanceTests 2>&1 | g
 - `CodeSyntaxAnalyzerTests`：言語とエンジンの選択、キャッシュ（命中、言語・エンジンの版による分離、LRU、長さの上限、ハッシュの衝突、複数スレッド）。
 - `CodeSyntaxSharingTests`：編集画面・プレビュー・書き出しが同じ字句を使うこと、プレビューがスナップショットの字句で再解析しないこと、ブロックの合間の取り消し、`DocumentAnalysisStore` が公開する字句がその版の本文のものであること。
 - `PreviewRenderCacheTests.testCodeBlockRenderHasNoPerCharacterBackgroundButInlineCodeKeepsIt`・`PreviewTypographyTests`：プレビューのコードブロックが文字ごとの背景を持たず、インラインコードは背景を保つこと、枠の面の色、検索の一致の色が面の上に重なること、空のコードブロックの枠がコピーボタンを収めること。`MarkdownRendererTests.testCalloutSegments…`：コールアウト内のコードブロック（リスト項目の子を含む）を文章の部分と分けること。
+- `WorkspaceDocumentEmbedTests.testEmbeddedCodeBlockIsFramedWithoutPerCharacterBackground`・`MarkdownRendererTests.testRenderSegments…`：埋め込み文書のコードブロックを文章の部分と分け、文字ごとの背景を持たないこと、引用の深さ、リスト項目の下のコードブロック、コードブロックを含まない文書が `render` と一致すること。
 - `CodeSyntaxPerformanceTests`：上の性能の計測。`MKTOWN_PERF=1` がなければ飛ばす。
