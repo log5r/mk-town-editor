@@ -8,6 +8,7 @@
 - 式の分割後、カスタマイズ可能なツールバー内の `ForEach` が `ToolbarContent` / `CustomizableToolbarContent` に適合しないことが判明した。`EditorFormattingToolbar` に各 `ToolbarItem` を明示的に宣言し、既存の順序・ID・既定の表示項目・選択範囲の監視を維持する。
 - `CommandsBuilder` は1ブロックの直接の要素を最大10個まで受け取る（`ToolbarContentBuilder` のカスタマイズ可能な項目も同様）。11個目のMarkdownメニューを追加すると `extra argument in call` になる。文書用と編集用に分け、各計算プロパティに `@CommandsBuilder` を指定してから `body` で結合する。メニューの順序・内容・ショートカットは維持する。
 - `@MainActor` の `MarkdownRenderer` に `@TaskLocal nonisolated` を指定すると、非分離のgetterからマクロが生成するmain actor上の保存領域へアクセスしてしまう。利用箇所はプレビュー・レンダリング・そのテストのmain actor上なので、`nonisolated` を削除して両者を揃える。他のタスクローカル値はactor指定のない `MarkdownHTMLExporter` 内にあり、同じ不整合はない。
+- `MarkdownPreview.body` の長い `if`/`else` の連鎖の中で、ジェネリックなビュー型の静的メンバーを型引数なしで参照する（`PreviewCodeBlockFrame.searchMatchTint`）と、型引数の推論が加わって型チェックが時間超過した（2026-10-10、PR #73）。エラー位置は無関係な行を指すことがある。定数と色はジェネリックでない型（`PreviewCodeBlockStyle`）へ置き、ビューの組み立ては `some View` を返すメソッドへ分ける。
 - 印刷キャンセル時の非推奨API `NSApp.endSheet` は、シートを持つ `window.endSheet` に置き換える。
 
 ## 再発確認
