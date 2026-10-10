@@ -73,6 +73,20 @@ final class PreviewTypographyTests: XCTestCase {
                                 PreviewCodeBlockStyle.searchMatchTint])
     }
 
+    /// 不具合: 暗いコード背景の拡張テーマで、コピーボタンが標準の色のまま背景に埋もれていた。
+    func testCopyButtonUsesThemeCodeColorValidatedAgainstCodeBackground() throws {
+        XCTAssertNil(PreviewCodeBlockStyle.copyButtonColor(for: .system))
+        let theme = DeclarativeExtension.Theme(name: "Deep", background: "#FFFFFF", body: "#000000",
+                                               heading: "#000000", code: "#FFFFFF", link: "#000080",
+                                               codeBackground: "#003399")
+        let themed = PreviewTheme.extensionTheme(theme)
+        let code = try XCTUnwrap(themed.codeColor)
+        XCTAssertEqual(PreviewCodeBlockStyle.copyButtonColor(for: themed), Color(nsColor: code))
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(code, try XCTUnwrap(themed.codeBackground)), 4.5)
+        XCTAssertEqual(PreviewCodeBlockStyle.copyButtonColor(for: .paper),
+                       Color(nsColor: try XCTUnwrap(PreviewTheme.paper.codeColor)))
+    }
+
     /// 不具合: 空のコードブロックでは本文の高さがなく、重ねたコピーボタンが枠の下へはみ出していた。
     func testEmptyCodeBlockFrameIsTallEnoughForCopyButton() {
         let button = NSHostingView(rootView: PreviewCodeBlockStyle.copyButton(action: {}))
