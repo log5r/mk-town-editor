@@ -642,10 +642,17 @@ enum PreviewCodeBlockStyle {
             (isSearchMatch ? [searchMatchTint] : [])
     }
 
-    static func copyButton(action: @escaping () -> Void) -> some View {
+    /// コピーボタンの色。ボタンはコード背景の上にあるため、テーマがあればコード背景とのコントラストを検証済みのコード色を使う。
+    /// システム配色では `nil` を返し、ボタンの標準の色にする。
+    static func copyButtonColor(for theme: PreviewTheme) -> Color? {
+        theme.codeColor.map { Color(nsColor: $0) }
+    }
+
+    static func copyButton(theme: PreviewTheme = .system, action: @escaping () -> Void) -> some View {
         Button("コードをコピー", systemImage: "doc.on.doc", action: action)
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
+            .foregroundStyle(copyButtonColor(for: theme).map(AnyShapeStyle.init) ?? AnyShapeStyle(.secondary))
             .help("フェンスを除いたコード本文をコピー")
     }
 }
@@ -665,7 +672,7 @@ struct PreviewCodeBlockFrame<Content: View>: View {
                 // 右上のコピーボタンと1行目が重ならないよう、右側に余白を取る。
                 .padding(.trailing, PreviewCodeBlockStyle.copyButtonInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            PreviewCodeBlockStyle.copyButton(action: onCopy)
+            PreviewCodeBlockStyle.copyButton(theme: theme, action: onCopy)
         }
         .padding(PreviewCodeBlockStyle.padding)
         .background {
