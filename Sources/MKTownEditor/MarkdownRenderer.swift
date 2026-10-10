@@ -84,6 +84,54 @@ enum MarkdownRenderer {
         return renderTree(block, in: analysis, context: context)
     }
 
+    /// コールアウトを、文章の部分と直下のコードブロックに分けて描画する。
+    /// プレビューはコードブロックを文字列に含めず、通常のコードブロックと同じ枠で囲んで表示する。
+    /// 入れ子の引用の中のコードブロックは、文章の部分に含めて `renderCallout` と同じく描画する。
+    enum CalloutSegment {
+        case text(NSAttributedString)
+        case codeBlock(MarkdownBlock)
+    }
+
+    static func renderCalloutSegments(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                                      documentContext: DocumentContext) -> [CalloutSegment] {
+        guard let callout = block.calloutKind else {
+            return [.text(renderCallout(block, in: analysis, documentContext: documentContext))]
+        }
+        var context = documentContext
+        context.markdownDialect = analysis.dialect
+        context.crossReferences = analysis.crossReferences
+        var segments: [CalloutSegment] = []
+        var pending: [MarkdownBlock] = []
+        var isFirstText = true
+        func flush() {
+            // コードブロックの前後を区切る空行は枠の間隔で表すため、文章の部分の端からは除く。
+            while pending.first?.kind == .blank { pending.removeFirst() }
+            while pending.last?.kind == .blank { pending.removeLast() }
+            guard isFirstText || !pending.isEmpty else { return }
+            let content = NSMutableAttributedString()
+            if isFirstText {
+                content.append(NSAttributedString(string: callout.title,
+                    attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                                               color: .labelColor)))
+                if !pending.isEmpty { content.append(NSAttributedString(string: "\n")) }
+            }
+            content.append(renderSequence(pending, in: analysis, context: context))
+            segments.append(.text(quote(content)))
+            pending = []
+            isFirstText = false
+        }
+        for child in analysis.children(of: block) {
+            if child.kind == .codeBlock {
+                flush()
+                segments.append(.codeBlock(child))
+            } else {
+                pending.append(child)
+            }
+        }
+        flush()
+        return segments
+    }
+
     private static func renderSequence(_ blocks: [MarkdownBlock], in analysis: MarkdownAnalysis,
                                        context: DocumentContext) -> NSAttributedString {
         let output = NSMutableAttributedString()

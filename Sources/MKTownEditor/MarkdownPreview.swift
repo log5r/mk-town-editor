@@ -158,10 +158,7 @@ struct MarkdownPreview: View {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
                                                 .accessibilityHidden(true)
-                                            inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
-                                                MarkdownRenderer.renderCallout(block, in: analysis,
-                                                                               documentContext: renderContext(for: analysis))
-                                            })
+                                            calloutContent(block, in: analysis)
                                         }
                                         .padding(12)
                                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -423,6 +420,25 @@ struct MarkdownPreview: View {
         } else {
             Text(AttributedString(rendered)).textSelection(.enabled)
         }
+    }
+
+    /// コールアウトの中身。直下のコードブロックは文字列に含めず、通常のコードブロックと同じ枠で囲む。
+    private func calloutContent(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
+        let segments = MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
+            MarkdownRenderer.renderCalloutSegments(block, in: analysis,
+                                                   documentContext: renderContext(for: analysis))
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            ForEach(segments.indices, id: \.self) { index in
+                switch segments[index] {
+                case let .text(rendered):
+                    inlineText(rendered)
+                case let .codeBlock(code):
+                    codeBlockView(code, in: analysis, isSearchMatch: isSearchMatch(code))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func isSearchMatch(_ block: MarkdownBlock) -> Bool {
