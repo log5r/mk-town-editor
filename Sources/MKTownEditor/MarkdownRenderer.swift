@@ -105,10 +105,15 @@ enum MarkdownRenderer {
         // `renderTree` と同じく、ブロックを描画順に改行で区切って並べる。
         var pending: [(isBlank: Bool, text: NSAttributedString)] = []
         var isFirstText = true
-        func flush() {
-            // コードブロックの前後を区切る空行は枠の間隔で表すため、文章の部分の端からは除く。
-            while pending.first?.isBlank == true { pending.removeFirst() }
-            while pending.last?.isBlank == true { pending.removeLast() }
+        func flush(beforeCodeBlock: Bool) {
+            // コードブロックの前後を区切る空行は枠の間隔で表すため、枠と接する側の端からだけ除く。
+            // 見出しと本文の間や、コードブロックを含まないコールアウトの空行は `renderCallout` と同じく残す。
+            if case .codeBlock = segments.last {
+                while pending.first?.isBlank == true { pending.removeFirst() }
+            }
+            if beforeCodeBlock {
+                while pending.last?.isBlank == true { pending.removeLast() }
+            }
             guard isFirstText || !pending.isEmpty else { return }
             let content = NSMutableAttributedString()
             if isFirstText {
@@ -127,7 +132,7 @@ enum MarkdownRenderer {
         }
         func visit(_ child: MarkdownBlock) {
             if child.kind == .codeBlock {
-                flush()
+                flush(beforeCodeBlock: true)
                 segments.append(.codeBlock(child))
             } else if child.kind == .quote {
                 pending.append((false, renderTree(child, in: analysis, context: context)))
@@ -139,7 +144,7 @@ enum MarkdownRenderer {
             }
         }
         analysis.children(of: block).forEach(visit)
-        flush()
+        flush(beforeCodeBlock: false)
         return segments
     }
 
