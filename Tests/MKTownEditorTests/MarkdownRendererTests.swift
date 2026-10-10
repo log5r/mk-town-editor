@@ -368,6 +368,35 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertFalse(texts[1].hasPrefix("│  \n"))
     }
 
+    /// 不具合: コードブロックを含まないコールアウトでも、見出しの直後の空行を除いていた。
+    @MainActor
+    func testCalloutSegmentsWithoutCodeMatchRenderCallout() throws {
+        for markdown in ["> [!NOTE]\n>\n> body\n>\n> more\n", "> [!TIP]\n> - item\n>\n> tail\n>\n"] {
+            let analysis = MarkdownAnalysis(markdown)
+            let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+            let context = DocumentContext(fileURL: nil)
+            let segments = MarkdownRenderer.renderCalloutSegments(callout, in: analysis, documentContext: context)
+            XCTAssertEqual(segments.count, 1, markdown)
+            guard case let .text(rendered) = segments.first else { return XCTFail(markdown) }
+            XCTAssertEqual(rendered.string,
+                           MarkdownRenderer.renderCallout(callout, in: analysis, documentContext: context).string,
+                           markdown)
+        }
+    }
+
+    /// 見出しと本文の間の空行は、後にコードブロックがあっても残す。
+    @MainActor
+    func testCalloutSegmentsKeepBlankAfterTitleBeforeText() throws {
+        let analysis = MarkdownAnalysis("> [!NOTE]\n>\n> body\n>\n> ```\n> code\n> ```\n")
+        let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+        let segments = MarkdownRenderer.renderCalloutSegments(callout, in: analysis,
+                                                              documentContext: DocumentContext(fileURL: nil))
+        guard case let .text(first) = segments.first else { return XCTFail("先頭は文章の部分") }
+        let title = try XCTUnwrap(callout.calloutKind).title
+        XCTAssertTrue(first.string.hasPrefix("│  \(title)\n│  \n│  body"), first.string)
+        XCTAssertFalse(first.string.hasSuffix("│  "))
+    }
+
     @MainActor
     func testCalloutSegmentsKeepTitleWhenCalloutStartsWithCodeAndNestedCodeInText() throws {
         let leading = MarkdownAnalysis("> [!TIP]\n> ```\n> code\n> ```\n")
