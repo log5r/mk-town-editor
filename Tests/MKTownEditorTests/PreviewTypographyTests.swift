@@ -60,8 +60,27 @@ final class PreviewTypographyTests: XCTestCase {
     }
 
     func testCodeBlockFrameUsesThemeBackgroundOrTranslucentPrimary() throws {
-        XCTAssertEqual(PreviewCodeBlockFrame.fill(for: .system), Color.primary.opacity(0.05))
-        XCTAssertEqual(PreviewCodeBlockFrame.fill(for: .paper),
-                       Color(nsColor: try XCTUnwrap(PreviewTheme.paper.codeBackground)))
+        XCTAssertEqual(PreviewCodeBlockStyle.fillLayers(for: .system, isSearchMatch: false),
+                       [Color.primary.opacity(0.05)])
+        XCTAssertEqual(PreviewCodeBlockStyle.fillLayers(for: .paper, isSearchMatch: false),
+                       [Color(nsColor: try XCTUnwrap(PreviewTheme.paper.codeBackground))])
+    }
+
+    /// 不具合: 紙色・拡張テーマの不透明な枠の面が、行の背景に付けた検索一致の色を覆い隠していた。
+    func testSearchMatchTintIsDrawnAboveOpaqueCodeFrameFill() throws {
+        let layers = PreviewCodeBlockStyle.fillLayers(for: .paper, isSearchMatch: true)
+        XCTAssertEqual(layers, [Color(nsColor: try XCTUnwrap(PreviewTheme.paper.codeBackground)),
+                                PreviewCodeBlockStyle.searchMatchTint])
+    }
+
+    /// 不具合: 空のコードブロックでは本文の高さがなく、重ねたコピーボタンが枠の下へはみ出していた。
+    func testEmptyCodeBlockFrameIsTallEnoughForCopyButton() {
+        let button = NSHostingView(rootView: PreviewCodeBlockStyle.copyButton(action: {}))
+        let frame = NSHostingView(rootView: PreviewCodeBlockFrame(theme: .system, onCopy: {}) {
+            Text(AttributedString(""))
+        }.frame(width: 400))
+        let padding = PreviewCodeBlockStyle.padding
+        XCTAssertGreaterThan(button.fittingSize.height, 0)
+        XCTAssertGreaterThanOrEqual(frame.fittingSize.height, button.fittingSize.height + 2 * padding - 0.5)
     }
 }
