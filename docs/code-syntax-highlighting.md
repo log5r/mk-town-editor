@@ -148,6 +148,8 @@ HTML書き出しでは字句を`<span class="tok-keyword">`のように囲み、
   - Diffの`---`・`+++`は、ハンクの外でだけファイル見出しとする。ハンク見出し（`@@ -1,2 +1,2 @@`）の行数を数え、ハンク内の`--- x`は削除行として扱う。
 - 編集画面では、言語を指定したブロックのフェンス行をコードの色、本文を字句ごとの色で表示する。本文の各行は原文の行の末尾部分（引用の`> `やリストの字下げを除いた部分）として位置を対応づける。タブの展開などで対応しない行がある場合は、ブロック全体をコードの色で表示する。
 - プレビューは描画結果に字句の種類（`.codeSyntaxToken`属性）を残し、`PreviewTypography.themed` がテーマの色に当て直す。
+- プレビューはコードブロックを角丸の枠（`PreviewCodeBlockFrame`）で囲み、枠の面に背景を塗る。`CodeSyntaxHighlighter.render` が付ける文字ごとの背景（`.backgroundColor`）は、`PreviewRenderCache` が `PreviewTypography.codeBlockBody` で外す。文字ごとの背景は行の文字がある部分だけを塗るため、行の長さに沿った帯になり、空行や行末の右側が塗られない。面の色はテーマのコード背景、システム配色では文字色（`Color.primary`）の5%で、境界線は文字色の12%である。どちらも外観とテーマの背景に合わせて濃さが変わる。コピーボタンは枠の右上に重ね、本文の右側にボタンの幅だけ余白を取る。
+- 埋め込み文書（`![[…]]`）と、構造化した表示を使わない文書全体の描画（`MarkdownRenderer.render`）は文字列1つで描くため、コードブロックは文字ごとの背景のままである。コードブロックを含む文書は `PreviewStructure.needsStructuredLayout` により常に構造化した表示を使うので、通常のプレビューでは後者の経路を通らない。
 
 ## 既知の制約
 
@@ -200,4 +202,5 @@ MKTOWN_PERF=1 swift test -c release --filter CodeSyntaxPerformanceTests 2>&1 | g
 - `TreeSitterSyntaxParserTests`：クエリのコンパイル、字句の種類、入れ子の解決（内側を優先し外側を分割）、範囲の検証、大きな本文がタイムアウト内に終わること、`Package.resolved` の版と `packageVersion` の一致。
 - `CodeSyntaxAnalyzerTests`：言語とエンジンの選択、キャッシュ（命中、言語・エンジンの版による分離、LRU、長さの上限、ハッシュの衝突、複数スレッド）。
 - `CodeSyntaxSharingTests`：編集画面・プレビュー・書き出しが同じ字句を使うこと、プレビューがスナップショットの字句で再解析しないこと、ブロックの合間の取り消し、`DocumentAnalysisStore` が公開する字句がその版の本文のものであること。
+- `PreviewRenderCacheTests.testCodeBlockRenderHasNoPerCharacterBackgroundButInlineCodeKeepsIt`・`PreviewTypographyTests`：プレビューのコードブロックが文字ごとの背景を持たず、インラインコードは背景を保つこと、枠の面の色。
 - `CodeSyntaxPerformanceTests`：上の性能の計測。`MKTOWN_PERF=1` がなければ飛ばす。

@@ -208,18 +208,19 @@ struct MarkdownPreview: View {
                                               let kind = ExternalDiagramKind(language: block.codeLanguage) {
                                         ExternalDiagramView(source: block.content, kind: kind)
                                     } else if block.kind == .codeBlock {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Spacer()
+                                        blockText(block, in: analysis)
+                                            // 右上のコピーボタンと1行目が重ならないよう、右側に余白を取る。
+                                            .padding(.trailing, PreviewCodeBlockFrame.copyButtonInset)
+                                            .modifier(PreviewCodeBlockFrame(theme: theme))
+                                            .overlay(alignment: .topTrailing) {
                                                 Button("コードをコピー", systemImage: "doc.on.doc") {
                                                     _ = MarkdownCodeCopy.copy(block)
                                                 }
                                                 .labelStyle(.iconOnly)
                                                 .buttonStyle(.borderless)
                                                 .help("フェンスを除いたコード本文をコピー")
+                                                .padding(10)
                                             }
-                                            blockText(block, in: analysis)
-                                        }
                                     } else if let task = block.task {
                                         taskView(block, task: task, in: analysis)
                                     } else {
@@ -608,6 +609,30 @@ private struct HoverLinkText: NSViewRepresentable {
             onOpenURL?(url)
             return true
         }
+    }
+}
+
+/// プレビューのコードブロックを、背景を塗った角丸の枠で囲む。
+/// 背景と境界線は文字色を薄く重ねて作り、システム・紙・拡張テーマのどの背景でも本文から区別できるようにする。
+struct PreviewCodeBlockFrame: ViewModifier {
+    var theme: PreviewTheme
+
+    static let cornerRadius: CGFloat = 8
+    static let padding: CGFloat = 12
+    static let copyButtonInset: CGFloat = 20
+
+    /// テーマがコード背景を定めていればそれを使い、システムでは文字色を 5% 重ねた面にする。
+    static func fill(for theme: PreviewTheme) -> Color {
+        theme.codeBackground.map { Color(nsColor: $0) } ?? Color.primary.opacity(0.05)
+    }
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
+        content
+            .padding(Self.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Self.fill(for: theme), in: shape)
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1))
     }
 }
 
