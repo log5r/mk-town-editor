@@ -438,4 +438,62 @@ final class MarkdownRendererTests: XCTestCase {
         XCTAssertNotNil(nested.blocks.first { $0.kind == .codeBlock })
         XCTAssertFalse(nestedSegments.contains { if case .codeBlock = $0 { true } else { false } })
     }
+
+    @MainActor
+    private func describe(_ segments: [MarkdownRenderer.DocumentSegment]) -> [String] {
+        segments.map { segment in
+            switch segment {
+            case let .text(text): "text:" + text.string
+            case let .codeBlock(block, rendered, quoteDepth):
+                "code\(quoteDepth):" + rendered.string + (block.content == rendered.string ? "" : " (block differs)")
+            }
+        }
+    }
+
+    @MainActor
+    func testRenderSegmentsSplitsCodeBlocksAndKeepsSurroundingText() throws {
+        let markdown = "# Title\n\nUse `inline`.\n\n```swift\nlet x = 1\n\nprint(x)\n```\n\nAfter[^n]\n\n[^n]: Note"
+        let segments = MarkdownRenderer.renderSegments(MarkdownAnalysis(markdown))
+        XCTAssertEqual(segments.count, 3)
+        guard case let .text(before) = segments[0],
+              case let .codeBlock(block, code, quoteDepth) = segments[1],
+              case let .text(after) = segments[2] else {
+            return XCTFail("\(segments)")
+        }
+        XCTAssertEqual(before.string, "Title\n\nUse inline.")
+        XCTAssertEqual(block.kind, .codeBlock)
+        XCTAssertEqual(code.string, "let x = 1\n\nprint(x)")
+        XCTAssertEqual(quoteDepth, 0)
+        XCTAssertTrue(after.string.hasPrefix("After1"))
+        XCTAssertTrue(after.string.contains("脚注\n1. Note ↩"))
+        let inline = (before.string as NSString).range(of: "inline").location
+        XCTAssertNotNil(before.attribute(.backgroundColor, at: inline, effectiveRange: nil))
+    }
+
+    @MainActor
+    func testRenderSegmentsWithoutCodeBlockMatchesSingleStringRender() {
+        let markdown = "# Title\n\n> Quoted\n\n- item\n  - nested"
+        let segments = MarkdownRenderer.renderSegments(MarkdownAnalysis(markdown))
+        XCTAssertEqual(segments.count, 1)
+        guard case let .text(text) = segments.first else { return XCTFail("\(segments)") }
+        XCTAssertEqual(text, MarkdownRenderer.render(markdown))
+    }
+
+    @MainActor
+    func testRenderSegmentsKeepsQuoteDepthOfCodeBlockInsideQuote() {
+        let markdown = "> [!TIP]\n> Before\n>\n> ```\n> code\n> ```\n>\n> After\n\nOutside"
+        XCTAssertEqual(describe(MarkdownRenderer.renderSegments(MarkdownAnalysis(markdown))),
+                       ["text:│  ヒント\n│  Before", "code1:code", "text:│  After", "text:Outside"])
+    }
+
+    /// リスト項目の下に字下げしたコードブロックは項目の子として解析されるため、子孫もたどって分ける。
+    @MainActor
+    func testRenderSegmentsSeparatesCodeBlockNestedUnderListItem() {
+        let markdown = "- step\n\n  ```sh\n  make test\n  ```\n- next"
+        let strings = describe(MarkdownRenderer.renderSegments(MarkdownAnalysis(markdown)))
+        XCTAssertEqual(strings.count, 3, "\(strings)")
+        XCTAssertTrue(strings.first?.hasPrefix("text:•  step") == true, "\(strings)")
+        XCTAssertEqual(strings.dropFirst().first, "code0:make test")
+        XCTAssertTrue(strings.last?.hasPrefix("text:•  next") == true, "\(strings)")
+    }
 }

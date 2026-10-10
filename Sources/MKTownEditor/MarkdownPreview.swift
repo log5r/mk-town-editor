@@ -687,6 +687,33 @@ struct PreviewCodeBlockFrame<Content: View>: View {
     }
 }
 
+/// 文書を文字列1つで描く箇所（埋め込み文書）のコードブロック。
+/// 前後の文章の引用記号（`│  `）と同じ位置に引用の深さだけ縦線を引き、`PreviewCodeBlockFrame` で囲む。
+/// 埋め込み文書の文字はテーマの色を当てないため、枠もシステム配色にする。
+struct PreviewQuotedCodeBlock<Content: View>: View {
+    var quoteDepth: Int
+    var onCopy: () -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(0..<quoteDepth, id: \.self) { _ in
+                Rectangle()
+                    .fill(Color(nsColor: .tertiaryLabelColor))
+                    .frame(width: 1)
+                    .padding(.leading, 1)
+                    .padding(.trailing, 10)
+                    .accessibilityHidden(true)
+            }
+            PreviewCodeBlockFrame(theme: .system, onCopy: onCopy) {
+                content
+            }
+        }
+        // 縦線は提案された高さをすべて取るため、行の高さを枠の高さに合わせる。
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 enum PreviewAccessibility {
     static func requiresStructuredView(_ blocks: [MarkdownBlock]) -> Bool {
         blocks.contains { block in
