@@ -77,6 +77,35 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.loadsRemoteImages, true)
     }
 
+    func testFrontMatterFormattingDefaultsOffAndPersistsIndependentlyOfVisibility() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertFalse(store.app.formatsFrontMatterInPreview ?? false)
+        var legacySettings = AppEditorSettings()
+        legacySettings.showsFrontMatterInPreview = true
+        let legacyData = try JSONEncoder().encode(legacySettings)
+        let legacyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: legacyData) as? [String: Any])
+        XCTAssertNil(legacyObject["formatsFrontMatterInPreview"])
+        let legacy = try JSONDecoder().decode(AppEditorSettings.self, from: legacyData)
+        XCTAssertEqual(legacy.showsFrontMatterInPreview, true)
+        XCTAssertNil(legacy.formatsFrontMatterInPreview)
+
+        var settings = store.app
+        settings.showsFrontMatterInPreview = true
+        settings.formatsFrontMatterInPreview = true
+        store.setAppSettings(settings)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.app.formatsFrontMatterInPreview, true)
+        XCTAssertEqual(restored.app.showsFrontMatterInPreview, true)
+
+        settings.showsFrontMatterInPreview = false
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.formatsFrontMatterInPreview, true)
+        settings.formatsFrontMatterInPreview = false
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.formatsFrontMatterInPreview, false)
+    }
+
     func testInlineLivePresentationPreferenceDefaultsOffAndPersists() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)

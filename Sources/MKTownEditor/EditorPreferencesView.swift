@@ -151,6 +151,10 @@ struct EditorPreferencesView: View {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
                 }
                 Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
+                Toggle("Obsidianのプロパティを整形して表示", isOn: binding(\.formatsFrontMatterInPreview, default: false))
+                    .disabled(!(settingsStore.app.showsFrontMatterInPreview ?? false))
+                Text("先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("外部の図描画器") {
                 HStack {
