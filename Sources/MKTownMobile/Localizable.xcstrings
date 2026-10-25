@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "Obsidianのプロパティを整形して表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format Obsidian properties for display"
+          }
+        }
+      }
+    },
+    "フロントマターを表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Front Matter"
+          }
+        }
+      }
+    },
+    "フロントマター" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Front Matter"
+          }
+        }
+      }
+    },
     "CR (旧Mac)" : {
       "extractionState" : "stale",
       "localizations" : {

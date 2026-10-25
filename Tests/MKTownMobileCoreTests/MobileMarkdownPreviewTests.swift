@@ -7,6 +7,52 @@ import XCTest
 #endif
 
 final class MobileMarkdownPreviewTests: XCTestCase {
+    func testFrontMatterIsSeparatedFromBodyAndUsesSharedPropertyFormatting() throws {
+        let source = "---\ntitle: 'Duo note'\ntags:\n- journal\n- project/app\naliases: [First, 'Other name']\ndate: 2026-10-26\n---\n# Heading\n\nBody🙂"
+        let preview = MobileMarkdownPreview(source)
+        XCTAssertEqual(preview.frontMatter?.raw,
+            "---\ntitle: 'Duo note'\ntags:\n- journal\n- project/app\naliases: [First, 'Other name']\ndate: 2026-10-26\n---\n")
+        let rows = try XCTUnwrap(preview.frontMatterRows)
+        XCTAssertEqual(rows.map(\.key), ["title", "tags", "aliases", "date"])
+        XCTAssertEqual(rows.map(\.values), [["Duo note"], ["journal", "project/app"],
+            ["First", "Other name"], ["2026-10-26"]])
+        XCTAssertEqual(preview.blocks.map { String($0.text.characters) }, ["Heading", "Body🙂"])
+        XCTAssertEqual(preview.blocks.first?.headingLevel, 1)
+    }
+
+    func testFrontMatterRetainsComplexValuesAndRawFallback() throws {
+        let preview = MobileMarkdownPreview("---\ncustom:\n  nested: keep\ntext: '**literal**'\n---\nBody")
+        let rows = try XCTUnwrap(preview.frontMatterRows)
+        XCTAssertTrue(rows[0].isVerbatim)
+        XCTAssertEqual(rows[0].values, ["\n  nested: keep"])
+        XCTAssertEqual(rows[1].values, ["**literal**"])
+
+        let json = "---\n{\"tags\": [\"journal\"]}\n---\nBody"
+        let unsupported = MobileMarkdownPreview(json)
+        XCTAssertNil(unsupported.frontMatterRows)
+        XCTAssertTrue(try XCTUnwrap(unsupported.frontMatter?.raw).contains("{\"tags\": [\"journal\"]}"))
+        XCTAssertEqual(unsupported.blocks.map { String($0.text.characters) }, ["Body"])
+    }
+
+    func testFrontMatterSupportsCRLFAndClosingDotsWithoutChangingSource() {
+        let source = "---\r\ntags: [\"one,two\", '#literal']\r\n...\r\n# Body🙂\r\n"
+        let preview = MobileMarkdownPreview(source)
+        XCTAssertEqual(preview.frontMatter?.raw, "---\r\ntags: [\"one,two\", '#literal']\r\n...\r\n")
+        XCTAssertEqual(preview.frontMatterRows?.first?.values, ["one,two", "#literal"])
+        XCTAssertEqual(preview.blocks.map { String($0.text.characters) }, ["Body🙂"])
+        XCTAssertEqual(source, "---\r\ntags: [\"one,two\", '#literal']\r\n...\r\n# Body🙂\r\n")
+    }
+
+    func testUnclosedFrontMatterAndLaterRulesStayInMarkdownBody() {
+        for source in ["---\ntitle: Unclosed\n# Heading", "Intro\n\n---\n\ntitle: Body"] {
+            let preview = MobileMarkdownPreview(source)
+            XCTAssertNil(preview.frontMatter)
+            XCTAssertNil(preview.frontMatterRows)
+            XCTAssertTrue(preview.blocks.contains { String($0.text.characters).contains("title:") })
+        }
+        XCTAssertTrue(MobileMarkdownPreview("---\ntags: [only]\n---\n").blocks.isEmpty)
+    }
+
     func testEmptyDocument() {
         XCTAssertTrue(MobileMarkdownPreview("").blocks.isEmpty)
     }

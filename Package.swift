@@ -19,11 +19,13 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby.git", from: "0.23.1")
     ],
     targets: [
-        .target(name: "MKTownMobileCore"),
+        .target(name: "MKTownMarkdownCore"),
+        .target(name: "MKTownMobileCore", dependencies: ["MKTownMarkdownCore"]),
         .testTarget(name: "MKTownMobileCoreTests", dependencies: ["MKTownMobileCore"]),
         .executableTarget(
             name: "MKTownEditor",
             dependencies: [
+                "MKTownMarkdownCore",
                 .product(name: "SwiftMath", package: "SwiftMath"),
                 .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
                 .product(name: "TreeSitterJavaScript", package: "tree-sitter-javascript"),

@@ -8,6 +8,27 @@ import XCTest
 
 @MainActor
 final class MobilePreviewStoreTests: XCTestCase {
+    func testFrontMatterAndBodyPublishTogetherAndClearWhenRemoved() async {
+        let first = expectation(description: "metadata and first body published")
+        let second = expectation(description: "body without metadata published")
+        let store = MobilePreviewStore(debounce: .zero)
+        let subscription = store.$preview.dropFirst().sink { preview in
+            switch preview.blocks.first.map({ String($0.text.characters) }) {
+            case "First": first.fulfill()
+            case "Second": second.fulfill()
+            default: break
+            }
+        }
+        store.update(source: "---\ntags: [journal]\n---\nFirst")
+        await fulfillment(of: [first], timeout: 2)
+        XCTAssertEqual(store.preview.frontMatterRows?.first?.values, ["journal"])
+        store.update(source: "Second")
+        await fulfillment(of: [second], timeout: 2)
+        XCTAssertNil(store.preview.frontMatter)
+        XCTAssertNil(store.preview.frontMatterRows)
+        withExtendedLifetime(subscription) {}
+    }
+
     func testSlowParserRunsOnceAtATimeAndCoalescesPendingSources() async {
         let first = expectation(description: "first parse started")
         let latest = expectation(description: "latest parse started")

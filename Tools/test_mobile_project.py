@@ -36,7 +36,7 @@ class MobileProjectTests(unittest.TestCase):
 
     def test_mobile_target_reuses_document_io_and_includes_all_mobile_sources(self):
         sources = self.sources(self.target("MKTownEditorMobile"))
-        expected = {str(p.relative_to(ROOT)) for directory in ("MKTownMobile", "MKTownMobileCore")
+        expected = {str(p.relative_to(ROOT)) for directory in ("MKTownMobile", "MKTownMobileCore", "MKTownMarkdownCore")
                     for p in (ROOT / "Sources" / directory).glob("*.swift")}
         expected.update({"Sources/MKTownEditor/MarkdownDocument.swift",
                          "Sources/MKTownEditor/MarkdownTextFormat.swift"})
@@ -104,7 +104,8 @@ class MobileProjectTests(unittest.TestCase):
 
     def test_document_sources_and_icon_use_the_desktop_file_references(self):
         for path in ("Sources/MKTownEditor/MarkdownDocument.swift",
-                     "Sources/MKTownEditor/MarkdownTextFormat.swift", "Support/AppIcon.icon"):
+                     "Sources/MKTownEditor/MarkdownTextFormat.swift",
+                     "Sources/MKTownMarkdownCore/MarkdownFrontMatter.swift", "Support/AppIcon.icon"):
             references = [key for key, obj in self.objects.items()
                           if obj.get("isa") == "PBXFileReference" and self.file_path(key) == path]
             self.assertEqual(len(references), 1, path)

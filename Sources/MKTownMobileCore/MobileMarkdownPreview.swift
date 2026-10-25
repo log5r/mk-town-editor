@@ -1,4 +1,7 @@
 import Foundation
+#if SWIFT_PACKAGE
+import MKTownMarkdownCore
+#endif
 
 /// Foundation parses Markdown; the UI supplies standard SwiftUI text styles for block semantics.
 /// This model never rewrites the source document and has no dependency on AppKit or UIKit.
@@ -15,11 +18,17 @@ struct MobileMarkdownPreview: Sendable {
     }
 
     let blocks: [Block]
+    let frontMatter: MarkdownFrontMatter?
+    let frontMatterRows: [FrontMatterPreviewProperties.Row]?
 
     init(_ source: String) {
-        guard let parsed = try? AttributedString(markdown: source, options: .init(
+        let frontMatter = MarkdownFrontMatter(source: source)
+        self.frontMatter = frontMatter
+        frontMatterRows = frontMatter.flatMap { FrontMatterPreviewProperties.rows(in: $0) }
+        let body = frontMatter.map { (source as NSString).substring(from: NSMaxRange($0.sourceRange)) } ?? source
+        guard let parsed = try? AttributedString(markdown: body, options: .init(
             interpretedSyntax: .full, failurePolicy: .returnPartiallyParsedIfPossible)) else {
-            blocks = [Block(id: 0, text: AttributedString(source), headingLevel: nil,
+            blocks = [Block(id: 0, text: AttributedString(body), headingLevel: nil,
                             isCode: false, isQuote: false, listMarker: nil,
                             indentation: 0, isRule: false)]
             return
