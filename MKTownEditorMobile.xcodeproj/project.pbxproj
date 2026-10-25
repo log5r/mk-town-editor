@@ -83,6 +83,7 @@
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
 			"files" = (
+				"0846BD5C4682504E662A6B1B",
 				"C0F816112D8D88BE4DBC3080",
 				"357D8CE668AB39E0EB416CD8",
 				"686623455B7C59C528A2883D",
@@ -172,6 +173,7 @@
 			"isa" = "PBXSourcesBuildPhase";
 			"buildActionMask" = "2147483647";
 			"files" = (
+				"9097F832C0114DA739643091",
 				"5A150E8F7B3AD0AA4307263D",
 				"9C444A90A010B32F849D84D8",
 				"C1EA09B7D1F54F9561D43D73",
@@ -368,6 +370,8 @@
 		"870B3294C0CBD48AF6BBCC1B" = {
 			"isa" = "PBXGroup";
 			"children" = (
+				"92E9E60DAF956E3C36415243",
+				"3ECABECCA7B36681774F0AC7",
 				"5C27FE56A2C7B98DB5D3A7C7",
 				"DDD994705C7ACFB84DB3006F",
 				"AB1B7B52A8A4B0CF99A2736B",
@@ -455,6 +459,26 @@
 				"F75109BEB4DD8800DA6B45F8",
 				"C062A5A4A7F4F37DD90F54CB",
 			);
+		};
+		"3ECABECCA7B36681774F0AC7" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Sources/MKTownMobileCore/MobilePreviewStore.swift";
+			"sourceTree" = "<group>";
+		};
+		"0846BD5C4682504E662A6B1B" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "3ECABECCA7B36681774F0AC7";
+		};
+		"92E9E60DAF956E3C36415243" = {
+			"isa" = "PBXFileReference";
+			"lastKnownFileType" = "sourcecode.swift";
+			"path" = "Tests/MKTownMobileCoreTests/MobilePreviewStoreTests.swift";
+			"sourceTree" = "<group>";
+		};
+		"9097F832C0114DA739643091" = {
+			"isa" = "PBXBuildFile";
+			"fileRef" = "92E9E60DAF956E3C36415243";
 		};
 	};
 	"rootObject" = "98F54143AB4E86B28C3AFEE0";
