@@ -1465,6 +1465,7 @@ struct EditorWorkspace: View {
             },
             onVisibleBlockChange: scrollAction, onRevealSource: revealAction,
             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+            formatsFrontMatter: settingsStore.app.formatsFrontMatterInPreview ?? false,
             zoom: settingsStore.zoom(for: .preview),
             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
             loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,

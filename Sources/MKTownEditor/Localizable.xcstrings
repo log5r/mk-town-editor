@@ -1,6 +1,26 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display YAML at the start of the file as properties in small text. Turn off to display the original YAML."
+          }
+        }
+      }
+    },
+    "Obsidianのプロパティを整形して表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format Obsidian properties for display"
+          }
+        }
+      }
+    },
     "" : {
 
     },

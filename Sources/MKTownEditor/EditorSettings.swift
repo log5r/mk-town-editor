@@ -251,6 +251,7 @@ struct AppEditorSettings: Codable, Equatable {
     var disabledLintRules: Set<MarkdownLintRule>?
     var proofing: EditorProofingSettings?
     var showsFrontMatterInPreview: Bool?
+    var formatsFrontMatterInPreview: Bool?
     var snippets: [EditorSnippet]?
     var loadsRemoteImages: Bool?
     var loadsExternalLinkPreviews: Bool?

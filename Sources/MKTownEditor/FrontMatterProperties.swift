@@ -9,6 +9,153 @@ struct FrontMatterProperty: Identifiable, Equatable {
     var id: String { key }
 }
 
+/// A conservative presentation of common Obsidian properties, not a general YAML decoder.
+/// Unsupported values retain their YAML; unsupported document structures use the raw view.
+enum FrontMatterPreviewProperties {
+    struct Row: Equatable {
+        let key: String
+        let values: [String]
+        let isVerbatim: Bool
+    }
+
+    private static let entry = try! NSRegularExpression(
+        pattern: #"^([\p{L}\p{N}_][\p{L}\p{N}_ -]*):(?:[ \t]+(.*)|$)"#)
+
+    static func rows(in frontMatter: MarkdownFrontMatter) -> [Row]? {
+        var entries: [(key: String, lines: [String])] = []
+        let content = frontMatter.content.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        for line in content.components(separatedBy: "\n") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty || trimmed.hasPrefix("#") {
+                if !entries.isEmpty { entries[entries.count - 1].lines.append(line) }
+                continue
+            }
+            let text = line as NSString
+            if let match = entry.firstMatch(in: line, range: NSRange(location: 0, length: text.length)) {
+                let valueRange = match.range(at: 2)
+                entries.append((text.substring(with: match.range(at: 1)),
+                    [valueRange.location == NSNotFound ? "" : text.substring(with: valueRange)]))
+            } else if !entries.isEmpty && (line.first?.isWhitespace == true || trimmed.hasPrefix("- ")) {
+                entries[entries.count - 1].lines.append(line)
+            } else {
+                return nil
+            }
+        }
+        return entries.map { item in
+            let first = item.lines[0]
+            let continuation = item.lines.dropFirst().filter {
+                let trimmed = $0.trimmingCharacters(in: .whitespaces)
+                return !trimmed.isEmpty && !trimmed.hasPrefix("#")
+            }
+            if continuation.isEmpty {
+                if let values = inlineList(first) {
+                    return Row(key: item.key, values: values, isVerbatim: false)
+                }
+                if let value = scalar(first) {
+                    return Row(key: item.key, values: [value], isVerbatim: false)
+                }
+            } else if scalar(first) == "" {
+                var values: [String] = []
+                var indentation: Int?
+                for line in continuation {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    let width = line.prefix(while: { $0 == " " }).count
+                    guard (indentation == nil || indentation == width), trimmed.hasPrefix("- "),
+                          let value = scalar(String(trimmed.dropFirst(2))), !value.isEmpty else {
+                        return Row(key: item.key, values: [item.lines.joined(separator: "\n")], isVerbatim: true)
+                    }
+                    indentation = width
+                    values.append(value)
+                }
+                return Row(key: item.key, values: values, isVerbatim: false)
+            }
+            return Row(key: item.key, values: [item.lines.joined(separator: "\n")], isVerbatim: true)
+        }
+    }
+
+    private static func scalar(_ source: String) -> String? {
+        let value = source.trimmingCharacters(in: .whitespaces)
+        if value.hasPrefix("\"") {
+            // JSON's quoted strings are a safe subset of YAML's double-quoted strings.
+            // YAML-specific escapes remain verbatim rather than being misinterpreted.
+            var escaped = false
+            for index in value.indices.dropFirst() {
+                let character = value[index]
+                if !escaped && character == "\"" {
+                    let suffix = value[value.index(after: index)...].trimmingCharacters(in: .whitespaces)
+                    guard suffix.isEmpty || suffix.hasPrefix("#"),
+                          let data = String(value[...index]).data(using: .utf8) else { return nil }
+                    return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) as? String
+                }
+                if character == "\\" { escaped.toggle() } else { escaped = false }
+            }
+            return nil
+        }
+        if value.hasPrefix("'") {
+            var cursor = value.index(after: value.startIndex)
+            var result = ""
+            while cursor < value.endIndex {
+                let next = value.index(after: cursor)
+                if value[cursor] == "'" {
+                    if next < value.endIndex && value[next] == "'" {
+                        result.append("'")
+                        cursor = value.index(after: next)
+                        continue
+                    }
+                    let suffix = value[next...].trimmingCharacters(in: .whitespaces)
+                    return suffix.isEmpty || suffix.hasPrefix("#") ? result : nil
+                }
+                result.append(value[cursor])
+                cursor = next
+            }
+            return nil
+        }
+        let uncommented: String
+        if let comment = value.range(of: #"(^|\s)#"#, options: .regularExpression) {
+            uncommented = String(value[..<comment.lowerBound]).trimmingCharacters(in: .whitespaces)
+        } else { uncommented = value }
+        guard !uncommented.contains(": "), !uncommented.contains(":\t"),
+              uncommented != "-", !uncommented.hasPrefix("- "),
+              uncommented.first.map({ !"[]{}&*!|>@`%,?:".contains($0) }) ?? true else { return nil }
+        return uncommented
+    }
+
+    private static func inlineList(_ source: String) -> [String]? {
+        let value = source.trimmingCharacters(in: .whitespaces)
+        guard value.first == "[" else { return nil }
+        var result: [String] = []
+        var part = ""
+        var quote: Character?
+        var escaped = false
+        for index in value.indices.dropFirst() {
+            let character = value[index]
+            if let current = quote {
+                part.append(character)
+                if !escaped && character == current { quote = nil }
+                if current == "\"" && character == "\\" { escaped.toggle() } else { escaped = false }
+            } else if (character == "\"" || character == "'") && part.trimmingCharacters(in: .whitespaces).isEmpty {
+                quote = character
+                part.append(character)
+            } else if character == "," || character == "]" {
+                if !part.trimmingCharacters(in: .whitespaces).isEmpty {
+                    guard let item = scalar(part), !item.isEmpty else { return nil }
+                    result.append(item)
+                } else if character == "," { return nil }
+                part = ""
+                if character == "]" {
+                    let suffix = value[value.index(after: index)...].trimmingCharacters(in: .whitespaces)
+                    return suffix.isEmpty || suffix.hasPrefix("#") ? result : nil
+                }
+            } else if character == "[" || character == "{" || character == "}" ||
+                        (character == "#" && (part.isEmpty || part.last?.isWhitespace == true)) {
+                return nil
+            } else { part.append(character) }
+        }
+        return nil
+    }
+}
+
 enum FrontMatterProperties {
     private static let entryPattern = try! NSRegularExpression(
         pattern: #"^([A-Za-z][A-Za-z0-9_-]*):[ \t]*(.*)$"#)

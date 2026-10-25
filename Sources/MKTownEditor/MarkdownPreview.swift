@@ -61,6 +61,7 @@ struct MarkdownPreview: View {
     var onVisibleBlockChange: ((Int) -> Void)?
     var onRevealSource: ((NSRange) -> Void)?
     var showsFrontMatter = false
+    var formatsFrontMatter = false
     var zoom: Double = 1
     var loadsRemoteImages = false
     var loadsExternalLinkPreviews = false
@@ -130,17 +131,9 @@ struct MarkdownPreview: View {
                     ScrollView(.vertical) {
                         LazyVStack(alignment: .leading, spacing: 0) {
                             if showsFrontMatter, let frontMatter = analysis.frontMatter {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("フロントマター").font(.headline)
-                                    Text(frontMatter.raw)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .textSelection(.enabled)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                                .background(Color.secondary.opacity(0.08))
-                                .cornerRadius(8)
-                                .padding(.bottom, 16)
+                                FrontMatterPreviewView(frontMatter: frontMatter,
+                                    formatsProperties: formatsFrontMatter, theme: theme, zoom: zoom)
+                                    .padding(.bottom, 16)
                             }
                             ForEach(layout.visibleBlocks.map { block in
                                 PreviewBlockRow(block: block, id: presentationIDs[block.id] ?? String(block.id))
@@ -1076,6 +1069,7 @@ private struct DetachedPreviewContent: View {
                                 { requested in try workspaceStore.openBufferSnapshots(under: root, including: requested) }
                             },
                             showsFrontMatter: settingsStore.app.showsFrontMatterInPreview ?? false,
+                            formatsFrontMatter: settingsStore.app.formatsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),
                             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
                             theme: settingsStore.app.previewTheme ?? .system,
@@ -1237,5 +1231,45 @@ enum MarkdownCodeCopy {
         guard block.kind == .codeBlock else { return false }
         pasteboard.clearContents()
         return pasteboard.setString(block.content, forType: .string)
+    }
+}
+
+struct FrontMatterPreviewView: View {
+    let frontMatter: MarkdownFrontMatter
+    let formatsProperties: Bool
+    let theme: PreviewTheme
+    let zoom: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("フロントマター")
+                .fontWeight(.semibold)
+                .accessibilityAddTraits(.isHeader)
+            if formatsProperties, let rows = FrontMatterPreviewProperties.rows(in: frontMatter) {
+                Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                        GridRow(alignment: .top) {
+                            Text(verbatim: row.key)
+                                .foregroundStyle(.secondary)
+                            Text(verbatim: row.values.joined(separator: " · "))
+                                .font(row.isVerbatim ? .system(size: 12 * zoom, design: .monospaced) : .system(size: 12 * zoom))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .gridColumnAlignment(.leading)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            } else {
+                Text(verbatim: frontMatter.raw)
+                    .font(.system(size: 12 * zoom, design: .monospaced))
+            }
+        }
+        .font(.system(size: 12 * zoom))
+        .foregroundStyle(theme.bodyColor.map { Color(nsColor: $0) } ?? .primary)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(8)
     }
 }
