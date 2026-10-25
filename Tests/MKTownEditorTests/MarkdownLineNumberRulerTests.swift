@@ -4,6 +4,57 @@ import XCTest
 
 @MainActor
 final class MarkdownLineNumberRulerTests: XCTestCase {
+    func testLineNumberVerticalPositionStaysStableWhenAddingAndRemovingNewlines() throws {
+        for font in EditorFontChoice.allCases {
+            for spacing in [0.0, 3.0, 12.0] {
+                let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
+                EditorTextStyle(fontChoice: font, lineSpacing: spacing).apply(to: view)
+                let manager = try XCTUnwrap(view.layoutManager)
+                let container = try XCTUnwrap(view.textContainer)
+                var firstY: CGFloat?
+                for text in ["", "\n", "\n\n\n", "\n", "", "text", "text\n", "text"] {
+                    view.string = text
+                    manager.ensureLayout(for: container)
+                    let labels = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds)
+                    let first = try XCTUnwrap(labels.first)
+                    let y = first.origin.y + first.height / 2
+                    if let firstY {
+                        XCTAssertEqual(y, firstY, accuracy: 0.01,
+                            "font=\(font) spacing=\(spacing) text=\(text.debugDescription)")
+                    } else {
+                        firstY = y
+                    }
+                    for label in labels {
+                        XCTAssertEqual(label.height, first.height, accuracy: 0.01,
+                            "normal and trailing empty lines must use the same vertical alignment")
+                    }
+                }
+            }
+        }
+    }
+
+    func testMovingCaretAndRelayoutKeepWrappedAndTrailingLineNumbersInPlace() throws {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 160, height: 600))
+        EditorTextStyle(fontSize: 17.5, lineSpacing: 7).apply(to: view)
+        view.string = "a long line that wraps onto several visual lines\nsecond\n\n"
+        let manager = try XCTUnwrap(view.layoutManager)
+        let container = try XCTUnwrap(view.textContainer)
+        manager.ensureLayout(for: container)
+        let expected = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds)
+        XCTAssertEqual(expected.map(\.number), [1, 2, 3, 4])
+
+        for location in 0...view.string.utf16.count {
+            view.setSelectedRange(NSRange(location: location, length: 0))
+            manager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: view.string.utf16.count),
+                                     actualCharacterRange: nil)
+            manager.ensureLayout(for: container)
+            let actual = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds)
+            XCTAssertEqual(actual.map(\.number), expected.map(\.number))
+            XCTAssertEqual(actual.map(\.origin), expected.map(\.origin))
+            XCTAssertEqual(actual.map(\.height), expected.map(\.height))
+        }
+    }
+
     func testIncrementalIndexMatchesRebuildForEveryEditBoundary() {
         for text in ["", "a\r\nb\nc\r", "🙂a\r\n\r\nz", "a\nb"] {
             let source = text as NSString

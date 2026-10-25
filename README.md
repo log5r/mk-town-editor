@@ -117,6 +117,8 @@ CIでは`Package.resolved`に固定した依存ライブラリを使い、テス
 
 Xcodeプロジェクトの書式変更やワークフロー定義が原因で失敗した場合は、[CIの設定検査と検証方法](docs/ci-configuration-failures.md)を参照してください。
 
+カバレッジの実測値、追加したいテスト、再計測手順は[テストカバレッジ調査（2026-10-23）](docs/test-coverage-audit.md)にまとめています。
+
 ## リリース配布
 
 `v1.0.0`などのタグをpushすると、[Releaseワークフロー](.github/workflows/release.yml)が全ユニットテストを実行し、Developer ID署名・Appleの公証済みUniversalアプリをZIPにしてGitHub Releasesのドラフトへ登録します。初回に証明書と5項目のGitHub Secretsを設定し、リリースごとにダウンロードしたアプリを確認して公開します。
