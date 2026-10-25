@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "MKTownEditor",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
+        .iOS(.v18)
     ],
     products: [
         .executable(name: "MKTownEditor", targets: ["MKTownEditor"])
@@ -18,6 +19,8 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-ruby.git", from: "0.23.1")
     ],
     targets: [
+        .target(name: "MKTownMobileCore"),
+        .testTarget(name: "MKTownMobileCoreTests", dependencies: ["MKTownMobileCore"]),
         .executableTarget(
             name: "MKTownEditor",
             dependencies: [
