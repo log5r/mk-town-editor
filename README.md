@@ -1,12 +1,16 @@
 # MKTownEditor
 
-macOS向けの、ローカルファイルを扱うMarkdownエディタです。原文とプレビューを並べて確認しながら、メモや記事を編集できます。macOS標準の書類操作、検索、Undo / Redo、スペルチェックに対応し、日本語・英語のUIとVoiceOver向けのラベルを備えています。
+macOS・iOS向けの、ローカルファイルを扱うMarkdownエディタです。原文とプレビューを確認しながら、メモや記事を編集できます。macOS版は標準の書類操作、検索、Undo / Redo、スペルチェックに対応し、日本語・英語のUIとVoiceOver向けのラベルを備えています。
+
+iOS版はiPhone Duoの開閉に応じて編集・プレビューの配置を変え、標準の書類ブラウザでMarkdownを開いて編集・自動保存できます。[iOS版の起動方法・対応範囲](docs/iphone-duo-support.md)を参照してください。
 
 通常の編集とプレビューは、アカウントやAPIキーなしでオフラインでも使えます。
 
 [主な機能](#主な機能) · [起動方法](#実行) · [基本操作](#基本操作) · [テスト](#テスト) · [数式の書き方](docs/features.md#数式の書き方)
 
 ## 主な機能
+
+以下はmacOS版の機能です。
 
 | 目的 | できること |
 | --- | --- |
@@ -22,7 +26,8 @@ macOS向けの、ローカルファイルを扱うMarkdownエディタです。�
 
 ## 動作環境
 
-- **アプリの実行**：macOS 14以降
+- **アプリの実行**：macOS 14以降、またはiOS / iPadOS 18以降
+- **iPhone Duo向けビルド**：Xcode 27.1以降（iOS 27.1 SDK以降）
 - **ビルド・開発**：Xcode 27 / Swift 6.4（CIで検証している環境）
 - **CIと同じチェックを実行する場合**：Python 3（設定検査にはmacOS標準の`plutil`と`/usr/bin/ruby`も使用）
 
@@ -46,6 +51,8 @@ Swift Packageの定義はSwift tools 6.0です。初回ビルドでは、依存�
 アプリバンドルとして起動するので、URLスキーム、Markdownの書類タイプ、サービスメニュー、共同編集のローカルネットワーク利用など、Info.plistに依存する機能も使えます。バンドルの構成と制約（アドホック署名、起動中のアプリとの関係など）は[`start.sh` のアプリバンドル起動](docs/production-launcher.md)にまとめています。
 
 Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`スキームを選んで実行します。
+
+iOS版は`MKTownEditorMobile.xcodeproj`を開き、`MKTownEditorMobile`スキームとiPhone DuoなどのiOSシミュレータを選んで実行します。実機ではSigning & Capabilitiesで開発チームを指定してください。
 
 `swift run MKTownEditor`でも起動できますが、実行ファイルを直接起動するため、Info.plistに依存する機能は使えません（[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)）。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
 
@@ -115,6 +122,8 @@ bash Tools/ci.sh
 
 CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
 
+CIではiOSアプリとiOSユニットテストのコンパイルも検査します。Duoシミュレータでのテスト実行手順は[iOS版の検証](docs/iphone-duo-support.md#検証)にあります。
+
 Xcodeプロジェクトの書式変更やワークフロー定義が原因で失敗した場合は、[CIの設定検査と検証方法](docs/ci-configuration-failures.md)を参照してください。
 
 カバレッジの実測値、追加したいテスト、再計測手順は[テストカバレッジ調査（2026-10-23）](docs/test-coverage-audit.md)にまとめています。
@@ -129,6 +138,8 @@ Xcodeプロジェクトの書式変更やワークフロー定義が原因で失
 | --- | --- |
 | [`Sources/MKTownEditor`](Sources/MKTownEditor) | アプリ本体と同梱リソース |
 | [`Tests/MKTownEditorTests`](Tests/MKTownEditorTests) | Swiftのユニットテスト |
+| [`Sources/MKTownMobile`](Sources/MKTownMobile) | Apple標準コンポーネントで構成したiOS画面 |
+| [`Sources/MKTownMobileCore`](Sources/MKTownMobileCore) | iOS版の表示切り替え・Markdownプレビュー解析 |
 | [`Support`](Support) | Info.plistとアプリアイコン（Icon Composerの書類。[アプリアイコン](docs/app-icon.md)を参照） |
 | [`Tools`](Tools) | CI、アプリバンドルの組み立て、スクリプトのテスト、書類を開くCLI |
 | [`Package.swift`](Package.swift) | Swift Packageの構成と依存ライブラリ |
