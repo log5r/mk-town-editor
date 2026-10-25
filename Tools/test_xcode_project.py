@@ -5,6 +5,7 @@ import plistlib
 import re
 import subprocess
 import unittest
+import xml.etree.ElementTree as ET
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -90,6 +91,52 @@ class XcodeProjectTests(unittest.TestCase):
         target_id = next(identifier for identifier, obj in self.objects.items()
                          if obj == self.target("MKTownEditorTests"))
         self.assertIn(f'BlueprintIdentifier = "{target_id}"', testables)
+
+    def test_single_project_contains_both_apps_and_tests(self):
+        self.assertEqual(sorted(path.name for path in REPOSITORY.glob("*.xcodeproj")),
+                         ["MKTownEditor.xcodeproj"])
+        projects = [obj for obj in self.objects.values() if obj.get("isa") == "PBXProject"]
+        self.assertEqual(len(projects), 1)
+        project = projects[0]
+        names = {self.objects[key]["name"] for key in project["targets"]}
+        self.assertEqual(names, {"MKTownEditor", "MKTownEditorTests",
+                                 "MKTownEditorMobile", "MKTownEditorMobileTests"})
+        for key in project["targets"]:
+            self.assertIn(key, project["attributes"]["TargetAttributes"])
+            self.assertIn(self.objects[key]["productReference"],
+                          self.objects[project["productRefGroup"]]["children"])
+
+    def test_platform_defaults_are_scoped_to_targets(self):
+        project = next(obj for obj in self.objects.values() if obj.get("isa") == "PBXProject")
+        for key in self.objects[project["buildConfigurationList"]]["buildConfigurations"]:
+            settings = self.objects[key]["buildSettings"]
+            for setting in ("SDKROOT", "SUPPORTED_PLATFORMS", "MACOSX_DEPLOYMENT_TARGET",
+                            "IPHONEOS_DEPLOYMENT_TARGET"):
+                self.assertNotIn(setting, settings)
+        for name in ("MKTownEditor", "MKTownEditorTests"):
+            target = self.target(name)
+            for key in self.objects[target["buildConfigurationList"]]["buildConfigurations"]:
+                settings = self.objects[key]["buildSettings"]
+                self.assertEqual(settings["SDKROOT"], "macosx")
+                self.assertEqual(settings["SUPPORTED_PLATFORMS"], "macosx")
+                self.assertEqual(settings["MACOSX_DEPLOYMENT_TARGET"], "14.0")
+
+    def test_both_schemes_resolve_build_run_profile_and_test_targets(self):
+        for name in ("MKTownEditor", "MKTownEditorMobile"):
+            scheme = ET.parse(PROJECT.parent / "xcshareddata" / "xcschemes" / f"{name}.xcscheme")
+            for reference in scheme.findall(".//BuildableReference"):
+                self.assertEqual(reference.attrib["ReferencedContainer"],
+                                 "container:MKTownEditor.xcodeproj")
+                target = self.objects[reference.attrib["BlueprintIdentifier"]]
+                self.assertEqual(target["name"], reference.attrib["BlueprintName"])
+                product = self.objects[target["productReference"]]
+                self.assertEqual(product["path"], reference.attrib["BuildableName"])
+            for action in ("BuildAction/BuildActionEntries/BuildActionEntry",
+                           "LaunchAction/BuildableProductRunnable", "ProfileAction/BuildableProductRunnable"):
+                reference = scheme.find(f"./{action}/BuildableReference")
+                self.assertEqual(reference.attrib["BlueprintName"], name)
+            reference = scheme.find("./TestAction/Testables/TestableReference/BuildableReference")
+            self.assertEqual(reference.attrib["BlueprintName"], name + "Tests")
 
 
 class ProjectParsingTests(unittest.TestCase):
