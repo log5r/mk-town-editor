@@ -40,7 +40,8 @@ class XcodeProjectTests(unittest.TestCase):
 
     def test_app_target_compiles_every_package_source_file(self):
         """The app target lists sources one by one; a file added only to the package breaks the Xcode build."""
-        package_sources = sorted(path.name for path in (REPOSITORY / "Sources" / "MKTownEditor").glob("*.swift"))
+        package_sources = sorted(path.name for directory in ("MKTownEditor", "MKTownMarkdownCore")
+                                 for path in (REPOSITORY / "Sources" / directory).glob("*.swift"))
         self.assertEqual(sorted(self.app_sources()), package_sources)
 
     def test_app_target_compiles_the_icon_composer_document(self):

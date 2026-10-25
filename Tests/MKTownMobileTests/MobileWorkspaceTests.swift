@@ -5,6 +5,43 @@ import XCTest
 
 @MainActor
 final class MobileWorkspaceTests: XCTestCase {
+    func testFrontMatterPreferencesDefaultOffPersistAndRemainIndependent() throws {
+        let suite = "MobileWorkspaceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let document = MarkdownDocument(text: "---\ntags: [journal]\n---\n# Body")
+        let workspace = MobileEditorWorkspace(document: .constant(document), preferences: defaults)
+        XCTAssertFalse(workspace.showsFrontMatter)
+        XCTAssertFalse(workspace.formatsFrontMatter)
+        defaults.set(true, forKey: "mobile.showsFrontMatterInPreview")
+        defaults.set(true, forKey: "mobile.formatsFrontMatterInPreview")
+        let restored = MobileEditorWorkspace(document: .constant(document), preferences: defaults)
+        XCTAssertTrue(restored.showsFrontMatter)
+        XCTAssertTrue(restored.formatsFrontMatter)
+        defaults.set(false, forKey: "mobile.showsFrontMatterInPreview")
+        let hidden = MobileEditorWorkspace(document: .constant(document), preferences: defaults)
+        XCTAssertFalse(hidden.showsFrontMatter)
+        XCTAssertTrue(hidden.formatsFrontMatter)
+        defaults.set(false, forKey: "mobile.formatsFrontMatterInPreview")
+        XCTAssertFalse(MobileEditorWorkspace(document: .constant(document), preferences: defaults).formatsFrontMatter)
+        XCTAssertEqual(document.text, "---\ntags: [journal]\n---\n# Body")
+    }
+
+    func testFrontMatterCardWrapsInNarrowLayoutAndScalesWithDynamicType() throws {
+        let preview = MobileMarkdownPreview("---\ntitle: A long note title with enough words to wrap in a narrow preview pane\ntags: [journal, personal, project/app]\n---\n")
+        let raw = try XCTUnwrap(preview.frontMatter?.raw)
+        func size(width: CGFloat, type: DynamicTypeSize, formatted: Bool = true) -> CGSize {
+            let host = UIHostingController(rootView: MobileFrontMatterPreviewView(raw: raw,
+                rows: preview.frontMatterRows, formatsProperties: formatted).environment(\.dynamicTypeSize, type))
+            return host.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+        }
+        let narrow = size(width: 280, type: .large)
+        XCTAssertLessThanOrEqual(narrow.width, 280)
+        XCTAssertGreaterThan(narrow.height, size(width: 700, type: .large).height)
+        XCTAssertGreaterThan(size(width: 280, type: .accessibility3).height, narrow.height)
+        XCTAssertGreaterThan(size(width: 280, type: .large, formatted: false).height, 0)
+    }
+
     private final class DocumentBox: ObservableObject {
         @Published var document = MarkdownDocument(text: "# Original\n\n日本語🙂\n")
     }

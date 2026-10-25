@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		728AAB9867BA4058B2ED865A /* MarkdownFrontMatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372FFC03E7DB44BBA6496D96 /* MarkdownFrontMatter.swift */; };
+		266C39BCA16348E8A6478F26 /* MarkdownFrontMatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372FFC03E7DB44BBA6496D96 /* MarkdownFrontMatter.swift */; };
 		02FA37F182392CE187209DDE /* MarkdownTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000051 /* MarkdownTextFormat.swift */; };
 		0442F1659973E0ED68374135 /* MobileMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */; };
 		0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */; };
@@ -195,6 +197,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		372FFC03E7DB44BBA6496D96 /* MarkdownFrontMatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFrontMatter.swift; sourceTree = "<group>"; };
 		0A1DCA3C4FD0ACFF781B5450 /* MobileWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileWorkspaceTests.swift; sourceTree = "<group>"; };
 		3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePreviewStore.swift; sourceTree = "<group>"; };
 		4E783A9E10D2A8ABA38CD11C /* MKTownEditorMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditorMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -405,6 +408,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E44C7CB65334492CB09CAAC3 /* Sources/MKTownMarkdownCore */ = {
+			isa = PBXGroup;
+			children = (
+				372FFC03E7DB44BBA6496D96 /* MarkdownFrontMatter.swift */,
+			);
+			path = Sources/MKTownMarkdownCore;
+			sourceTree = "<group>";
+		};
 		A40000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
@@ -413,6 +424,7 @@
 				D20000000000000000000001 /* Tests/MKTownEditorTests */,
 				E80000000000000000000001 /* Sources/MKTownMobile */,
 				E80000000000000000000002 /* Sources/MKTownMobileCore */,
+				E44C7CB65334492CB09CAAC3 /* Sources/MKTownMarkdownCore */,
 				E80000000000000000000003 /* Tests/MKTownMobileTests */,
 				E80000000000000000000004 /* Tests/MKTownMobileCoreTests */,
 				A40000000000000000000004 /* Products */,
@@ -829,6 +841,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				266C39BCA16348E8A6478F26 /* MarkdownFrontMatter.swift in Sources */,
 				0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */,
 				C0F816112D8D88BE4DBC3080 /* MKTownMobileApp.swift in Sources */,
 				357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */,
@@ -843,6 +856,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				728AAB9867BA4058B2ED865A /* MarkdownFrontMatter.swift in Sources */,
 				A10000000000000000000001 /* DocumentStatistics.swift in Sources */,
 				A10000000000000000000002 /* EditorMode.swift in Sources */,
 				A10000000000000000000003 /* EditorWorkspace.swift in Sources */,

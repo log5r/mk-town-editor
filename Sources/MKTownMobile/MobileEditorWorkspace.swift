@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MobileEditorWorkspace: View {
     @Binding var document: MarkdownDocument
+    @AppStorage private(set) var showsFrontMatter: Bool
+    @AppStorage private(set) var formatsFrontMatter: Bool
     @State private var presentation: MobileEditorPresentation = .automatic
     @State private var compactPreview = false
     @State private var selection: TextSelection?
@@ -11,6 +13,12 @@ struct MobileEditorWorkspace: View {
     @State private var previewPosition: Int?
     @FocusState private var editorFocused: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(document: Binding<MarkdownDocument>, preferences: UserDefaults = .standard) {
+        _document = document
+        _showsFrontMatter = AppStorage(wrappedValue: false, "mobile.showsFrontMatterInPreview", store: preferences)
+        _formatsFrontMatter = AppStorage(wrappedValue: false, "mobile.formatsFrontMatterInPreview", store: preferences)
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -50,6 +58,11 @@ struct MobileEditorWorkspace: View {
                             Text("編集").tag(MobileEditorPresentation.editor)
                             Text("プレビュー").tag(MobileEditorPresentation.preview)
                         }
+                        Section("フロントマター") {
+                            Toggle("フロントマターを表示", isOn: $showsFrontMatter)
+                            Toggle("Obsidianのプロパティを整形して表示", isOn: $formatsFrontMatter)
+                                .disabled(!showsFrontMatter)
+                        }
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -75,6 +88,10 @@ struct MobileEditorWorkspace: View {
     private var previewContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
+                if showsFrontMatter, let frontMatter = previewStore.preview.frontMatter {
+                    MobileFrontMatterPreviewView(raw: frontMatter.raw,
+                        rows: previewStore.preview.frontMatterRows, formatsProperties: formatsFrontMatter)
+                }
                 ForEach(previewStore.preview.blocks) { block in
                     previewBlock(block)
                 }
@@ -117,5 +134,49 @@ struct MobileEditorWorkspace: View {
         case .some: return .headline
         case nil: return .body
         }
+    }
+}
+
+struct MobileFrontMatterPreviewView: View {
+    let raw: String
+    let rows: [FrontMatterPreviewProperties.Row]?
+    let formatsProperties: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("フロントマター")
+                .fontWeight(.semibold)
+                .accessibilityAddTraits(.isHeader)
+            if formatsProperties, let rows {
+                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 16) {
+                            Text(verbatim: row.key).foregroundStyle(.secondary)
+                                .fixedSize(horizontal: true, vertical: false)
+                            propertyValue(row)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: row.key).foregroundStyle(.secondary)
+                            propertyValue(row)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            } else {
+                Text(verbatim: raw).font(.caption.monospaced())
+            }
+        }
+        .font(.caption)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityIdentifier("frontMatterPreview")
+    }
+
+    private func propertyValue(_ row: FrontMatterPreviewProperties.Row) -> some View {
+        Text(verbatim: row.values.joined(separator: " · "))
+            .font(row.isVerbatim ? .caption.monospaced() : .caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
