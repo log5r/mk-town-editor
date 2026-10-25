@@ -55,7 +55,7 @@ jobs:
         env:
           CI_ARTIFACTS_DIR: ${{ runner.temp }}/ci-results
         run: |
-          xcodebuild -project MKTownEditorMobile.xcodeproj -scheme MKTownEditorMobile \
+          xcodebuild -project MKTownEditor.xcodeproj -scheme MKTownEditorMobile \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/mobile-derived-data" \
             build-for-testing CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$CI_ARTIFACTS_DIR/mobile-build.log"

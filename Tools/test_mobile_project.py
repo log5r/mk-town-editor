@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 class MobileProjectTests(unittest.TestCase):
     def setUp(self):
         self.objects = project_objects(
-            (ROOT / "MKTownEditorMobile.xcodeproj/project.pbxproj").read_text())
+            (ROOT / "MKTownEditor.xcodeproj/project.pbxproj").read_text())
         self.info = plistlib.loads((ROOT / "Support/Mobile-Info.plist").read_bytes())
 
     def target(self, name):
@@ -22,9 +22,17 @@ class MobileProjectTests(unittest.TestCase):
 
     def sources(self, target):
         phases = [self.objects[key] for key in target["buildPhases"]]
-        return {self.objects[self.objects[key]["fileRef"]]["path"]
+        return {self.file_path(self.objects[key]["fileRef"])
                 for phase in phases if phase["isa"] == "PBXSourcesBuildPhase"
                 for key in phase["files"]}
+
+    def file_path(self, identifier):
+        obj = self.objects[identifier]
+        path = Path(obj.get("path", ""))
+        parents = [key for key, group in self.objects.items()
+                   if group.get("isa") == "PBXGroup" and identifier in group["children"]]
+        self.assertLessEqual(len(parents), 1, f"Ambiguous group for {identifier}")
+        return str(Path(self.file_path(parents[0])) / path) if parents else str(path)
 
     def test_mobile_target_reuses_document_io_and_includes_all_mobile_sources(self):
         sources = self.sources(self.target("MKTownEditorMobile"))
@@ -50,10 +58,10 @@ class MobileProjectTests(unittest.TestCase):
                     for directory in ("MKTownMobileTests", "MKTownMobileCoreTests")
                     for p in (ROOT / "Tests" / directory).glob("*.swift")}
         self.assertEqual(self.sources(target), expected)
-        scheme = ET.parse(ROOT / "MKTownEditorMobile.xcodeproj/xcshareddata/xcschemes/MKTownEditorMobile.xcscheme")
+        scheme = ET.parse(ROOT / "MKTownEditor.xcodeproj/xcshareddata/xcschemes/MKTownEditorMobile.xcscheme")
         reference = scheme.find("./TestAction/Testables/TestableReference/BuildableReference")
         self.assertEqual(self.objects[reference.attrib["BlueprintIdentifier"]], target)
-        self.assertEqual(reference.attrib["ReferencedContainer"], "container:MKTownEditorMobile.xcodeproj")
+        self.assertEqual(reference.attrib["ReferencedContainer"], "container:MKTownEditor.xcodeproj")
 
     def test_document_browser_opens_files_in_place_and_supports_all_orientations(self):
         self.assertTrue(self.info["UISupportsDocumentBrowser"])
@@ -74,6 +82,38 @@ class MobileProjectTests(unittest.TestCase):
             self.assertEqual(settings["SDKROOT"], "iphoneos")
             self.assertEqual(settings["SUPPORTED_PLATFORMS"], "iphoneos iphonesimulator")
             self.assertEqual(settings["IPHONEOS_DEPLOYMENT_TARGET"], "18.0")
+
+    def test_mobile_tests_depend_on_and_load_the_ios_app(self):
+        target = self.target("MKTownEditorMobileTests")
+        dependencies = [self.objects[key] for key in target["dependencies"]]
+        self.assertEqual(len(dependencies), 1)
+        dependency = dependencies[0]
+        self.assertEqual(self.objects[dependency["target"]], self.target("MKTownEditorMobile"))
+        proxy = self.objects[dependency["targetProxy"]]
+        self.assertEqual(proxy["remoteGlobalIDString"], dependency["target"])
+        self.assertEqual(self.objects[proxy["containerPortal"]]["isa"], "PBXProject")
+        for key in self.objects[target["buildConfigurationList"]]["buildConfigurations"]:
+            settings = self.objects[key]["buildSettings"]
+            self.assertEqual(settings["TEST_HOST"],
+                             "$(BUILT_PRODUCTS_DIR)/MKTownEditorMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MKTownEditorMobile")
+            self.assertEqual(settings["BUNDLE_LOADER"], "$(TEST_HOST)")
+            self.assertEqual(settings["SDKROOT"], "iphoneos")
+            self.assertEqual(settings["SUPPORTED_PLATFORMS"], "iphoneos iphonesimulator")
+            if self.objects[key]["name"] == "Debug":
+                self.assertEqual(settings["ENABLE_TESTABILITY"], "YES")
+
+    def test_document_sources_and_icon_use_the_desktop_file_references(self):
+        for path in ("Sources/MKTownEditor/MarkdownDocument.swift",
+                     "Sources/MKTownEditor/MarkdownTextFormat.swift", "Support/AppIcon.icon"):
+            references = [key for key, obj in self.objects.items()
+                          if obj.get("isa") == "PBXFileReference" and self.file_path(key) == path]
+            self.assertEqual(len(references), 1, path)
+            for name in ("MKTownEditor", "MKTownEditorMobile"):
+                phases = [self.objects[key] for key in self.target(name)["buildPhases"]]
+                files = [self.objects[key]["fileRef"] for phase in phases
+                         if phase["isa"] in ("PBXSourcesBuildPhase", "PBXResourcesBuildPhase")
+                         for key in phase["files"]]
+                self.assertEqual(files.count(references[0]), 1, (name, path))
 
     def test_mobile_and_desktop_declare_the_same_markdown_type(self):
         desktop = plistlib.loads((ROOT / "Support/Info.plist").read_bytes())

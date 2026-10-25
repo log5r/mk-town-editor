@@ -50,9 +50,14 @@ Swift Packageの定義はSwift tools 6.0です。初回ビルドでは、依存�
 
 アプリバンドルとして起動するので、URLスキーム、Markdownの書類タイプ、サービスメニュー、共同編集のローカルネットワーク利用など、Info.plistに依存する機能も使えます。バンドルの構成と制約（アドホック署名、起動中のアプリとの関係など）は[`start.sh` のアプリバンドル起動](docs/production-launcher.md)にまとめています。
 
-Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開き、`MKTownEditor`スキームを選んで実行します。
+Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開きます。macOS・iOSのアプリとユニットテストを1つのプロジェクトで管理しています。
 
-iOS版は`MKTownEditorMobile.xcodeproj`を開き、`MKTownEditorMobile`スキームとiPhone DuoなどのiOSシミュレータを選んで実行します。実機ではSigning & Capabilitiesで開発チームを指定してください。
+| 実行するアプリ | スキーム | 実行先 |
+| --- | --- | --- |
+| macOS版 | `MKTownEditor` | My Mac |
+| iOS版 | `MKTownEditorMobile` | iOSシミュレータ、または接続したiPhone・iPad |
+
+iOS実機でデバッグする場合は、`MKTownEditorMobile`ターゲットのSigning & Capabilitiesで開発チームを指定し、実行先に接続した端末を選んでください。プロジェクト構成と設定の検査方法は[単一Xcodeプロジェクトの構成](docs/xcode-project-structure.md)を参照してください。
 
 `swift run MKTownEditor`でも起動できますが、実行ファイルを直接起動するため、Info.plistに依存する機能は使えません（[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)）。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
 

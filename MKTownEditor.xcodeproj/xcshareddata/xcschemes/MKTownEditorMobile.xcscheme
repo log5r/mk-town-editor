@@ -17,7 +17,7 @@
                BlueprintIdentifier = "F75109BEB4DD8800DA6B45F8"
                BuildableName = "MKTownEditorMobile.app"
                BlueprintName = "MKTownEditorMobile"
-               ReferencedContainer = "container:MKTownEditorMobile.xcodeproj">
+               ReferencedContainer = "container:MKTownEditor.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -36,7 +36,7 @@
                BlueprintIdentifier = "C062A5A4A7F4F37DD90F54CB"
                BuildableName = "MKTownEditorMobileTests.xctest"
                BlueprintName = "MKTownEditorMobileTests"
-               ReferencedContainer = "container:MKTownEditorMobile.xcodeproj">
+               ReferencedContainer = "container:MKTownEditor.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -58,7 +58,7 @@
             BlueprintIdentifier = "F75109BEB4DD8800DA6B45F8"
             BuildableName = "MKTownEditorMobile.app"
             BlueprintName = "MKTownEditorMobile"
-            ReferencedContainer = "container:MKTownEditorMobile.xcodeproj">
+            ReferencedContainer = "container:MKTownEditor.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -75,7 +75,7 @@
             BlueprintIdentifier = "F75109BEB4DD8800DA6B45F8"
             BuildableName = "MKTownEditorMobile.app"
             BlueprintName = "MKTownEditorMobile"
-            ReferencedContainer = "container:MKTownEditorMobile.xcodeproj">
+            ReferencedContainer = "container:MKTownEditor.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

@@ -40,6 +40,13 @@ class WorkflowConfigurationTests(unittest.TestCase):
         self.assertTrue(upload["with"]["path"].startswith(output + "/notarization-"))
         self.assertEqual(upload["if"], "${{ always() }}")
 
+    def test_ios_compilation_uses_the_shared_project_and_mobile_scheme(self):
+        steps = self.workflow("ci.yml")["jobs"]["build-and-test"]["steps"]
+        command = next(step["run"] for step in steps if step.get("name") == "Compile iOS app and unit tests")
+        self.assertIn("-project MKTownEditor.xcodeproj -scheme MKTownEditorMobile", command)
+        self.assertIn("build-for-testing", command)
+        self.assertIn("CODE_SIGNING_ALLOWED=NO", command)
+
 
 class CIScriptTests(unittest.TestCase):
     def setUp(self):

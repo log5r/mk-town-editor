@@ -4,7 +4,7 @@ iOS版は、標準の書類ブラウザからMarkdownファイルを開き、編
 
 ## 起動と基本操作
 
-1. Xcode 27.1以降で`MKTownEditorMobile.xcodeproj`を開く。
+1. Xcode 27.1以降で`MKTownEditor.xcodeproj`を開く。
 2. `MKTownEditorMobile`スキームとiPhone Duoシミュレータを選び、実行する。実機では開発チームの設定が必要になる。
 3. 「書類を作成」を選ぶか、標準書類ブラウザから既存の`.md`・`.txt`ファイルを開く。
 4. 本文を編集する。変更は標準の書類管理機能で自動保存される。書類名のメニューから名称や保存先を操作できる。
@@ -33,7 +33,7 @@ macOS版の拡張構文の描画（数式・Mermaidなど）、画像の表示�
 通常の`swift test --force-resolved-versions`は、macOS版の全テストに加えて、iOS版の幅による表示判定とプレビュー解析のテストを実行する。iOS専用の書類・画面テストは次のコマンドで実行する。
 
 ```sh
-xcodebuild -project MKTownEditorMobile.xcodeproj \
+xcodebuild -project MKTownEditor.xcodeproj \
   -scheme MKTownEditorMobile \
   -destination 'platform=iOS Simulator,name=iPhone Duo' \
   test CODE_SIGNING_ALLOWED=NO
