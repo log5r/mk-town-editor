@@ -353,6 +353,7 @@
 		A200000000000000000000B0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		A200000000000000000000B1 /* MarkdownMathCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMathCompatibility.swift; sourceTree = "<group>"; };
 		A200000000000000000000B2 /* PreviewUserScrollObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewUserScrollObserver.swift; sourceTree = "<group>"; };
+		A200000000000000000000B3 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
@@ -576,6 +577,7 @@
 		A40000000000000000000003 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				A200000000000000000000B3 /* Signing.xcconfig */,
 				A2000000000000000000000C /* Info.plist */,
 				A200000000000000000000B0 /* AppIcon.icon */,
 				96FC794F210D3D1903908AC7 /* Mobile-Info.plist */,
@@ -1106,6 +1108,7 @@
 		};
 		B10000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A200000000000000000000B3 /* Signing.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				ENABLE_TESTABILITY = YES;
@@ -1117,6 +1120,7 @@
 		};
 		B10000000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A200000000000000000000B3 /* Signing.xcconfig */;
 			buildSettings = {
 				CLANG_ENABLE_MODULES = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;

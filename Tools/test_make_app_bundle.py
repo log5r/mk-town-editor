@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 
+from test_xcode_project import project_objects
+
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 SCRIPT = REPOSITORY / "Tools" / "make-app-bundle.sh"
@@ -17,16 +19,12 @@ SCRIPT = REPOSITORY / "Tools" / "make-app-bundle.sh"
 
 def configurations(project, owner):
     """Map configuration names to the build settings of a configuration list in project.pbxproj."""
-    configuration_list = re.search(
-        r"/\* Build configuration list for " + re.escape(owner) + r" \*/ = "
-        r"\{[^}]*?buildConfigurations = \(([^)]*)\)", project)
-    result = {}
-    for identifier in re.findall(r"[0-9A-F]{24}", configuration_list.group(1)):
-        block = re.search(re.escape(identifier) + r" /\* \w+ \*/ = \{\s*isa = XCBuildConfiguration;"
-                          r"\s*buildSettings = \{(.*?)\};\s*name = (\w+);", project, re.S)
-        settings = re.findall(r"(\w+) = (\"[^\"]*\"|[^;]+);", block.group(1))
-        result[block.group(2)] = {key: value.strip().strip('"') for key, value in settings}
-    return result
+    objects = project_objects(project)
+    kind, name = re.fullmatch(r'(PBXProject|PBXNativeTarget) "([^"]+)"', owner).groups()
+    target = next(obj for obj in objects.values() if obj.get("isa") == kind
+                  and (kind == "PBXProject" or obj.get("name") == name))
+    identifiers = objects[target["buildConfigurationList"]]["buildConfigurations"]
+    return {objects[key]["name"]: objects[key]["buildSettings"] for key in identifiers}
 
 
 def app_target_build_settings():

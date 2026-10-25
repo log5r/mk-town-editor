@@ -10,6 +10,20 @@ SDK・対応プラットフォーム・最低OSバージョンは各ターゲッ
 
 `MarkdownDocument.swift`、`MarkdownTextFormat.swift`、`Support/AppIcon.icon`は、両アプリのビルドフェーズから同じファイル参照を使う。iOSの画面・解析・テストはそれぞれのディレクトリのグループで管理する。Bundle IdentifierとInfo.plistはOSごとに保持する。
 
+## ローカル署名設定
+
+開発用のTEAM IDは、Gitで追跡しない`Support/Signing.local.xcconfig`に保存する。実機デバッグなどで署名が必要な場合は、このファイルを作り、自分のTEAM IDを指定する。
+
+```xcconfig
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+```
+
+プロジェクトのDebug・Release共通設定は`Support/Signing.xcconfig`を参照し、そこからローカルファイルを任意で読み込む。この設定はmacOS・iOSの両アプリとテストターゲットへ継承される。ローカルファイルがなくても、署名を無効にしたCIビルドやシミュレータ向けのビルドを行える。
+
+XcodeのSigning & Capabilitiesでチームを選ぶと、TEAM IDが`project.pbxproj`へ書き込まれる場合がある。チームを変更するときはローカルファイルを編集する。配布スクリプトは従来どおり環境変数`APPLE_TEAM_ID`をビルド時に指定し、ローカルの設定を上書きする。
+
+`Tools/test_xcode_project.py`は、共有プロジェクトへのTEAM IDの書き込み、ローカルファイルの追跡、共通設定への参照漏れを検出する。過去のコミットに記録された値は、最新ファイルから削除しても履歴には残る。
+
 ## 検査
 
 `Tools/test_xcode_project.py`は、ルートのプロジェクトが1つであること、4ターゲットと成果物の登録、OS設定の分離、両スキームのビルド・起動・プロファイル・テストの参照先を検査する。`Tools/test_mobile_project.py`は、グループの相対パスを解決してソースの網羅性と共有参照、iOSテストのホストと依存関係を検査する。CIも統合先のプロジェクトを指定する。

@@ -9,3 +9,4 @@ xcuserdata/
 /docs-local/
 *.p12
 *.keychain-db
+/Support/Signing.local.xcconfig

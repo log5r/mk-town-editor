@@ -57,7 +57,7 @@ Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開きます。macOS・iOS�
 | macOS版 | `MKTownEditor` | My Mac |
 | iOS版 | `MKTownEditorMobile` | iOSシミュレータ、または接続したiPhone・iPad |
 
-iOS実機でデバッグする場合は、`MKTownEditorMobile`ターゲットのSigning & Capabilitiesで開発チームを指定し、実行先に接続した端末を選んでください。プロジェクト構成と設定の検査方法は[単一Xcodeプロジェクトの構成](docs/xcode-project-structure.md)を参照してください。
+iOS実機でデバッグする場合は、[ローカル署名設定](docs/xcode-project-structure.md#ローカル署名設定)で開発チームを指定し、実行先に接続した端末を選んでください。TEAM IDはGitで追跡しないファイルに保存します。
 
 `swift run MKTownEditor`でも起動できますが、実行ファイルを直接起動するため、Info.plistに依存する機能は使えません（[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)）。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
 

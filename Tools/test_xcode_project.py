@@ -121,6 +121,35 @@ class XcodeProjectTests(unittest.TestCase):
                 self.assertEqual(settings["SUPPORTED_PLATFORMS"], "macosx")
                 self.assertEqual(settings["MACOSX_DEPLOYMENT_TARGET"], "14.0")
 
+    def test_signing_team_is_not_stored_in_the_shared_project(self):
+        for identifier, obj in self.objects.items():
+            if obj.get("isa") == "XCBuildConfiguration":
+                self.assertFalse("DEVELOPMENT_TEAM" in obj["buildSettings"], identifier)
+            if obj.get("isa") == "PBXProject":
+                for target in obj["attributes"]["TargetAttributes"].values():
+                    self.assertFalse("DevelopmentTeam" in target)
+
+    def test_project_configurations_include_optional_local_signing_settings(self):
+        project = next(obj for obj in self.objects.values() if obj.get("isa") == "PBXProject")
+        for identifier in self.objects[project["buildConfigurationList"]]["buildConfigurations"]:
+            configuration = self.objects[identifier]
+            reference = self.objects[configuration["baseConfigurationReference"]]
+            self.assertEqual(reference["path"], "Signing.xcconfig")
+            support = next(obj for obj in self.objects.values()
+                           if obj.get("isa") == "PBXGroup" and obj.get("path") == "Support")
+            self.assertIn(configuration["baseConfigurationReference"], support["children"])
+        source = (REPOSITORY / "Support" / "Signing.xcconfig").read_text()
+        self.assertEqual(source.strip(), '#include? "Signing.local.xcconfig"')
+
+    def test_local_signing_settings_are_ignored_and_untracked(self):
+        path = "Support/Signing.local.xcconfig"
+        ignored = subprocess.run(["git", "check-ignore", "--no-index", "--quiet", path],
+                                 cwd=REPOSITORY, capture_output=True)
+        self.assertEqual(ignored.returncode, 0)
+        tracked = subprocess.run(["git", "ls-files", "--", path],
+                                 cwd=REPOSITORY, capture_output=True, text=True, check=True)
+        self.assertEqual(tracked.stdout, "")
+
     def test_both_schemes_resolve_build_run_profile_and_test_targets(self):
         for name in ("MKTownEditor", "MKTownEditorMobile"):
             scheme = ET.parse(PROJECT.parent / "xcshareddata" / "xcschemes" / f"{name}.xcscheme")
