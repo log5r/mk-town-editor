@@ -5,7 +5,7 @@ struct MobileEditorWorkspace: View {
     @State private var presentation: MobileEditorPresentation = .automatic
     @State private var compactPreview = false
     @State private var selection: TextSelection?
-    @State private var preview = MobileMarkdownPreview("")
+    @StateObject private var previewStore = MobilePreviewStore()
     @State private var exporting = false
     @State private var exportError: String?
     @State private var previewPosition: Int?
@@ -57,15 +57,9 @@ struct MobileEditorWorkspace: View {
                 }
             }
         }
-        .task(id: document.text) {
-            // Coalesce typing; keep parsing away from the main actor for large documents.
-            let source = document.text
-            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-            let worker = Task.detached(priority: .userInitiated) { MobileMarkdownPreview(source) }
-            let value = await worker.value
-            guard !Task.isCancelled else { return }
-            preview = value
-        }
+        .onAppear { previewStore.update(source: document.text) }
+        .onChange(of: document.text) { _, source in previewStore.update(source: source) }
+        .onDisappear { previewStore.cancel() }
         .fileExporter(isPresented: $exporting, document: document,
                       contentType: MarkdownDocument.markdownType) { result in
             if case .failure(let error) = result { exportError = error.localizedDescription }
@@ -81,7 +75,7 @@ struct MobileEditorWorkspace: View {
     private var previewContent: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 16) {
-                ForEach(preview.blocks) { block in
+                ForEach(previewStore.preview.blocks) { block in
                     previewBlock(block)
                 }
             }
