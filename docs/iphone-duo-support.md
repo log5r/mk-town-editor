@@ -1,0 +1,61 @@
+# iPhone Duo・iOS版の対応
+
+iOS版は、標準の書類ブラウザからMarkdownファイルを開き、編集・プレビュー・自動保存・コピーの書き出しを行える。iPhone Duoの開閉、画面回転、ウインドウサイズの変更に応じて本文の配置を更新する。
+
+## 起動と基本操作
+
+1. Xcode 27.1以降で`MKTownEditorMobile.xcodeproj`を開く。
+2. `MKTownEditorMobile`スキームとiPhone Duoシミュレータを選び、実行する。実機では開発チームの設定が必要になる。
+3. 「書類を作成」を選ぶか、標準書類ブラウザから既存の`.md`・`.txt`ファイルを開く。
+4. 本文を編集する。変更は標準の書類管理機能で自動保存される。書類名のメニューから名称や保存先を操作できる。
+5. 狭い画面では目のボタンでプレビューへ切り替える。「表示」メニューでは「自動」「編集」「プレビュー」を選べる。共有アイコンからコピーを書き出せる。
+
+iOS / iPadOS 18以降で動作する。Duoの全面表示と縦方向の標準ツールバーに対応するビルドには、iOS 27.1 SDK以降を使う。SDKによる表示の違いはAppleの[対応ガイド](https://developer.apple.com/iphone-duo/prepare/)に記載されている。
+
+## 画面と保存の設計
+
+書類操作はSwiftUIの`DocumentGroup`、編集は`TextEditor`、表示切り替えは`Menu`と`Picker`、コピーの書き出しは`fileExporter`を使う。書類ブラウザが提供するナビゲーションとツールバーを利用し、独自のナビゲーションバーや分割ハンドルは追加しない。
+
+「自動」では、本文に使える幅が720ポイント以上なら編集とプレビューを並べる。各列に360ポイント以上を確保するための基準であり、端末の画面解像度を表す値ではない。幅は`GeometryReader`から取得し、開閉のたびに判定し直す。アクセシビリティ用の文字サイズでは1列にする。セーフエリアとキーボードによる領域の調整はSwiftUIに任せる。
+
+本文と選択範囲は配置の切り替えより外側で保持する。開閉時に編集欄が表示されたままなら同じ`TextEditor`を維持し、日本語入力の途中で入力欄を作り直さない。狭い画面でプレビューを選んだ状態も、再び開閉するまで保持する。
+
+読み書きにはmacOS版と同じ`MarkdownDocument`と`MarkdownTextFormat`をコンパイルする。UTF-8 BOMと改行形式を保持し、不正なUTF-8は読み込みエラーにする。モバイル用の読み書き処理を別途実装しないことで、両OS間での保存結果の差を防ぐ。
+
+## プレビューと機能の範囲
+
+プレビューの解析にはFoundationの`AttributedString(markdown:)`を使い、見出し・段落・強調・リンク・リスト・引用・コードブロックを標準のSwiftUI `Text`で表示する。画像は代替テキストを表示する。描画用の解析結果を本文へ書き戻す処理はない。
+
+macOS版の拡張構文の描画（数式・Mermaidなど）、画像の表示・編集、表のグリッド表示、ワークスペース管理、Git操作、外部コマンドによる変換、公開・共同編集・AI機能はiOS版に含めない。拡張記法を含む書類自体は編集・保存できる。macOS版の機能一覧は[機能ガイド](features.md)を参照。
+
+## 検証
+
+通常の`swift test --force-resolved-versions`は、macOS版の全テストに加えて、iOS版の幅による表示判定とプレビュー解析のテストを実行する。iOS専用の書類・画面テストは次のコマンドで実行する。
+
+```sh
+xcodebuild -project MKTownEditorMobile.xcodeproj \
+  -scheme MKTownEditorMobile \
+  -destination 'platform=iOS Simulator,name=iPhone Duo' \
+  test CODE_SIGNING_ALLOWED=NO
+```
+
+AIエージェントは、実行時に[AGENTS.md](../AGENTS.md)のログ保存・`xcsift`整形手順を適用する。
+
+`MobileWorkspaceTests`は実際のSwiftUI画面へ文字を入力し、本文の表示幅を390→960→500→720→390ポイントへ変更する。本文・選択範囲・同じ入力欄が保持され、保存後にも編集内容が残ることを検査する。書類のテストでは、BOM・混在する改行・日本語・結合文字・絵文字の保存と、不正なUTF-8の拒否を確認する。
+
+Duoシミュレータでは、標準書類ブラウザで作成・編集した後、Device HubのClosed / Partially Open / Openを切り替えて操作する。編集とプレビューの往復、縦方向のツールバー、キーボード表示中の開閉、文字サイズの拡大、コピーの書き出しと再読み込みを確認する。実機でのIME入力・バックグラウンド復帰・iCloud上のファイル操作は、配布前にも確認する。
+
+CIは既存のmacOSテストに加えて、iOSアプリとiOSユニットテストを`build-for-testing`でコンパイルする。Duo固有の実行検証にはiOS 27.1ランタイムが必要なので、CIのコンパイル検査とシミュレータ上の検証を区別する。
+
+2026-10-25にXcode 27.1で検証し、Swiftの全1,154件、Duo上のiOSテスト20件、スクリプトのテスト62件が通った。iPhone実機向けのRelease構成も署名なしでビルドできた。Device HubでClosed / Partially Open / Open、新規作成、編集・プレビューの往復、コピーの保存を操作し、自動保存された本文と書き出したコピーのバイト列が一致することを確認した。実機での操作は未検証。
+
+## ナビゲーションの重複の再発防止
+
+`DocumentGroup`の編集画面に`NavigationSplitView`を直接重ねた構成では、Duoの狭い画面で戻るボタンと書類の操作領域が重複した。書類画面にナビゲーションコンテナを追加するときは、標準書類ブラウザが既に提供している操作と重ならないかを確認する。
+
+現在は書類画面内の`HStack`で標準編集欄とプレビューを配置し、ナビゲーションを`DocumentGroup`に集約している。`UIScreen.main`、端末種別、向きからレイアウトを決定する処理がないことと、書類ブラウザ・全画面固定・対応する向きの設定は`Tools/test_mobile_project.py`で検査する。
+
+## 参照
+
+- [Apple: Prepare your app for iPhone Duo](https://developer.apple.com/iphone-duo/prepare/)
+- [Human Interface Guidelines: Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
