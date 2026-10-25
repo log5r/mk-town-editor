@@ -37,6 +37,7 @@ private struct PreviewBlockRow: Identifiable {
 struct MarkdownPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var renderCache = PreviewRenderCache()
+    @StateObject private var userScrollMonitor = PreviewUserScrollMonitor()
     @ObservedObject private var remoteImages = RemoteImageStore.shared
     @ObservedObject private var localImages = LocalImageStore.shared
     @State private var citationCatalog = MarkdownCitationCatalog.empty
@@ -258,6 +259,9 @@ struct MarkdownPreview: View {
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, 28)
                         .padding(.vertical, 24)
+                        .background(PreviewUserScrollObserver(monitor: userScrollMonitor,
+                            identity: analysis.identity,
+                            onVisibleBlockChange: onVisibleBlockChange))
                     }
                     .coordinateSpace(name: "markdownPreview")
                     .focusable()
@@ -275,9 +279,7 @@ struct MarkdownPreview: View {
                                         presentationIDs: presentationIDs, index: matchingSnapshot?.scrollIndex)
                     }
                     .onPreferenceChange(PreviewBlockOriginsKey.self) { origins in
-                        if let blockID = PreviewScrollSync.topBlockID(from: origins) {
-                            onVisibleBlockChange?(blockID)
-                        }
+                        userScrollMonitor.record(origins: origins, identity: analysis.identity)
                     }
                     .environment(\.openURL, OpenURLAction { url in
                         if let imageURL = MarkdownImageInspectionLink.destination(url) {

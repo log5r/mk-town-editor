@@ -7,6 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02FA37F182392CE187209DDE /* MarkdownTextFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000051 /* MarkdownTextFormat.swift */; };
+		0442F1659973E0ED68374135 /* MobileMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */; };
+		0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */; };
+		329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68415AC928FC514625D3B348 /* MobileEditorLayout.swift */; };
+		34AF324D60BD0E4B09E2BF39 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B8A0EEAA379943E284578C8C /* Localizable.xcstrings */; };
+		357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */; };
+		5A150E8F7B3AD0AA4307263D /* MobileDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65FABA01D6D1FA59F7DA6F53 /* MobileDocumentTests.swift */; };
+		686623455B7C59C528A2883D /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* MarkdownDocument.swift */; };
+		776FE4899C78E807A439C9CF /* MobileMarkdownPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D61650C61C3274006430FE0 /* MobileMarkdownPreviewTests.swift */; };
+		9097F832C0114DA739643091 /* MobilePreviewStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */; };
+		9C444A90A010B32F849D84D8 /* MobileWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1DCA3C4FD0ACFF781B5450 /* MobileWorkspaceTests.swift */; };
 		A10000000000000000000001 /* DocumentStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* DocumentStatistics.swift */; };
 		A10000000000000000000002 /* EditorMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* EditorMode.swift */; };
 		A10000000000000000000003 /* EditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* EditorWorkspace.swift */; };
@@ -115,12 +126,10 @@
 		A10000000000000000000084 /* WorkspaceNamedLayoutSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */; };
 		A10000000000000000000085 /* WorkspaceLayoutActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000085 /* WorkspaceLayoutActivation.swift */; };
 		A10000000000000000000086 /* MarkdownMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000086 /* MarkdownMath.swift */; };
-		A100000000000000000000B1 /* MarkdownMathCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B1 /* MarkdownMathCompatibility.swift */; };
 		A10000000000000000000087 /* SwiftMath in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000001 /* SwiftMath */; };
 		A10000000000000000000088 /* MermaidDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000087 /* MermaidDiagramView.swift */; };
 		A10000000000000000000089 /* Resources/mermaid.min.js in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000088 /* Resources/mermaid.min.js */; };
 		A1000000000000000000008A /* Resources/Mermaid-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */; };
-		A100000000000000000000B0 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B0 /* AppIcon.icon */; };
 		A1000000000000000000008B /* ExternalDiagramRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008A /* ExternalDiagramRenderer.swift */; };
 		A1000000000000000000008C /* ExternalDiagramView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008B /* ExternalDiagramView.swift */; };
 		A1000000000000000000008D /* MarkdownCitations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000008C /* MarkdownCitations.swift */; };
@@ -152,6 +161,9 @@
 		A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */; };
 		A100000000000000000000A8 /* CodeSyntaxAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */; };
 		A100000000000000000000A9 /* TreeSitterSyntaxParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */; };
+		A100000000000000000000B0 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B0 /* AppIcon.icon */; };
+		A100000000000000000000B1 /* MarkdownMathCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B1 /* MarkdownMathCompatibility.swift */; };
+		A100000000000000000000B2 /* PreviewUserScrollObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B2 /* PreviewUserScrollObserver.swift */; };
 		A10000000000000000000202 /* SwiftTreeSitter in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000002 /* SwiftTreeSitter */; };
 		A10000000000000000000203 /* TreeSitterJavaScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000003 /* TreeSitterJavaScript */; };
 		A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000004 /* TreeSitterTypeScript */; };
@@ -160,62 +172,9 @@
 		A1000000000000000000AD01 /* PanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD01 /* PanelPresentation.swift */; };
 		A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD02 /* SplitDividerHandle.swift */; };
 		A1000000000000000000AD03 /* ListKeyboardSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD03 /* ListKeyboardSelection.swift */; };
-		02FA37F182392CE187209DDE = {
-			fileRef = A20000000000000000000051;
-			isa = PBXBuildFile;
-		};
-		0442F1659973E0ED68374135 = {
-			fileRef = 77F24E9613D399389B779337;
-			isa = PBXBuildFile;
-		};
-		0846BD5C4682504E662A6B1B = {
-			fileRef = 3ECABECCA7B36681774F0AC7;
-			isa = PBXBuildFile;
-		};
-		329E338B9D53911578AEA992 = {
-			fileRef = 68415AC928FC514625D3B348;
-			isa = PBXBuildFile;
-		};
-		34AF324D60BD0E4B09E2BF39 = {
-			fileRef = B8A0EEAA379943E284578C8C;
-			isa = PBXBuildFile;
-		};
-		357D8CE668AB39E0EB416CD8 = {
-			fileRef = DDD994705C7ACFB84DB3006F;
-			isa = PBXBuildFile;
-		};
-		5A150E8F7B3AD0AA4307263D = {
-			fileRef = 65FABA01D6D1FA59F7DA6F53;
-			isa = PBXBuildFile;
-		};
-		686623455B7C59C528A2883D = {
-			fileRef = A20000000000000000000006;
-			isa = PBXBuildFile;
-		};
-		776FE4899C78E807A439C9CF = {
-			fileRef = 9D61650C61C3274006430FE0;
-			isa = PBXBuildFile;
-		};
-		9097F832C0114DA739643091 = {
-			fileRef = 92E9E60DAF956E3C36415243;
-			isa = PBXBuildFile;
-		};
-		9C444A90A010B32F849D84D8 = {
-			fileRef = 0A1DCA3C4FD0ACFF781B5450;
-			isa = PBXBuildFile;
-		};
-		C0F816112D8D88BE4DBC3080 = {
-			fileRef = 5C27FE56A2C7B98DB5D3A7C7;
-			isa = PBXBuildFile;
-		};
-		C1EA09B7D1F54F9561D43D73 = {
-			fileRef = EA6E019BA1B55AC2984D8A6B;
-			isa = PBXBuildFile;
-		};
-		EE8D20AA6654ED2A9EBE4A4B = {
-			fileRef = A200000000000000000000B0;
-			isa = PBXBuildFile;
-		};
+		C0F816112D8D88BE4DBC3080 /* MKTownMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */; };
+		C1EA09B7D1F54F9561D43D73 /* MobileEditorLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */; };
+		EE8D20AA6654ED2A9EBE4A4B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B0 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -226,9 +185,9 @@
 			remoteGlobalIDString = A50000000000000000000001;
 			remoteInfo = MKTownEditor;
 		};
-		D799BAE6088A90139B415FCC = {
+		D799BAE6088A90139B415FCC /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = A80000000000000000000001;
+			containerPortal = A80000000000000000000001 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F75109BEB4DD8800DA6B45F8;
 			remoteInfo = MKTownEditorMobile;
@@ -236,6 +195,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0A1DCA3C4FD0ACFF781B5450 /* MobileWorkspaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileWorkspaceTests.swift; sourceTree = "<group>"; };
+		3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePreviewStore.swift; sourceTree = "<group>"; };
+		4E783A9E10D2A8ABA38CD11C /* MKTownEditorMobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditorMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MKTownMobileApp.swift; sourceTree = "<group>"; };
+		65FABA01D6D1FA59F7DA6F53 /* MobileDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDocumentTests.swift; sourceTree = "<group>"; };
+		68415AC928FC514625D3B348 /* MobileEditorLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorLayout.swift; sourceTree = "<group>"; };
+		6C7CCDEB3609F1FAA874E941 /* MKTownEditorMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownPreview.swift; sourceTree = "<group>"; };
+		92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePreviewStoreTests.swift; sourceTree = "<group>"; };
+		96FC794F210D3D1903908AC7 /* Mobile-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Mobile-Info.plist"; sourceTree = "<group>"; };
+		9D61650C61C3274006430FE0 /* MobileMarkdownPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownPreviewTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000001 /* DocumentStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStatistics.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* EditorMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorMode.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* EditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorWorkspace.swift; sourceTree = "<group>"; };
@@ -248,7 +218,6 @@
 		A2000000000000000000000A /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A200000000000000000000B0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
 		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000E /* MarkdownPositionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPositionMap.swift; sourceTree = "<group>"; };
 		A2000000000000000000000F /* MarkdownAnalysis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownAnalysis.swift; sourceTree = "<group>"; };
@@ -347,7 +316,6 @@
 		A20000000000000000000084 /* WorkspaceNamedLayoutSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceNamedLayoutSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000085 /* WorkspaceLayoutActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceLayoutActivation.swift; sourceTree = "<group>"; };
 		A20000000000000000000086 /* MarkdownMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMath.swift; sourceTree = "<group>"; };
-		A200000000000000000000B1 /* MarkdownMathCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMathCompatibility.swift; sourceTree = "<group>"; };
 		A20000000000000000000087 /* MermaidDiagramView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MermaidDiagramView.swift; sourceTree = "<group>"; };
 		A20000000000000000000088 /* Resources/mermaid.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/mermaid.min.js; sourceTree = "<group>"; };
 		A20000000000000000000089 /* Resources/Mermaid-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Resources/Mermaid-LICENSE.txt"; sourceTree = "<group>"; };
@@ -382,97 +350,17 @@
 		A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxTokenizer.swift; sourceTree = "<group>"; };
 		A200000000000000000000A8 /* CodeSyntaxAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxAnalyzer.swift; sourceTree = "<group>"; };
 		A200000000000000000000A9 /* TreeSitterSyntaxParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TreeSitterSyntaxParser.swift; sourceTree = "<group>"; };
+		A200000000000000000000B0 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		A200000000000000000000B1 /* MarkdownMathCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownMathCompatibility.swift; sourceTree = "<group>"; };
+		A200000000000000000000B2 /* PreviewUserScrollObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewUserScrollObserver.swift; sourceTree = "<group>"; };
 		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD03 /* ListKeyboardSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardSelection.swift; sourceTree = "<group>"; };
+		B8A0EEAA379943E284578C8C /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D10000000000000000000001 /* MKTownEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		0A1DCA3C4FD0ACFF781B5450 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileWorkspaceTests.swift;
-			sourceTree = "<group>";
-		};
-		3ECABECCA7B36681774F0AC7 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobilePreviewStore.swift;
-			sourceTree = "<group>";
-		};
-		4E783A9E10D2A8ABA38CD11C = {
-			isa = PBXFileReference;
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			path = MKTownEditorMobile.app;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		5C27FE56A2C7B98DB5D3A7C7 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MKTownMobileApp.swift;
-			sourceTree = "<group>";
-		};
-		65FABA01D6D1FA59F7DA6F53 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileDocumentTests.swift;
-			sourceTree = "<group>";
-		};
-		68415AC928FC514625D3B348 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileEditorLayout.swift;
-			sourceTree = "<group>";
-		};
-		6C7CCDEB3609F1FAA874E941 = {
-			isa = PBXFileReference;
-			explicitFileType = wrapper.cfbundle;
-			includeInIndex = 0;
-			path = MKTownEditorMobileTests.xctest;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		77F24E9613D399389B779337 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileMarkdownPreview.swift;
-			sourceTree = "<group>";
-		};
-		92E9E60DAF956E3C36415243 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobilePreviewStoreTests.swift;
-			sourceTree = "<group>";
-		};
-		96FC794F210D3D1903908AC7 = {
-			isa = PBXFileReference;
-			lastKnownFileType = text.plist.xml;
-			path = "Mobile-Info.plist";
-			sourceTree = "<group>";
-		};
-		9D61650C61C3274006430FE0 = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileMarkdownPreviewTests.swift;
-			sourceTree = "<group>";
-		};
-		B8A0EEAA379943E284578C8C = {
-			isa = PBXFileReference;
-			lastKnownFileType = text.json.xcstrings;
-			path = Localizable.xcstrings;
-			sourceTree = "<group>";
-		};
-		DDD994705C7ACFB84DB3006F = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileEditorWorkspace.swift;
-			sourceTree = "<group>";
-		};
-		EA6E019BA1B55AC2984D8A6B = {
-			isa = PBXFileReference;
-			lastKnownFileType = sourcecode.swift;
-			path = MobileEditorLayoutTests.swift;
-			sourceTree = "<group>";
-		};
+		DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorWorkspace.swift; sourceTree = "<group>"; };
+		EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorLayoutTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -492,6 +380,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		BD92572B49AC16A86614498D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D30000000000000000000002 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -499,14 +394,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BD92572B49AC16A86614498D = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		E05DB79C430AA1B0BA487AFC = {
+		E05DB79C430AA1B0BA487AFC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -519,14 +407,14 @@
 		A40000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				A40000000000000000000002,
-				A40000000000000000000003,
-				D20000000000000000000001,
-				E80000000000000000000001,
-				E80000000000000000000002,
-				E80000000000000000000003,
-				E80000000000000000000004,
-				A40000000000000000000004,
+				A40000000000000000000002 /* Sources/MKTownEditor */,
+				A40000000000000000000003 /* Support */,
+				D20000000000000000000001 /* Tests/MKTownEditorTests */,
+				E80000000000000000000001 /* Sources/MKTownMobile */,
+				E80000000000000000000002 /* Sources/MKTownMobileCore */,
+				E80000000000000000000003 /* Tests/MKTownMobileTests */,
+				E80000000000000000000004 /* Tests/MKTownMobileCoreTests */,
+				A40000000000000000000004 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
@@ -542,6 +430,7 @@
 				A20000000000000000000007 /* MarkdownEditorModel.swift */,
 				A20000000000000000000008 /* MarkdownFormatter.swift */,
 				A20000000000000000000009 /* MarkdownPreview.swift */,
+				A200000000000000000000B2 /* PreviewUserScrollObserver.swift */,
 				A2000000000000000000000A /* MarkdownRenderer.swift */,
 				A2000000000000000000000B /* MarkdownTextEditor.swift */,
 				A2000000000000000000000E /* MarkdownPositionMap.swift */,
@@ -687,9 +576,9 @@
 		A40000000000000000000003 /* Support */ = {
 			isa = PBXGroup;
 			children = (
-				A2000000000000000000000C,
-				A200000000000000000000B0,
-				96FC794F210D3D1903908AC7,
+				A2000000000000000000000C /* Info.plist */,
+				A200000000000000000000B0 /* AppIcon.icon */,
+				96FC794F210D3D1903908AC7 /* Mobile-Info.plist */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -697,49 +586,49 @@
 		A40000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A2000000000000000000000D,
-				D10000000000000000000001,
-				4E783A9E10D2A8ABA38CD11C,
-				6C7CCDEB3609F1FAA874E941,
+				A2000000000000000000000D /* MKTownEditor.app */,
+				D10000000000000000000001 /* MKTownEditorTests.xctest */,
+				4E783A9E10D2A8ABA38CD11C /* MKTownEditorMobile.app */,
+				6C7CCDEB3609F1FAA874E941 /* MKTownEditorMobileTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		E80000000000000000000001 = {
+		E80000000000000000000001 /* Sources/MKTownMobile */ = {
 			isa = PBXGroup;
 			children = (
-				5C27FE56A2C7B98DB5D3A7C7,
-				B8A0EEAA379943E284578C8C,
-				DDD994705C7ACFB84DB3006F,
+				5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */,
+				B8A0EEAA379943E284578C8C /* Localizable.xcstrings */,
+				DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */,
 			);
 			path = Sources/MKTownMobile;
 			sourceTree = "<group>";
 		};
-		E80000000000000000000002 = {
+		E80000000000000000000002 /* Sources/MKTownMobileCore */ = {
 			isa = PBXGroup;
 			children = (
-				3ECABECCA7B36681774F0AC7,
-				68415AC928FC514625D3B348,
-				77F24E9613D399389B779337,
+				3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */,
+				68415AC928FC514625D3B348 /* MobileEditorLayout.swift */,
+				77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */,
 			);
 			path = Sources/MKTownMobileCore;
 			sourceTree = "<group>";
 		};
-		E80000000000000000000003 = {
+		E80000000000000000000003 /* Tests/MKTownMobileTests */ = {
 			isa = PBXGroup;
 			children = (
-				0A1DCA3C4FD0ACFF781B5450,
-				65FABA01D6D1FA59F7DA6F53,
+				0A1DCA3C4FD0ACFF781B5450 /* MobileWorkspaceTests.swift */,
+				65FABA01D6D1FA59F7DA6F53 /* MobileDocumentTests.swift */,
 			);
 			path = Tests/MKTownMobileTests;
 			sourceTree = "<group>";
 		};
-		E80000000000000000000004 = {
+		E80000000000000000000004 /* Tests/MKTownMobileCoreTests */ = {
 			isa = PBXGroup;
 			children = (
-				92E9E60DAF956E3C36415243,
-				9D61650C61C3274006430FE0,
-				EA6E019BA1B55AC2984D8A6B,
+				92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */,
+				9D61650C61C3274006430FE0 /* MobileMarkdownPreviewTests.swift */,
+				EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */,
 			);
 			path = Tests/MKTownMobileCoreTests;
 			sourceTree = "<group>";
@@ -771,6 +660,24 @@
 			productReference = A2000000000000000000000D /* MKTownEditor.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C062A5A4A7F4F37DD90F54CB /* MKTownEditorMobileTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 61AF5D6BEA2D148C6F2833BF /* Build configuration list for PBXNativeTarget "MKTownEditorMobileTests" */;
+			buildPhases = (
+				77A03FEE20FE96AD9384861E /* Sources */,
+				E05DB79C430AA1B0BA487AFC /* Frameworks */,
+				D5C76E148680C094C001AC35 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DE58E2B17C19600779694943 /* PBXTargetDependency */,
+			);
+			name = MKTownEditorMobileTests;
+			productName = MKTownEditorMobileTests;
+			productReference = 6C7CCDEB3609F1FAA874E941 /* MKTownEditorMobileTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		D40000000000000000000001 /* MKTownEditorTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = D80000000000000000000001 /* Build configuration list for PBXNativeTarget "MKTownEditorTests" */;
@@ -794,31 +701,13 @@
 			productReference = D10000000000000000000001 /* MKTownEditorTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		C062A5A4A7F4F37DD90F54CB = {
+		F75109BEB4DD8800DA6B45F8 /* MKTownEditorMobile */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 61AF5D6BEA2D148C6F2833BF;
+			buildConfigurationList = F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "MKTownEditorMobile" */;
 			buildPhases = (
-				77A03FEE20FE96AD9384861E,
-				E05DB79C430AA1B0BA487AFC,
-				D5C76E148680C094C001AC35,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				DE58E2B17C19600779694943,
-			);
-			name = MKTownEditorMobileTests;
-			productName = MKTownEditorMobileTests;
-			productReference = 6C7CCDEB3609F1FAA874E941;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		F75109BEB4DD8800DA6B45F8 = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F37922C48DA5978D02C9E50E;
-			buildPhases = (
-				949D493B91791558E87BC5D7,
-				BD92572B49AC16A86614498D,
-				8ECC8B5D05B79F879ACDF1A2,
+				949D493B91791558E87BC5D7 /* Sources */,
+				BD92572B49AC16A86614498D /* Frameworks */,
+				8ECC8B5D05B79F879ACDF1A2 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -826,7 +715,7 @@
 			);
 			name = MKTownEditorMobile;
 			productName = MKTownEditorMobile;
-			productReference = 4E783A9E10D2A8ABA38CD11C;
+			productReference = 4E783A9E10D2A8ABA38CD11C /* MKTownEditorMobile.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -842,20 +731,20 @@
 					A50000000000000000000001 = {
 						CreatedOnToolsVersion = 27.0;
 					};
-					D40000000000000000000001 = {
-						CreatedOnToolsVersion = 27.0;
-						TestTargetID = A50000000000000000000001;
-					};
 					C062A5A4A7F4F37DD90F54CB = {
 						CreatedOnToolsVersion = 27.1;
 						TestTargetID = F75109BEB4DD8800DA6B45F8;
+					};
+					D40000000000000000000001 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A50000000000000000000001;
 					};
 					F75109BEB4DD8800DA6B45F8 = {
 						CreatedOnToolsVersion = 27.1;
 					};
 				};
 			};
-			buildConfigurationList = A90000000000000000000001;
+			buildConfigurationList = A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */;
 			compatibilityVersion = "Xcode 16.0";
 			developmentRegion = ja;
 			hasScannedForEncodings = 0;
@@ -866,25 +755,34 @@
 			);
 			mainGroup = A40000000000000000000001;
 			packageReferences = (
-				C00000000000000000000001,
-				C00000000000000000000002,
-				C00000000000000000000003,
-				C00000000000000000000004,
-				C00000000000000000000005,
+				C00000000000000000000001 /* XCRemoteSwiftPackageReference "SwiftMath" */,
+				C00000000000000000000002 /* XCRemoteSwiftPackageReference "swift-tree-sitter" */,
+				C00000000000000000000003 /* XCRemoteSwiftPackageReference "tree-sitter-javascript" */,
+				C00000000000000000000004 /* XCRemoteSwiftPackageReference "tree-sitter-typescript" */,
+				C00000000000000000000005 /* XCRemoteSwiftPackageReference "tree-sitter-ruby" */,
 			);
-			productRefGroup = A40000000000000000000004;
+			productRefGroup = A40000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A50000000000000000000001,
-				D40000000000000000000001,
-				F75109BEB4DD8800DA6B45F8,
-				C062A5A4A7F4F37DD90F54CB,
+				A50000000000000000000001 /* MKTownEditor */,
+				D40000000000000000000001 /* MKTownEditorTests */,
+				F75109BEB4DD8800DA6B45F8 /* MKTownEditorMobile */,
+				C062A5A4A7F4F37DD90F54CB /* MKTownEditorMobileTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		8ECC8B5D05B79F879ACDF1A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				34AF324D60BD0E4B09E2BF39 /* Localizable.xcstrings in Resources */,
+				EE8D20AA6654ED2A9EBE4A4B /* AppIcon.icon in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A60000000000000000000001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -903,16 +801,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		8ECC8B5D05B79F879ACDF1A2 = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				34AF324D60BD0E4B09E2BF39,
-				EE8D20AA6654ED2A9EBE4A4B,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		D5C76E148680C094C001AC35 = {
+		D5C76E148680C094C001AC35 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -922,6 +811,32 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		77A03FEE20FE96AD9384861E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9097F832C0114DA739643091 /* MobilePreviewStoreTests.swift in Sources */,
+				5A150E8F7B3AD0AA4307263D /* MobileDocumentTests.swift in Sources */,
+				9C444A90A010B32F849D84D8 /* MobileWorkspaceTests.swift in Sources */,
+				C1EA09B7D1F54F9561D43D73 /* MobileEditorLayoutTests.swift in Sources */,
+				776FE4899C78E807A439C9CF /* MobileMarkdownPreviewTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		949D493B91791558E87BC5D7 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */,
+				C0F816112D8D88BE4DBC3080 /* MKTownMobileApp.swift in Sources */,
+				357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */,
+				686623455B7C59C528A2883D /* MarkdownDocument.swift in Sources */,
+				02FA37F182392CE187209DDE /* MarkdownTextFormat.swift in Sources */,
+				329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */,
+				0442F1659973E0ED68374135 /* MobileMarkdownPreview.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A70000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -935,6 +850,7 @@
 				A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */,
 				A10000000000000000000008 /* MarkdownFormatter.swift in Sources */,
 				A10000000000000000000009 /* MarkdownPreview.swift in Sources */,
+				A100000000000000000000B2 /* PreviewUserScrollObserver.swift in Sources */,
 				A1000000000000000000000A /* MarkdownRenderer.swift in Sources */,
 				A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */,
 				A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */,
@@ -1080,32 +996,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		77A03FEE20FE96AD9384861E = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				9097F832C0114DA739643091,
-				5A150E8F7B3AD0AA4307263D,
-				9C444A90A010B32F849D84D8,
-				C1EA09B7D1F54F9561D43D73,
-				776FE4899C78E807A439C9CF,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		949D493B91791558E87BC5D7 = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				0846BD5C4682504E662A6B1B,
-				C0F816112D8D88BE4DBC3080,
-				357D8CE668AB39E0EB416CD8,
-				686623455B7C59C528A2883D,
-				02FA37F182392CE187209DDE,
-				329E338B9D53911578AEA992,
-				0442F1659973E0ED68374135,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1114,14 +1004,106 @@
 			target = A50000000000000000000001 /* MKTownEditor */;
 			targetProxy = D50000000000000000000001 /* PBXContainerItemProxy */;
 		};
-		DE58E2B17C19600779694943 = {
+		DE58E2B17C19600779694943 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = F75109BEB4DD8800DA6B45F8;
-			targetProxy = D799BAE6088A90139B415FCC;
+			target = F75109BEB4DD8800DA6B45F8 /* MKTownEditorMobile */;
+			targetProxy = D799BAE6088A90139B415FCC /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		0F3D67935A4F199E058A017A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditorMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MKTownEditorMobile";
+			};
+			name = Debug;
+		};
+		20B70E15FDC36C625E57F658 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditorMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MKTownEditorMobile";
+			};
+			name = Release;
+		};
+		5A8C91857F674E16E2724F47 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Support/Mobile-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		B10000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1146,9 +1128,6 @@
 		B10000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1156,9 +1135,12 @@
 				DEVELOPMENT_LANGUAGE = en;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Support/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
@@ -1166,9 +1148,6 @@
 		B10000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
@@ -1176,9 +1155,12 @@
 				DEVELOPMENT_LANGUAGE = en;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Support/Info.plist;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
@@ -1186,16 +1168,16 @@
 		D70000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditor.app/Contents/MacOS/MKTownEditor";
 			};
@@ -1204,95 +1186,33 @@
 		D70000000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				SDKROOT = macosx;
-				SUPPORTED_PLATFORMS = macosx;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mktown.editor.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditor.app/Contents/MacOS/MKTownEditor";
 			};
 			name = Release;
 		};
-		0F3D67935A4F199E058A017A = {
+		E9B2E96ABC5F6856F2BE79CF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				ONLY_ACTIVE_ARCH = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditorMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MKTownEditorMobile";
-			};
-			name = Debug;
-		};
-		20B70E15FDC36C625E57F658 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MKTownEditorMobile.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/MKTownEditorMobile";
-			};
-			name = Release;
-		};
-		5A8C91857F674E16E2724F47 = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_STRICT_CONCURRENCY = complete;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = "Support/Mobile-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -1301,45 +1221,15 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
-				SWIFT_VERSION = 6.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-		E9B2E96ABC5F6856F2BE79CF = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu17;
-				ONLY_ACTIVE_ARCH = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Support/Mobile-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = jp.mktowneditor.mobile;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1348,6 +1238,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		61AF5D6BEA2D148C6F2833BF /* Build configuration list for PBXNativeTarget "MKTownEditorMobileTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0F3D67935A4F199E058A017A /* Debug */,
+				20B70E15FDC36C625E57F658 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A90000000000000000000001 /* Build configuration list for PBXProject "MKTownEditor" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1375,23 +1274,14 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		61AF5D6BEA2D148C6F2833BF = {
+		F37922C48DA5978D02C9E50E /* Build configuration list for PBXNativeTarget "MKTownEditorMobile" */ = {
+			isa = XCConfigurationList;
 			buildConfigurations = (
-				0F3D67935A4F199E058A017A,
-				20B70E15FDC36C625E57F658,
+				E9B2E96ABC5F6856F2BE79CF /* Debug */,
+				5A8C91857F674E16E2724F47 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
-			isa = XCConfigurationList;
-		};
-		F37922C48DA5978D02C9E50E = {
-			buildConfigurations = (
-				E9B2E96ABC5F6856F2BE79CF,
-				5A8C91857F674E16E2724F47,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-			isa = XCConfigurationList;
 		};
 /* End XCConfigurationList section */
 

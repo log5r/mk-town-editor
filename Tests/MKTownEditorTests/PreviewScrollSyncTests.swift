@@ -80,6 +80,74 @@ final class PreviewScrollSyncTests: XCTestCase {
 
 @MainActor
 final class EditorScrollSyncTests: XCTestCase {
+    func testPreviewGeometryMeasuredBeforeAttachmentCanSynchronizeTheFirstScroll() {
+        let monitor = PreviewUserScrollMonitor()
+        var blocks: [Int] = []
+        monitor.onVisibleBlockChange = { blocks.append($0) }
+        monitor.record(origins: [7: 24])
+        let scroll = NSScrollView()
+        monitor.attach(to: scroll)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+        XCTAssertEqual(blocks, [7])
+    }
+
+    func testReplacedPreviewAnalysisWaitsForCurrentGeometry() {
+        let monitor = PreviewUserScrollMonitor()
+        let scroll = NSScrollView()
+        var blocks: [Int] = []
+        monitor.onVisibleBlockChange = { blocks.append($0) }
+        monitor.attach(to: scroll)
+        let old = MarkdownAnalysis("old").identity
+        let current = MarkdownAnalysis("current").identity
+        monitor.setLayout(old)
+        monitor.record(origins: [0: 24], identity: old)
+        monitor.setLayout(current)
+        NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+        XCTAssertTrue(blocks.isEmpty)
+        monitor.record(origins: [0: 24], identity: old)
+        XCTAssertTrue(blocks.isEmpty, "old block IDs must not be used with a new analysis")
+        monitor.record(origins: [9: 24], identity: current)
+        XCTAssertEqual(blocks, [9], "the first user scroll waits for the matching geometry")
+    }
+
+    func testPreviewLayoutAndProgrammaticScrollDoNotSynchronizeSource() {
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        scroll.documentView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 1000))
+        let monitor = PreviewUserScrollMonitor()
+        var blocks: [Int] = []
+        monitor.onVisibleBlockChange = { blocks.append($0) }
+        monitor.attach(to: scroll)
+        monitor.record(origins: [0: 24, 1: 124])
+        monitor.record(origins: [0: 24, 1: 124, 2: 224])
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 100))
+        monitor.record(origins: [0: -76, 1: 24, 2: 124])
+        XCTAssertTrue(blocks.isEmpty)
+    }
+
+    func testPreviewUserScrollSynchronizesBeforeAndAfterGeometryUpdates() {
+        for geometryFirst in [false, true] {
+            let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+            scroll.documentView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 1000))
+            let monitor = PreviewUserScrollMonitor()
+            var blocks: [Int] = []
+            monitor.onVisibleBlockChange = { blocks.append($0) }
+            monitor.attach(to: scroll)
+            monitor.record(origins: [0: 24, 1: 124, 2: 224])
+            let initialY = scroll.contentView.bounds.origin.y
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: initialY + 100))
+            if geometryFirst { monitor.record(origins: [0: -76, 1: 24, 2: 124]) }
+            NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+            XCTAssertEqual(blocks, [1], "geometryFirst=\(geometryFirst)")
+
+            let otherScroll = NSScrollView()
+            NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: otherScroll)
+            XCTAssertEqual(blocks, [1], "nested or other preview scroll views must be ignored")
+            monitor.attach(to: nil)
+            NotificationCenter.default.post(name: NSScrollView.didLiveScrollNotification, object: scroll)
+            XCTAssertEqual(blocks, [1])
+        }
+    }
+
     func testScrollToBlockDoesNotMoveSelection() {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
         let editor = EditorTextView(frame: NSRect(x: 0, y: 0, width: 280, height: 100))
