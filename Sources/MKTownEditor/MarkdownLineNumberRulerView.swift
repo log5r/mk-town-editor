@@ -65,6 +65,7 @@ struct MarkdownLineNumberIndex {
 struct MarkdownLineNumberLabel {
     let number: Int
     let origin: NSPoint
+    /// Font height used for alignment, excluding paragraph line spacing.
     let height: CGFloat
 }
 
@@ -74,9 +75,12 @@ enum MarkdownLineNumberLayout {
                        cachedIndex: MarkdownLineNumberIndex? = nil) -> [MarkdownLineNumberLabel] {
         guard let manager = textView.layoutManager, let container = textView.textContainer else { return [] }
         let index = cachedIndex ?? MarkdownLineNumberIndex(textView.editorSource)
+        // Normal fragments include line spacing; the last/extra fragment may omit it.
+        // Centering within those varying heights makes numbers jump when a newline is
+        // inserted or removed. Anchor every label to the same font height at the line top.
+        let height = manager.defaultLineHeight(for: textView.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize))
         if index.length == 0 {
             let origin = textView.textContainerOrigin
-            let height = manager.defaultLineHeight(for: textView.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize))
             return NSRect(origin: origin, size: NSSize(width: 1, height: height)).intersects(visibleRect)
                 ? [MarkdownLineNumberLabel(number: 1, origin: origin, height: height)] : []
         }
@@ -90,7 +94,7 @@ enum MarkdownLineNumberLayout {
             let origin = NSPoint(x: textView.textContainerOrigin.x + rectangle.minX,
                                  y: textView.textContainerOrigin.y + rectangle.minY)
             labels.append(MarkdownLineNumberLabel(number: number, origin: origin,
-                                                  height: rectangle.height))
+                                                  height: height))
         }
 
         if index.starts.last == index.length {
@@ -100,7 +104,7 @@ enum MarkdownLineNumberLayout {
                                      y: textView.textContainerOrigin.y + extra.minY)
                 if NSRect(origin: origin, size: extra.size).intersects(visibleRect) {
                     labels.append(MarkdownLineNumberLabel(number: index.starts.count,
-                                                          origin: origin, height: extra.height))
+                                                          origin: origin, height: height))
                 }
             }
         }
