@@ -170,7 +170,8 @@ struct MarkdownPreview: View {
                                             diskRevision: workspaceDiskRevision,
                                             documentIndex: workspaceIndex,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
-                                            onOpen: onOpenEmbeddedDocument)
+                                            onOpen: onOpenEmbeddedDocument,
+                                            preservesSoftLineBreaks: documentContext.preservesSoftLineBreaks)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
                                         MarkdownMediaPreview(media: media, documentContext: documentContext)
                                     } else if documentContext.markdownDialect == .extended,
@@ -1060,7 +1061,8 @@ private struct DetachedPreviewContent: View {
             MarkdownPreview(markdown: presentation.source,
                             documentContext: DocumentContext(fileURL: manager.documentURL,
                                 attachmentDirectory: settingsStore.attachmentDirectory(for: manager.documentURL),
-                                markdownDialect: dialect),
+                                markdownDialect: dialect,
+                                preservesSoftLineBreaks: settingsStore.app.preservesSoftLineBreaksInPreview ?? false),
                             snapshot: presentation.snapshot,
                             usesSharedAnalysis: updates.state.isPaused,
                             workspaceDocumentURLs: workspaceStore.documentURLs,

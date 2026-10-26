@@ -5,6 +5,8 @@ struct DocumentContext: Equatable, Sendable {
     let fileURL: URL?
     var attachmentDirectory: AttachmentDirectory = .assets
     var markdownDialect: MarkdownDialect = .extended
+    /// プレビューの段落内で、通常の改行もそのまま表示する。
+    var preservesSoftLineBreaks = false
     var crossReferences: MarkdownCrossReferences? = nil
     /// 解決済みの参考文献。`nil` の場合は描画時に書類のフォルダから読み込む。
     var citationCatalog: MarkdownCitationCatalog? = nil
@@ -14,7 +16,9 @@ struct DocumentContext: Equatable, Sendable {
 
     static func == (lhs: DocumentContext, rhs: DocumentContext) -> Bool {
         lhs.fileURL == rhs.fileURL && lhs.attachmentDirectory == rhs.attachmentDirectory &&
-            lhs.markdownDialect == rhs.markdownDialect && lhs.crossReferences == rhs.crossReferences &&
+            lhs.markdownDialect == rhs.markdownDialect &&
+            lhs.preservesSoftLineBreaks == rhs.preservesSoftLineBreaks &&
+            lhs.crossReferences == rhs.crossReferences &&
             lhs.citationCatalog == rhs.citationCatalog
     }
 

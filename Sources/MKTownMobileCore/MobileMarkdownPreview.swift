@@ -15,6 +15,27 @@ struct MobileMarkdownPreview: Sendable {
         let listMarker: String?
         let indentation: Int
         let isRule: Bool
+
+        /// Foundationが区別した通常の改行だけを切り替え、コードや明示的な改行を保つ。
+        func displayText(preservesSoftLineBreaks: Bool) -> AttributedString {
+            guard text.runs.contains(where: { $0.inlinePresentationIntent?.contains(.softBreak) == true }) else {
+                return text
+            }
+            var result = AttributedString()
+            for run in text.runs {
+                if run.inlinePresentationIntent?.contains(.softBreak) == true {
+                    var separator = AttributedString(preservesSoftLineBreaks ? "\n" : " ", attributes: run.attributes)
+                    var intent = run.inlinePresentationIntent ?? []
+                    intent.remove(.softBreak)
+                    if preservesSoftLineBreaks { intent.insert(.lineBreak) }
+                    separator.inlinePresentationIntent = intent
+                    result.append(separator)
+                } else {
+                    result.append(AttributedString(text[run.range]))
+                }
+            }
+            return result
+        }
     }
 
     let blocks: [Block]

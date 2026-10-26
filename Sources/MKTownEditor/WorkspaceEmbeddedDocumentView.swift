@@ -9,12 +9,14 @@ struct WorkspaceEmbeddedDocumentView: View {
     var documentIndex: WorkspaceDocumentIndex?
     let loadOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
     let onOpen: ((URL) -> Void)?
+    var preservesSoftLineBreaks = false
     @State private var targetURL: URL?
     @State private var cachedIndex: WorkspaceDocumentIndex?
     @State private var indexedDocuments: [URL] = []
     @State private var expansion: WorkspaceEmbedExpansion?
     @State private var refreshID = 0
     @State private var segments: [WorkspaceEmbedSegment] = []
+    @State private var renderedAnalysis: MarkdownAnalysis?
     @State private var fileCache = WorkspaceEmbedFileCache()
     @State private var directoryMonitor: WorkspaceDirectoryMonitor?
     @State private var dependencies: Set<URL> = []
@@ -87,6 +89,12 @@ struct WorkspaceEmbeddedDocumentView: View {
             directoryMonitor?.stop(); directoryMonitor = nil
             completedRefreshKey = nil
         }
+        .onChange(of: preservesSoftLineBreaks) { _, _ in
+            updateSegments()
+        }
+        .onChange(of: renderedAnalysis?.identity) { _, _ in
+            updateSegments()
+        }
     }
 
     @ViewBuilder
@@ -122,8 +130,7 @@ struct WorkspaceEmbeddedDocumentView: View {
                     loaded.dependencies.map { ($0, revisions[$0, default: 0]) }), diskRevision: key.diskRevision)
             if expansion != loaded.expansion || loaded.analysis != nil {
                 if let analysis = loaded.analysis {
-                    segments = WorkspaceEmbedSegment.render(analysis,
-                        documentContext: DocumentContext(fileURL: targetURL))
+                    renderedAnalysis = analysis
                 }
                 expansion = loaded.expansion
             }
@@ -132,6 +139,13 @@ struct WorkspaceEmbeddedDocumentView: View {
             // Only cancellation is thrown by the background expansion. Buffer
             // conflicts retain the existing disk fallback in the loader.
         }
+    }
+
+    private func updateSegments() {
+        guard let renderedAnalysis else { return }
+        segments = WorkspaceEmbedSegment.render(renderedAnalysis,
+            documentContext: DocumentContext(fileURL: targetURL,
+                preservesSoftLineBreaks: preservesSoftLineBreaks))
     }
 }
 

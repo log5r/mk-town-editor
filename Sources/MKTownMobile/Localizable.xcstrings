@@ -1,6 +1,66 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "設定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "完了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "Markdownの解釈" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown interpretation"
+          }
+        }
+      }
+    },
+    "本文の改行をそのまま表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preserve line breaks in body text"
+          }
+        }
+      }
+    },
+    "オンにすると、段落内の改行1つもプレビューで改行します。オフにすると空白として表示します。原文と書き出しには影響しません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When enabled, single line breaks within paragraphs appear as line breaks in the preview. When disabled, they appear as spaces. Source text and exports are unaffected."
+          }
+        }
+      }
+    },
+    "先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display YAML at the start of the file as properties in small text. Turn off to display the original YAML."
+          }
+        }
+      }
+    },
     "Obsidianのプロパティを整形して表示" : {
       "localizations" : {
         "en" : {

@@ -5,6 +5,62 @@ import XCTest
 
 @MainActor
 final class EditorScrollClippingTests: XCTestCase {
+    func testPlainPreviewUpdatesLineBreakPreferenceWithUnchangedSourceAndSnapshot() throws {
+        let source = "first\nsecond"
+        let snapshot = DocumentSnapshot(source: source)
+        func preview(_ enabled: Bool) -> MarkdownPreview {
+            MarkdownPreview(markdown: source,
+                documentContext: DocumentContext(fileURL: nil, preservesSoftLineBreaks: enabled),
+                snapshot: snapshot, usesSharedAnalysis: true)
+        }
+        let host = NSHostingView(rootView: preview(false))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host
+        defer { window.orderOut(nil); window.contentView = nil }
+        for enabled in [false, true, false] {
+            host.rootView = preview(enabled)
+            host.layoutSubtreeIfNeeded()
+            let scroll = try XCTUnwrap(findTextScrollView(in: host))
+            let text = try XCTUnwrap(scroll.documentView as? NSTextView)
+            XCTAssertEqual(text.string, enabled ? "first\nsecond" : "first second")
+        }
+        XCTAssertEqual(snapshot.source, source)
+    }
+
+    func testEmbeddedPreviewUpdatesLineBreaksWithoutReloadingSource() async throws {
+        let root = URL(fileURLWithPath: "/private/tmp/embed-line-breaks-\(UUID().uuidString)")
+        let document = root.appendingPathComponent("main.md")
+        let embedded = root.appendingPathComponent("note.md")
+        let reference = try XCTUnwrap(WorkspaceDocumentEmbed.reference(in: "![[note]]"))
+        var loads = 0
+        func preview(_ enabled: Bool) -> WorkspaceEmbeddedDocumentView {
+            WorkspaceEmbeddedDocumentView(reference: reference, documentURL: document,
+                documents: [document, embedded], diskRevision: 0, loadOpenBuffers: { _ in
+                    loads += 1
+                    return [embedded: Data("first\nsecond\nthird".utf8)]
+                }, onOpen: nil, preservesSoftLineBreaks: enabled)
+        }
+        let host = NSHostingView(rootView: preview(false))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host
+        defer { window.orderOut(nil); window.contentView = nil }
+        for _ in 0..<100 where loads == 0 { try await Task.sleep(for: .milliseconds(10)) }
+        try await Task.sleep(for: .milliseconds(100))
+        host.layoutSubtreeIfNeeded()
+        let joinedHeight = host.fittingSize.height
+        host.rootView = preview(true)
+        try await Task.sleep(for: .milliseconds(100))
+        host.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(host.fittingSize.height, joinedHeight + 10)
+        host.rootView = preview(false)
+        try await Task.sleep(for: .milliseconds(100))
+        host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(host.fittingSize.height, joinedHeight, accuracy: 0.5)
+        XCTAssertEqual(loads, 1, "Changing a display preference must reuse the loaded analysis")
+    }
+
     func testSourceEditorClipsRulerAndBackgroundAtPaneBoundary() throws {
         let model = MarkdownEditorModel()
         let host = NSHostingView(rootView: MarkdownTextEditor(

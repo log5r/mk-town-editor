@@ -4,6 +4,8 @@ struct MobileEditorWorkspace: View {
     @Binding var document: MarkdownDocument
     @AppStorage private(set) var showsFrontMatter: Bool
     @AppStorage private(set) var formatsFrontMatter: Bool
+    @AppStorage private(set) var preservesSoftLineBreaks: Bool
+    @State private var showingSettings = false
     @State private var presentation: MobileEditorPresentation = .automatic
     @State private var compactPreview = false
     @State private var selection: TextSelection?
@@ -18,6 +20,7 @@ struct MobileEditorWorkspace: View {
         _document = document
         _showsFrontMatter = AppStorage(wrappedValue: false, "mobile.showsFrontMatterInPreview", store: preferences)
         _formatsFrontMatter = AppStorage(wrappedValue: false, "mobile.formatsFrontMatterInPreview", store: preferences)
+        _preservesSoftLineBreaks = AppStorage(wrappedValue: false, "mobile.preservesSoftLineBreaksInPreview", store: preferences)
     }
 
     var body: some View {
@@ -58,21 +61,28 @@ struct MobileEditorWorkspace: View {
                             Text("編集").tag(MobileEditorPresentation.editor)
                             Text("プレビュー").tag(MobileEditorPresentation.preview)
                         }
-                        Section("フロントマター") {
-                            Toggle("フロントマターを表示", isOn: $showsFrontMatter)
-                            Toggle("Obsidianのプロパティを整形して表示", isOn: $formatsFrontMatter)
-                                .disabled(!showsFrontMatter)
-                        }
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("コピーを書き出す", systemImage: "square.and.arrow.up") { exporting = true }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("設定", systemImage: "gearshape") {
+                        editorFocused = false
+                        showingSettings = true
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityIdentifier("openSettings")
                 }
             }
         }
         .onAppear { previewStore.update(source: document.text) }
         .onChange(of: document.text) { _, source in previewStore.update(source: source) }
         .onDisappear { previewStore.cancel() }
+        .sheet(isPresented: $showingSettings) {
+            MobilePreferencesView(preservesSoftLineBreaks: $preservesSoftLineBreaks,
+                showsFrontMatter: $showsFrontMatter, formatsFrontMatter: $formatsFrontMatter)
+        }
         .fileExporter(isPresented: $exporting, document: document,
                       contentType: MarkdownDocument.markdownType) { result in
             if case .failure(let error) = result { exportError = error.localizedDescription }
@@ -112,7 +122,7 @@ struct MobileEditorWorkspace: View {
         } else {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 if let marker = block.listMarker { Text(marker) }
-                Text(block.text)
+                Text(block.displayText(preservesSoftLineBreaks: preservesSoftLineBreaks))
                     .font(font(for: block))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(block.headingLevel == nil ? [] : .isHeader)
@@ -133,6 +143,47 @@ struct MobileEditorWorkspace: View {
         case 3: return .title2.bold()
         case .some: return .headline
         case nil: return .body
+        }
+    }
+}
+
+struct MobilePreferencesView: View {
+    @Binding var preservesSoftLineBreaks: Bool
+    @Binding var showsFrontMatter: Bool
+    @Binding var formatsFrontMatter: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Toggle("本文の改行をそのまま表示", isOn: $preservesSoftLineBreaks)
+                        .accessibilityIdentifier("preserveLineBreaks")
+                } header: {
+                    Text("Markdownの解釈")
+                } footer: {
+                    Text("オンにすると、段落内の改行1つもプレビューで改行します。オフにすると空白として表示します。原文と書き出しには影響しません。")
+                }
+                Section {
+                    Toggle("フロントマターを表示", isOn: $showsFrontMatter)
+                        .accessibilityIdentifier("showFrontMatter")
+                    Toggle("Obsidianのプロパティを整形して表示", isOn: $formatsFrontMatter)
+                        .disabled(!showsFrontMatter)
+                        .accessibilityIdentifier("formatFrontMatter")
+                } header: {
+                    Text("フロントマター")
+                } footer: {
+                    Text("先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。")
+                }
+            }
+            .navigationTitle("設定")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                        .accessibilityIdentifier("closeSettings")
+                }
+            }
         }
     }
 }

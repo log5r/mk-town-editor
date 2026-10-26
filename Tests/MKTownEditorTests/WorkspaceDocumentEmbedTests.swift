@@ -240,6 +240,19 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
             "![[new#section]]\n```\n![[old]]\n```")
     }
 
+    @MainActor
+    func testEmbeddedSegmentsFollowSoftLineBreakPreference() {
+        let analysis = MarkdownAnalysis("first\nsecond\n\n```\na\nb\n```")
+        for enabled in [false, true, false] {
+            let segments = WorkspaceEmbedSegment.render(analysis,
+                documentContext: DocumentContext(fileURL: nil, preservesSoftLineBreaks: enabled))
+            guard case let .text(text) = segments.first else { return XCTFail("Missing text segment") }
+            XCTAssertEqual(String(text.characters), enabled ? "first\nsecond" : "first second")
+            guard case let .codeBlock(_, code, _) = segments.last else { return XCTFail("Missing code segment") }
+            XCTAssertEqual(String(code.characters), "a\nb")
+        }
+    }
+
     /// 不具合: 埋め込み文書のコードブロックは文字ごとの背景のままで、行の長さに沿った白い帯として表示されていた。
     @MainActor
     func testEmbeddedCodeBlockIsFramedWithoutPerCharacterBackground() throws {

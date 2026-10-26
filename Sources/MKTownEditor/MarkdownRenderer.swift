@@ -315,7 +315,7 @@ enum MarkdownRenderer {
         case let .heading(level):
             let sizes: [CGFloat] = [28, 23, 20, 18, 16, 15]
             return inline(
-                paragraphContent(block),
+                paragraphContent(block, preservesSoftLineBreaks: context.preservesSoftLineBreaks),
                 baseFont: .systemFont(ofSize: sizes[level - 1], weight: level < 3 ? .bold : .semibold),
                 paragraphSpacing: level < 3 ? 14 : 9, references: references,
                 footnotes: footnotes, context: context
@@ -324,7 +324,8 @@ enum MarkdownRenderer {
             return NSAttributedString(string: "")
         case .unorderedList:
             let task = block.task
-            let content = inline(paragraphContent(block, content: task?.content),
+            let content = inline(paragraphContent(block, content: task?.content,
+                                                  preservesSoftLineBreaks: context.preservesSoftLineBreaks),
                                  baseFont: .systemFont(ofSize: 15), references: references,
                                  footnotes: footnotes, context: context)
             if showTaskPrefix || task == nil {
@@ -335,7 +336,8 @@ enum MarkdownRenderer {
             return content
         case let .orderedList(number):
             let task = block.task
-            let content = inline(paragraphContent(block, content: task?.content),
+            let content = inline(paragraphContent(block, content: task?.content,
+                                                  preservesSoftLineBreaks: context.preservesSoftLineBreaks),
                                  baseFont: .systemFont(ofSize: 15), references: references,
                                  footnotes: footnotes, context: context)
             let prefix = showTaskPrefix
@@ -386,7 +388,9 @@ enum MarkdownRenderer {
                 }
                 return output
             }
-            let content = inline(paragraphContent(block), baseFont: .systemFont(ofSize: 15),
+            let content = inline(paragraphContent(block,
+                                                  preservesSoftLineBreaks: context.preservesSoftLineBreaks),
+                                 baseFont: .systemFont(ofSize: 15),
                                  captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
             if block.parentID != nil {
@@ -399,7 +403,8 @@ enum MarkdownRenderer {
         }
     }
 
-    nonisolated static func paragraphContent(_ block: MarkdownBlock, content: String? = nil) -> String {
+    nonisolated static func paragraphContent(_ block: MarkdownBlock, content: String? = nil,
+                                            preservesSoftLineBreaks: Bool = false) -> String {
         let lines = (content ?? block.content).components(separatedBy: "\n")
         var result = ""
         for (index, line) in lines.enumerated() {
@@ -413,7 +418,7 @@ enum MarkdownRenderer {
             }
             result += content
             if index < block.lineBreaks.count {
-                result += block.lineBreaks[index] == .hard ? "\n" : " "
+                result += block.lineBreaks[index] == .hard || preservesSoftLineBreaks ? "\n" : " "
             }
         }
         return result

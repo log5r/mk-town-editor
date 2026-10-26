@@ -150,6 +150,13 @@ struct EditorPreferencesView: View {
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
                 }
+            }
+            Section("Markdownの解釈") {
+                Toggle("本文の改行をそのまま表示", isOn: binding(\.preservesSoftLineBreaksInPreview, default: false))
+                Text("オンにすると、段落内の改行1つもプレビューで改行します。オフにすると空白として表示します。原文と書き出しには影響しません。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section("フロントマター") {
                 Toggle("プレビューにフロントマターを表示", isOn: binding(\.showsFrontMatterInPreview, default: false))
                 Toggle("Obsidianのプロパティを整形して表示", isOn: binding(\.formatsFrontMatterInPreview, default: false))
                     .disabled(!(settingsStore.app.showsFrontMatterInPreview ?? false))
