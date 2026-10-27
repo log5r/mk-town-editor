@@ -11,6 +11,8 @@ macOS・iOS・iPadOSで、開いている書類の本文を検索・置換でき
 
 検索欄に文字列を入力し、前後の一致へ移動する。置換欄には新しい文字列を入力し、1件ずつ置換するか、すべて置換する。空の置換文字列で一致箇所を削除できる。変更は通常の書類編集と同じ保存処理に反映され、Undoで取り消せる。
 
+iOS・iPadOSでは、検索中に本文の下部にも現在位置と総数を表示する。検索バー内の件数をOSが非表示にした場合も、この専用欄で確認できる。
+
 iOS・iPadOSでプレビューだけを表示している場合、検索を開くと編集画面へ切り替わる。検索を閉じても本文は編集画面に表示する。プレビューに切り替えると検索UIを閉じる。
 
 macOS版は[正規表現検索やフォルダ全体の検索・置換](features.md#文書内の移動と検索)にも対応する。これらの拡張機能はモバイル版には含めない。
@@ -62,7 +64,24 @@ iOS・iPadOSはSwiftUIの`TextEditor`とUIKitの検索機能を使い、macOSの
 | iPad Pro 13インチ（M5）/ iPadOS 26.0 | モバイルの全43テスト成功。同じ連続移動・表示検査を実行 |
 | iPhone 17 / iOS 26.0 | 連続移動・表示検査が成功。通常のiPhoneの画面幅でも確認 |
 
+### iPhone Duo実機での追加調査
+
+上記の検証後、iPhone Duo実機（iOS 27.1）の録画で別の表示問題を確認した。9件目までは件数が見え、10件目から消えていた。実機上で長い文章と実際の`MobileEditorWorkspace`を使って再現すると、検索結果と現在位置は正しいまま、UIKitの件数ラベルが`10 / 40`を保持して`isHidden == true`になることを確認できた。`UIFindInteraction.updateResultCount()`を呼んでも、この非表示は解除されなかった。
+
+初回のモバイルテストは短い文章を簡易な`TextEditor`に表示していたため、実際のワークスペースで発生する件数表示の問題を検出できていなかった。追加の回帰テストでは本番のワークスペースを表示し、ツールバーから検索を開く。長い日本語の文章に40件の一致を用意し、標準の前後ボタンを各45回操作して、現在位置と総数が専用欄に表示されることを検査する。
+
+修正では、標準検索バーの件数とは別に、本文下部へ件数専用の領域を設けた。公開APIの`UIFindSession.resultCount`と`highlightedResultIndex`を50ミリ秒間隔で読み、変化した場合だけラベルを更新する。検索・強調・前後移動・置換は引き続きOSが処理する。検索セッションや本文へ書き込む処理は追加しない。
+
+専用欄は検索中だけ存在し、検索を閉じるか編集欄を取り除くと更新タスクをキャンセルする。文字は標準のキャプション書体とDynamic Typeを使い、VoiceOverにも件数を公開する。回帰テストは件数ラベルの実表示と幅、検索語を変更したときの該当なし・再検索、検索終了後のラベル除去と本文入力も確認する。
+
+追加修正の検証は、利用者の希望によりシミュレーターで実施する。実機では修正前の再現まで確認しており、追加修正後の実機動作は未確認。
+
+追加修正後は全Swiftユニットテスト1,190件を実行し、既存の5件がスキップ、失敗は0件だった。iPhone Duo（iOS 27.1）とiPad Pro 13インチ（iPadOS 26.0）のシミュレーターでは各44件が成功した。Duoの長文テストはアプリを起動し直して3回繰り返しても成功し、各移動後に専用ラベルの表示値が実際の現在位置・総数と一致することを確認した。通常のiPhone 17（iOS 26.0）シミュレーターでも同じ長文テストが成功した。
+
+CIのPython設定検査は、ワークスペース内の`UIViewRepresentable`を一律に禁止していたため、件数ラベルの追加で失敗した。画面サイズ・端末種別への依存とセーフエリアの無視を禁じる検査は維持し、標準編集欄の利用は`TextEditor`と本文・選択範囲のバインディングを直接確認する。件数ラベルのUIKit接続自体をレイアウト違反とは扱わない。ローカルでCIを検証するときも、Swiftのテストだけでなく`Tools/ci.sh`のPython設定検査とReleaseビルドを含めて実行する。
+
 ## 参照
 
 - [Apple: findNavigator(isPresented:)](https://developer.apple.com/documentation/swiftui/view/findnavigator(ispresented:))
+- [Apple: UIFindSession](https://developer.apple.com/documentation/uikit/uifindsession)
 - [Human Interface Guidelines: Searching](https://developer.apple.com/design/human-interface-guidelines/searching)
