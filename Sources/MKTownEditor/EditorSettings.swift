@@ -252,6 +252,7 @@ struct AppEditorSettings: Codable, Equatable {
     var proofing: EditorProofingSettings?
     var showsFrontMatterInPreview: Bool?
     var formatsFrontMatterInPreview: Bool?
+    var preservesSoftLineBreaksInPreview: Bool?
     var snippets: [EditorSnippet]?
     var loadsRemoteImages: Bool?
     var loadsExternalLinkPreviews: Bool?

@@ -110,6 +110,44 @@ final class MarkdownRendererTests: XCTestCase {
     }
 
     @MainActor
+    func testOptionalSoftLineBreaksPreserveHardBreaksBlankLinesAndInlineFormatting() {
+        for dialect in MarkdownDialect.allCases {
+            let analysis = MarkdownAnalysis("**first**\nsecond  \nthird\\\nfourth\n\nnext", dialect: dialect)
+            let context = DocumentContext(fileURL: nil, preservesSoftLineBreaks: true)
+            let rendered = MarkdownRenderer.render(analysis, documentContext: context)
+            XCTAssertEqual(rendered.string, "first\nsecond\nthird\nfourth\n\nnext")
+            let font = rendered.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+            XCTAssertTrue(font.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } ?? false)
+            XCTAssertEqual(MarkdownRenderer.render(analysis).string, "first second\nthird\nfourth\n\nnext")
+        }
+    }
+
+    @MainActor
+    func testOptionalSoftLineBreaksApplyToListTaskQuoteAndCalloutBodies() throws {
+        for source in ["- first\n  second", "1. first\n   second", "- [ ] first\n  second",
+                       "> first\n> second", "> [!NOTE]\n> first\n> second"] {
+            let analysis = MarkdownAnalysis(source)
+            let context = DocumentContext(fileURL: nil, preservesSoftLineBreaks: true)
+            let rendered = MarkdownRenderer.render(analysis, documentContext: context).string
+            XCTAssertTrue(rendered.contains("first\nsecond") || rendered.contains("first\n│  second"), source)
+            XCTAssertTrue(MarkdownRenderer.render(analysis).string.contains("first second"), source)
+            if let task = analysis.blocks.first(where: { $0.task != nil }) {
+                XCTAssertEqual(MarkdownRenderer.renderLeaf(task, in: analysis, showTaskPrefix: false,
+                    documentContext: context).string, "first\nsecond")
+            }
+        }
+    }
+
+    @MainActor
+    func testOptionalSoftLineBreaksLeaveCodeAndEscapedBackslashesIntact() {
+        let source = "first\\\\\nsecond\n\n```\na\nb\n```"
+        let context = DocumentContext(fileURL: nil, preservesSoftLineBreaks: true)
+        XCTAssertEqual(MarkdownRenderer.render(source, documentContext: context).string,
+                       "first\\\nsecond\n\na\nb")
+        XCTAssertEqual(MarkdownRenderer.render(source).string, "first\\ second\n\na\nb")
+    }
+
+    @MainActor
     func testNestedListAndContinuationAreVisuallyIndented() {
         let rendered = MarkdownRenderer.render("- parent\n  - child\n\n    continuation")
         let source = rendered.string as NSString

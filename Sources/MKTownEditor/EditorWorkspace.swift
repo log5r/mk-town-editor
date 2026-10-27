@@ -352,7 +352,8 @@ struct EditorWorkspace: View {
     private var documentContext: DocumentContext {
         DocumentContext(fileURL: fileURL,
                         attachmentDirectory: settingsStore.attachmentDirectory(for: fileURL),
-                        markdownDialect: settingsStore.markdownDialect(for: fileURL))
+                        markdownDialect: settingsStore.markdownDialect(for: fileURL),
+                        preservesSoftLineBreaks: settingsStore.app.preservesSoftLineBreaksInPreview ?? false)
     }
 
     private var navigationView: some View {

@@ -106,6 +106,27 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.formatsFrontMatterInPreview, false)
     }
 
+    func testSoftLineBreakPreferenceMigratesAndPersistsIndependentlyOfFrontMatter() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertFalse(store.app.preservesSoftLineBreaksInPreview ?? false)
+        let legacyData = try JSONEncoder().encode(store.app)
+        let legacy = try JSONDecoder().decode(AppEditorSettings.self, from: legacyData)
+        XCTAssertNil(legacy.preservesSoftLineBreaksInPreview)
+
+        var settings = store.app
+        settings.showsFrontMatterInPreview = true
+        settings.formatsFrontMatterInPreview = true
+        for enabled in [true, false, true] {
+            settings.preservesSoftLineBreaksInPreview = enabled
+            store.setAppSettings(settings)
+            let restored = EditorSettingsStore(defaults: defaults).app
+            XCTAssertEqual(restored.preservesSoftLineBreaksInPreview, enabled)
+            XCTAssertEqual(restored.showsFrontMatterInPreview, true)
+            XCTAssertEqual(restored.formatsFrontMatterInPreview, true)
+        }
+    }
+
     func testInlineLivePresentationPreferenceDefaultsOffAndPersists() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)

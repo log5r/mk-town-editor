@@ -7,6 +7,41 @@ import XCTest
 #endif
 
 final class MobileMarkdownPreviewTests: XCTestCase {
+    func testSoftLineBreaksToggleWithoutReparsingOrChangingBlockStructure() throws {
+        let source = "**first**\nsecond  \nthird\\\nfourth\n\nnext"
+        let preview = MobileMarkdownPreview(source)
+        let block = try XCTUnwrap(preview.blocks.first)
+        for enabled in [false, true, false] {
+            let text = block.displayText(preservesSoftLineBreaks: enabled)
+            XCTAssertEqual(String(text.characters), enabled ? "first\nsecond\nthird\nfourth" : "first second\nthird\nfourth")
+            XCTAssertTrue(text.runs.first?.inlinePresentationIntent?.contains(.stronglyEmphasized) == true)
+        }
+        XCTAssertEqual(preview.blocks.count, 2)
+        XCTAssertEqual(String(preview.blocks[1].text.characters), "next")
+    }
+
+    func testSoftLineBreaksApplyToListAndQuoteButPreserveCode() throws {
+        for source in ["- first\n  second", "1. first\n   second", "> first\n> second"] {
+            let block = try XCTUnwrap(MobileMarkdownPreview(source).blocks.first)
+            XCTAssertEqual(String(block.displayText(preservesSoftLineBreaks: true).characters), "first\nsecond")
+            XCTAssertEqual(String(block.displayText(preservesSoftLineBreaks: false).characters), "first second")
+        }
+        let preview = MobileMarkdownPreview("```\na\nb\n```\n\n`inline\ncode`")
+        for enabled in [false, true] {
+            XCTAssertEqual(String(preview.blocks[0].displayText(preservesSoftLineBreaks: enabled).characters), "a\nb\n")
+            XCTAssertEqual(String(preview.blocks[1].displayText(preservesSoftLineBreaks: enabled).characters), "inline code")
+        }
+    }
+
+    func testSoftLineBreakSettingLeavesFrontMatterAndCRLFSourceIntact() throws {
+        let source = "---\r\ntitle: Duo\r\ntags: [journal]\r\n---\r\nfirst\r\nsecond"
+        let preview = MobileMarkdownPreview(source)
+        let block = try XCTUnwrap(preview.blocks.first)
+        XCTAssertEqual(String(block.displayText(preservesSoftLineBreaks: true).characters), "first\nsecond")
+        XCTAssertEqual(String(block.displayText(preservesSoftLineBreaks: false).characters), "first second")
+        XCTAssertEqual(preview.frontMatter?.raw, "---\r\ntitle: Duo\r\ntags: [journal]\r\n---\r\n")
+    }
+
     func testFrontMatterIsSeparatedFromBodyAndUsesSharedPropertyFormatting() throws {
         let source = "---\ntitle: 'Duo note'\ntags:\n- journal\n- project/app\naliases: [First, 'Other name']\ndate: 2026-10-26\n---\n# Heading\n\nBody🙂"
         let preview = MobileMarkdownPreview(source)

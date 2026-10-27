@@ -4,6 +4,19 @@ import XCTest
 
 @MainActor
 final class PreviewRenderCacheTests: XCTestCase {
+    func testSoftLineBreakPreferenceInvalidatesCacheWithoutChangingAnalysis() throws {
+        let analysis = MarkdownAnalysis("first\nsecond")
+        let block = try XCTUnwrap(analysis.rootBlocks.first)
+        let cache = PreviewRenderCache()
+        for enabled in [false, true, false] {
+            let context = DocumentContext(fileURL: nil, preservesSoftLineBreaks: enabled)
+            let rendered = cache.render(block, in: analysis, context: context, zoom: 1)
+            XCTAssertEqual(rendered.string, enabled ? "first\nsecond" : "first second")
+            XCTAssertTrue(rendered === cache.render(block, in: analysis, context: context, zoom: 1))
+        }
+        XCTAssertEqual(cache.renderCount, 3)
+    }
+
     func testUnchangedBlockReusesRenderedAttributesAfterOtherBlockChanges() throws {
         let first = MarkdownAnalysis("# Heading\n\nFirst\n\nSecond")
         let changed = MarkdownAnalysis("# Heading\n\nFirst\n\nChanged")

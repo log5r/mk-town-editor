@@ -5,6 +5,106 @@ import XCTest
 
 @MainActor
 final class MobileWorkspaceTests: XCTestCase {
+    private final class PreferenceBox: ObservableObject {
+        @Published var preserves = false
+        @Published var shows = false
+        @Published var formats = true
+    }
+
+    private struct PreferencesContainer: View {
+        @ObservedObject var model: PreferenceBox
+        var body: some View {
+            MobilePreferencesView(preservesSoftLineBreaks: $model.preserves,
+                showsFrontMatter: $model.shows, formatsFrontMatter: $model.formats)
+        }
+    }
+
+    func testLineBreakPreferenceDefaultsOffPersistsAndKeepsFrontMatterChoices() throws {
+        let suite = "MobileWorkspaceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let document = MarkdownDocument(text: "first\nsecond")
+        XCTAssertFalse(MobileEditorWorkspace(document: .constant(document), preferences: defaults).preservesSoftLineBreaks)
+        defaults.set(true, forKey: "mobile.showsFrontMatterInPreview")
+        defaults.set(true, forKey: "mobile.formatsFrontMatterInPreview")
+        for enabled in [true, false, true] {
+            defaults.set(enabled, forKey: "mobile.preservesSoftLineBreaksInPreview")
+            let restored = MobileEditorWorkspace(document: .constant(document), preferences: defaults)
+            XCTAssertEqual(restored.preservesSoftLineBreaks, enabled)
+            XCTAssertTrue(restored.showsFrontMatter)
+            XCTAssertTrue(restored.formatsFrontMatter)
+        }
+        XCTAssertEqual(document.text, "first\nsecond")
+    }
+
+    func testSettingsControlsApplyImmediatelyAndRetainFormattingWhenHidden() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = PreferenceBox()
+        let host = UIHostingController(rootView: PreferencesContainer(model: model))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await Task.sleep(for: .milliseconds(200))
+        let controls = switches(in: host.view)
+        XCTAssertEqual(controls.count, 3)
+        guard controls.count == 3 else { return }
+        XCTAssertFalse(controls[0].isOn)
+        XCTAssertFalse(controls[1].isOn)
+        XCTAssertTrue(controls[2].isOn)
+        XCTAssertFalse(controls[2].isEnabled)
+        controls[0].isOn = true
+        controls[0].sendActions(for: .valueChanged)
+        XCTAssertTrue(model.preserves)
+        controls[1].isOn = true
+        controls[1].sendActions(for: .valueChanged)
+        XCTAssertTrue(model.shows)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(controls[2].isEnabled)
+        controls[1].isOn = false
+        controls[1].sendActions(for: .valueChanged)
+        XCTAssertFalse(model.shows)
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertFalse(controls[2].isEnabled)
+        XCTAssertTrue(model.formats)
+    }
+
+    func testSettingsButtonPresentsScreenFromDocumentToolbar() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView: NavigationStack {
+            MobileEditorWorkspace(document: .constant(MarkdownDocument(text: "first\nsecond")))
+        })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await Task.sleep(for: .milliseconds(200))
+        func items(_ item: UINavigationItem) -> [UIBarButtonItem] {
+            (item.rightBarButtonItems ?? []) + item.trailingItemGroups.flatMap(\.barButtonItems)
+        }
+        func toolbarItems(in controller: UIViewController) -> [UIBarButtonItem] {
+            items(controller.navigationItem) + (controller.toolbarItems ?? []) +
+                controller.children.flatMap { toolbarItems(in: $0) }
+        }
+        func viewItems(in view: UIView) -> [UIBarButtonItem] {
+            let own = (view as? UINavigationBar)?.items?.flatMap { items($0) } ??
+                (view as? UIToolbar)?.items ?? []
+            return own + view.subviews.flatMap { viewItems(in: $0) }
+        }
+        let buttons = toolbarItems(in: host) + viewItems(in: host.view)
+        // iOS 27.0 exposes the SwiftUI button's accessibility metadata on its view,
+        // rather than on UIBarButtonItem. The trailing action is Settings; verify
+        // the presented controls as well so another sheet cannot satisfy this test.
+        let settings = try XCTUnwrap(buttons.first { $0.accessibilityIdentifier == "openSettings" ||
+            $0.accessibilityLabel == String(localized: "設定") } ?? buttons.last)
+        let action = try XCTUnwrap(settings.action)
+        XCTAssertTrue(UIApplication.shared.sendAction(action, to: settings.target, from: settings, for: nil))
+        try await Task.sleep(for: .milliseconds(400))
+        let presented = try XCTUnwrap(host.presentedViewController)
+        XCTAssertEqual(switches(in: presented.view).count, 3)
+        host.dismiss(animated: false)
+    }
+
     func testFrontMatterPreferencesDefaultOffPersistAndRemainIndependent() throws {
         let suite = "MobileWorkspaceTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -90,6 +190,10 @@ final class MobileWorkspaceTests: XCTestCase {
 
     private func textViews(in view: UIView) -> [UITextView] {
         (view as? UITextView).map { [$0] } ?? view.subviews.flatMap { textViews(in: $0) }
+    }
+
+    private func switches(in view: UIView) -> [UISwitch] {
+        (view as? UISwitch).map { [$0] } ?? view.subviews.flatMap { switches(in: $0) }
     }
 
     func testWorkspaceDoesNotAddAnotherNavigationBarInsideDocumentNavigation() async throws {
