@@ -78,6 +78,8 @@ iOS・iPadOSはSwiftUIの`TextEditor`とUIKitの検索機能を使い、macOSの
 
 追加修正後は全Swiftユニットテスト1,190件を実行し、既存の5件がスキップ、失敗は0件だった。iPhone Duo（iOS 27.1）とiPad Pro 13インチ（iPadOS 26.0）のシミュレーターでは各44件が成功した。Duoの長文テストはアプリを起動し直して3回繰り返しても成功し、各移動後に専用ラベルの表示値が実際の現在位置・総数と一致することを確認した。通常のiPhone 17（iOS 26.0）シミュレーターでも同じ長文テストが成功した。
 
+CIのPython設定検査は、ワークスペース内の`UIViewRepresentable`を一律に禁止していたため、件数ラベルの追加で失敗した。画面サイズ・端末種別への依存とセーフエリアの無視を禁じる検査は維持し、標準編集欄の利用は`TextEditor`と本文・選択範囲のバインディングを直接確認する。件数ラベルのUIKit接続自体をレイアウト違反とは扱わない。ローカルでCIを検証するときも、Swiftのテストだけでなく`Tools/ci.sh`のPython設定検査とReleaseビルドを含めて実行する。
+
 ## 参照
 
 - [Apple: findNavigator(isPresented:)](https://developer.apple.com/documentation/swiftui/view/findnavigator(ispresented:))

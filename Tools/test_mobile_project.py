@@ -47,10 +47,11 @@ class MobileProjectTests(unittest.TestCase):
     def test_adaptive_layout_has_no_device_or_screen_size_assumptions(self):
         source = (ROOT / "Sources/MKTownMobile/MobileEditorWorkspace.swift").read_text()
         for forbidden in ("UIScreen.main", "userInterfaceIdiom", "UIDevice.current.orientation",
-                          "ignoresSafeArea", "UIViewRepresentable"):
+                          "ignoresSafeArea"):
             self.assertNotIn(forbidden, source)
         self.assertIn("GeometryReader", source)
-        self.assertIn("TextEditor", source)
+        # A UIKit label bridge does not constrain layout or replace the native editor.
+        self.assertIn("TextEditor(text: $document.text, selection: $selection)", source)
 
     def test_all_mobile_unit_tests_are_in_the_shared_scheme(self):
         target = self.target("MKTownEditorMobileTests")
