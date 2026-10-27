@@ -5,6 +5,127 @@ import XCTest
 
 @MainActor
 final class MobileWorkspaceTests: XCTestCase {
+    private final class SearchBox: ObservableObject {
+        @Published var state = MobileEditorState(presentation: .preview)
+        @Published var text = "日本語🙂 日本語🙂"
+    }
+
+    private struct SearchContainer: View {
+        @ObservedObject var model: SearchBox
+        var body: some View {
+            HStack {
+                if model.state.presentation != .preview {
+                    TextEditor(text: $model.text)
+                        .modifier(MobileFindNavigator(editorState: $model.state))
+                }
+                if model.state.presentation == .preview {
+                    ScrollView { Text(model.text) }.frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("Search Test")
+            .toolbar {
+                Button("Find") { model.state.showFindNavigator() }
+            }
+        }
+    }
+
+    private final class AppearanceHost<Content: View>: UIHostingController<Content> {
+        var didAppear = false
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            didAppear = true
+        }
+    }
+
+    func testFindRequestPresentsNavigatorAfterLeavingPreview() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = SearchBox()
+        let host = AppearanceHost(rootView: NavigationStack { SearchContainer(model: model) })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<100 {
+            if host.didAppear { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        XCTAssertTrue(host.didAppear)
+        XCTAssertTrue(textViews(in: host.view).isEmpty)
+        for cycle in 0..<2 {
+            model.state.showFindNavigator()
+            // UIKit presentation can follow the SwiftUI update by several animation frames.
+            for _ in 0..<100 {
+                if textViews(in: host.view).first?.findInteraction?.isFindNavigatorVisible == true { break }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            let editor = try XCTUnwrap(textViews(in: host.view).first)
+            XCTAssertNotNil(editor.window)
+            XCTAssertGreaterThan(editor.bounds.width, 0)
+            let interaction = try XCTUnwrap(editor.findInteraction)
+            XCTAssertTrue(interaction.isFindNavigatorVisible, "Search cycle \(cycle)")
+            XCTAssertTrue(model.state.showsFindNavigator, "Search cycle \(cycle)")
+            model.state.togglePreview(showsEditor: true)
+            for _ in 0..<100 {
+                if textViews(in: host.view).isEmpty { break }
+                try await Task.sleep(for: .milliseconds(50))
+            }
+            XCTAssertFalse(model.state.showsFindNavigator)
+            XCTAssertNil(editor.window)
+            XCTAssertTrue(textViews(in: host.view).isEmpty)
+        }
+    }
+
+    func testNativeFindSupportsNavigationReplacementUndoAndDocumentSaving() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = DocumentBox()
+        let original = "# 日本語🙂\n\ne\u{301} 日本語🙂 日本語🙂\n"
+        model.document.text = original
+        let host = UIHostingController(rootView: Container(model: model))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        try await Task.sleep(for: .milliseconds(200))
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        XCTAssertTrue(editor.isFindInteractionEnabled)
+        editor.becomeFirstResponder()
+        let interaction = try XCTUnwrap(editor.findInteraction)
+        interaction.presentFindNavigator(showingReplace: true)
+        defer { interaction.dismissFindNavigator() }
+        try await Task.sleep(for: .milliseconds(200))
+        let session = try XCTUnwrap(interaction.activeFindSession)
+        XCTAssertTrue(session.supportsReplacement)
+        session.performSearch(query: "日本語🙂", options: nil)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(session.resultCount, 3)
+        interaction.findNext()
+        let first = session.highlightedResultIndex
+        interaction.findNext()
+        XCTAssertNotEqual(session.highlightedResultIndex, first)
+        interaction.findPrevious()
+        XCTAssertEqual(session.highlightedResultIndex, first)
+
+        session.performSingleReplacement(query: "日本語🙂", replacementString: "置換👩🏽‍💻", options: nil)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.document.text.components(separatedBy: "置換👩🏽‍💻").count - 1, 1)
+        XCTAssertEqual(model.document.text.components(separatedBy: "日本語🙂").count - 1, 2)
+        editor.undoManager?.undo()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.document.text, original)
+
+        session.replaceAll(searchQuery: "日本語🙂", replacementString: "", options: nil)
+        try await Task.sleep(for: .milliseconds(100))
+        let replaced = "# \n\ne\u{301}  \n"
+        XCTAssertEqual(model.document.text, replaced)
+        XCTAssertEqual(try MarkdownDocument(data: model.document.encodedData()).text, replaced)
+        editor.undoManager?.undo()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.document.text, original)
+        session.replaceAll(searchQuery: "missing", replacementString: "unused", options: nil)
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(model.document.text, original)
+    }
+
     private final class PreferenceBox: ObservableObject {
         @Published var preserves = false
         @Published var shows = false
