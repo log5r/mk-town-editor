@@ -163,24 +163,27 @@ struct MobileFindNavigator: ViewModifier {
     @ScaledMetric(relativeTo: .caption) private var counterHeight = 28
 
     func body(content: Content) -> some View {
-        content
-            .findNavigator(isPresented: $editorState.showsFindNavigator)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                if editorState.showsFindNavigator {
-                    MobileFindResultCounter()
-                        .frame(height: counterHeight)
-                        .padding(.horizontal, 12)
-                        .background(.bar)
-                }
+        VStack(spacing: 0) {
+            content
+                .findNavigator(isPresented: $editorState.showsFindNavigator)
+                // UIFindInteraction can expand the underlying text view beyond SwiftUI's
+                // proposed size. Keep its drawing out of the separate count row.
+                .clipped()
+            if editorState.showsFindNavigator {
+                MobileFindResultCounter()
+                    .frame(height: counterHeight)
+                    .padding(.horizontal, 12)
+                    .background(.bar)
             }
-            .task(id: editorState.findRequested) {
-                guard editorState.findRequested else { return }
-                // A yield alone can still run before UIKit finishes installing the find interaction.
-                do { try await Task.sleep(for: .milliseconds(300)) }
-                catch { return }
-                guard !Task.isCancelled else { return }
-                editorState.presentRequestedFindNavigator()
-            }
+        }
+        .task(id: editorState.findRequested) {
+            guard editorState.findRequested else { return }
+            // A yield alone can still run before UIKit finishes installing the find interaction.
+            do { try await Task.sleep(for: .milliseconds(300)) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            editorState.presentRequestedFindNavigator()
+        }
     }
 }
 
