@@ -192,7 +192,6 @@ final class MobileWorkspaceTests: XCTestCase {
     }
 
     func testWorkspaceFindCountSurvivesNavigationInLongDocument() async throws {
-        continueAfterFailure = false
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         let model = DocumentBox()
@@ -203,12 +202,7 @@ final class MobileWorkspaceTests: XCTestCase {
         }.joined()
         let original = model.document.text
         let host = AppearanceHost(rootView: NavigationStack { Container(model: model) })
-        let parent = UIViewController()
-        window.rootViewController = parent
-        parent.addChild(host)
-        parent.view.addSubview(host.view)
-        host.didMove(toParent: parent)
-        host.view.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
+        window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         for _ in 0..<100 where !host.didAppear { try await Task.sleep(for: .milliseconds(20)) }
@@ -250,12 +244,35 @@ final class MobileWorkspaceTests: XCTestCase {
             if let label = view as? UILabel, label.accessibilityIdentifier == "findResultCount" { return label }
             return view.subviews.lazy.compactMap { resultCounter(in: $0) }.first
         }
+        for _ in 0..<100 where resultCounter(in: host.view) == nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         let counter = try XCTUnwrap(resultCounter(in: host.view))
         for _ in 0..<100 where counter.text == nil {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertNotNil(counter.text)
         XCTAssertGreaterThan(counter.bounds.width, 0)
+        func visibleFrame(of child: UIView) -> CGRect {
+            var frame = child.convert(child.bounds, to: window)
+            var ancestor = child.superview
+            while let view = ancestor {
+                if view.clipsToBounds || view.layer.masksToBounds {
+                    frame = frame.intersection(view.convert(view.bounds, to: window))
+                }
+                ancestor = view.superview
+            }
+            return frame
+        }
+        func assertCounterLayout() {
+            let frame = counter.convert(counter.bounds, to: window)
+            XCTAssertTrue(window.bounds.contains(frame), "The counter must stay on screen")
+            XCTAssertTrue(visibleFrame(of: counter).contains(frame.insetBy(dx: 0.5, dy: 0.5)),
+                          "The counter must not be clipped")
+            XCTAssertLessThanOrEqual(visibleFrame(of: editor).maxY, frame.minY + 1,
+                                     "The find counter must have space outside the text editor")
+        }
+        assertCounterLayout()
         for direction in 0..<2 {
             for step in 0..<45 {
                 let identifier = direction == 0 ? "find.nextButton" : "find.previousButton"
@@ -276,6 +293,7 @@ final class MobileWorkspaceTests: XCTestCase {
                 XCTAssertFalse(counter.isHidden)
                 XCTAssertNotNil(counter.window)
                 XCTAssertEqual(session.resultCount, 40)
+                assertCounterLayout()
             }
         }
         XCTAssertEqual(model.document.text, original)
