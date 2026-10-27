@@ -6,6 +6,52 @@ import XCTest
 #endif
 
 final class MobileEditorLayoutTests: XCTestCase {
+    func testFindShowsEditorFromEveryPresentationAtEveryLayout() {
+        for presentation in MobileEditorPresentation.allCases {
+            for compactPreview in [false, true] {
+                var state = MobileEditorState(presentation: presentation, compactPreview: compactPreview)
+                state.showFindNavigator()
+                XCTAssertTrue(state.findRequested)
+                XCTAssertFalse(state.showsFindNavigator)
+                state.presentRequestedFindNavigator()
+                XCTAssertTrue(state.showsFindNavigator)
+                XCTAssertEqual(state.presentation, presentation == .preview ? .editor : presentation)
+                for width in [320.0, 720, 1200] {
+                    for accessibilityText in [false, true] {
+                        XCTAssertTrue(MobileEditorLayout(width: width, accessibilityText: accessibilityText,
+                            presentation: state.presentation, compactPreview: state.compactPreview).showsEditor)
+                    }
+                }
+            }
+        }
+    }
+
+    func testReturningToPreviewClosesFindAndAllowsReopening() {
+        for presentation in [MobileEditorPresentation.automatic, .editor] {
+            var state = MobileEditorState(presentation: presentation)
+            state.showFindNavigator()
+            state.presentRequestedFindNavigator()
+            state.togglePreview(showsEditor: true)
+            XCTAssertFalse(state.showsFindNavigator)
+            XCTAssertTrue(MobileEditorLayout(width: 390, accessibilityText: false,
+                presentation: state.presentation, compactPreview: state.compactPreview).showsPreview)
+            state.showFindNavigator()
+            state.presentRequestedFindNavigator()
+            XCTAssertTrue(state.showsFindNavigator)
+            XCTAssertTrue(MobileEditorLayout(width: 390, accessibilityText: false,
+                presentation: state.presentation, compactPreview: state.compactPreview).showsEditor)
+        }
+    }
+
+    func testHidingEditorDismissesSearch() {
+        var state = MobileEditorState()
+        state.showFindNavigator()
+        state.dismissFindNavigator()
+        state.presentRequestedFindNavigator()
+        XCTAssertFalse(state.showsFindNavigator)
+        XCTAssertFalse(state.findRequested)
+    }
+
     func testAutomaticLayoutFollowsAvailableWidthAcrossRepeatedFoldTransitions() {
         for width in [390.0, 960, 500, 720, 719, 1200, 320] {
             let layout = MobileEditorLayout(width: width, accessibilityText: false,

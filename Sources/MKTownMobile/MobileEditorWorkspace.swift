@@ -6,8 +6,7 @@ struct MobileEditorWorkspace: View {
     @AppStorage private(set) var formatsFrontMatter: Bool
     @AppStorage private(set) var preservesSoftLineBreaks: Bool
     @State private var showingSettings = false
-    @State private var presentation: MobileEditorPresentation = .automatic
-    @State private var compactPreview = false
+    @State private var editorState = MobileEditorState()
     @State private var selection: TextSelection?
     @StateObject private var previewStore = MobilePreviewStore()
     @State private var exporting = false
@@ -27,7 +26,7 @@ struct MobileEditorWorkspace: View {
         GeometryReader { geometry in
             let layout = MobileEditorLayout(width: geometry.size.width,
                 accessibilityText: dynamicTypeSize.isAccessibilitySize,
-                presentation: presentation, compactPreview: compactPreview)
+                presentation: editorState.presentation, compactPreview: editorState.compactPreview)
             HStack(spacing: 0) {
                 if layout.showsEditor {
                     TextEditor(text: $document.text, selection: $selection)
@@ -35,28 +34,38 @@ struct MobileEditorWorkspace: View {
                         .focused($editorFocused)
                         .accessibilityLabel("Markdown本文")
                         .accessibilityIdentifier("markdownEditor")
+                        .modifier(MobileFindNavigator(editorState: $editorState))
                 }
                 if layout.showsEditor && layout.showsPreview { Divider() }
                 if layout.showsPreview { previewContent }
             }
+            .onChange(of: layout.showsEditor) { _, visible in
+                if !visible {
+                    editorFocused = false
+                    editorState.dismissFindNavigator()
+                }
+            }
             .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("検索・置換", systemImage: "magnifyingglass") {
+                        editorState.showFindNavigator()
+                    }
+                    .keyboardShortcut("f", modifiers: .command)
+                    .accessibilityIdentifier("findAndReplace")
+                }
                 if !(layout.showsEditor && layout.showsPreview) {
                     ToolbarItem(placement: .primaryAction) {
                         Button(layout.showsEditor ? String(localized: "プレビュー") : String(localized: "編集"),
                                systemImage: layout.showsEditor ? "eye" : "square.and.pencil") {
                             editorFocused = false
-                            if presentation == .automatic {
-                                compactPreview.toggle()
-                            } else {
-                                presentation = layout.showsEditor ? .preview : .editor
-                            }
+                            editorState.togglePreview(showsEditor: layout.showsEditor)
                         }
                         .accessibilityIdentifier("togglePreview")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu("表示", systemImage: "rectangle.split.2x1") {
-                        Picker("表示", selection: $presentation) {
+                        Picker("表示", selection: $editorState.presentation) {
                             Text("自動").tag(MobileEditorPresentation.automatic)
                             Text("編集").tag(MobileEditorPresentation.editor)
                             Text("プレビュー").tag(MobileEditorPresentation.preview)
@@ -144,6 +153,24 @@ struct MobileEditorWorkspace: View {
         case .some: return .headline
         case nil: return .body
         }
+    }
+}
+
+/// Native find presentation must follow the editor's insertion and navigation transition.
+struct MobileFindNavigator: ViewModifier {
+    @Binding var editorState: MobileEditorState
+
+    func body(content: Content) -> some View {
+        content
+            .findNavigator(isPresented: $editorState.showsFindNavigator)
+            .task(id: editorState.findRequested) {
+                guard editorState.findRequested else { return }
+                // A yield alone can still run before UIKit finishes installing the find interaction.
+                do { try await Task.sleep(for: .milliseconds(300)) }
+                catch { return }
+                guard !Task.isCancelled else { return }
+                editorState.presentRequestedFindNavigator()
+            }
     }
 }
 
