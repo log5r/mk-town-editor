@@ -972,7 +972,12 @@ final class MarkdownEditorModel: ObservableObject {
 
     private func performFinderAction(_ action: NSTextFinder.Action) {
         guard let textView else { return }
-        textView.window?.makeFirstResponder(textView)
+        // Leaving the search field ends incremental-search feedback. Keep the
+        // current responder while navigating an already visible find bar.
+        let navigatesMatches = action == .nextMatch || action == .previousMatch
+        if !navigatesMatches || textView.enclosingScrollView?.isFindBarVisible != true {
+            textView.window?.makeFirstResponder(textView)
+        }
         let item = NSMenuItem()
         item.tag = action.rawValue
         textView.performTextFinderAction(item)
