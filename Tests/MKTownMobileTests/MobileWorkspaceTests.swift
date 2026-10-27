@@ -168,7 +168,7 @@ final class MobileWorkspaceTests: XCTestCase {
                 if backwards { interaction.findPrevious() } else { interaction.findNext() }
                 model.objectWillChange.send()
                 host.view.layoutIfNeeded()
-                await Task.yield()
+                try await Task.sleep(for: .milliseconds(50))
                 XCTAssertEqual(session.highlightedResultIndex, (previous + (backwards ? 39 : 1)) % 40,
                                "Navigation \(step), backwards: \(backwards)")
                 XCTAssertEqual(session.resultCount, 40)
@@ -185,10 +185,125 @@ final class MobileWorkspaceTests: XCTestCase {
     }
 
     private func findCountLabels(in view: UIView) -> [String] {
-        guard !view.isHidden, view.alpha > 0 else { return [] }
+        guard !view.isHidden, view.alpha > 0, view.bounds.width > 0, view.bounds.height > 0 else { return [] }
         let label = (view as? UILabel)?.text
         let own = label.map { $0.count < 40 && $0.contains("40") ? [$0] : [] } ?? []
         return own + view.subviews.flatMap { findCountLabels(in: $0) }
+    }
+
+    func testWorkspaceFindCountSurvivesNavigationInLongDocument() async throws {
+        continueAfterFailure = false
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = DocumentBox()
+        let searchTerm = "検索対象"
+        model.document.text = (1...40).map {
+            "## テスト区間\($0)\n\n" + String(repeating: "これは表示検証用に生成したデータです。", count: 15)
+                + " \(searchTerm)\n\n"
+        }.joined()
+        let original = model.document.text
+        let host = AppearanceHost(rootView: NavigationStack { Container(model: model) })
+        let parent = UIViewController()
+        window.rootViewController = parent
+        parent.addChild(host)
+        parent.view.addSubview(host.view)
+        host.didMove(toParent: parent)
+        host.view.frame = CGRect(x: 0, y: 0, width: 390, height: 700)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<100 where !host.didAppear { try await Task.sleep(for: .milliseconds(20)) }
+        try await Task.sleep(for: .milliseconds(200))
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        editor.findInteraction?.searchText = searchTerm
+
+        func items(in controller: UIViewController) -> [UIBarButtonItem] {
+            let item = controller.navigationItem
+            return (item.rightBarButtonItems ?? []) + item.trailingItemGroups.flatMap(\.barButtonItems)
+                + (controller.toolbarItems ?? []) + controller.children.flatMap { items(in: $0) }
+        }
+        func items(in view: UIView) -> [UIBarButtonItem] {
+            let own = (view as? UINavigationBar)?.items?.flatMap {
+                ($0.rightBarButtonItems ?? []) + $0.trailingItemGroups.flatMap(\.barButtonItems)
+            } ?? (view as? UIToolbar)?.items ?? []
+            return own + view.subviews.flatMap { items(in: $0) }
+        }
+        let buttons = items(in: host) + items(in: host.view)
+        let find = try XCTUnwrap(buttons.first {
+            $0.accessibilityIdentifier == "findAndReplace" || $0.accessibilityLabel == String(localized: "検索・置換")
+        } ?? buttons.first)
+        let action = try XCTUnwrap(find.action)
+        XCTAssertTrue(UIApplication.shared.sendAction(action, to: find.target, from: find, for: nil))
+        for _ in 0..<100 where editor.findInteraction?.isFindNavigatorVisible != true {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let interaction = try XCTUnwrap(editor.findInteraction)
+        let session = try XCTUnwrap(interaction.activeFindSession)
+        defer { interaction.dismissFindNavigator() }
+        for _ in 0..<100 where session.resultCount != 40 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(session.resultCount, 40)
+        func controls(in view: UIView) -> [UIControl] {
+            (view as? UIControl).map { [$0] } ?? view.subviews.flatMap { controls(in: $0) }
+        }
+        func resultCounter(in view: UIView) -> UILabel? {
+            if let label = view as? UILabel, label.accessibilityIdentifier == "findResultCount" { return label }
+            return view.subviews.lazy.compactMap { resultCounter(in: $0) }.first
+        }
+        let counter = try XCTUnwrap(resultCounter(in: host.view))
+        for _ in 0..<100 where counter.text == nil {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertNotNil(counter.text)
+        XCTAssertGreaterThan(counter.bounds.width, 0)
+        for direction in 0..<2 {
+            for step in 0..<45 {
+                let identifier = direction == 0 ? "find.nextButton" : "find.previousButton"
+                let button = try XCTUnwrap(scene.windows.flatMap { controls(in: $0) }.first {
+                    $0.accessibilityIdentifier == identifier
+                })
+                let previous = session.highlightedResultIndex
+                button.sendActions(for: .touchUpInside)
+                try await Task.sleep(for: .milliseconds(80))
+                let expected = previous == NSNotFound ? (direction == 0 ? 0 : 39)
+                    : (previous + (direction == 0 ? 1 : 39)) % 40
+                let summary = "\(expected + 1) / 40"
+                for _ in 0..<30 where counter.text != summary {
+                    try await Task.sleep(for: .milliseconds(10))
+                }
+                XCTAssertEqual(session.highlightedResultIndex, expected, "Navigation \(step), direction \(direction)")
+                XCTAssertEqual(counter.text, summary, "Navigation \(step), direction \(direction)")
+                XCTAssertFalse(counter.isHidden)
+                XCTAssertNotNil(counter.window)
+                XCTAssertEqual(session.resultCount, 40)
+            }
+        }
+        XCTAssertEqual(model.document.text, original)
+        XCTAssertGreaterThanOrEqual(counter.bounds.width, counter.intrinsicContentSize.width)
+        let query = try XCTUnwrap(scene.windows.flatMap { controls(in: $0) }.first {
+            $0.accessibilityIdentifier == "find.searchField"
+        } as? UITextField)
+        query.selectAll(nil)
+        query.insertText("該当しない検索語")
+        for _ in 0..<100 where counter.text != "0" { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(session.resultCount, 0)
+        XCTAssertEqual(counter.text, "0")
+        query.selectAll(nil)
+        query.insertText(searchTerm)
+        for _ in 0..<100 where session.resultCount != 40 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(session.resultCount, 40)
+        interaction.dismissFindNavigator()
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNil(counter.window, "Closing find must remove the count view and its refresh task")
+        editor.becomeFirstResponder()
+        let selection = editor.selectedRange
+        model.objectWillChange.send()
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(editor.selectedRange, selection, "Closing find must not restore a stale pre-search selection")
+        editor.insertText("追記")
+        try await Task.sleep(for: .milliseconds(50))
+        let edited = (original as NSString).replacingCharacters(in: selection, with: "追記")
+        XCTAssertEqual(model.document.text, edited)
     }
 
     private final class PreferenceBox: ObservableObject {

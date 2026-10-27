@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct MobileEditorWorkspace: View {
     @Binding var document: MarkdownDocument
@@ -159,10 +160,19 @@ struct MobileEditorWorkspace: View {
 /// Native find presentation must follow the editor's insertion and navigation transition.
 struct MobileFindNavigator: ViewModifier {
     @Binding var editorState: MobileEditorState
+    @ScaledMetric(relativeTo: .caption) private var counterHeight = 28
 
     func body(content: Content) -> some View {
         content
             .findNavigator(isPresented: $editorState.showsFindNavigator)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if editorState.showsFindNavigator {
+                    MobileFindResultCounter()
+                        .frame(height: counterHeight)
+                        .padding(.horizontal, 12)
+                        .background(.bar)
+                }
+            }
             .task(id: editorState.findRequested) {
                 guard editorState.findRequested else { return }
                 // A yield alone can still run before UIKit finishes installing the find interaction.
@@ -171,6 +181,86 @@ struct MobileFindNavigator: ViewModifier {
                 guard !Task.isCancelled else { return }
                 editorState.presentRequestedFindNavigator()
             }
+    }
+}
+
+/// UIKit can hide its in-field counter when the current index gains a digit.
+/// Keep the system search/replace controls and give the count its own layout space.
+struct MobileFindResultCounter: UIViewRepresentable {
+    func makeUIView(context: Context) -> CounterLabel { CounterLabel() }
+    func updateUIView(_ view: CounterLabel, context: Context) { view.startIfNeeded() }
+    static func dismantleUIView(_ view: CounterLabel, coordinator: ()) { view.stop() }
+
+    final class CounterLabel: UILabel {
+        private weak var editor: UITextView?
+        private var refreshTask: Task<Void, Never>?
+
+        init() {
+            super.init(frame: .zero)
+            font = .preferredFont(forTextStyle: .caption1)
+            adjustsFontForContentSizeCategory = true
+            textColor = .secondaryLabel
+            textAlignment = .right
+            accessibilityIdentifier = "findResultCount"
+            accessibilityLabel = String(localized: "検索・置換")
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            if window == nil { stop() } else { startIfNeeded() }
+        }
+
+        func startIfNeeded() {
+            guard window != nil, refreshTask == nil else { return }
+            refreshTask = Task { @MainActor [weak self] in
+                while !Task.isCancelled {
+                    guard let self, self.window != nil else { return }
+                    self.refresh()
+                    // UIFindSession has no public result-change notification. Read its
+                    // inexpensive state only while the find navigator is presented.
+                    do { try await Task.sleep(for: .milliseconds(50)) }
+                    catch { return }
+                }
+            }
+        }
+
+        func stop() {
+            refreshTask?.cancel()
+            refreshTask = nil
+            editor = nil
+        }
+
+        private func refresh() {
+            if editor?.window == nil { editor = findEditor() }
+            guard let editor, let interaction = editor.findInteraction,
+                  let current = interaction.activeFindSession else {
+                if text != nil { text = nil; accessibilityValue = nil }
+                return
+            }
+            let total = max(0, current.resultCount)
+            let index = current.highlightedResultIndex
+            let summary = (0..<total).contains(index) ? "\(index + 1) / \(total)" : "\(total)"
+            if text != summary {
+                text = summary
+                accessibilityValue = summary
+                invalidateIntrinsicContentSize()
+            }
+        }
+
+        private func findEditor() -> UITextView? {
+            func editor(in view: UIView) -> UITextView? {
+                if let textView = view as? UITextView, textView.isFindInteractionEnabled { return textView }
+                return view.subviews.lazy.compactMap { editor(in: $0) }.first
+            }
+            var ancestor = superview
+            while let view = ancestor {
+                if let found = editor(in: view) { return found }
+                ancestor = view.superview
+            }
+            return nil
+        }
     }
 }
 
