@@ -46,7 +46,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
-        textView.isEditable = isEditable
+        textView.updateEditorEditability(isEditable)
         textView.isSelectable = true
         textView.allowsUndo = true
         textView.usesFindBar = true
@@ -165,7 +165,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         model.beginViewUpdate()
         defer { model.endViewUpdate() }
         guard let textView = scrollView.documentView as? EditorTextView else { return }
-        textView.isEditable = isEditable
+        textView.updateEditorEditability(isEditable)
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
@@ -508,8 +508,14 @@ struct MarkdownTextEditor: NSViewRepresentable {
             let protected = dialectPending || proofingRangesWereDiscarded
                 || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
                 || (sourcePending && MarkdownProofingContext.isProtectedInParagraph(location, of: source))
-            textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling && !protected
-            textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling && !protected
+            let checksSpelling = proofing.checksSpelling && !protected
+            if textView.isContinuousSpellCheckingEnabled != checksSpelling {
+                textView.isContinuousSpellCheckingEnabled = checksSpelling
+            }
+            let correctsSpelling = proofing.correctsSpelling && !protected
+            if textView.isAutomaticSpellingCorrectionEnabled != correctsSpelling {
+                textView.isAutomaticSpellingCorrectionEnabled = correctsSpelling
+            }
             if textView.window?.firstResponder === textView { applyProofingLanguage() }
         }
 
@@ -653,6 +659,11 @@ private final class EditorScrollView: NSScrollView {
 
 extension NSTextView {
     var editorSource: String { (self as? EditorTextView)?.sourceText ?? string }
+
+    /// Reapplying AppKit settings can reset feedback in an active find session.
+    func updateEditorEditability(_ editable: Bool) {
+        if isEditable != editable { isEditable = editable }
+    }
 }
 
 final class EditorTextView: NSTextView {

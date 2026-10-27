@@ -126,6 +126,71 @@ final class MobileWorkspaceTests: XCTestCase {
         XCTAssertEqual(model.document.text, original)
     }
 
+    func testFindCountSurvivesRepeatedNavigationAndViewUpdates() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = SearchBox()
+        model.state = MobileEditorState(presentation: .editor)
+        model.text = (1...40).map { "\($0). 日本語🙂 needle\n" }.joined()
+        let original = model.text
+        let host = AppearanceHost(rootView: NavigationStack { SearchContainer(model: model) })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<100 where !host.didAppear { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(host.didAppear)
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        editor.findInteraction?.searchText = "日本語🙂"
+        model.state.showFindNavigator()
+        for _ in 0..<100 where editor.findInteraction?.isFindNavigatorVisible != true {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let interaction = try XCTUnwrap(editor.findInteraction)
+        let session = try XCTUnwrap(interaction.activeFindSession)
+        defer { interaction.dismissFindNavigator() }
+        session.performSearch(query: "日本語🙂", options: nil)
+        for _ in 0..<100 where session.resultCount != 40 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(session.resultCount, 40)
+        for _ in 0..<100 where scene.windows.flatMap({ findCountLabels(in: $0) }).isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(scene.windows.flatMap { findCountLabels(in: $0) }.isEmpty)
+        interaction.findNext()
+        for _ in 0..<100 where session.highlightedResultIndex == NSNotFound {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue((0..<40).contains(session.highlightedResultIndex))
+        for backwards in [false, true] {
+            for step in 0..<85 {
+                let previous = session.highlightedResultIndex
+                if backwards { interaction.findPrevious() } else { interaction.findNext() }
+                model.objectWillChange.send()
+                host.view.layoutIfNeeded()
+                await Task.yield()
+                XCTAssertEqual(session.highlightedResultIndex, (previous + (backwards ? 39 : 1)) % 40,
+                               "Navigation \(step), backwards: \(backwards)")
+                XCTAssertEqual(session.resultCount, 40)
+                XCTAssertTrue(interaction.isFindNavigatorVisible)
+                XCTAssertTrue(interaction.activeFindSession === session)
+                XCTAssertTrue(textViews(in: host.view).first === editor)
+                XCTAssertFalse(scene.windows.flatMap { findCountLabels(in: $0) }.isEmpty,
+                               "The result count disappeared during navigation \(step)")
+            }
+        }
+        XCTAssertEqual(model.text, original)
+        let labels = scene.windows.flatMap { findCountLabels(in: $0) }
+        XCTAssertFalse(labels.isEmpty, "The native find navigator must keep its result count visible")
+    }
+
+    private func findCountLabels(in view: UIView) -> [String] {
+        guard !view.isHidden, view.alpha > 0 else { return [] }
+        let label = (view as? UILabel)?.text
+        let own = label.map { $0.count < 40 && $0.contains("40") ? [$0] : [] } ?? []
+        return own + view.subviews.flatMap { findCountLabels(in: $0) }
+    }
+
     private final class PreferenceBox: ObservableObject {
         @Published var preserves = false
         @Published var shows = false
