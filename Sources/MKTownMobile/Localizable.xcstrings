@@ -1,108 +1,7 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
-    "検索・置換" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Find and Replace"
-          }
-        }
-      }
-    },
-    "設定" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Settings"
-          }
-        }
-      }
-    },
-    "完了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done"
-          }
-        }
-      }
-    },
-    "Markdownの解釈" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Markdown interpretation"
-          }
-        }
-      }
-    },
-    "本文の改行をそのまま表示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preserve line breaks in body text"
-          }
-        }
-      }
-    },
-    "オンにすると、段落内の改行1つもプレビューで改行します。オフにすると空白として表示します。原文と書き出しには影響しません。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "When enabled, single line breaks within paragraphs appear as line breaks in the preview. When disabled, they appear as spaces. Source text and exports are unaffected."
-          }
-        }
-      }
-    },
-    "先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Display YAML at the start of the file as properties in small text. Turn off to display the original YAML."
-          }
-        }
-      }
-    },
-    "Obsidianのプロパティを整形して表示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Format Obsidian properties for display"
-          }
-        }
-      }
-    },
-    "フロントマターを表示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Front Matter"
-          }
-        }
-      }
-    },
-    "フロントマター" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Front Matter"
-          }
-        }
-      }
-    },
     "CR (旧Mac)" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -118,8 +17,17 @@
         }
       }
     },
+    "Markdownの解釈" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown interpretation"
+          }
+        }
+      }
+    },
     "Markdown本文" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -135,8 +43,17 @@
         }
       }
     },
+    "Obsidianのプロパティを整形して表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format Obsidian properties for display"
+          }
+        }
+      }
+    },
     "OK" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -152,8 +69,17 @@
         }
       }
     },
+    "オンにすると、段落内の改行1つもプレビューで改行します。オフにすると空白として表示します。原文と書き出しには影響しません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When enabled, single line breaks within paragraphs appear as line breaks in the preview. When disabled, they appear as spaces. Source text and exports are unaffected."
+          }
+        }
+      }
+    },
     "コピーを書き出す" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -185,8 +111,47 @@
         }
       }
     },
+    "フロントマター" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Front Matter"
+          }
+        }
+      }
+    },
+    "フロントマターを表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Front Matter"
+          }
+        }
+      }
+    },
+    "先頭のYAMLを項目ごとに小さな文字で表示します。オフにするとYAMLをそのまま表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display YAML at the start of the file as properties in small text. Turn off to display the original YAML."
+          }
+        }
+      }
+    },
+    "完了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
     "書き出しできませんでした" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -198,6 +163,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "書き出しできませんでした"
+          }
+        }
+      }
+    },
+    "本文の改行をそのまま表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preserve line breaks in body text"
+          }
+        }
+      }
+    },
+    "検索・置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find and Replace"
           }
         }
       }
@@ -235,7 +220,6 @@
       }
     },
     "表示" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -247,6 +231,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "表示"
+          }
+        }
+      }
+    },
+    "設定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
           }
         }
       }

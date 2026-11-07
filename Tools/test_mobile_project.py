@@ -1,5 +1,6 @@
 """Guard the native iOS target's source sharing and resizability configuration."""
 
+import json
 from pathlib import Path
 import plistlib
 import unittest
@@ -116,6 +117,30 @@ class MobileProjectTests(unittest.TestCase):
                          if phase["isa"] in ("PBXSourcesBuildPhase", "PBXResourcesBuildPhase")
                          for key in phase["files"]]
                 self.assertEqual(files.count(references[0]), 1, (name, path))
+
+    def has_string_catalog(self, target):
+        phases = [self.objects[key] for key in target["buildPhases"]]
+        return any(self.objects[self.objects[key]["fileRef"]].get("lastKnownFileType") == "text.json.xcstrings"
+                   for phase in phases if phase["isa"] == "PBXResourcesBuildPhase"
+                   for key in phase["files"])
+
+    def test_targets_with_string_catalogs_extract_strings_with_the_compiler(self):
+        # Without compiler output, Xcode's sync sees little more than Text("...") and marks
+        # strings still in use as stale. See docs/localization.md.
+        targets = [obj for obj in self.objects.values()
+                   if obj.get("isa") == "PBXNativeTarget" and self.has_string_catalog(obj)]
+        self.assertEqual({target["name"] for target in targets}, {"MKTownEditor", "MKTownEditorMobile"})
+        for target in targets:
+            for key in self.objects[target["buildConfigurationList"]]["buildConfigurations"]:
+                configuration = self.objects[key]
+                self.assertEqual(configuration["buildSettings"].get("SWIFT_EMIT_LOC_STRINGS"), "YES",
+                                 (target["name"], configuration["name"]))
+
+    def test_mobile_string_catalog_has_no_stale_entries(self):
+        catalog = json.loads((ROOT / "Sources/MKTownMobile/Localizable.xcstrings").read_text())
+        stale = sorted(key for key, entry in catalog["strings"].items()
+                       if entry.get("extractionState") == "stale")
+        self.assertEqual(stale, [], "Delete unused strings, or fix extraction if they are still used")
 
     def test_mobile_and_desktop_declare_the_same_markdown_type(self):
         desktop = plistlib.loads((ROOT / "Support/Info.plist").read_bytes())
