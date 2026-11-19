@@ -714,6 +714,81 @@ final class MobileWorkspaceTests: XCTestCase {
         XCTAssertEqual(model.text, "短いにほ")
     }
 
+    /// The keyboard session discards marked text that exists before it finishes starting, and
+    /// how long that takes varies, so start the composition again until it stays.
+    private func beginComposition(_ marked: String, in editor: UITextView, at location: Int) async throws {
+        let original = editor.text
+        editor.becomeFirstResponder()
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(250))
+            guard editor.markedTextRange == nil else { return }
+            XCTAssertEqual(editor.text, original, "A discarded composition must not leave text behind")
+            editor.selectedRange = NSRange(location: location, length: 0)
+            editor.setMarkedText(marked, selectedRange: NSRange(location: (marked as NSString).length, length: 0))
+        }
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNotNil(editor.markedTextRange, "The composition did not start")
+    }
+
+    /// The document can change elsewhere (for example a file update) while the input method is
+    /// composing. Committing must not publish the editor's older text over that change.
+    func testExternalTextChangeDuringCompositionSurvivesCommit() async throws {
+        let model = EditorBox()
+        model.text = "一行目\n二行目"
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        try await beginComposition("にほ", in: editor, at: (editor.text as NSString).length)
+
+        model.text = "外部の変更\n一行目\n二行目"
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNotNil(editor.markedTextRange, "An outside change must not end IME composition")
+        XCTAssertEqual(editor.text, "一行目\n二行目にほ")
+
+        editor.unmarkText()
+        let merged = "外部の変更\n一行目\n二行目にほ"
+        for _ in 0..<50 where model.text != merged || editor.text != merged {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(model.text, merged, "Committing must keep the outside change and the typed text")
+        XCTAssertEqual(editor.text, merged)
+        XCTAssertEqual(editor.selectedRange, NSRange(location: (merged as NSString).length, length: 0),
+                       "The caret stays after the committed text")
+    }
+
+    func testCancelledCompositionAppliesTheOutsideChange() async throws {
+        let model = EditorBox()
+        model.text = "本文"
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        try await beginComposition("にほ", in: editor, at: 2)
+        model.text = "外部の本文"
+        try await Task.sleep(for: .milliseconds(200))
+        // Deleting the whole composition leaves the editor's own text unchanged.
+        editor.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+        editor.unmarkText()
+        for _ in 0..<50 where editor.text != "外部の本文" { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(editor.text, "外部の本文")
+        XCTAssertEqual(model.text, "外部の本文")
+    }
+
+    func testMergingTypedTextWithAnOutsideChange() {
+        func merge(_ base: String, typed: String, outside: String) -> String? {
+            MobileMarkdownTextView.merging(typed: typed, outside: outside, base: base)?.text
+        }
+        XCTAssertEqual(merge("AB\nCD", typed: "AB\nCDにほ", outside: "X\nAB\nCD"), "X\nAB\nCDにほ")
+        XCTAssertEqual(merge("AB\nCD", typed: "にほAB\nCD", outside: "AB\nCD\n追記"), "にほAB\nCD\n追記")
+        XCTAssertEqual(merge("日本語🙂の文", typed: "日本語🙂のよい文", outside: "新・日本語🙂の文"), "新・日本語🙂のよい文")
+        XCTAssertEqual(merge("ABCD", typed: "AD", outside: "ABCD!"), "AD!")
+        XCTAssertEqual(merge("", typed: "あ", outside: "外部"), "あ外部")
+        // Both sides changed the same place: there is no safe automatic result.
+        XCTAssertNil(merge("ABCD", typed: "AXCD", outside: "AYCD"))
+        XCTAssertNil(merge("ABCD", typed: "ABXCD", outside: "AD"))
+        let shifted = MobileMarkdownTextView.merging(typed: "ABにほ", outside: "追加AB", base: "AB")
+        XCTAssertEqual(shifted?.offsetAfterTypedText, 2, "Text inserted before the typed text moves the caret")
+    }
+
     func testEditorUsesMonospacedBodyFontThatFollowsDynamicType() async throws {
         let model = EditorBox()
         let (window, host) = try await showEditor(model)

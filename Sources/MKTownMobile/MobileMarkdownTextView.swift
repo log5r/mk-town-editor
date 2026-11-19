@@ -55,14 +55,10 @@ struct MobileMarkdownTextView: UIViewRepresentable {
         }
 
         // Typed text already reached the binding from UIKit, so the common case is identical
-        // storage. Never replace the text during IME composition (docs/ime-composition-reset.md).
+        // storage. Never replace the text during IME composition (docs/ime-composition-reset.md):
+        // `syncedText` stays behind, and the coordinator reconciles the change when it ends.
         if text != coordinator.syncedText, view.markedTextRange == nil {
-            coordinator.syncedText = text
-            if view.text != text {
-                let selected = view.selectedRange
-                view.text = text
-                view.selectedRange = Self.clamped(selected, to: text)
-            }
+            coordinator.apply(outsideText: text, to: view)
         }
 
         if isFocused != coordinator.focusBinding {
@@ -105,6 +101,38 @@ struct MobileMarkdownTextView: UIViewRepresentable {
         return NSRange(location: location, length: min(max(range.length, 0), length - location))
     }
 
+    /// Combines text typed in the editor with a change made elsewhere since `base`, when the two
+    /// changed different places. `offsetAfterTypedText` is how far text after the typed change
+    /// moved, in UTF-16 units. Returns nil when both changed the same place.
+    static func merging(typed: String, outside: String, base: String) -> (text: String, offsetAfterTypedText: Int)? {
+        let base = base as NSString, typed = typed as NSString, outside = outside as NSString
+        /// The range of `base` that `other` replaced, found from the shared start and end.
+        func changedRange(_ other: NSString) -> NSRange {
+            let limit = min(base.length, other.length)
+            var prefix = 0
+            while prefix < limit, base.character(at: prefix) == other.character(at: prefix) { prefix += 1 }
+            var suffix = 0
+            while suffix < limit - prefix,
+                  base.character(at: base.length - 1 - suffix) == other.character(at: other.length - 1 - suffix) {
+                suffix += 1
+            }
+            return NSRange(location: prefix, length: base.length - prefix - suffix)
+        }
+        let typedRange = changedRange(typed), outsideRange = changedRange(outside)
+        let replacement = typed.substring(with: NSRange(location: typedRange.location,
+            length: typed.length - (base.length - typedRange.length)))
+        if NSMaxRange(typedRange) <= outsideRange.location {
+            // Typed before the outside change: the same range of the new text is still untouched.
+            return (outside.replacingCharacters(in: typedRange, with: replacement), 0)
+        }
+        if typedRange.location >= NSMaxRange(outsideRange) {
+            let shift = outside.length - base.length
+            let moved = NSRange(location: typedRange.location + shift, length: typedRange.length)
+            return (outside.replacingCharacters(in: moved, with: replacement), shift)
+        }
+        return nil
+    }
+
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: MobileMarkdownTextView
@@ -138,9 +166,37 @@ struct MobileMarkdownTextView: UIViewRepresentable {
             if parent.isFindNavigatorPresented != active { parent.isFindNavigatorPresented = active }
         }
 
+        /// Replaces the editor's text with a change made elsewhere.
+        func apply(outsideText: String, to view: UITextView) {
+            syncedText = outsideText
+            guard view.text != outsideText else { return }
+            let selected = view.selectedRange
+            view.text = outsideText
+            view.selectedRange = MobileMarkdownTextView.clamped(selected, to: outsideText)
+        }
+
         private func publishText(of view: UITextView) {
             hasUnpublishedComposition = false
-            let text = view.text ?? ""
+            var text = view.text ?? ""
+            // The document can change elsewhere while composition keeps `updateUIView` from
+            // applying it. Publishing the editor's text as it is would discard that change.
+            let outside = parent.text
+            if outside != syncedText {
+                guard text != syncedText else {
+                    // Nothing was typed after all, so the outside change simply applies.
+                    apply(outsideText: outside, to: view)
+                    return
+                }
+                if let merged = MobileMarkdownTextView.merging(typed: text, outside: outside, base: syncedText) {
+                    let selected = view.selectedRange
+                    view.text = merged.text
+                    view.selectedRange = MobileMarkdownTextView.clamped(NSRange(
+                        location: selected.location + merged.offsetAfterTypedText, length: selected.length),
+                        to: merged.text)
+                    text = merged.text
+                }
+                // Otherwise both changed the same place. Keep what the person sees and just typed.
+            }
             guard text != syncedText else { return }
             syncedText = text
             parent.text = text
