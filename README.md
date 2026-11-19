@@ -65,6 +65,12 @@ Xcodeを使う場合は、`MKTownEditor.xcodeproj`を開きます。macOS・iOS�
 
 iOS実機でデバッグする場合は、[ローカル署名設定](docs/xcode-project-structure.md#ローカル署名設定)で開発チームを指定し、実行先に接続した端末を選んでください。TEAM IDはGitで追跡しないファイルに保存します。
 
+Xcodeでペアリング済みのiPhone・iPadには、ターミナルからもビルドしてインストールできます。「Connect via network」を有効にした端末なら、ケーブルは不要です。事前準備とオプションは[iPhone・iPadへのインストール](docs/ios-device-install.md)を参照してください。
+
+```sh
+./install-ios.sh --launch
+```
+
 `swift run MKTownEditor`でも起動できますが、実行ファイルを直接起動するため、Info.plistに依存する機能は使えません（[`swift run` で起動したときに文字が入力できない問題](docs/package-launch-activation.md)）。SwiftUIのコンパイルエラーについては[原因と検証方法](docs/swiftui-build-errors.md)を参照してください。
 
 ## 基本操作
