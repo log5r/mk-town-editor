@@ -8,12 +8,12 @@ struct MobileEditorWorkspace: View {
     @AppStorage private(set) var preservesSoftLineBreaks: Bool
     @State private var showingSettings = false
     @State private var editorState = MobileEditorState()
-    @State private var selection: TextSelection?
+    @State private var selection = MobileTextSelection()
     @StateObject private var previewStore = MobilePreviewStore()
     @State private var exporting = false
     @State private var exportError: String?
     @State private var previewPosition: Int?
-    @FocusState private var editorFocused: Bool
+    @State private var editorFocused = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(document: Binding<MarkdownDocument>, preferences: UserDefaults = .standard) {
@@ -30,11 +30,9 @@ struct MobileEditorWorkspace: View {
                 presentation: editorState.presentation, compactPreview: editorState.compactPreview)
             HStack(spacing: 0) {
                 if layout.showsEditor {
-                    TextEditor(text: $document.text, selection: $selection)
-                        .font(.body.monospaced())
-                        .focused($editorFocused)
-                        .accessibilityLabel("Markdown本文")
-                        .accessibilityIdentifier("markdownEditor")
+                    // Not TextEditor: it jumps while typing in long wrapped documents (issue #84).
+                    MobileMarkdownTextView(text: $document.text, selection: selection, isFocused: $editorFocused,
+                        isFindNavigatorPresented: $editorState.showsFindNavigator)
                         .modifier(MobileFindNavigator(editorState: $editorState))
                 }
                 if layout.showsEditor && layout.showsPreview { Divider() }
@@ -158,6 +156,8 @@ struct MobileEditorWorkspace: View {
 }
 
 /// Native find presentation must follow the editor's insertion and navigation transition.
+/// `MobileMarkdownTextView` presents and dismisses the system find navigator from
+/// `showsFindNavigator`. This modifier delays new requests and adds the result count row.
 struct MobileFindNavigator: ViewModifier {
     @Binding var editorState: MobileEditorState
     @ScaledMetric(relativeTo: .caption) private var counterHeight = 28
@@ -165,9 +165,7 @@ struct MobileFindNavigator: ViewModifier {
     func body(content: Content) -> some View {
         VStack(spacing: 0) {
             content
-                .findNavigator(isPresented: $editorState.showsFindNavigator)
-                // UIFindInteraction can expand the underlying text view beyond SwiftUI's
-                // proposed size. Keep its drawing out of the separate count row.
+                // Keep the editor's drawing out of the separate count row.
                 .clipped()
             if editorState.showsFindNavigator {
                 MobileFindResultCounter()

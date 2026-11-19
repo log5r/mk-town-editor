@@ -12,10 +12,13 @@ final class MobileWorkspaceTests: XCTestCase {
 
     private struct SearchContainer: View {
         @ObservedObject var model: SearchBox
+        @State private var selection = MobileTextSelection()
+        @State private var focused = false
         var body: some View {
             HStack {
                 if model.state.presentation != .preview {
-                    TextEditor(text: $model.text)
+                    MobileMarkdownTextView(text: $model.text, selection: selection, isFocused: $focused,
+                        isFindNavigatorPresented: $model.state.showsFindNavigator)
                         .modifier(MobileFindNavigator(editorState: $model.state))
                 }
                 if model.state.presentation == .preview {
@@ -500,10 +503,334 @@ final class MobileWorkspaceTests: XCTestCase {
             host.view.layoutIfNeeded()
             try await Task.sleep(for: .milliseconds(100))
             let current = try XCTUnwrap(textViews(in: host.view).first)
-            XCTAssertTrue(current === editor, "Resizing should preserve TextEditor's input session")
+            XCTAssertTrue(current === editor, "Resizing should preserve the editor's input session")
             XCTAssertEqual(current.selectedRange, selection)
             XCTAssertEqual(model.document.text, edited)
             XCTAssertEqual(try MarkdownDocument(data: model.document.encodedData()).text, edited)
+        }
+    }
+
+    /// Records every intermediate scroll value, including the ones a later layout pass corrects.
+    @MainActor
+    private final class ScrollRecorder: NSObject {
+        private(set) var offsets: [CGFloat] = []
+        private(set) var heights: [CGFloat] = []
+        private var editor: UITextView?
+
+        init(_ editor: UITextView) {
+            self.editor = editor
+            super.init()
+            editor.addObserver(self, forKeyPath: "contentOffset", options: [.new], context: nil)
+            editor.addObserver(self, forKeyPath: "contentSize", options: [.new], context: nil)
+        }
+
+        nonisolated override func observeValue(forKeyPath keyPath: String?, of object: Any?,
+                                               change: [NSKeyValueChangeKey: Any]?,
+                                               context: UnsafeMutableRawPointer?) {
+            let offset = keyPath == "contentOffset" ? (change?[.newKey] as? NSValue)?.cgPointValue.y : nil
+            let height = keyPath == "contentSize" ? (change?[.newKey] as? NSValue)?.cgSizeValue.height : nil
+            MainActor.assumeIsolated {
+                if let offset { offsets.append(offset) }
+                if let height { heights.append(height) }
+            }
+        }
+
+        func stop() {
+            editor?.removeObserver(self, forKeyPath: "contentOffset")
+            editor?.removeObserver(self, forKeyPath: "contentSize")
+            editor = nil
+        }
+    }
+
+    /// Issue #84: rebuilding the whole editor text for every keystroke reset TextKit 2's
+    /// estimated heights, so long wrapped documents jumped while typing near the end.
+    func testTypingNearEndOfLongWrappedDocumentKeepsScrollPositionStable() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = DocumentBox()
+        // Each paragraph is wider than one line at 360 points, so the document wraps throughout.
+        model.document.text = (1...80).map {
+            "\($0). 折り返しを検証するために生成した日本語の段落です。表示幅が狭いと二行になります。"
+        }.joined(separator: "\n")
+        let original = model.document.text
+        // Fix the editor width so the result does not depend on the Duo posture. 360 points is
+        // the narrowest column the layout uses and fits inside every posture's safe area.
+        let host = AppearanceHost(rootView: NavigationStack { Container(model: model).frame(width: 360) })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<100 where !host.didAppear { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(host.didAppear)
+        try await Task.sleep(for: .milliseconds(200))
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        XCTAssertEqual(editor.bounds.width, 360, accuracy: 1)
+        XCTAssertTrue(host.view.bounds.inset(by: host.view.safeAreaInsets)
+            .contains(editor.convert(editor.bounds, to: host.view)), "The editor must stay inside the safe area")
+        editor.becomeFirstResponder()
+        editor.selectedRange = NSRange(location: (editor.text as NSString).length, length: 0)
+        // Let the keyboard and the scroll to the caret settle before recording.
+        var settled = editor.contentOffset.y
+        var stableReadings = 0
+        for _ in 0..<60 where stableReadings < 3 {
+            editor.scrollRangeToVisible(editor.selectedRange)
+            try await Task.sleep(for: .milliseconds(100))
+            stableReadings = editor.contentOffset.y == settled ? stableReadings + 1 : 0
+            settled = editor.contentOffset.y
+        }
+        let lineHeight = (editor.font ?? .preferredFont(forTextStyle: .body)).lineHeight
+        let baseline = editor.contentOffset.y
+        XCTAssertGreaterThan(editor.contentSize.height, editor.bounds.height * 2,
+                             "The document must be long enough to scroll")
+        XCTAssertGreaterThan(baseline, lineHeight * 10, "The caret must be near the end of a scrolled document")
+        // The editor stays above the keyboard and shows the caret at the end of the document.
+        host.view.layoutIfNeeded()
+        let keyboardTop = host.view.keyboardLayoutGuide.layoutFrame.minY
+        let editorFrame = editor.convert(editor.bounds, to: host.view)
+        let caret = editor.convert(editor.caretRect(for: editor.endOfDocument), to: host.view)
+        XCTAssertLessThanOrEqual(editorFrame.maxY, keyboardTop + 1, "The editor must respect the keyboard safe area")
+        // UIKit may leave the caret a fraction of a point past the edge after scrolling.
+        XCTAssertTrue(editorFrame.insetBy(dx: 0, dy: -2).contains(caret), "The caret must be visible: \(caret)")
+        let recorder = ScrollRecorder(editor)
+        defer { recorder.stop() }
+
+        let typed = "追記した文字列を確認"
+        for character in typed {
+            editor.insertText(String(character))
+            try await Task.sleep(for: .milliseconds(60))
+        }
+        for marked in ["n", "に", "にh", "にほ", "にほn", "にほん", "にほんg", "にほんご"] {
+            editor.setMarkedText(marked, selectedRange: NSRange(location: (marked as NSString).length, length: 0))
+            try await Task.sleep(for: .milliseconds(60))
+            XCTAssertNotNil(editor.markedTextRange, "Updating the view must not end the composition of \(marked)")
+        }
+        editor.unmarkText()
+        for _ in 0..<50 where model.document.text != original + typed + "にほんご" {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(model.document.text, original + typed + "にほんご")
+        XCTAssertTrue(editor.text.hasSuffix(typed + "にほんご"))
+        recorder.stop()
+
+        // Typing at the end may scroll down by a few new lines. It must never jump back.
+        let lowest = recorder.offsets.min() ?? baseline
+        let highest = recorder.offsets.max() ?? baseline
+        XCTAssertGreaterThanOrEqual(lowest, baseline - lineHeight,
+            "contentOffset.y jumped from \(baseline) to \(lowest): \(recorder.offsets)")
+        XCTAssertLessThanOrEqual(highest, baseline + lineHeight * 4,
+            "contentOffset.y jumped from \(baseline) to \(highest): \(recorder.offsets)")
+        let shortest = recorder.heights.min() ?? editor.contentSize.height
+        XCTAssertGreaterThanOrEqual(shortest, editor.contentSize.height - lineHeight * 4,
+            "contentSize.height shrank to \(shortest): \(recorder.heights)")
+        print("Issue84 keyboardTop=\(keyboardTop) editorFrame=\(editorFrame) baseline=\(baseline) offsets=\(recorder.offsets) heights=\(recorder.heights)")
+    }
+
+    private final class EditorBox: ObservableObject {
+        @Published var text = "0123456789"
+        @Published var focused = false
+        @Published var findShown = false
+        @Published var showsEditor = true
+        @Published var dynamicTypeSize = DynamicTypeSize.large
+        let selection = MobileTextSelection()
+    }
+
+    private struct EditorContainer: View {
+        @ObservedObject var model: EditorBox
+        var body: some View {
+            VStack {
+                if model.showsEditor {
+                    MobileMarkdownTextView(text: $model.text, selection: model.selection,
+                        isFocused: $model.focused, isFindNavigatorPresented: $model.findShown)
+                } else {
+                    Text(model.text)
+                }
+            }
+            .environment(\.dynamicTypeSize, model.dynamicTypeSize)
+        }
+    }
+
+    private func showEditor(_ model: EditorBox) async throws -> (UIWindow, UIHostingController<EditorContainer>) {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView: EditorContainer(model: model))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        for _ in 0..<100 where textViews(in: host.view).first?.window == nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return (window, host)
+    }
+
+    func testEditorBridgesFocusSelectionAndOutsideTextChanges() async throws {
+        let model = EditorBox()
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        XCTAssertEqual(editor.accessibilityIdentifier, "markdownEditor")
+        XCTAssertEqual(editor.accessibilityLabel, String(localized: "Markdown本文"))
+        XCTAssertTrue(editor.isFindInteractionEnabled)
+
+        XCTAssertTrue(editor.becomeFirstResponder())
+        for _ in 0..<50 where !model.focused { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(model.focused, "Tapping the editor must publish focus")
+        // Let SwiftUI render the published focus before the next, separate request.
+        try await Task.sleep(for: .milliseconds(100))
+        model.focused = false
+        for _ in 0..<50 where editor.isFirstResponder { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(editor.isFirstResponder, "Clearing focus, as Settings does, must hide the keyboard")
+        model.focused = true
+        for _ in 0..<50 where !editor.isFirstResponder { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertTrue(editor.isFirstResponder)
+
+        editor.selectedRange = NSRange(location: 3, length: 2)
+        model.showsEditor = false
+        for _ in 0..<50 where !textViews(in: host.view).isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertNil(editor.window)
+        model.showsEditor = true
+        for _ in 0..<50 where textViews(in: host.view).first?.window == nil {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let restored = try XCTUnwrap(textViews(in: host.view).first)
+        XCTAssertFalse(restored === editor)
+        XCTAssertEqual(restored.selectedRange, NSRange(location: 3, length: 2),
+                       "Returning from the preview must keep the selection")
+
+        model.text = "短い"
+        for _ in 0..<50 where restored.text != "短い" { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(restored.text, "短い")
+        XCTAssertLessThanOrEqual(NSMaxRange(restored.selectedRange), 2)
+
+        restored.becomeFirstResponder()
+        // The keyboard session discards marked text that exists before it finishes starting.
+        try await Task.sleep(for: .milliseconds(500))
+        restored.selectedRange = NSRange(location: 2, length: 0)
+        restored.setMarkedText("にほ", selectedRange: NSRange(location: 2, length: 0))
+        model.objectWillChange.send()
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertNotNil(restored.markedTextRange, "Re-rendering must not end IME composition")
+        XCTAssertEqual(restored.text, "短いにほ")
+        XCTAssertEqual(model.text, "短い", "Composition text is not part of the document until committed")
+        restored.unmarkText()
+        for _ in 0..<50 where model.text != "短いにほ" { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(model.text, "短いにほ")
+    }
+
+    /// The keyboard session discards marked text that exists before it finishes starting, and
+    /// how long that takes varies, so start the composition again until it stays.
+    private func beginComposition(_ marked: String, in editor: UITextView, at location: Int) async throws {
+        let original = editor.text
+        editor.becomeFirstResponder()
+        for _ in 0..<20 {
+            try await Task.sleep(for: .milliseconds(250))
+            guard editor.markedTextRange == nil else { return }
+            XCTAssertEqual(editor.text, original, "A discarded composition must not leave text behind")
+            editor.selectedRange = NSRange(location: location, length: 0)
+            editor.setMarkedText(marked, selectedRange: NSRange(location: (marked as NSString).length, length: 0))
+        }
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertNotNil(editor.markedTextRange, "The composition did not start")
+    }
+
+    /// The document can change elsewhere (for example a file update) while the input method is
+    /// composing. Committing must not publish the editor's older text over that change.
+    func testExternalTextChangeDuringCompositionSurvivesCommit() async throws {
+        let model = EditorBox()
+        model.text = "一行目\n二行目"
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        try await beginComposition("にほ", in: editor, at: (editor.text as NSString).length)
+
+        model.text = "外部の変更\n一行目\n二行目"
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertNotNil(editor.markedTextRange, "An outside change must not end IME composition")
+        XCTAssertEqual(editor.text, "一行目\n二行目にほ")
+
+        editor.unmarkText()
+        let merged = "外部の変更\n一行目\n二行目にほ"
+        for _ in 0..<50 where model.text != merged || editor.text != merged {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(model.text, merged, "Committing must keep the outside change and the typed text")
+        XCTAssertEqual(editor.text, merged)
+        XCTAssertEqual(editor.selectedRange, NSRange(location: (merged as NSString).length, length: 0),
+                       "The caret stays after the committed text")
+    }
+
+    func testCancelledCompositionAppliesTheOutsideChange() async throws {
+        let model = EditorBox()
+        model.text = "本文"
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        try await beginComposition("にほ", in: editor, at: 2)
+        model.text = "外部の本文"
+        try await Task.sleep(for: .milliseconds(200))
+        // Deleting the whole composition leaves the editor's own text unchanged.
+        editor.setMarkedText("", selectedRange: NSRange(location: 0, length: 0))
+        editor.unmarkText()
+        for _ in 0..<50 where editor.text != "外部の本文" { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(editor.text, "外部の本文")
+        XCTAssertEqual(model.text, "外部の本文")
+    }
+
+    func testMergingTypedTextWithAnOutsideChange() {
+        func merge(_ base: String, typed: String, outside: String) -> String? {
+            MobileMarkdownTextView.merging(typed: typed, outside: outside, base: base)?.text
+        }
+        XCTAssertEqual(merge("AB\nCD", typed: "AB\nCDにほ", outside: "X\nAB\nCD"), "X\nAB\nCDにほ")
+        XCTAssertEqual(merge("AB\nCD", typed: "にほAB\nCD", outside: "AB\nCD\n追記"), "にほAB\nCD\n追記")
+        XCTAssertEqual(merge("日本語🙂の文", typed: "日本語🙂のよい文", outside: "新・日本語🙂の文"), "新・日本語🙂のよい文")
+        XCTAssertEqual(merge("ABCD", typed: "AD", outside: "ABCD!"), "AD!")
+        XCTAssertEqual(merge("", typed: "あ", outside: "外部"), "あ外部")
+        // Both sides changed the same place: there is no safe automatic result.
+        XCTAssertNil(merge("ABCD", typed: "AXCD", outside: "AYCD"))
+        XCTAssertNil(merge("ABCD", typed: "ABXCD", outside: "AD"))
+        let shifted = MobileMarkdownTextView.merging(typed: "ABにほ", outside: "追加AB", base: "AB")
+        XCTAssertEqual(shifted?.offsetAfterTypedText, 2, "Text inserted before the typed text moves the caret")
+    }
+
+    func testEditorUsesMonospacedBodyFontThatFollowsDynamicType() async throws {
+        let model = EditorBox()
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        for size in [DynamicTypeSize.large, .accessibility3, .xSmall] {
+            model.dynamicTypeSize = size
+            let expected = UIFont.preferredFont(forTextStyle: .body,
+                compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))).pointSize
+            for _ in 0..<50 where editor.font?.pointSize != expected { try await Task.sleep(for: .milliseconds(20)) }
+            let font = try XCTUnwrap(editor.font)
+            XCTAssertEqual(font.pointSize, expected, "\(size)")
+            XCTAssertTrue(font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace), "\(size)")
+            XCTAssertTrue(textViews(in: host.view).first === editor, "Changing the text size must keep the editor")
+        }
+    }
+
+    func testClosingSystemFindNavigatorResetsPresentationState() async throws {
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        let model = SearchBox()
+        model.state = MobileEditorState(presentation: .editor)
+        let host = AppearanceHost(rootView: NavigationStack { SearchContainer(model: model) })
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        for _ in 0..<100 where !host.didAppear { try await Task.sleep(for: .milliseconds(20)) }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        for cycle in 0..<2 {
+            model.state.showFindNavigator()
+            for _ in 0..<100 where editor.findInteraction?.isFindNavigatorVisible != true {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let interaction = try XCTUnwrap(editor.findInteraction)
+            XCTAssertTrue(interaction.isFindNavigatorVisible, "Cycle \(cycle)")
+            XCTAssertTrue(model.state.showsFindNavigator, "Cycle \(cycle)")
+            // The same call the system find bar's close button makes.
+            interaction.dismissFindNavigator()
+            for _ in 0..<100 where model.state.showsFindNavigator { try await Task.sleep(for: .milliseconds(20)) }
+            XCTAssertFalse(model.state.showsFindNavigator, "Closing the find bar must update the state, cycle \(cycle)")
+            XCTAssertFalse(interaction.isFindNavigatorVisible)
+            XCTAssertTrue(textViews(in: host.view).first === editor)
         }
     }
 

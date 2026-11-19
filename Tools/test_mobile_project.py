@@ -47,12 +47,20 @@ class MobileProjectTests(unittest.TestCase):
 
     def test_adaptive_layout_has_no_device_or_screen_size_assumptions(self):
         source = (ROOT / "Sources/MKTownMobile/MobileEditorWorkspace.swift").read_text()
-        for forbidden in ("UIScreen.main", "userInterfaceIdiom", "UIDevice.current.orientation",
-                          "ignoresSafeArea"):
-            self.assertNotIn(forbidden, source)
+        editor = (ROOT / "Sources/MKTownMobile/MobileMarkdownTextView.swift").read_text()
+        for text in (source, editor):
+            for forbidden in ("UIScreen.main", "userInterfaceIdiom", "UIDevice.current.orientation",
+                              "ignoresSafeArea", "contentInsetAdjustmentBehavior"):
+                self.assertNotIn(forbidden, text)
         self.assertIn("GeometryReader", source)
-        # A UIKit label bridge does not constrain layout or replace the native editor.
-        self.assertIn("TextEditor(text: $document.text, selection: $selection)", source)
+        # UIKit bridges for the count label and the editor do not constrain layout.
+        # SwiftUI's TextEditor jumped while typing in long wrapped documents (issue #84).
+        self.assertNotIn("TextEditor(", source)
+        self.assertIn("MobileMarkdownTextView(text: $document.text, selection: selection", source)
+        self.assertIn("isFindNavigatorPresented: $editorState.showsFindNavigator", source)
+        # The editor uses UIKit's own find UI and keeps IME composition intact.
+        self.assertIn("isFindInteractionEnabled = true", editor)
+        self.assertIn("view.markedTextRange == nil", editor)
 
     def test_all_mobile_unit_tests_are_in_the_shared_scheme(self):
         target = self.target("MKTownEditorMobileTests")

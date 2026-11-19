@@ -19,11 +19,11 @@ macOS版は[正規表現検索やフォルダ全体の検索・置換](features.
 
 ## 標準UIを使う設計
 
-macOSでは既存の`NSTextView`と`NSTextFinder`、モバイル版では`TextEditor.findNavigator(isPresented:)`を使う。OSが検索結果の表示・移動・置換・Undoを処理するため、別の文字列置換エンジンや編集欄を作らず、既存の本文バインディングを使える。検索UIのラベルと検索オプションはOSが提供する。
+macOSでは既存の`NSTextView`と`NSTextFinder`、モバイル版では編集欄の`UITextView`が持つ`UIFindInteraction`を使う。OSが検索結果の表示・移動・置換・Undoを処理するため、別の文字列置換エンジンや編集欄を作らず、既存の本文バインディングを使える。検索UIのラベルと検索オプションはOSが提供する。
 
 モバイル版の表示状態は`MobileEditorState`で管理する。検索要求時は編集欄を表示し、自動配置の設定は維持する。検索中に表示メニュー、画面幅、アクセシビリティの文字サイズ変更で編集欄が隠れた場合も、検索の表示状態を解除する。
 
-新しく生成した`TextEditor`へ同時に検索UIの表示を要求すると、編集欄だけが表示され、検索UIが開かない場合がある。`MobileFindNavigator`は要求を保留し、UIKitの入力欄と検索機能の準備を300ミリ秒待ってから表示する。`Task.yield()`だけでは準備前に再開する場合がある。画面を切り替えると待機タスクがキャンセルされるため、古い要求による再表示も防げる。
+新しく生成した編集欄へ同時に検索UIの表示を要求すると、編集欄だけが表示され、検索UIが開かない場合がある（`TextEditor`を使っていた時期に確認した）。`MobileFindNavigator`は要求を保留し、UIKitの入力欄と検索機能の準備を300ミリ秒待ってから表示する。`Task.yield()`だけでは準備前に再開する場合がある。画面を切り替えると待機タスクがキャンセルされるため、古い要求による再表示も防げる。
 
 プレビュー専用の表示では編集欄を取り除き、フォーカスと検索の表示状態を解除する。幅0の編集欄を残す構成も検証したが、iPad上で検索セッションが終了せずに残る場合があった。編集欄が表示されたままの画面幅変更では、既存の入力欄を維持する。
 
@@ -31,7 +31,7 @@ macOSでは既存の`NSTextView`と`NSTextFinder`、モバイル版では`TextEd
 
 `FindReplaceCommandsTests`はmacOSの標準検索アクションと、入力変換中の一括置換の抑止を確認する。`MobileEditorLayoutTests`は各表示モード・画面幅・アクセシビリティ文字サイズからの検索開始と、プレビューへの切り替え後の検索再開を確認する。
 
-`MobileWorkspaceTests`は実際のSwiftUI編集欄で標準検索が有効になっていることを確認し、日本語・絵文字を含む検索、前後移動、1件置換、空文字列への一括置換、該当なし、Undo、保存後の再読み込みを検証する。
+`MobileWorkspaceTests`は実際の編集欄で標準検索が有効になっていることを確認し、日本語・絵文字を含む検索、前後移動、1件置換、空文字列への一括置換、該当なし、Undo、保存後の再読み込みを検証する。
 
 `testFindRequestPresentsNavigatorAfterLeavingPreview`は、プレビューから検索UIが開くことと、プレビューへ戻ると検索UIが閉じ、もう一度開けることを確認する。
 
@@ -51,7 +51,7 @@ macOSで40件の一致を検索し、「次を検索」を連続して押すと�
 
 `FindReplaceCommandsTests`は、繰り返し更新しても同じ設定のsetterを呼ばないこと、編集可否の変更を適用すること、検索バーの表示中に前後移動してもフォーカスを要求しないことを検証する。40件の一致を前後に選択する経路も検査する。コード内の校正抑止と通常文への復帰は、既存の`EditorSourceCacheTests`と`MarkdownProofingTests`で確認する。
 
-iOS・iPadOSはSwiftUIの`TextEditor`とUIKitの検索機能を使い、macOSのAppKit設定処理を共有しない。`MobileWorkspaceTests.testFindCountSurvivesRepeatedNavigationAndViewUpdates`は日本語と絵文字を含む40件の一致を前後各85回移動し、現在位置・総数・検索UI・入力欄と検索セッションの継続・候補数ラベルの表示を検証する。各移動でSwiftUIの更新も要求し、本文が変わらないことを確認する。
+iOS・iPadOSは`UITextView`とUIKitの検索機能を使い、macOSのAppKit設定処理を共有しない。`MobileWorkspaceTests.testFindCountSurvivesRepeatedNavigationAndViewUpdates`は日本語と絵文字を含む40件の一致を前後各85回移動し、現在位置・総数・検索UI・入力欄と検索セッションの継続・候補数ラベルの表示を検証する。各移動でSwiftUIの更新も要求し、本文が変わらないことを確認する。
 
 検索UIの検証では、候補が実際に移動したことも確認する。macOSの非アクティブなテストウインドウでは、候補が動かず総数だけ読める場合がある。総数が残っているという検査だけでは連続移動の検証にならないため、macOSは設定更新のユニットテストと実アプリでの操作確認を組み合わせる。モバイルのテストでは、検索UIを開く前に`UIFindInteraction.searchText`も設定する。セッションの`performSearch`だけでは、検索欄と候補数ラベルを含む表示を検証できない。
 
@@ -90,8 +90,19 @@ Device Hubで検索中にClosed→Open→Closedと切り替え、標準検索バ
 
 iPad Pro 13インチ（iPadOS 26.0）でもモバイル全44件、iPhone 17（iOS 26.0）でも長文の回帰テストが成功した。Closed対応後の実機での確認は行っていない。
 
+## 編集欄をUITextViewへ置き換えたときの変更
+
+長い書類で入力のたびに本文が揺れる問題（[原因と検証](mobile-editor-scroll-jump.md)）を修正するため、モバイル版の編集欄をSwiftUIの`TextEditor`から、`UITextView`を包む`MobileMarkdownTextView`へ置き換えた。検索の表示には`findNavigator(isPresented:)`を使わず、`UITextView.isFindInteractionEnabled`を有効にして`findInteraction`を直接操作する。
+
+- `MobileEditorState.showsFindNavigator`が`true`になると`presentFindNavigator(showingReplace: false)`を、`false`になると`dismissFindNavigator()`を呼ぶ。新しい編集欄への要求を300ミリ秒待ってから表示する`MobileFindNavigator`の処理は従来どおり。
+- 利用者が検索バーを閉じた場合や、システムの操作で検索を開いた場合は、`UITextView`が受け取る`UIFindInteractionDelegate`の開始・終了通知から表示状態を更新する。`UITextView`のサブクラスで2つの通知を受け、UIKit側の実装を呼んだ後に状態を書き換える。システム側から検索を開く経路は自動テストしていない。
+- 編集欄を取り除くときは、検索UIが残っていれば閉じる。表示状態とフォーカスの解除は従来どおりワークスペースが行う。
+- 件数欄は従来どおり編集欄の外の独立した行に置く。編集欄は割り当てられた領域でクリップする。
+
+`MobileWorkspaceTests.testClosingSystemFindNavigatorResetsPresentationState`は、検索バーを閉じる操作で表示状態が解除され、同じ入力欄でもう一度検索を開けることを2回繰り返して確認する。既存の検索・置換・Undo・件数欄のテストは、新しい編集欄でそのまま成功した。
+
 ## 参照
 
-- [Apple: findNavigator(isPresented:)](https://developer.apple.com/documentation/swiftui/view/findnavigator(ispresented:))
+- [Apple: UIFindInteraction](https://developer.apple.com/documentation/uikit/uifindinteraction)
 - [Apple: UIFindSession](https://developer.apple.com/documentation/uikit/uifindsession)
 - [Human Interface Guidelines: Searching](https://developer.apple.com/design/human-interface-guidelines/searching)
