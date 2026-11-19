@@ -14,6 +14,7 @@
 		0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */; };
 		329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68415AC928FC514625D3B348 /* MobileEditorLayout.swift */; };
 		34AF324D60BD0E4B09E2BF39 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B8A0EEAA379943E284578C8C /* Localizable.xcstrings */; };
+		A84B0C1E5D2F4A6B8C9D0E1F /* MobileMarkdownTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B95C1D2F6E3A5B7C9D0E1F2A /* MobileMarkdownTextView.swift */; };
 		357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */; };
 		5A150E8F7B3AD0AA4307263D /* MobileDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65FABA01D6D1FA59F7DA6F53 /* MobileDocumentTests.swift */; };
 		686623455B7C59C528A2883D /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* MarkdownDocument.swift */; };
@@ -363,6 +364,7 @@
 		A2000000000000000000AD03 /* ListKeyboardSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardSelection.swift; sourceTree = "<group>"; };
 		B8A0EEAA379943E284578C8C /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		D10000000000000000000001 /* MKTownEditorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B95C1D2F6E3A5B7C9D0E1F2A /* MobileMarkdownTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownTextView.swift; sourceTree = "<group>"; };
 		DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorWorkspace.swift; sourceTree = "<group>"; };
 		EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorLayoutTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -614,6 +616,7 @@
 				5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */,
 				B8A0EEAA379943E284578C8C /* Localizable.xcstrings */,
 				DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */,
+				B95C1D2F6E3A5B7C9D0E1F2A /* MobileMarkdownTextView.swift */,
 			);
 			path = Sources/MKTownMobile;
 			sourceTree = "<group>";
@@ -845,6 +848,7 @@
 				0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */,
 				C0F816112D8D88BE4DBC3080 /* MKTownMobileApp.swift in Sources */,
 				357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */,
+				A84B0C1E5D2F4A6B8C9D0E1F /* MobileMarkdownTextView.swift in Sources */,
 				686623455B7C59C528A2883D /* MarkdownDocument.swift in Sources */,
 				02FA37F182392CE187209DDE /* MarkdownTextFormat.swift in Sources */,
 				329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */,
