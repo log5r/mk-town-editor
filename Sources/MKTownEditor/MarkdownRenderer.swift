@@ -177,8 +177,12 @@ enum MarkdownRenderer {
         case codeBlock(MarkdownBlock)
     }
 
+    ///
+    /// - Parameter quotesText: 文章の部分の各行に引用記号（`│  `）を付けるか。
+    ///   構造化プレビューは縦線を図形で引くため付けない。入れ子の引用の引用記号は常に付く。
     static func renderCalloutSegments(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
-                                      documentContext: DocumentContext) -> [CalloutSegment] {
+                                      documentContext: DocumentContext,
+                                      quotesText: Bool = true) -> [CalloutSegment] {
         guard let callout = block.calloutKind else {
             return [.text(renderCallout(block, in: analysis, documentContext: documentContext))]
         }
@@ -210,7 +214,7 @@ enum MarkdownRenderer {
                 if index > 0 { content.append(NSAttributedString(string: "\n")) }
                 content.append(item.text)
             }
-            segments.append(.text(quote(content)))
+            segments.append(.text(quotesText ? quote(content) : content))
             pending = []
             isFirstText = false
         }
@@ -271,10 +275,10 @@ enum MarkdownRenderer {
     fileprivate static func quote(_ content: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let source = content.string as NSString
-        let prefix = NSAttributedString(
-            string: "│  ",
-            attributes: baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)
-        )
+        var prefixAttributes = baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)
+        // AppKit で描く箇所（`PreviewAppKitIndent`）は、引用記号を行頭に固定し、リストの字下げをその内側に置く。
+        prefixAttributes[.previewQuotePrefix] = true
+        let prefix = NSAttributedString(string: "│  ", attributes: prefixAttributes)
         var cursor = 0
         repeat {
             result.append(prefix)
@@ -330,7 +334,7 @@ enum MarkdownRenderer {
                                  footnotes: footnotes, context: context)
             if showTaskPrefix || task == nil {
                 let prefix = task.map { $0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ") } ?? "•  "
-                content.insert(NSAttributedString(string: prefix, attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+                content.insert(NSAttributedString(string: prefix, attributes: listMarkerAttributes()), at: 0)
             }
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
@@ -344,8 +348,7 @@ enum MarkdownRenderer {
                 ? task.map { "\(number).  " + ($0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ")) }
                     ?? "\(number).  "
                 : "\(number).  "
-            content.insert(NSAttributedString(string: prefix,
-                attributes: baseAttributes(font: .systemFont(ofSize: 15))), at: 0)
+            content.insert(NSAttributedString(string: prefix, attributes: listMarkerAttributes()), at: 0)
             applyListIndent(to: content, depth: block.nestingDepth)
             return content
         case .paragraph:
@@ -393,7 +396,8 @@ enum MarkdownRenderer {
                                  baseFont: .systemFont(ofSize: 15),
                                  captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
-            if block.parentID != nil {
+            // リスト項目の続きの段落だけを字下げする。引用の直下の段落（深さ0）は引用記号の後ろに続ける。
+            if block.nestingDepth > 0 {
                 applyContinuationIndent(to: content, depth: block.nestingDepth)
             }
             if let target = context.crossReferences?.target(forBlockID: block.id) {
@@ -682,18 +686,37 @@ enum MarkdownRenderer {
         ]
     }
 
+    /// リストの行頭記号（`•  `、`1.  `、タスクの状態）の属性。
+    /// `NSTextView` で描く箇所は記号の範囲を `previewListMarker` で見分け、本文の左端をそろえる（`PreviewAppKitIndent`）。
+    private static func listMarkerAttributes() -> [NSAttributedString.Key: Any] {
+        var attributes = baseAttributes(font: .systemFont(ofSize: 15))
+        attributes[.previewListMarker] = true
+        return attributes
+    }
+
+    /// 深さ `depth` のリスト項目の行頭記号の位置。タスクのチェックボックスもここに置く。
+    nonisolated static func listMarkerIndent(depth: Int) -> CGFloat { CGFloat(12 + depth * 24) }
+
+    /// 深さ `depth` のリスト項目の本文の左端。項目の続きの段落（深さ `depth + 1`）も同じ位置にそろう。
+    nonisolated static func listBodyIndent(depth: Int) -> CGFloat { CGFloat(32 + depth * 24) }
+
+    /// リスト項目の行間。項目の間にも同じ間隔だけを空け、段落の間隔は足さない。
+    /// `Text` は段落スタイルの行間を無視して約19ptの間隔で行を並べる。`NSTextView`（行の高さ18pt）で描く項目も
+    /// 同じ間隔になるようにし、コールアウトの中と外、折り返した行と次の項目で間隔をそろえる。
+    nonisolated static let listLineSpacing: CGFloat = 1
+
     private static func applyListIndent(to text: NSMutableAttributedString, depth: Int) {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.firstLineHeadIndent = CGFloat(12 + depth * 24)
-        paragraph.headIndent = CGFloat(32 + depth * 24)
-        paragraph.lineSpacing = 3
-        paragraph.paragraphSpacing = 4
+        paragraph.firstLineHeadIndent = listMarkerIndent(depth: depth)
+        paragraph.headIndent = listBodyIndent(depth: depth)
+        paragraph.lineSpacing = listLineSpacing
+        paragraph.paragraphSpacing = 0
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
     }
 
     private static func applyContinuationIndent(to text: NSMutableAttributedString, depth: Int) {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.firstLineHeadIndent = CGFloat(8 + depth * 24)
+        paragraph.firstLineHeadIndent = listBodyIndent(depth: depth - 1)
         paragraph.headIndent = paragraph.firstLineHeadIndent
         paragraph.lineSpacing = 3
         paragraph.paragraphSpacing = 4
@@ -800,6 +823,10 @@ final class MarkdownImageAttachment: NSTextAttachment {
 extension NSAttributedString.Key {
     /// 背景で読み込み中のローカル画像の仮表示。描画キャッシュはこの結果を保持しない。
     static let pendingLocalImage = NSAttributedString.Key("MKTownPendingLocalImage")
+    /// リスト項目の行頭記号の範囲。`PreviewAppKitIndent` が記号の幅を測り、本文の位置をそろえるために使う。
+    static let previewListMarker = NSAttributedString.Key("MKTownPreviewListMarker")
+    /// 引用記号（`│  `）の範囲。`PreviewAppKitIndent` が引用記号を行頭に固定するために使う。
+    static let previewQuotePrefix = NSAttributedString.Key("MKTownPreviewQuotePrefix")
 }
 
 extension NSAttributedString {

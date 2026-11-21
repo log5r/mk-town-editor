@@ -191,7 +191,7 @@ struct MarkdownPreview: View {
                                             if let target = analysis.crossReferences.target(forBlockID: block.id) {
                                                 Text(target.label).font(.caption).foregroundStyle(.secondary)
                                             }
-                                            tableView(table, in: analysis)
+                                            tableView(table, sourceRange: block.sourceRange, in: analysis)
                                         }
                                     } else if block.kind == .blank {
                                         Text(" ").frame(height: 12)
@@ -205,7 +205,7 @@ struct MarkdownPreview: View {
                                     } else if let task = block.task {
                                         taskView(block, task: task, in: analysis)
                                     } else {
-                                        blockText(block, in: analysis)
+                                        blockText(block, in: analysis, parent: layout.parent(of: block))
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -406,14 +406,25 @@ struct MarkdownPreview: View {
         citationCatalog = catalog
     }
 
+    /// - Parameter sourceRange: 文脈メニューの「原文へ移動」で示す原文の範囲。`NSTextView` で描く場合は右クリックを
+    ///   `NSTextView` が受け取り、行に付けた SwiftUI の文脈メニューが出ないため、ここから渡す。
+    ///   ブロックに属さない箇所（脚注など）では `nil`。
     @ViewBuilder
-    private func inlineText(_ rendered: NSAttributedString) -> some View {
+    private func inlineText(_ rendered: NSAttributedString, sourceRange: NSRange? = nil) -> some View {
         // SwiftUI Text drops NSTextAttachment when bridging to AttributedString.
         // Keep formula and image attachments in AppKit, including inside tables and notes.
-        if rendered.requiresAppKitText {
+        if PreviewAppKitIndent.containsListIndent(rendered) || PreviewAppKitIndent.containsQuotePrefix(rendered) {
+            // 複数のブロックをまとめた文字列（コールアウト）の入れ子のリストと引用。`Text` は字下げを無視し、
+            // 引用の縦線も文字でしか描けず行間で途切れる。範囲選択を保ったまま `NSTextView` で描く。
+            HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered), source: markdown,
+                          context: documentContext, loadsExternalPages: loadsExternalLinkPreviews,
+                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
+                          onRevealSource: revealAction(for: sourceRange))
+        } else if rendered.requiresAppKitText {
             HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
                           loadsExternalPages: loadsExternalLinkPreviews,
-                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme))
+                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
+                          onRevealSource: revealAction(for: sourceRange))
         } else {
             // Text はリンクの文字色に属性の色ではなく tint を使う。
             Text(AttributedString(rendered)).textSelection(.enabled)
@@ -421,23 +432,36 @@ struct MarkdownPreview: View {
         }
     }
 
+    /// `NSTextView` の文脈メニューの「原文へ移動」。行の SwiftUI の文脈メニューと同じ範囲を示す。
+    private func revealAction(for sourceRange: NSRange?) -> (() -> Void)? {
+        guard let sourceRange, let onRevealSource else { return nil }
+        return { onRevealSource(sourceRange) }
+    }
+
     /// コールアウトの中身。直下のコードブロックは文字列に含めず、通常のコードブロックと同じ枠で囲む。
     private func calloutContent(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let segments = MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
             MarkdownRenderer.renderCalloutSegments(block, in: analysis,
-                                                   documentContext: renderContext(for: analysis))
+                                                   documentContext: renderContext(for: analysis),
+                                                   quotesText: false)
         }
-        return VStack(alignment: .leading, spacing: 8) {
-            ForEach(segments.indices, id: \.self) { index in
-                switch segments[index] {
-                case let .text(rendered):
-                    inlineText(rendered)
-                case let .codeBlock(code):
-                    codeBlockView(code, in: analysis, isSearchMatch: isSearchMatch(code))
+        // 縦線は引用記号（`│`）の文字ではなく1本の図形で引く。文字で描くと行間で途切れ、破線に見える。
+        return HStack(alignment: .top, spacing: 0) {
+            PreviewQuoteBar()
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(segments.indices, id: \.self) { index in
+                    switch segments[index] {
+                    case let .text(rendered):
+                        inlineText(rendered, sourceRange: block.sourceRange)
+                    case let .codeBlock(code):
+                        codeBlockView(code, in: analysis, isSearchMatch: isSearchMatch(code))
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // 縦線は提案された高さをすべて取るため、行の高さを中身の高さに合わせる。
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func isSearchMatch(_ block: MarkdownBlock) -> Bool {
@@ -453,23 +477,64 @@ struct MarkdownPreview: View {
     }
 
     @ViewBuilder
-    private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
+    private func blockText(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
+                           parent: MarkdownBlock? = nil) -> some View {
         let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
             zoom: zoom, remoteRevision: resourceRevision, theme: theme)
         if case let .heading(level) = block.kind {
-            inlineText(rendered)
+            inlineText(rendered, sourceRange: block.sourceRange)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityAddTraits(.isHeader)
             .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
-        } else {
-            inlineText(rendered)
+        } else if Self.isListItem(block) {
+            // `Text` は段落スタイルの字下げを無視する。行頭記号と本文を1つの選択面に保ったまま字下げするため、
+            // 項目ごとに `NSTextView` で描く。
+            HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered, indentScale: CGFloat(zoom)),
+                          source: markdown, context: documentContext,
+                          loadsExternalPages: loadsExternalLinkPreviews,
+                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
+                          onRevealSource: revealAction(for: block.sourceRange))
             .frame(maxWidth: .infinity, alignment: .leading)
+            // `NSTextView` は最後の行の後ろの行間を高さに含めない。項目ごとに描くと項目の間が詰まるため補い、
+            // 1つの文字列で描くリスト（コールアウトの中など）と同じ間隔にする。
+            .padding(.bottom, PreviewListIndent.trailingSpacing(of: rendered))
+        } else {
+            // 項目の続きの段落は、字下げを行の余白で表す。
+            inlineText(PreviewListIndent.withoutIndent(rendered), sourceRange: block.sourceRange)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, continuationIndent(of: rendered, parent: parent, in: analysis))
         }
+    }
+
+    private static func isListItem(_ block: MarkdownBlock) -> Bool {
+        switch block.kind {
+        case .unorderedList, .orderedList: true
+        default: false
+        }
+    }
+
+    /// 項目の続きの段落の左端。親の項目の本文の左端にそろえる。
+    /// 幅の広い行頭記号で項目の本文が右へずれた場合も、`PreviewAppKitIndent.itemBodyIndent` で同じ位置を求める。
+    private func continuationIndent(of rendered: NSAttributedString, parent: MarkdownBlock?,
+                                    in analysis: MarkdownAnalysis) -> CGFloat {
+        let scale = CGFloat(zoom)
+        let nominal = (PreviewAppKitIndent.contentStyle(of: rendered,
+            in: NSRange(location: 0, length: rendered.length))?.headIndent ?? 0) * scale
+        // タスクはチェックボックスで描き、本文の位置が行頭記号の幅で決まらない。
+        guard nominal > 0, let parent, Self.isListItem(parent), parent.task == nil else { return nominal }
+        let parentRendered = renderCache.render(parent, in: analysis, context: renderContext(for: analysis),
+                                                zoom: zoom, remoteRevision: resourceRevision, theme: theme)
+        return PreviewAppKitIndent.itemBodyIndent(parentRendered, indentScale: scale) ?? nominal
     }
 
     private func taskView(_ block: MarkdownBlock, task: MarkdownTask,
                           in analysis: MarkdownAnalysis) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
+                                          zoom: zoom, showsTaskPrefix: false,
+                                          remoteRevision: resourceRevision, theme: theme)
+        // チェックボックスを行頭記号の位置に置き、入れ子の深さを行の余白で表す。
+        // 位置は深さから求める。本文が空のタスクは描画結果が空になり、字下げを読み取れないため。
+        return HStack(alignment: .top, spacing: 8) {
             Toggle(task.isChecked ? "完了" : "未完了", isOn: Binding(
                 get: { task.isChecked },
                 set: { _ in onToggleTask?(block.sourceRange.location) }
@@ -479,27 +544,32 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
-                                              zoom: zoom, showsTaskPrefix: false,
-                                              remoteRevision: resourceRevision, theme: theme)
-            inlineText(rendered)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // 番号付きのタスクの番号（`1.  `）と本文は、1つの選択面に置く。
+            inlineText(PreviewListIndent.withoutIndent(rendered), sourceRange: block.sourceRange)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(.leading, PreviewListIndent.taskCheckboxIndent(for: block) * CGFloat(zoom))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func tableView(_ table: MarkdownTable, in analysis: MarkdownAnalysis) -> some View {
+    private func tableView(_ table: MarkdownTable, sourceRange: NSRange,
+                           in analysis: MarkdownAnalysis) -> some View {
         let widths = table.header.indices.map { column in
             let values = [table.header[column]] + table.rows.map { $0[column] }
             return CGFloat(min(360, max(120, (values.map(\.count).max() ?? 0) * 8 + 24)))
         }
         return ScrollView(.horizontal) {
             VStack(spacing: 0) {
-                tableRow(table.header, table: table, widths: widths, rowNumber: 0, in: analysis)
+                tableRow(table.header, table: table, widths: widths, rowNumber: 0, sourceRange: sourceRange,
+                         in: analysis)
                 ForEach(Array(table.rows.enumerated()), id: \.offset) { index, row in
-                    tableRow(row, table: table, widths: widths, rowNumber: index + 1, in: analysis)
+                    tableRow(row, table: table, widths: widths, rowNumber: index + 1, sourceRange: sourceRange,
+                             in: analysis)
                 }
             }
+            // セルは右と下の線だけを引く。表の上と左の線をここで足し、どの線も同じ太さにする。
+            .overlay(alignment: .top) { PreviewTableStyle.horizontalBorder }
+            .overlay(alignment: .leading) { PreviewTableStyle.verticalBorder }
             .fixedSize(horizontal: true, vertical: false)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -508,25 +578,29 @@ struct MarkdownPreview: View {
     }
 
     private func tableRow(
-        _ cells: [String], table: MarkdownTable, widths: [CGFloat], rowNumber: Int,
+        _ cells: [String], table: MarkdownTable, widths: [CGFloat], rowNumber: Int, sourceRange: NSRange,
         in analysis: MarkdownAnalysis
     ) -> some View {
+        // 折り返したセルがあっても、行のすべてのセルを同じ高さにして縦線をつなげる。
         HStack(spacing: 0) {
             ForEach(cells.indices, id: \.self) { column in
                 let rendered = renderCache.renderCell(cells[column], in: analysis,
                     context: renderContext, zoom: zoom,
                     remoteRevision: resourceRevision, theme: theme)
-                inlineText(rendered)
+                inlineText(rendered, sourceRange: sourceRange)
                     .frame(width: widths[column], alignment: alignment(table.alignments[column]))
                     .padding(8)
                     .frame(minHeight: 34)
-                    .background(rowNumber == 0 ? Color.secondary.opacity(0.08) : Color.clear)
-                    .overlay(Rectangle().stroke(Color.secondary.opacity(0.2), lineWidth: 0.5))
+                    .frame(maxHeight: .infinity)
+                    .background(rowNumber == 0 ? PreviewTableStyle.headerFill : Color.clear)
+                    .overlay(alignment: .trailing) { PreviewTableStyle.verticalBorder }
+                    .overlay(alignment: .bottom) { PreviewTableStyle.horizontalBorder }
                     .accessibilityLabel(PreviewAccessibility.tableCellLabel(
                         header: table.header[column], value: cells[column], rowNumber: rowNumber))
                     .accessibilityAddTraits(rowNumber == 0 ? .isHeader : [])
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func alignment(_ value: MarkdownTable.Alignment) -> Alignment {
@@ -559,18 +633,24 @@ private extension NSAttributedString {
     }
 }
 
-private struct HoverLinkText: NSViewRepresentable {
+/// `NSTextView` で描く選択可能な文字列。リンクのホバー表示を持つ。
+/// リスト項目、入れ子のリストを含むコールアウト、埋め込み文書も、段落スタイルの字下げを効かせるためにこれで描く。
+/// 行の余白（`lineFragmentPadding`）は持たず、`Text` で描く周りの段落や引用の縦線と左端をそろえる。
+struct HoverLinkText: NSViewRepresentable {
     @Environment(\.openURL) private var openURL
     let rendered: NSAttributedString
     let source: String
     let context: DocumentContext
     let loadsExternalPages: Bool
     var linkAttributes = PreviewLinkStyle.textViewAttributes(for: .system)
+    /// 文脈メニューの「原文へ移動」。`NSTextView` は右クリックを受け取り、行に付けた SwiftUI の文脈メニューを出さないため。
+    var onRevealSource: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> HoverPreviewTextView {
         let view = HoverPreviewTextView()
+        view.textContainer?.lineFragmentPadding = 0
         view.isEditable = false
         view.isSelectable = true
         view.drawsBackground = false
@@ -598,6 +678,7 @@ private struct HoverLinkText: NSViewRepresentable {
         view.hoverSource = source
         view.loadsExternalLinkPreviews = loadsExternalPages
         view.linkTextAttributes = linkAttributes
+        view.revealSource = onRevealSource
         if !view.attributedString().isEqual(to: rendered) {
             view.textStorage?.setAttributedString(rendered)
             view.cancelHover()
@@ -704,6 +785,40 @@ struct PreviewCodeBlockFrame<Content: View>: View {
     }
 }
 
+/// 引用の縦線。引用記号（`│  `）を文字で描く箇所と同じ位置・幅・色で、行間で途切れない1本の線を引く。
+struct PreviewQuoteBar: View {
+    /// 線の左の余白・線の幅・本文までの余白。合計は引用記号（`│  `）の幅にそろえる。
+    static let leading: CGFloat = 1
+    static let lineWidth: CGFloat = 1
+    static let trailing: CGFloat = 10
+
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .tertiaryLabelColor))
+            .frame(width: Self.lineWidth)
+            .padding(.leading, Self.leading)
+            .padding(.trailing, Self.trailing)
+            .accessibilityHidden(true)
+    }
+}
+
+/// プレビューの表の罫線と見出し行の色。
+/// 罫線は文字色を薄く重ねて作り、明暗どちらの背景でも表の区切りが読み取れる濃さにする。
+enum PreviewTableStyle {
+    static let borderOpacity = 0.3
+    static let borderWidth: CGFloat = 1
+    static let borderColor = Color.primary.opacity(borderOpacity)
+    static let headerFill = Color.secondary.opacity(0.08)
+
+    static var horizontalBorder: some View {
+        Rectangle().fill(borderColor).frame(height: borderWidth).accessibilityHidden(true)
+    }
+
+    static var verticalBorder: some View {
+        Rectangle().fill(borderColor).frame(width: borderWidth).accessibilityHidden(true)
+    }
+}
+
 /// 文書を文字列1つで描く箇所（埋め込み文書）のコードブロック。
 /// 前後の文章の引用記号（`│  `）と同じ位置に引用の深さだけ縦線を引き、`PreviewCodeBlockFrame` で囲む。
 /// 埋め込み文書の文字はテーマの色を当てないため、枠もシステム配色にする。
@@ -715,12 +830,7 @@ struct PreviewQuotedCodeBlock<Content: View>: View {
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(0..<quoteDepth, id: \.self) { _ in
-                Rectangle()
-                    .fill(Color(nsColor: .tertiaryLabelColor))
-                    .frame(width: 1)
-                    .padding(.leading, 1)
-                    .padding(.trailing, 10)
-                    .accessibilityHidden(true)
+                PreviewQuoteBar()
             }
             PreviewCodeBlockFrame(theme: .system, onCopy: onCopy) {
                 content
@@ -866,7 +976,9 @@ private struct MarkdownTextPreview: NSViewRepresentable {
             analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
                 ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         }
-        textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
+        // 引用の中のリストの字下げと、幅の広い行頭記号の下の本文の位置をそろえる。
+        textView.textStorage?.setAttributedString(
+            PreviewAppKitIndent.aligned(PreviewTypography.scaled(rendered, by: zoom)))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom
@@ -881,7 +993,87 @@ final class HoverPreviewTextView: NSTextView {
     private let linkHover = MarkdownLinkHoverPopover()
     private var hoverTrackingArea: NSTrackingArea?
 
+    /// 設定すると、文脈メニューの先頭に「原文へ移動」を加える。
+    var revealSource: (() -> Void)?
+
+    /// 文字列が引用の縦線（`PreviewQuoteBars`）を含むか。文字列が変わるまで覚えておく。
+    fileprivate var hasQuoteBars: Bool?
+    /// 引用記号の文字を隠す一時属性を、今の文字列に合わせて付け直す必要があるか。文字列が変わると立てる。
+    fileprivate var quoteGlyphsNeedUpdate = true
+    /// 一時属性を付けたことがあるか。付けた後に引用のない文字列へ変わったら、古い一時属性を外す。
+    private var hasHiddenQuoteGlyphs = false
+
+    private func containsQuoteBars() -> Bool {
+        // 文字列の変更を受け取り、覚えた結果を捨てる。
+        if textStorage?.delegate == nil { textStorage?.delegate = self }
+        if let hasQuoteBars { return hasQuoteBars }
+        let result = textStorage.map { PreviewQuoteBars.containsBars($0) } ?? false
+        hasQuoteBars = result
+        return result
+    }
+
+    /// 引用記号の縦線の文字を、表示のときだけ透明にする。文字列（`textStorage`）は変えない。
+    /// `layoutManager` に触れると TextKit 1 に切り替わるため、引用の縦線を含む文字列か、
+    /// すでに一時属性を付けた（切り替わった）後に限る。
+    private func updateQuoteGlyphs() {
+        let hasBars = containsQuoteBars()
+        guard quoteGlyphsNeedUpdate, hasBars || hasHiddenQuoteGlyphs, let layoutManager else { return }
+        quoteGlyphsNeedUpdate = false
+        if hasBars {
+            PreviewQuoteBars.hideGlyphs(in: layoutManager)
+            hasHiddenQuoteGlyphs = true
+        } else if let textStorage {
+            layoutManager.removeTemporaryAttribute(.foregroundColor,
+                                                   forCharacterRange: NSRange(location: 0, length: textStorage.length))
+            hasHiddenQuoteGlyphs = false
+        }
+    }
+
+    override func viewWillDraw() {
+        // 縦線は `NSLayoutManager` の行の位置から求める。描画の途中でレイアウトの方式が切り替わらないよう、
+        // 先に用意し、引用記号の文字を隠す一時属性も付けておく。
+        updateQuoteGlyphs()
+        super.viewWillDraw()
+    }
+
+    /// 縦線は文字の背景として描く。`draw(_:)` を上書きすると `NSTextView` は初めから TextKit 1 で作られ、
+    /// 引用を含まない文字列でも TextKit 2 を使えなくなるため。記号の文字は透明にしてあり、線は文字に隠れない。
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        // TextKit 2 のまま描く場合（`viewWillDraw` を経ずに描いた場合）は、描画の途中で切り替えず、
+        // 記号の文字をそのまま見せる。
+        guard textLayoutManager == nil, containsQuoteBars(),
+              let textStorage, let layoutManager, let textContainer else { return }
+        // `viewWillDraw` を経ない描画（`cacheDisplay(in:to:)` など）でも、文字を描く前に記号の文字を隠す。
+        updateQuoteGlyphs()
+        let origin = textContainerOrigin
+        let visible = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let glyphs = layoutManager.glyphRange(forBoundingRect: visible, in: textContainer)
+        let characters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+        for bar in PreviewQuoteBars.bars(in: textStorage, layoutManager: layoutManager,
+                                         container: textContainer, characterRange: characters) {
+            bar.color.setFill()
+            bar.rect.offsetBy(dx: origin.x, dy: origin.y).fill(using: .sourceOver)
+        }
+    }
+
     func cancelHover() { linkHover.cancel() }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        guard revealSource != nil else { return menu }
+        let item = NSMenuItem(title: String(localized: "原文へ移動"),
+                              action: #selector(revealSourceFromMenu(_:)), keyEquivalent: "")
+        item.target = self
+        item.image = NSImage(systemSymbolName: "text.cursor", accessibilityDescription: nil)
+        menu.insertItem(.separator(), at: 0)
+        menu.insertItem(item, at: 0)
+        return menu
+    }
+
+    @objc private func revealSourceFromMenu(_ sender: Any?) {
+        revealSource?()
+    }
 
     override func updateTrackingAreas() {
         if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
@@ -935,6 +1127,15 @@ final class HoverPreviewTextView: NSTextView {
     override func mouseDown(with event: NSEvent) {
         linkHover.cancel()
         super.mouseDown(with: event)
+    }
+}
+
+extension HoverPreviewTextView: @MainActor NSTextStorageDelegate {
+    func textStorage(_ textStorage: NSTextStorage, didProcessEditing editedMask: NSTextStorageEditActions,
+                     range editedRange: NSRange, changeInLength delta: Int) {
+        hasQuoteBars = nil
+        // 一時属性は `NSLayoutManager` が編集を受け取った後に付け直す（次の描画の前）。
+        quoteGlyphsNeedUpdate = true
     }
 }
 

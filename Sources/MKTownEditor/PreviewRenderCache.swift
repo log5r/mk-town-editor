@@ -5,9 +5,11 @@ import SwiftMath
 struct PreviewLayoutIndex: Sendable {
     let visibleBlocks: [MarkdownBlock]
     private let quoteDepths: [Int: Int]
+    private let blocksByID: [Int: MarkdownBlock]
 
     init(_ analysis: MarkdownAnalysis) {
         let byID = Dictionary(uniqueKeysWithValues: analysis.blocks.map { ($0.id, $0) })
+        blocksByID = byID
         visibleBlocks = analysis.blocks.filter { block in
             if analysis.crossReferences.markerBlockIDs.contains(block.id) { return false }
             if block.calloutKind != nil { return true }
@@ -33,6 +35,9 @@ struct PreviewLayoutIndex: Sendable {
     }
 
     func quoteDepth(for blockID: Int) -> Int { quoteDepths[blockID] ?? 0 }
+
+    /// 親のブロック（リスト項目の続きの段落なら、その項目）。
+    func parent(of block: MarkdownBlock) -> MarkdownBlock? { block.parentID.flatMap { blocksByID[$0] } }
 }
 
 /// 本文と解析結果だけで決まる、構造化プレビューが必要かどうかの判定。

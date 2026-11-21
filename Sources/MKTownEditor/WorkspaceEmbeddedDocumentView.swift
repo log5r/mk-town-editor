@@ -101,8 +101,9 @@ struct WorkspaceEmbeddedDocumentView: View {
     private func segmentView(_ segment: WorkspaceEmbedSegment) -> some View {
         switch segment {
         case let .text(text):
-            Text(text)
-                .textSelection(.enabled)
+            WorkspaceEmbedText(text: text, source: expansion?.text ?? "",
+                               context: DocumentContext(fileURL: targetURL,
+                                                        preservesSoftLineBreaks: preservesSoftLineBreaks))
         case let .codeBlock(block, code, quoteDepth):
             PreviewQuotedCodeBlock(quoteDepth: quoteDepth, onCopy: { _ = MarkdownCodeCopy.copy(block) }) {
                 Text(code)
@@ -149,10 +150,27 @@ struct WorkspaceEmbeddedDocumentView: View {
     }
 }
 
+/// 埋め込み文書の文章の部分。
+/// `Text` は段落スタイルの字下げを無視するため、`NSTextView`（`HoverLinkText`）で描く。
+/// 区間全体を1つの選択面にし、項目をまたいだ範囲選択と、行頭記号・タスクの状態を含むコピーを保つ。
+struct WorkspaceEmbedText: View {
+    let text: NSAttributedString
+    let source: String
+    let context: DocumentContext
+
+    var body: some View {
+        // 外部ページの題名取得は設定を受け取らないため行わない。
+        // `HoverLinkText` は行の余白を持たず、引用の中のコードブロックの縦線（`PreviewQuotedCodeBlock`）と引用記号の位置がそろう。
+        HoverLinkText(rendered: text, source: source, context: context, loadsExternalPages: false)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 /// 埋め込み文書の表示単位。コードブロックは文字ごとの背景を外し、通常のプレビューと同じ
 /// `PreviewCodeBlockFrame` の枠で囲んで描く（`PreviewQuotedCodeBlock`）。
 enum WorkspaceEmbedSegment: Equatable {
-    case text(AttributedString)
+    /// 文章の部分。字下げを `PreviewAppKitIndent` で整え、1つの `NSTextView` で描く。
+    case text(NSAttributedString)
     case codeBlock(MarkdownBlock, AttributedString, quoteDepth: Int)
 
     @MainActor
@@ -160,7 +178,7 @@ enum WorkspaceEmbedSegment: Equatable {
         MarkdownRenderer.renderSegments(analysis, documentContext: documentContext).map { segment in
             switch segment {
             case let .text(text):
-                .text(AttributedString(text))
+                .text(PreviewAppKitIndent.aligned(text))
             case let .codeBlock(block, rendered, quoteDepth):
                 .codeBlock(block, AttributedString(PreviewTypography.codeBlockBody(rendered)),
                            quoteDepth: quoteDepth)
