@@ -1353,6 +1353,9 @@ struct EditorWorkspace: View {
 
     var body: some View {
         documentChangesView
+        // Only `isEmpty` reaches the window, so typing does not compare the whole text.
+        .background(WindowRestorationSetter(isRestorable: EditorWindowRestoration.isRestorable(
+            fileURL: fileURL, isTextEmpty: document.text.isEmpty)))
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onReceive(editorModel.selectionState.$selectedRanges.dropFirst()) { selections in
             schedulePositionSave()
