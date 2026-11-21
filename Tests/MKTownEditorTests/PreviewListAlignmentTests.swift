@@ -104,8 +104,8 @@ final class PreviewListAlignmentTests: XCTestCase {
         }
     }
 
-    /// 入れ子のリストを含まないコールアウトは、これまでどおり `Text` で描く。
-    func testCalloutWithoutListKeepsSwiftUIText() {
+    /// 入れ子のリストを含まないコールアウトは、リストの字下げを位置に直す対象にしない。
+    func testCalloutWithoutListHasNoListIndent() {
         let plain = NSAttributedString(string: "│  note", attributes: [.previewQuotePrefix: true])
         XCTAssertFalse(PreviewAppKitIndent.containsListIndent(plain))
     }

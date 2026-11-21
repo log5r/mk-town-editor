@@ -59,7 +59,7 @@
 - 文字は残るため、`aligned` の位置合わせ、範囲選択、コピーで得る文字列（`│  ` を含む）は変わらない。
 - 引用を含む文字列だけ、描画の前（`viewWillDraw`）に `layoutManager` を用意する。
 
-入れ子の引用を含むコールアウトは、リストを含む場合と同じく `Text` ではなく `NSTextView` で描く（`MarkdownPreview.inlineText`）。`Text` は図形を重ねられず、文字の線が行間で途切れるため。`NSTextView` は段落の間隔を反映するため、このコールアウトの段落の間は `Text` で描くコールアウトより広い。
+入れ子の引用を含むコールアウトは、リストを含む場合と同じく、行の幅いっぱいの `NSTextView` で描く（`MarkdownPreview.inlineText`）。この修正の時点では、引用もリストも含まないコールアウトは SwiftUI の `Text` で描いていた。`Text` は図形を重ねられず、文字の線が行間で途切れるため、引用を含むものだけを `NSTextView` に分けた。`Text` は段落の間隔を反映しないため、当時はこのコールアウトの段落の間が `Text` で描くコールアウトより広かった。2026-11-22 からは、引用もリストも含まないコールアウトも `NSTextView`（文字の幅に合わせる `HoverLinkText` の `hugsContent`）で描く（[preview-text-backend-performance.md](preview-text-backend-performance.md)）。
 
 `NSTextView` は右クリックを受け取り、行に付けた SwiftUI の文脈メニュー（「原文へ移動」）を出さない。`inlineText` は引数 `sourceRange` を `HoverLinkText` の `onRevealSource` に渡し、`NSTextView` の文脈メニューに同じ項目を加える。コールアウト、見出し、段落、タスク、表のセルはブロックの `sourceRange` を渡す。ブロックに属さない脚注は渡さない。
 
@@ -71,17 +71,19 @@ PDF・HTMLの書き出しは `MarkdownHTMLExporter` が `<blockquote>` を出力
 
 | 描き方 | 行の間隔 |
 | --- | --- |
-| SwiftUI の `Text` | 約19pt。段落スタイルの `lineSpacing`・`paragraphSpacing` を無視する |
+| SwiftUI の `Text`（2026-11-22 まで段落などに使っていた。現在は使わない） | 約19pt。段落スタイルの `lineSpacing`・`paragraphSpacing` を無視する |
 | `NSTextView` の段落の途中の行 | 行の高さ18pt ＋ `lineSpacing` |
 | `NSTextView` の段落の最後の行 | 行の高さ18pt ＋ `lineSpacing` ＋ `paragraphSpacing` |
 | `NSTextView` の文字列全体の最後の行 | 行の高さ18ptだけ。後ろの間隔は高さに含まれない |
 
 リスト項目の段落スタイルは `lineSpacing` 3・`paragraphSpacing` 4 だった。そのため、コールアウトの中（複数の項目を1つの文字列で描く）と外（項目ごとに1つのビューで描く）で間隔が食い違っていた。項目ごとに `NSTextView` で描く版では中が25pt・外が18pt、すべて `Text` で描いていた版では中が19pt・外が約21ptだった。
 
-- リスト項目の段落スタイルを `lineSpacing` 1（`MarkdownRenderer.listLineSpacing`）・`paragraphSpacing` 0 にした。行の間隔は19ptになり、`Text` で描く段落や、リストを含まないコールアウトとそろう。折り返した行と次の項目の間隔も同じになる。
+- リスト項目の段落スタイルを `lineSpacing` 3（`MarkdownRenderer.listLineSpacing`）・`paragraphSpacing` 0 にしている。行の間隔は21ptになり、段落（行の高さ18pt＋行間3pt）や、リストを含まないコールアウトとそろう。折り返した行と次の項目の間隔も同じになる。
 - 項目ごとに描く `NSTextView` は、最後の行の後ろの間隔を高さに含めない。`PreviewListIndent.trailingSpacing` で求めた分を行の下の余白として補う。
 
-全体を1つの `NSTextView` で描くプレビューと埋め込み文書のリストも、同じ段落スタイルを使うため19ptの間隔になる。
+この修正の時点では段落を `Text` で描いていたため、その間隔（約19pt）に合わせて `listLineSpacing` を1（行の間隔19pt）にした。2026-11-22 に段落も `NSTextView` で描くようにしたため（[preview-text-backend-performance.md](preview-text-backend-performance.md)）、3にそろえ直した。
+
+全体を1つの `NSTextView` で描くプレビューと埋め込み文書のリストも、同じ段落スタイルを使うため21ptの間隔になる。
 
 ## 検証方法
 

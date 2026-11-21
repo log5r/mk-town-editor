@@ -350,8 +350,8 @@ final class PreviewBlockStyleTests: XCTestCase {
             }
             XCTAssertEqual(tops[1] - tops[0], inside, accuracy: 0.5)
             XCTAssertEqual(tops[2] - tops[1], inside, accuracy: 0.5)
-            // `Text` で描く段落の行の間隔（約19pt）にそろえる。
-            XCTAssertEqual(inside, 19, accuracy: 1)
+            // 段落の行の間隔（行の高さ18pt＋行間3pt）にそろえる。
+            XCTAssertEqual(inside, 21, accuracy: 1)
         }
     }
 

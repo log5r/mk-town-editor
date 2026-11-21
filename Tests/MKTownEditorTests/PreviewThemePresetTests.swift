@@ -151,15 +151,13 @@ final class PreviewThemePresetTests: XCTestCase {
         XCTAssertEqual(PreviewTheme.extensionTheme(theme).colorScheme, .light)
     }
 
-    /// 不具合: Text と NSTextView がリンクを既定の青で描き、紙色を含むどのテーマでもリンク色が反映されなかった。
+    /// 不具合: NSTextView がリンクを既定の青で描き、紙色を含むどのテーマでもリンク色が反映されなかった。
     func testLinkDrawingUsesThemeLinkColorInsteadOfDefaultBlue() throws {
-        XCTAssertNil(PreviewLinkStyle.tint(for: .system))
         XCTAssertEqual(PreviewLinkStyle.textViewAttributes(for: .system)[.foregroundColor] as? NSColor,
                        NSColor.linkColor)
         let custom = PreviewTheme.extensionTheme(try XCTUnwrap(try load(package()).theme))
         for theme in [PreviewTheme.paper, .preset(.dracula), .preset(.githubLight), custom] {
             let link = try XCTUnwrap(theme.linkColor)
-            XCTAssertEqual(PreviewLinkStyle.tint(for: theme), Color(nsColor: link), theme.title)
             let attributes = PreviewLinkStyle.textViewAttributes(for: theme)
             XCTAssertEqual(attributes[.foregroundColor] as? NSColor, link, theme.title)
             XCTAssertEqual(attributes[.underlineStyle] as? Int, NSUnderlineStyle.single.rawValue)

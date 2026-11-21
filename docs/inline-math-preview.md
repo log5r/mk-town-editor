@@ -17,6 +17,8 @@
 本文、見出し、タスク、表セルに加え、同じ変換を行っていた注記と脚注にも適用する。
 この判定は数式に限定せず、他の添付画像にも適用する。
 
+2026-11-22 からは、リンクや添付画像の有無によらず、構造化プレビューの文字列をすべて `NSTextView`（`HoverLinkText`）で描き、`Text` を使う分岐はない。添付を含む文字列は、画像が行の残りの幅に合わせて大きさを決めるため、行の幅いっぱいに描く（[preview-text-backend-performance.md](preview-text-backend-performance.md)）。
+
 ## 回帰確認
 
 `MarkdownMathTests.testInlineMathSurvivesActualPreviewLayoutInEveryTextContainer` は

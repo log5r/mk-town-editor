@@ -406,29 +406,40 @@ struct MarkdownPreview: View {
         citationCatalog = catalog
     }
 
-    /// - Parameter sourceRange: 文脈メニューの「原文へ移動」で示す原文の範囲。`NSTextView` で描く場合は右クリックを
-    ///   `NSTextView` が受け取り、行に付けた SwiftUI の文脈メニューが出ないため、ここから渡す。
-    ///   ブロックに属さない箇所（脚注など）では `nil`。
+    /// ブロックの文字列を `NSTextView`（`HoverLinkText`）で描く。
+    /// SwiftUI の `Text` は使わない。`Text` は段落スタイルの字下げと行間、添付画像、リンクの文字色を無視する
+    /// （docs/swiftui-caused-bugs.md）。性能は docs/preview-text-backend-performance.md で確かめた。
+    ///
+    /// - Parameter sourceRange: 文脈メニューの「原文へ移動」で示す原文の範囲。右クリックは `NSTextView` が受け取り、
+    ///   行に付けた SwiftUI の文脈メニューが出ないため、ここから渡す。ブロックに属さない箇所（脚注など）では `nil`。
     @ViewBuilder
     private func inlineText(_ rendered: NSAttributedString, sourceRange: NSRange? = nil) -> some View {
-        // SwiftUI Text drops NSTextAttachment when bridging to AttributedString.
-        // Keep formula and image attachments in AppKit, including inside tables and notes.
         if PreviewAppKitIndent.containsListIndent(rendered) || PreviewAppKitIndent.containsQuotePrefix(rendered) {
-            // 複数のブロックをまとめた文字列（コールアウト）の入れ子のリストと引用。`Text` は字下げを無視し、
-            // 引用の縦線も文字でしか描けず行間で途切れる。範囲選択を保ったまま `NSTextView` で描く。
+            // 複数のブロックをまとめた文字列（コールアウト）の入れ子のリストと引用。
+            // 字下げと引用の縦線を行の幅いっぱいで描く。
             HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered), source: markdown,
                           context: documentContext, loadsExternalPages: loadsExternalLinkPreviews,
                           linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
                           onRevealSource: revealAction(for: sourceRange))
-        } else if rendered.requiresAppKitText {
-            HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                          loadsExternalPages: loadsExternalLinkPreviews,
-                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
-                          onRevealSource: revealAction(for: sourceRange))
         } else {
-            // Text はリンクの文字色に属性の色ではなく tint を使う。
-            Text(AttributedString(rendered)).textSelection(.enabled)
-                .tint(PreviewLinkStyle.tint(for: theme))
+            // 文字の幅に合わせ、表のセルの寄せや、脚注の後ろに置くボタンの位置を周りのレイアウトに任せる。
+            // 添付画像を含む文字列は行の幅いっぱいで描く。画像は行の残りの幅に合わせて大きさを決めるため
+            // （`MarkdownImageAttachment`）、測った幅に置き直すと画像が縮む。
+            let (hasLink, hasAttachment) = rendered.linkAndAttachmentPresence
+            let text = HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
+                                     loadsExternalPages: loadsExternalLinkPreviews,
+                                     linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
+                                     hugsContent: !hasAttachment,
+                                     onRevealSource: revealAction(for: sourceRange))
+            if hasLink || hasAttachment {
+                // リンクを1つずつたどれるよう、`NSTextView` のアクセシビリティ要素をそのまま公開する。
+                text
+            } else {
+                // `NSTextView` は編集できなくても「テキスト入力領域」として公開され、呼び出し側が付ける
+                // 見出しの特性やラベル（`accessibilityAddTraits`・`accessibilityLabel`）も届かない。
+                // リンクのない文字列は静的なテキストとして公開し、呼び出し側の指定が効くようにする。
+                text.accessibilityRepresentation { Text(rendered.string) }
+            }
         }
     }
 
@@ -487,8 +498,7 @@ struct MarkdownPreview: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
         } else if Self.isListItem(block) {
-            // `Text` は段落スタイルの字下げを無視する。行頭記号と本文を1つの選択面に保ったまま字下げするため、
-            // 項目ごとに `NSTextView` で描く。
+            // 行頭記号と本文を1つの選択面に保ったまま字下げするため、段落スタイルの字下げを位置に直して描く。
             HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered, indentScale: CGFloat(zoom)),
                           source: markdown, context: documentContext,
                           loadsExternalPages: loadsExternalLinkPreviews,
@@ -620,22 +630,22 @@ private struct PreviewBlockOriginsKey: PreferenceKey {
     }
 }
 
-private extension NSAttributedString {
-    var requiresAppKitText: Bool {
-        var found = false
+extension NSAttributedString {
+    /// リンクと添付（画像、数式）を含むか。
+    var linkAndAttachmentPresence: (link: Bool, attachment: Bool) {
+        var result = (link: false, attachment: false)
         enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, _, stop in
-            if attributes[.link] != nil || attributes[.attachment] != nil {
-                found = true
-                stop.pointee = true
-            }
+            if attributes[.link] != nil { result.link = true }
+            if attributes[.attachment] != nil { result.attachment = true }
+            if result.link && result.attachment { stop.pointee = true }
         }
-        return found
+        return result
     }
 }
 
 /// `NSTextView` で描く選択可能な文字列。リンクのホバー表示を持つ。
-/// リスト項目、入れ子のリストを含むコールアウト、埋め込み文書も、段落スタイルの字下げを効かせるためにこれで描く。
-/// 行の余白（`lineFragmentPadding`）は持たず、`Text` で描く周りの段落や引用の縦線と左端をそろえる。
+/// 構造化プレビューの見出し、段落、リスト項目、表のセル、コールアウト、脚注と、埋め込み文書をこれで描く。
+/// 行の余白（`lineFragmentPadding`）は持たず、周りの図形（引用の縦線など）と左端をそろえる。
 struct HoverLinkText: NSViewRepresentable {
     @Environment(\.openURL) private var openURL
     let rendered: NSAttributedString
@@ -643,8 +653,14 @@ struct HoverLinkText: NSViewRepresentable {
     let context: DocumentContext
     let loadsExternalPages: Bool
     var linkAttributes = PreviewLinkStyle.textViewAttributes(for: .system)
+    /// 真なら、提案された幅で折り返したうえで、文字が実際に使った幅をビューの幅にする（`Text` と同じ決め方）。
+    /// 偽なら、提案された幅いっぱいを使う。字下げや引用の縦線を行の幅で描く文字列に使う。
+    var hugsContent = false
     /// 文脈メニューの「原文へ移動」。`NSTextView` は右クリックを受け取り、行に付けた SwiftUI の文脈メニューを出さないため。
     var onRevealSource: (() -> Void)?
+
+    /// 幅の指定がない提案で、折り返さない幅を求めるときの上限。
+    private static let unboundedWidth: CGFloat = 100_000
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -679,8 +695,13 @@ struct HoverLinkText: NSViewRepresentable {
         view.loadsExternalLinkPreviews = loadsExternalPages
         view.linkTextAttributes = linkAttributes
         view.revealSource = onRevealSource
-        if !view.attributedString().isEqual(to: rendered) {
+        // 文字の幅に合わせる場合は、SwiftUI が決めたビューの幅で折り返す。幅は `sizeThatFits` が別のレイアウトで測る。
+        view.textContainer?.widthTracksTextView = hugsContent
+        // `NSTextStorage` はフォントを置き換えるため、ビューの文字列は渡した文字列と等しくならないことがある。
+        // 渡した文字列を覚えておいて比べ、更新のたびに同じ内容を入れ直さないようにする。
+        if !(view.appliedRendered?.isEqual(to: rendered) ?? false) {
             view.textStorage?.setAttributedString(rendered)
+            view.appliedRendered = rendered
             view.cancelHover()
         }
     }
@@ -688,16 +709,45 @@ struct HoverLinkText: NSViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, nsView view: HoverPreviewTextView,
                       context: Context) -> CGSize? {
         guard let container = view.textContainer, let manager = view.layoutManager else { return nil }
-        let width = max(1, proposal.width ?? 500)
-        container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
-        view.frame.size.width = width
-        manager.ensureLayout(for: container)
-        let height = manager.usedRect(for: container).height
-        return CGSize(width: width, height: max(1, height))
+        guard hugsContent else {
+            let width = max(1, proposal.width ?? 500)
+            container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+            view.frame.size.width = width
+            manager.ensureLayout(for: container)
+            let height = manager.usedRect(for: container).height
+            return CGSize(width: width, height: max(1, height))
+        }
+        // 幅の指定がない（または無限の）提案では、折り返さない幅を返す。
+        let proposed = proposal.width ?? .infinity
+        let limit = proposed.isFinite ? max(1, proposed) : Self.unboundedWidth
+        return context.coordinator.huggedSize(of: view, limit: limit, isUnbounded: !proposed.isFinite)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var onOpenURL: ((URL) -> Void)?
+        private var measuredText: NSAttributedString?
+        private var measuredSizes: [CGFloat: CGSize] = [:]
+
+        /// 幅 `limit` で折り返したときに文字が使う大きさ。SwiftUI は同じ提案で何度も尋ねるため、文字列が変わるまで覚えておく。
+        /// 測るのは `NSTextView` が持つ文字列のほう。`NSTextStorage` は日本語などのフォントを置き換えるため、
+        /// 渡した文字列で測ると幅が食い違い、返した幅に置かれたビューで折り返しの位置が変わる。
+        /// 覚える単位は `appliedRendered`（ビューへ最後に入れた文字列）。内容が変わったときだけ入れ替わる。
+        @MainActor func huggedSize(of view: HoverPreviewTextView, limit: CGFloat, isUnbounded: Bool) -> CGSize {
+            if measuredText !== view.appliedRendered {
+                measuredText = view.appliedRendered
+                measuredSizes = [:]
+            }
+            if let size = measuredSizes[limit] { return size }
+            let used = HoverLinkTextMeasurer.usedRect(of: view.attributedString(), width: limit)
+            // 幅の上限がないときは文字の幅そのものを返す。右から左の段落は行の右端に寄るため、右端の位置では測れない。
+            // 上限があるときは、端数を切り上げ、返した幅で置かれたときに同じ位置で折り返すようにする。
+            let width = isUnbounded ? used.width.rounded(.up) : min(limit, used.maxX.rounded(.up))
+            let size = CGSize(width: max(1, width), height: max(1, used.height))
+            // ウインドウの大きさを変えている間は幅が次々に変わる。覚える数を抑える。
+            if measuredSizes.count >= 16 { measuredSizes = [:] }
+            measuredSizes[limit] = size
+            return size
+        }
 
         func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
             guard let url = (link as? URL) ?? (link as? String).flatMap(URL.init(string:)) else {
@@ -709,15 +759,39 @@ struct HoverLinkText: NSViewRepresentable {
     }
 }
 
-/// プレビューのリンクの色。
-/// `Text` は tint、`NSTextView` は `linkTextAttributes` でリンクを描き、どちらも文字列に付けた文字色を無視する。
-/// テーマのリンク色は文字列の属性に加えて、ここから両方の描画へ渡す。
-enum PreviewLinkStyle {
-    /// テーマのリンク色。システム配色では `nil` を返し、アクセントカラーのままにする。
-    static func tint(for theme: PreviewTheme) -> Color? {
-        theme.linkColor.map { Color(nsColor: $0) }
-    }
+/// `HoverLinkText` の文字が使う大きさを、表示中の `NSTextView` とは別のレイアウトで測る。
+/// 表示中のビューのコンテナで測ると、SwiftUI が試しに尋ねた幅（0や無限）のレイアウトがビューに残る。
+/// また、一度置かれたビューでは `usedRect` が文字の幅ではなくコンテナの幅を返した（macOS 27 で確認）。
+@MainActor
+enum HoverLinkTextMeasurer {
+    private static let storage = NSTextStorage()
+    private static let container: NSTextContainer = {
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        return container
+    }()
+    private static let manager: NSLayoutManager = {
+        let manager = NSLayoutManager()
+        manager.addTextContainer(container)
+        storage.addLayoutManager(manager)
+        return manager
+    }()
 
+    static func usedRect(of text: NSAttributedString, width: CGFloat) -> CGRect {
+        _ = manager
+        storage.setAttributedString(text)
+        container.size = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        manager.ensureLayout(for: container)
+        let used = manager.usedRect(for: container)
+        storage.setAttributedString(NSAttributedString())
+        return used
+    }
+}
+
+/// プレビューのリンクの色。
+/// `NSTextView` は `linkTextAttributes` でリンクを描き、文字列に付けた文字色を無視する。
+/// テーマのリンク色は文字列の属性に加えて、ここから描画へ渡す。
+enum PreviewLinkStyle {
     static func textViewAttributes(for theme: PreviewTheme) -> [NSAttributedString.Key: Any] {
         [.foregroundColor: theme.linkColor ?? NSColor.linkColor,
          .underlineStyle: NSUnderlineStyle.single.rawValue,
@@ -995,6 +1069,9 @@ final class HoverPreviewTextView: NSTextView {
 
     /// 設定すると、文脈メニューの先頭に「原文へ移動」を加える。
     var revealSource: (() -> Void)?
+
+    /// `HoverLinkText` が最後に入れた文字列。`attributedString()` はフォントの置き換えで変わるため、比較にはこれを使う。
+    var appliedRendered: NSAttributedString?
 
     /// 文字列が引用の縦線（`PreviewQuoteBars`）を含むか。文字列が変わるまで覚えておく。
     fileprivate var hasQuoteBars: Bool?

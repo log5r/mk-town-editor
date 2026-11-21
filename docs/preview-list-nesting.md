@@ -44,10 +44,10 @@ HTML・PDF・リッチテキストのコピーは `MarkdownHTMLExporter` が `<u
 ### 複数のブロックを1つの文字列で描く箇所
 
 - `MarkdownTextPreview`（全体を1つの `NSTextView` で描くプレビュー）は `aligned` を通す。
-- コールアウトは、リストの字下げを含むときだけ `NSTextView` で描く。含まないコールアウトはこれまでどおり `Text` で描く。
+- コールアウトは、リストの字下げを含むときは行の幅いっぱいの `NSTextView` で描き、`aligned` を通す。この修正の時点では、含まないコールアウトは `Text` で描いていた。2026-11-22 からは、含まないコールアウトも文字の幅に合わせた `NSTextView`（`HoverLinkText` の `hugsContent`）で描く（[preview-text-backend-performance.md](preview-text-backend-performance.md)）。
 - 埋め込み文書は、文章の部分ごとに1つの `NSTextView`（`WorkspaceEmbedText`）で描く。項目をまたいだ範囲選択と、行頭記号・タスクの状態を含むコピーを保つ。
 
-`HoverLinkText` は行の余白（`lineFragmentPadding`）を持たない。`Text` で描く周りの段落、引用の中のコードブロックの縦線（`PreviewQuotedCodeBlock`）と左端がそろう。
+`HoverLinkText` は行の余白（`lineFragmentPadding`）を持たない。周りの段落、引用の中のコードブロックの縦線（`PreviewQuotedCodeBlock`）と左端がそろう。周りの段落は、この修正の時点では `Text` で、2026-11-22 からは同じ `HoverLinkText` で描く。
 
 ### 表示の重さ
 
@@ -72,7 +72,7 @@ HTML・PDF・リッチテキストのコピーは `MarkdownHTMLExporter` が `<u
 
 測定の補助は `PreviewLayoutTestSupport` にまとめている。
 
-- 実際の `MarkdownPreview` を `NSHostingView` に載せ、`NSTextView` の位置と、`NSLayoutManager` で求めた文字の位置を比べる。リスト項目はすべて `NSTextView` で描くため、リンクのない項目も測れる。続きの段落は、リンクを含めて `NSTextView` で描かせて測る。`Text` で描くブロックはビューの階層から位置を取れない。
+- 実際の `MarkdownPreview` を `NSHostingView` に載せ、`NSTextView` の位置と、`NSLayoutManager` で求めた文字の位置を比べる。リスト項目はすべて `NSTextView` で描くため、リンクのない項目も測れる。続きの段落は、この修正の時点ではリンクのないものを `Text` で描き、ビューの階層から位置を取れなかったため、リンクを含めて `NSTextView` で描かせて測った。2026-11-22 からは構造化プレビューの文字列をすべて `NSTextView` で描くため、続きの段落もリンクの有無によらず測れる。
 - 報告と同じ形の文書（見出し、`#` だけの行、段落、3階層の箇条書き）を、2スペース・4スペース・タブの字下げで描き、深さごとに記号の位置が増えることを確かめる。番号付きリストと箇条書きの4階層の混在、親より2段深く書いた子、表示倍率、明示的な改行と続きの段落、幅の広い番号（`10.`・`12345.`）と続きの段落、コールアウト（リンクなし）、引用の中のリストも確かめる。
 - 選択とコピーは、`NSTextView` を `selectAll` し、`writeSelection(to:types:)` で専用のペーストボードへ書き出して確かめる。構造化プレビューのリスト項目は番号・記号を含む項目全体、埋め込み文書は項目をまたいだ区間全体（タスクの状態を含む）になる。`NSTextView` は文字列を旧来の種類（`NSStringPboardType`）で書き出すため、`writeSelection(to:type: .string)` は失敗する。
 - 文脈メニューは、右クリックの `NSEvent` を作って `menu(for:)` を呼び、先頭の「原文へ移動」を実行して、項目の原文の範囲が渡ることを確かめる。
@@ -86,7 +86,7 @@ HTML・PDF・リッチテキストのコピーは `MarkdownHTMLExporter` が `<u
 
 - リスト項目の中のコードブロックと表は、構造化プレビューで字下げしない。今回の修正の前から同じで、段落スタイルを使っていないため原因も異なる。
 - `NSTextView` で描く箇所では、最上位のタスクの状態（`☐ 未完了  `・`☑ 完了  `）が記号の列より大きく広いため、本文の位置が記号の幅で決まる。完了と未完了の兄弟で本文の左端が約13pt 異なる（修正前と同じ）。構造化プレビューはチェックボックスで描くため影響しない。
-- 構造化プレビューでは、リスト項目の VoiceOver の読み上げが `Text`（静的テキスト）から `NSTextView`（テキスト領域）に変わる。読み上げは確かめていない。
+- 構造化プレビューでは、リスト項目の VoiceOver の読み上げが `Text`（静的テキスト）から `NSTextView`（テキスト領域）に変わる。読み上げは確かめていない。2026-11-22 からは、リンクも添付も含まない段落やタスクの本文などの文字列を `accessibilityRepresentation` で静的なテキストとして公開するが、タスクでないリスト項目はこの対象に含まない（`blockText` が `HoverLinkText` を直接使う）。
 - `HoverLinkText.sizeThatFits` は幅の提案が無限のときにそのまま `NSTextView` の幅にし、「Invalid view geometry: width is infinity」を記録する。修正前から同じで、表示の幅は最終的に有限の提案で決まる。
 - `MarkdownAnalysis` のリストの入れ子の判定は、CommonMark と一致しない場合がある。親の項目より字下げが深ければ子とみなし、親の本文の開始位置を見ていない。そのため、次の場合に結果が異なる。
   - `- a` の次の ` - b`（1スペース）は、CommonMark では同じ階層の項目だが、子として扱う。仕様の「項目の字下げはそろっていなくてもよい」例（`- a`・` - b`・`  - c`・`   - d`…がすべて同じリスト）も、階段状の入れ子になる。
