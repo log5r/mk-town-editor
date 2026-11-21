@@ -4,7 +4,7 @@ import XCTest
 @testable import MKTownEditor
 
 /// プレビューを `NSHostingView` に載せ、`NSTextView` で描いた文字の位置を測るための補助。
-/// `Text` で描くブロックはビューの階層から位置を取れないため、`NSTextView` で描く箇所で確かめる。
+/// 構造化プレビューは文字列をすべて `NSTextView` で描くため、ビューの階層から位置を取れる。
 @MainActor
 enum PreviewLayoutTestSupport {
     static func hosted<Content: View>(_ view: Content, width: CGFloat = 600,

@@ -99,10 +99,9 @@ enum PreviewTypography {
 
 /// 構造化プレビュー（ブロックごとに描く `MarkdownPreview` の経路）でのリストの字下げ。
 ///
-/// SwiftUI の `Text` は `NSParagraphStyle` の字下げ（`firstLineHeadIndent`・`headIndent`）を無視する。
-/// 描画結果をそのまま `Text` に渡すと、入れ子のリストがすべて同じ位置に並ぶ。
 /// リスト項目は行頭記号と本文を1つの選択面に保つため、`PreviewAppKitIndent.aligned` で整えて `NSTextView` で描く。
-/// それ以外の字下げした段落（項目の続きの段落）とタスクの本文は、字下げを除いて `Text` に渡し、行の余白で字下げする。
+/// それ以外の字下げした段落（項目の続きの段落）とタスクの本文は、字下げを除いて描き、行の余白で字下げする。
+/// 文字の幅に合わせる `NSTextView`（`HoverLinkText` の `hugsContent`）に字下げを残すと、幅の計算に字下げが入るため。
 enum PreviewListIndent {
     /// タスクのチェックボックスの位置。描画結果ではなく深さから求め、本文が空の項目でも兄弟とそろえる。
     static func taskCheckboxIndent(for block: MarkdownBlock) -> CGFloat {

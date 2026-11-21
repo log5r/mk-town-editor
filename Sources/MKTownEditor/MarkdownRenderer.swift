@@ -701,9 +701,9 @@ enum MarkdownRenderer {
     nonisolated static func listBodyIndent(depth: Int) -> CGFloat { CGFloat(32 + depth * 24) }
 
     /// リスト項目の行間。項目の間にも同じ間隔だけを空け、段落の間隔は足さない。
-    /// `Text` は段落スタイルの行間を無視して約19ptの間隔で行を並べる。`NSTextView`（行の高さ18pt）で描く項目も
-    /// 同じ間隔になるようにし、コールアウトの中と外、折り返した行と次の項目で間隔をそろえる。
-    nonisolated static let listLineSpacing: CGFloat = 1
+    /// 段落の行間（`lineSpacing` 3）と同じ値にし、段落、リストを含まないコールアウト、リストで行の間隔（21pt）をそろえる。
+    /// コールアウトの中と外、折り返した行と次の項目でも同じ間隔になる。
+    nonisolated static let listLineSpacing: CGFloat = 3
 
     private static func applyListIndent(to text: NSMutableAttributedString, depth: Int) {
         let paragraph = NSMutableParagraphStyle()

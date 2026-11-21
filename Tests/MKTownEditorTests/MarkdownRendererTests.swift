@@ -270,7 +270,8 @@ final class MarkdownRendererTests: XCTestCase {
             view.subviews.flatMap { [$0] + descendants(of: $0) }
         }
         XCTAssertTrue(descendants(of: host).contains(where: { $0 is NSScrollView }))
-        XCTAssertFalse(descendants(of: host).contains(where: { $0 is NSTextView }))
+        // 全体を1つの `NSTextView` で描く経路ではなく、ブロックごとに描く経路を通る。
+        XCTAssertFalse(descendants(of: host).contains(where: { ($0 as? NSScrollView)?.documentView is NSTextView }))
     }
 
 

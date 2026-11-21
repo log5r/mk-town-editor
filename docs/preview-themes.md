@@ -111,11 +111,13 @@ Nordのコード背景は、公式のnord1（#3B4252）では多くの字句が�
 - `DeclarativeExtension.Theme.syntax` は省略可能で、項目のない既存のJSONと保存済みの設定はそのまま読める。
 - 字句の色は `CodeSyntaxPalette.color(for:theme:)` が返す。`PreviewTypography.themed` は1ブロックにつき字句の種類ごとに一度だけ色を求める。
 - 選択肢は `PreviewThemeOptions` が設定とメニューの両方に並べる。
-- リンクの色は `PreviewLinkStyle` から描画へ渡す。SwiftUIの `Text` はリンクを tint で、`NSTextView` は `linkTextAttributes` で描き、どちらも文字列に付けた文字色（`.foregroundColor`）を無視するためである。
+- リンクの色は `PreviewLinkStyle.textViewAttributes(for:)` から `HoverLinkText` の `linkTextAttributes` へ渡す。`NSTextView` はリンクを `linkTextAttributes` で描き、文字列に付けた文字色（`.foregroundColor`）を無視するためである。構造化プレビューは文字列をすべて `NSTextView` で描き、SwiftUIの `Text` は使わない（2026-11-22から）。
 
 ### 不具合: テーマのリンク色が反映されない（2026-11-21修正）
 
-紙色を含むどのテーマでも、リンクが既定の青（アクセントカラー）で表示されていた。`PreviewTypography.themed` はリンクの範囲に文字色を付けていたが、上記のとおり描画側がその属性を使わない。属性文字列を調べるテストは通るため、画面で確認するまで気付けなかった。`Text` には `.tint`、`HoverLinkText` には `linkTextAttributes` でテーマのリンク色を渡して修正した。システム配色では従来どおりアクセントカラーで描く。文書を文字列1つで描く `MarkdownTextPreview` と埋め込み文書はテーマの色を当てないため、対象外。
+紙色を含むどのテーマでも、リンクが既定の青（アクセントカラー）で表示されていた。`PreviewTypography.themed` はリンクの範囲に文字色を付けていたが、描画側がその属性を使っていなかった。当時の描画には SwiftUI の `Text`（リンクを tint で描く）と `NSTextView`（`linkTextAttributes` で描く）を使っていた。属性文字列を調べるテストは通るため、画面で確認するまで気付けなかった。`Text` には `.tint`、`HoverLinkText` には `linkTextAttributes` でテーマのリンク色を渡して修正した。システム配色では従来どおりアクセントカラーで描く。文書を文字列1つで描く `MarkdownTextPreview` と埋め込み文書はテーマの色を当てないため、対象外。
+
+2026-11-22 に構造化プレビューの文字列をすべて `HoverLinkText` で描くようにし、`Text` に `.tint` を渡す経路（`PreviewLinkStyle.tint`）は削除した。現在は `linkTextAttributes` だけでテーマのリンク色を渡す。
 
 ## 編集画面の配色
 
@@ -190,7 +192,7 @@ Nordのコード背景は、公式のnord1（#3B4252）では多くの字句が�
 - 4.5:1の基準、未知の字句名、書式の誤り、コントラスト不足の字句色の拒否
 - この文書のサンプルJSONが読み込めること
 
-- リンクの描画（tint と `linkTextAttributes`）にテーマのリンク色が渡ること
+- リンクの描画（`linkTextAttributes`）にテーマのリンク色が渡ること
 
 2026-11-21に `./start.sh` で起動したアプリ（macOSのライト外観）で次を目視した。
 
