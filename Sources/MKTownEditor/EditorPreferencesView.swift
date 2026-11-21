@@ -118,6 +118,12 @@ struct EditorPreferencesView: View {
                 }
             }
             Section("表示") {
+                Picker("配色", selection: binding(\.editorTheme, default: EditorThemePalette.defaultTheme)) {
+                    PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
+                }
+                Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: \.editorTheme) }
+                Text("既定はGitHub風（ダーク）です。「システム」はmacOSの外観に合わせます。テーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。")
+                    .font(.caption).foregroundStyle(.secondary)
                 Toggle("行番号を表示", isOn: binding(\.showsLineNumbers, default: true))
                 Toggle("行を折り返す", isOn: binding(\.wrapsLines))
                 Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
@@ -148,7 +154,7 @@ struct EditorPreferencesView: View {
                 Picker("配色", selection: binding(\.previewTheme, default: .system)) {
                     PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
                 }
-                Button("カスタムテーマを読み込む…") { importExtension(selectsTheme: true) }
+                Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: \.previewTheme) }
                 Text("「システム」はmacOSの外観に合わせます。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。")
                     .font(.caption).foregroundStyle(.secondary)
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
@@ -292,39 +298,29 @@ struct EditorPreferencesView: View {
         .formStyle(.grouped)
     }
 
-    /// `selectsTheme` が真なら、読み込んだ拡張のテーマをそのままプレビューの配色に選ぶ。
-    private func importExtension(selectsTheme: Bool = false) {
+    /// `target` を指定すると、読み込んだ拡張のテーマをそのままその配色（プレビューか編集画面）に選ぶ。
+    private func importExtension(selectingThemeFor target: WritableKeyPath<AppEditorSettings, PreviewTheme?>? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.canChooseDirectories = false
         panel.beginAttached { response in
             guard response == .OK, let url = panel.url else { return }
-            loadExtension(from: url, selectsTheme: selectsTheme)
+            loadExtension(from: url, selectingThemeFor: target)
         }
     }
 
-    private func loadExtension(from url: URL, selectsTheme: Bool = false) {
+    private func loadExtension(from url: URL,
+                               selectingThemeFor target: WritableKeyPath<AppEditorSettings, PreviewTheme?>? = nil) {
         do {
-            let package = try DeclarativeExtension.load(from: url)
             var settings = settingsStore.app
-            if let previous = settings.extensionPackages?.first(where: { $0.id == package.id }),
-               let previousTheme = previous.theme,
-               settings.previewTheme == .extensionTheme(previousTheme) {
-                settings.previewTheme = package.theme.map(PreviewTheme.extensionTheme) ?? .system
-            }
-            settings.extensionPackages = (settings.extensionPackages ?? []).filter { $0.id != package.id } + [package]
-            if selectsTheme, let theme = package.theme { settings.previewTheme = .extensionTheme(theme) }
+            try settings.installExtension(DeclarativeExtension.load(from: url), selectingThemeFor: target)
             settingsStore.setAppSettings(settings)
         } catch { extensionError = error.localizedDescription }
     }
 
     private func removeExtension(_ id: String) {
         var settings = settingsStore.app
-        if case .extensionTheme(let selected) = settings.previewTheme,
-           settings.extensionPackages?.contains(where: { $0.id == id && $0.theme == selected }) == true {
-            settings.previewTheme = .system
-        }
-        settings.extensionPackages?.removeAll { $0.id == id }
+        settings.removeExtension(id)
         settingsStore.setAppSettings(settings)
     }
 

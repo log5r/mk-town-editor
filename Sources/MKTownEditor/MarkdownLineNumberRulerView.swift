@@ -116,6 +116,10 @@ enum MarkdownLineNumberLayout {
 final class MarkdownLineNumberRulerView: NSRulerView {
     private weak var editor: NSTextView?
     private(set) var index: MarkdownLineNumberIndex
+    /// 背景と番号の色。編集画面の配色に合わせる。
+    var palette = EditorThemePalette.system {
+        didSet { if palette != oldValue { needsDisplay = true } }
+    }
 
     init(scrollView: NSScrollView, editor: NSTextView) {
         self.editor = editor
@@ -164,13 +168,13 @@ final class MarkdownLineNumberRulerView: NSRulerView {
 
     override func drawHashMarksAndLabels(in rect: NSRect) {
         guard let editor else { return }
-        NSColor.textBackgroundColor.setFill()
+        palette.background.setFill()
         bounds.fill()
         let font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize,
                                                    weight: .regular)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor.secondaryLabelColor
+            .foregroundColor: palette.lineNumber
         ]
         let lineStarts = index.starts
         let foldedLocations = (editor as? EditorTextView)?.foldedHeaderLocations ?? []

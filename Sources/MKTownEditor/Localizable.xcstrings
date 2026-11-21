@@ -3130,6 +3130,26 @@
         }
       }
     },
+    "エディタの配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor Color Theme"
+          }
+        }
+      }
+    },
+    "既定はGitHub風（ダーク）です。「システム」はmacOSの外観に合わせます。テーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The default is GitHub-style (Dark). “System” follows the macOS appearance. Themes are shared with the preview, and themes you add can be removed in Extensions."
+          }
+        }
+      }
+    },
     "プレビューの配色" : {
       "localizations" : {
         "en" : {

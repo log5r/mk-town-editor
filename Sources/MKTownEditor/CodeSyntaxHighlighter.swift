@@ -28,7 +28,7 @@ enum CodeSyntaxPalette {
             })
         })
 
-    /// 外観に追従する色。編集画面とシステム配色のプレビューで使う。
+    /// 外観に追従する色。「システム」配色の編集画面とプレビューで使う。
     static func color(for token: CodeSyntaxToken) -> NSColor { dynamicColors[token]! }
 
     /// プレビューテーマ用の色。標準装備の配色とJSON拡張は、テーマが字句の色を定めていなければ `nil`（コード色のまま）。

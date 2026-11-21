@@ -227,13 +227,15 @@ enum MarkdownSyntaxHighlighter {
 
     /// 構文色を一時属性として反映する。現在の色と異なる区間だけを変更し、
     /// 変更のない区間の再描画を発生させない。
+    /// `palette` は編集画面の配色。字句・見出し・記号などの色をここから求める。
     @MainActor
-    static func apply(to textView: NSTextView, spans providedSpans: [MarkdownSyntaxSpan]? = nil) {
+    static func apply(to textView: NSTextView, spans providedSpans: [MarkdownSyntaxSpan]? = nil,
+                      palette: EditorThemePalette = .system) {
         guard !textView.hasMarkedText(), let layoutManager = textView.layoutManager,
               let length = textView.textStorage?.length, length > 0 else { return }
         let desired = coloredRuns(providedSpans ?? spans(in: textView.string), length: length)
         for run in desired {
-            let wanted = run.role.map(color(for:))
+            let wanted = run.role.map(palette.color(for:))
             var position = run.range.location
             let runEnd = NSMaxRange(run.range)
             while position < runEnd {
@@ -253,21 +255,6 @@ enum MarkdownSyntaxHighlighter {
                 }
                 position = end
             }
-        }
-    }
-
-    @MainActor
-    private static func color(for role: MarkdownSyntaxSpan.Role) -> NSColor {
-        switch role {
-        case .heading: .systemBlue
-        case .code: .systemPurple
-        case .link: .linkColor
-        case .marker: .secondaryLabelColor
-        case .quoteMarker: .systemTeal
-        case .listMarker: .systemOrange
-        case .taskMarker: .systemGreen
-        case .tableMarker: .systemIndigo
-        case .codeToken(let token): CodeSyntaxPalette.color(for: token)
         }
     }
 

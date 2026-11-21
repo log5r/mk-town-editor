@@ -71,9 +71,40 @@ extension AppEditorSettings {
         return (extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) }
             .filter { seen.insert($0).inserted }
     }
+
+    /// 配色の設定と、選んでいた拡張のテーマがなくなったときに戻す値。
+    /// プレビューは「システム」、編集画面は未設定（既定のダーク系）に戻す。
+    private static var themeSelections: [(WritableKeyPath<AppEditorSettings, PreviewTheme?>, PreviewTheme?)] {
+        [(\.previewTheme, .system), (\.editorTheme, nil)]
+    }
+
+    /// 拡張を追加する。同じ `id` の拡張は置き換え、そのテーマを選んでいた配色は新しいテーマに移す。
+    /// `target` を指定すると、拡張のテーマをその配色に選ぶ。
+    mutating func installExtension(_ package: DeclarativeExtension,
+                                   selectingThemeFor target: WritableKeyPath<AppEditorSettings, PreviewTheme?>? = nil) {
+        if let previousTheme = extensionPackages?.first(where: { $0.id == package.id })?.theme {
+            for (keyPath, fallback) in Self.themeSelections
+            where self[keyPath: keyPath] == .extensionTheme(previousTheme) {
+                self[keyPath: keyPath] = package.theme.map(PreviewTheme.extensionTheme) ?? fallback
+            }
+        }
+        extensionPackages = (extensionPackages ?? []).filter { $0.id != package.id } + [package]
+        if let target, let theme = package.theme { self[keyPath: target] = .extensionTheme(theme) }
+    }
+
+    /// 拡張を削除する。そのテーマを選んでいた配色は既定に戻す。
+    mutating func removeExtension(_ id: String) {
+        for (keyPath, fallback) in Self.themeSelections {
+            if case .extensionTheme(let selected) = self[keyPath: keyPath],
+               extensionPackages?.contains(where: { $0.id == id && $0.theme == selected }) == true {
+                self[keyPath: keyPath] = fallback
+            }
+        }
+        extensionPackages?.removeAll { $0.id == id }
+    }
 }
 
-/// 配色の選択肢。設定の「配色」と表示メニューの「プレビューの配色」で共有する。
+/// 配色の選択肢。設定の「配色」（エディタとプレビュー）と表示メニューの「エディタの配色」「プレビューの配色」で共有する。
 /// 基本の配色、標準装備の配色、読み込んだカスタムテーマの順に区切って並べる。
 struct PreviewThemeOptions: View {
     let customThemes: [PreviewTheme]
