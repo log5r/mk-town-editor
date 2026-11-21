@@ -66,6 +66,13 @@ final class DocumentLinkNavigation: ObservableObject {
         pendingLines.removeValue(forKey: fileURL.resolvingSymlinksInPath().standardizedFileURL)
     }
 
+    /// Whether the window about to show `fileURL` will switch to the editor as soon as it appears,
+    /// for a line from mktown-open or a position from search, backlinks, tasks or bookmarks.
+    func hasPendingEditorPosition(for fileURL: URL) -> Bool {
+        let key = fileURL.resolvingSymlinksInPath().standardizedFileURL
+        return pendingLines[key] != nil || pendingPosition?.fileURL == key
+    }
+
     func requestPosition(in fileURL: URL, range: NSRange) {
         pendingPosition = PendingPosition(fileURL: fileURL.resolvingSymlinksInPath().standardizedFileURL,
                                           range: range)
