@@ -160,9 +160,8 @@ struct WorkspaceEmbedText: View {
 
     var body: some View {
         // 外部ページの題名取得は設定を受け取らないため行わない。
-        // 引用の中のコードブロックの縦線（`PreviewQuotedCodeBlock`）と引用記号の位置をそろえるため、行の余白をなくす。
-        HoverLinkText(rendered: text, source: source, context: context, loadsExternalPages: false,
-                      lineFragmentPadding: 0)
+        // `HoverLinkText` は行の余白を持たず、引用の中のコードブロックの縦線（`PreviewQuotedCodeBlock`）と引用記号の位置がそろう。
+        HoverLinkText(rendered: text, source: source, context: context, loadsExternalPages: false)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -683,7 +683,7 @@ enum MarkdownRenderer {
     }
 
     /// リストの行頭記号（`•  `、`1.  `、タスクの状態）の属性。
-    /// 構造化プレビューは記号の範囲を `previewListMarker` で見分け、字下げを SwiftUI の配置に置き換える。
+    /// `NSTextView` で描く箇所は記号の範囲を `previewListMarker` で見分け、本文の左端をそろえる（`PreviewAppKitIndent`）。
     private static func listMarkerAttributes() -> [NSAttributedString.Key: Any] {
         var attributes = baseAttributes(font: .systemFont(ofSize: 15))
         attributes[.previewListMarker] = true
@@ -814,7 +814,7 @@ final class MarkdownImageAttachment: NSTextAttachment {
 extension NSAttributedString.Key {
     /// 背景で読み込み中のローカル画像の仮表示。描画キャッシュはこの結果を保持しない。
     static let pendingLocalImage = NSAttributedString.Key("MKTownPendingLocalImage")
-    /// リスト項目の行頭記号の範囲。`PreviewIndentedText` が記号と本文を分けるために使う。
+    /// リスト項目の行頭記号の範囲。`PreviewAppKitIndent` が記号の幅を測り、本文の位置をそろえるために使う。
     static let previewListMarker = NSAttributedString.Key("MKTownPreviewListMarker")
     /// 引用記号（`│  `）の範囲。`PreviewAppKitIndent` が引用記号を行頭に固定するために使う。
     static let previewQuotePrefix = NSAttributedString.Key("MKTownPreviewQuotePrefix")

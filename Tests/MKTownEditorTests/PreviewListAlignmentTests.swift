@@ -4,59 +4,34 @@ import XCTest
 @testable import MKTownEditor
 
 /// 入れ子のリストの字下げの修正に対するレビュー指摘の再現テスト。
-/// 埋め込み文書のコピー、コールアウト、本文が空のタスク、幅の広い行頭記号、引用の中のリストを確かめる。
+/// 埋め込み文書のコピー、コールアウト、本文が空のタスク、幅の広い行頭記号、引用の中のリスト、
+/// 構造化プレビューのリスト項目全体の選択とコピーを確かめる。
 final class PreviewListAlignmentTests: XCTestCase {
     // MARK: - 補助
 
-    @MainActor
-    private func textView(_ text: NSAttributedString, width: CGFloat = 480) -> NSTextView {
-        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 2000))
-        view.textStorage?.setAttributedString(text)
-        return view
-    }
+    private typealias Support = PreviewLayoutTestSupport
 
-    /// `needle` が現れるたびに、その先頭の文字の左端の位置を返す。
+    @MainActor
+    private func textView(_ text: NSAttributedString) -> NSTextView { Support.standaloneTextView(text) }
+
     @MainActor
     private func positions(of needle: String, in view: NSTextView) throws -> [CGFloat] {
-        let manager = try XCTUnwrap(view.layoutManager)
-        let container = try XCTUnwrap(view.textContainer)
-        manager.ensureLayout(for: container)
-        let source = view.string as NSString
-        var result: [CGFloat] = []
-        var location = 0
-        while location < source.length {
-            let range = source.range(of: needle, range: NSRange(location: location, length: source.length - location))
-            guard range.location != NSNotFound else { break }
-            let glyphs = manager.glyphRange(forCharacterRange: NSRange(location: range.location, length: 1),
-                                            actualCharacterRange: nil)
-            result.append(manager.boundingRect(forGlyphRange: glyphs, in: container).minX)
-            location = NSMaxRange(range)
-        }
-        return result
+        try Support.positions(of: needle, in: view)
     }
 
     @MainActor
     private func position(of needle: String, in view: NSTextView) throws -> CGFloat {
-        try XCTUnwrap(positions(of: needle, in: view).first, needle)
+        try Support.position(of: needle, in: view)
     }
 
     @MainActor
-    private func hosted<Content: View>(_ view: Content, width: CGFloat = 600,
+    private func hosted<Content: View>(_ view: Content,
                                        body: (NSHostingView<Content>) throws -> Void) rethrows {
-        let host = NSHostingView(rootView: view)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: 500),
-                              styleMask: [.titled], backing: .buffered, defer: false)
-        window.contentView = host
-        host.frame = window.contentView?.bounds ?? .zero
-        host.layoutSubtreeIfNeeded()
-        defer { window.contentView = nil }
-        try body(host)
+        try Support.hosted(view, body: body)
     }
 
     @MainActor
-    private func textViews(in view: NSView) -> [NSTextView] {
-        (view as? NSTextView).map { [$0] } ?? view.subviews.flatMap { textViews(in: $0) }
-    }
+    private func textViews(in view: NSView) -> [NSTextView] { Support.textViews(in: view) }
 
     private func assertStrictlyIncreasing(_ values: [CGFloat], by step: CGFloat,
                                           file: StaticString = #filePath, line: UInt = #line) {
@@ -103,14 +78,7 @@ final class PreviewListAlignmentTests: XCTestCase {
             XCTAssertEqual(views.count, 1, "区間全体が1つの選択面になる")
             let view = try XCTUnwrap(views.first)
             XCTAssertTrue(view.isSelectable)
-            view.selectAll(nil)
-            let pasteboard = NSPasteboard(name: NSPasteboard.Name("PreviewListAlignmentTests-\(UUID().uuidString)"))
-            defer { pasteboard.releaseGlobally() }
-            pasteboard.clearContents()
-            // NSTextView は文字列を旧来の種類（NSStringPboardType）で書き出し、`.string` として読める。
-            XCTAssertTrue(view.writeSelection(to: pasteboard, types: view.writablePasteboardTypes))
-            XCTAssertEqual(pasteboard.string(forType: .string),
-                           "☐ 未完了  alpha task\n☑ 完了  bravo task\n•  charlie")
+            XCTAssertEqual(Support.copiedString(view), "☐ 未完了  alpha task\n☑ 完了  bravo task\n•  charlie")
             // 引用の中のコードブロックの縦線と左端をそろえるため、行の余白を持たない。
             XCTAssertEqual(try position(of: "☐", in: view), 0, accuracy: 0.5)
             // 字下げは表示だけに効かせ、入れ子の項目は右にずれる。
@@ -154,76 +122,43 @@ final class PreviewListAlignmentTests: XCTestCase {
         XCTAssertEqual(tasks.map(\.nestingDepth), [0, 1, 1])
         XCTAssertEqual(MarkdownRenderer.renderLeaf(tasks[1], in: analysis, showTaskPrefix: false).length, 0,
                        "空のタスクの描画結果からは字下げを読み取れない")
-        let indents = tasks.map(PreviewIndentedText.taskCheckboxIndent(for:))
+        let indents = tasks.map(PreviewListIndent.taskCheckboxIndent(for:))
         XCTAssertEqual(indents[1], indents[2])
         XCTAssertGreaterThan(indents[1], indents[0])
         // チェックボックスは同じ深さの箇条書きの記号と同じ位置に置く。
-        let labeled = PreviewIndentedText.make(
-            MarkdownRenderer.renderLeaf(tasks[2], in: analysis, showTaskPrefix: false))
-        XCTAssertEqual(indents[2], labeled.markerIndent)
+        XCTAssertEqual(indents[2], MarkdownRenderer.listMarkerIndent(depth: 1))
     }
 
     // MARK: - 4. 幅の広い行頭記号
 
-    func testMarkerColumnOverflowsLeftInsteadOfPushingBody() {
-        XCTAssertEqual(PreviewMarkerColumn.markerOffset(markerWidth: 14, columnWidth: 20), 0)
-        XCTAssertEqual(PreviewMarkerColumn.markerOffset(markerWidth: 20, columnWidth: 20), 0)
-        XCTAssertEqual(PreviewMarkerColumn.markerOffset(markerWidth: 57, columnWidth: 20), -37)
-    }
-
-    /// 白地に描いた画像で、指定した行の範囲にある最も左の濃い画素の位置を返す。
-    @MainActor
-    private func leftmostInk(_ view: some View, rows: ClosedRange<Int>? = nil) -> Int? {
-        let renderer = ImageRenderer(content: view
-            .frame(width: 260, alignment: .leading)
-            .padding(.leading, 60)
-            .background(Color.white)
-            .environment(\.colorScheme, .light))
-        renderer.scale = 1
-        guard let image = renderer.cgImage else { return nil }
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        let range = rows ?? 0...(bitmap.pixelsHigh - 1)
-        for x in 0..<bitmap.pixelsWide {
-            for y in range where y < bitmap.pixelsHigh {
-                if let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB),
-                   color.brightnessComponent < 0.5 { return x }
-            }
-        }
-        return nil
-    }
-
-    /// 記号を白で描き、本文の左端だけを測る。
-    @MainActor
-    private func bodyOnlyView(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
-        let layout = PreviewIndentedText.make(MarkdownRenderer.renderLeaf(block, in: analysis))
-        func colored(_ text: NSAttributedString, _ color: NSColor) -> NSAttributedString {
-            let result = NSMutableAttributedString(attributedString: text)
-            result.addAttribute(.foregroundColor, value: color, range: NSRange(location: 0, length: result.length))
-            return result
-        }
-        return PreviewIndentedLayout(
-            layout: PreviewIndentedText(markerIndent: layout.markerIndent, bodyIndent: layout.bodyIndent,
-                                        marker: layout.marker.map { colored($0, .white) },
-                                        body: colored(layout.body, .black)),
-            marker: { Text(AttributedString($0)) }, content: { Text(AttributedString($0)) })
-    }
-
     /// 不具合: 記号が列（20pt）より広いと本文が右へ押され、同じ項目の続きの段落とずれていた。
+    /// 構造化プレビューでは項目と続きの段落を別の行で描くため、続きの段落は親の項目の本文の位置を求めてそろえる。
+    /// 続きの段落はリンクを含めて `NSTextView` で描き、位置を測る。表示倍率を変えても同じ。
     @MainActor
     func testWideOrderedMarkerKeepsBodyAlignedWithContinuationInStructuredPreview() throws {
-        let long = Array(repeating: "delta", count: 12).joined(separator: " ")
-        let analysis = MarkdownAnalysis("9. alpha\n10. bravo\n12345. \(long)\n\n       continuation")
-        let items = analysis.blocks.filter { if case .orderedList = $0.kind { true } else { false } }
-        let continuation = try XCTUnwrap(analysis.blocks.first { $0.content == "continuation" })
-        XCTAssertEqual(continuation.nestingDepth, 1)
-        var edges = try items.map { try XCTUnwrap(leftmostInk(bodyOnlyView($0, in: analysis))) }
-        edges.append(try XCTUnwrap(leftmostInk(bodyOnlyView(continuation, in: analysis))))
-        for edge in edges {
-            XCTAssertEqual(Double(edge), Double(edges[0]), accuracy: 2, "\(edges)")
+        let source = """
+        # Heading
+
+        9. alpha
+        10. bravo
+
+            [after bravo](https://example.com/b)
+        12345. charlie
+
+               [after charlie](https://example.com/c)
+        """
+        for zoom in [1.0, 1.5] {
+            try hosted(Support.preview(source, zoom: zoom)) { host in
+                @MainActor func body(_ text: String, _ needle: String) throws -> CGFloat {
+                    try Support.position(of: needle, in: Support.textView(text, in: host), relativeTo: host)
+                }
+                let alpha = try body("9.  alpha", "alpha")
+                XCTAssertEqual(try body("10.  bravo", "bravo"), alpha, accuracy: 0.5, "zoom \(zoom)")
+                XCTAssertEqual(try body("after bravo", "after"), alpha, accuracy: 0.5, "zoom \(zoom)")
+                XCTAssertEqual(try body("after charlie", "after"), try body("12345.  charlie", "charlie"),
+                               accuracy: 0.5, "zoom \(zoom)")
+            }
         }
-        // 幅の広い記号の項目の折り返した行も、1行目の本文と同じ位置から始まる。
-        let wrapped = try XCTUnwrap(leftmostInk(bodyOnlyView(items[2], in: analysis), rows: 24...200))
-        XCTAssertEqual(Double(wrapped), Double(edges[2]), accuracy: 2)
     }
 
     /// AppKit で描く箇所（全体を1つで描くプレビュー・コールアウト・埋め込み文書）も、本文の左端をそろえる。
@@ -287,11 +222,11 @@ final class PreviewListAlignmentTests: XCTestCase {
             XCTAssertFalse(MarkdownRenderer.renderLeaf(item, in: analysis).string.contains("│"))
         }
         try hosted(MarkdownPreview(markdown: source, documentContext: DocumentContext(fileURL: nil))) { host in
-            let views = textViews(in: host)
-            let parent = try XCTUnwrap(views.first { $0.string == "parent" })
-            let child = try XCTUnwrap(views.first { $0.string == "child" })
-            XCTAssertGreaterThan(child.convert(NSPoint.zero, to: host).x,
-                                 parent.convert(NSPoint.zero, to: host).x + 16)
+            let parent = try Support.textView("•  parent", in: host)
+            let child = try Support.textView("•  child", in: host)
+            XCTAssertFalse(parent.string.contains("│") || child.string.contains("│"))
+            XCTAssertGreaterThan(try Support.position(of: "•", in: child, relativeTo: host),
+                                 try Support.position(of: "•", in: parent, relativeTo: host) + 16)
         }
     }
 
@@ -301,5 +236,60 @@ final class PreviewListAlignmentTests: XCTestCase {
         let analysis = MarkdownAnalysis("> quoted paragraph")
         let paragraph = try XCTUnwrap(analysis.blocks.first { $0.kind == .paragraph })
         XCTAssertFalse(PreviewAppKitIndent.containsListIndent(MarkdownRenderer.renderLeaf(paragraph, in: analysis)))
+    }
+
+    // MARK: - 6. 構造化プレビューのリスト項目全体の選択とコピー
+
+    /// 不具合: 行頭記号を `Text`、本文を別のビュー（リンクがあれば `NSTextView`）で描いたため、
+    /// 番号や記号を含めて項目全体を選択・コピーできなかった。修正前（字下げの修正の前）は1つのビューで描いていた。
+    @MainActor
+    func testListItemIsOneSelectionSurfaceIncludingMarker() throws {
+        let source = "# Heading\n\n1. [alpha](https://example.com/a)\n2. bravo plain\n- charlie plain\n  - delta"
+        try hosted(Support.preview(source)) { host in
+            for item in ["1.  alpha", "2.  bravo plain", "•  charlie plain", "•  delta"] {
+                let view = try Support.textView(item, in: host)
+                XCTAssertTrue(view.isSelectable, item)
+                XCTAssertEqual(Support.copiedString(view), item)
+            }
+        }
+    }
+
+    /// 番号付きのタスクも、番号と本文を1つの選択面に置く（チェックボックスは操作部品のため別）。
+    @MainActor
+    func testNumberedTaskKeepsNumberAndTextInOneSurface() throws {
+        try hosted(Support.preview("# Heading\n\n1. [ ] [alpha](https://example.com/a)\n- [x] [bravo](https://example.com/b)")) { host in
+            XCTAssertEqual(Support.copiedString(try Support.textView("1.  alpha", in: host)), "1.  alpha")
+            XCTAssertEqual(Support.copiedString(try Support.textView("bravo", in: host)), "bravo")
+        }
+    }
+
+    /// `NSTextView` は右クリックを受け取り、行に付けた SwiftUI の文脈メニューを出さない。
+    /// リスト項目の `NSTextView` の文脈メニューに「原文へ移動」を加える。
+    @MainActor
+    func testListItemContextMenuOffersRevealSource() throws {
+        let source = "# Heading\n\n- alpha\n  - bravo"
+        let analysis = MarkdownAnalysis(source)
+        let bravo = try XCTUnwrap(analysis.blocks.first { $0.content == "bravo" })
+        var revealed: [NSRange] = []
+        try hosted(Support.preview(source, onRevealSource: { revealed.append($0) })) { host in
+            let view = try Support.textView("•  bravo", in: host)
+            let event = try XCTUnwrap(NSEvent.mouseEvent(
+                with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+            let menu = try XCTUnwrap(view.menu(for: event))
+            XCTAssertEqual(menu.items.first?.title, String(localized: "原文へ移動"))
+            menu.performActionForItem(at: 0)
+            XCTAssertEqual(revealed, [bravo.sourceRange])
+        }
+        // 「原文へ移動」を渡さないプレビューでは加えない。
+        try hosted(Support.preview(source)) { host in
+            let view = try Support.textView("•  bravo", in: host)
+            let event = try XCTUnwrap(NSEvent.mouseEvent(
+                with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+                clickCount: 1, pressure: 1))
+            XCTAssertNotEqual(view.menu(for: event)?.items.first?.title, String(localized: "原文へ移動"))
+        }
     }
 }

@@ -97,57 +97,20 @@ enum PreviewTypography {
     }
 }
 
-/// 1ブロックの描画結果を、SwiftUI で配置できる形に分けたもの。
+/// 構造化プレビュー（ブロックごとに描く `MarkdownPreview` の経路）でのリストの字下げ。
 ///
 /// SwiftUI の `Text` は `NSParagraphStyle` の字下げ（`firstLineHeadIndent`・`headIndent`）を無視する。
 /// 描画結果をそのまま `Text` に渡すと、入れ子のリストがすべて同じ位置に並ぶ。
-/// 構造化プレビューはブロックごとに字下げを文字列から取り出し、行頭の余白と行頭記号の列で表す
-/// （`PreviewIndentedLayout`）。AppKit の `NSTextView` で描く本文にも字下げを残さず、余白と二重にならないようにする。
-/// 複数のブロックを1つの文字列で描く箇所は、範囲選択とコピーを保つため `PreviewAppKitIndent` で `NSTextView` に描く。
-struct PreviewIndentedText: Equatable {
-    /// 行頭記号を置く位置。
-    let markerIndent: CGFloat
-    /// 本文の左端。折り返した行もここから始まる。
-    let bodyIndent: CGFloat
-    /// リストの行頭記号（`•  `、`1.  ` など）。字下げは取り除いてある。
-    let marker: NSAttributedString?
-    /// 字下げを取り除いた本文。
-    let body: NSAttributedString
-
-    /// 行頭記号の列の幅。記号がこれより広い場合は左へはみ出させ、本文の左端は動かさない。
-    var markerWidth: CGFloat { max(0, bodyIndent - markerIndent) }
-
-    /// 行頭記号と本文をつないだ文字列。
-    var string: String { (marker?.string ?? "") + body.string }
-
-    /// 1ブロックの描画結果を、字下げと行頭記号と本文に分ける。
-    static func make(_ rendered: NSAttributedString) -> PreviewIndentedText {
-        guard rendered.length > 0 else {
-            return PreviewIndentedText(markerIndent: 0, bodyIndent: 0, marker: nil, body: rendered)
-        }
-        let style = PreviewAppKitIndent.contentStyle(of: rendered,
-                                                     in: NSRange(location: 0, length: rendered.length))
-        let first = style?.firstLineHeadIndent ?? 0
-        let head = style?.headIndent ?? 0
-        guard let markerRange = PreviewAppKitIndent.markerRange(in: rendered,
-                                                                 within: NSRange(location: 0, length: rendered.length)) else {
-            return PreviewIndentedText(markerIndent: first, bodyIndent: head, marker: nil,
-                                       body: withoutIndent(rendered))
-        }
-        let markerEnd = NSMaxRange(markerRange)
-        return PreviewIndentedText(
-            markerIndent: first, bodyIndent: head,
-            marker: withoutIndent(rendered.attributedSubstring(from: NSRange(location: 0, length: markerEnd))),
-            body: withoutIndent(rendered.attributedSubstring(from:
-                NSRange(location: markerEnd, length: rendered.length - markerEnd))))
-    }
-
+/// リスト項目は行頭記号と本文を1つの選択面に保つため、`PreviewAppKitIndent.aligned` で整えて `NSTextView` で描く。
+/// それ以外の字下げした段落（項目の続きの段落）とタスクの本文は、字下げを除いて `Text` に渡し、行の余白で字下げする。
+enum PreviewListIndent {
     /// タスクのチェックボックスの位置。描画結果ではなく深さから求め、本文が空の項目でも兄弟とそろえる。
     static func taskCheckboxIndent(for block: MarkdownBlock) -> CGFloat {
         MarkdownRenderer.listMarkerIndent(depth: block.nestingDepth)
     }
 
-    private static func withoutIndent(_ text: NSAttributedString) -> NSAttributedString {
+    /// 段落スタイルの字下げを除いた文字列。行の余白と二重にならないよう、`NSTextView` で描く場合も除く。
+    static func withoutIndent(_ text: NSAttributedString) -> NSAttributedString {
         let range = NSRange(location: 0, length: text.length)
         var styles: [(NSRange, NSParagraphStyle)] = []
         text.enumerateAttribute(.paragraphStyle, in: range) { value, subrange, _ in
@@ -167,7 +130,7 @@ struct PreviewIndentedText: Equatable {
     }
 }
 
-/// 複数のブロックを1つの `NSTextView` で描く箇所（全体を1つで描くプレビュー、コールアウト、埋め込み文書）の字下げ。
+/// `NSTextView` で描く箇所（構造化プレビューのリスト項目、全体を1つで描くプレビュー、コールアウト、埋め込み文書）の字下げ。
 ///
 /// `MarkdownRenderer` はリストの深さを段落スタイルで表し、引用では各行の先頭に引用記号（`│  `）を付ける。
 /// そのまま `NSTextView` に渡すと、次の問題が起きる。
@@ -193,7 +156,8 @@ enum PreviewAppKitIndent {
     /// 1段浅い項目の記号より12pt以上右に置き、入れ子の深さが見分けられるようにする。
     static let maximumMarkerOverflow: CGFloat = 12
 
-    static func aligned(_ text: NSAttributedString) -> NSAttributedString {
+    /// - Parameter indentScale: 字下げの倍率。構造化プレビューでは文字と同じく表示倍率で広げる。
+    static func aligned(_ text: NSAttributedString, indentScale: CGFloat = 1) -> NSAttributedString {
         guard needsAlignment(text) else { return text }
         let result = NSMutableAttributedString(attributedString: text)
         let source = text.string as NSString
@@ -215,15 +179,15 @@ enum PreviewAppKitIndent {
             }
             let content = NSRange(location: NSMaxRange(quoteRange), length: contentsEnd - NSMaxRange(quoteRange))
             let style = contentStyle(of: text, in: content)
-            let first = style?.firstLineHeadIndent ?? 0
-            let head = style?.headIndent ?? 0
+            let first = (style?.firstLineHeadIndent ?? 0) * indentScale
+            let head = (style?.headIndent ?? 0) * indentScale
             let lineStart: CGFloat
             let body: CGFloat
             if let marker = markerRange(in: text, within: content) {
                 let width = layoutWidth(text.attributedSubstring(from:
                     NSRange(location: content.location, length: NSMaxRange(marker) - content.location)))
-                lineStart = max(0, first - maximumMarkerOverflow, min(first, head - width))
-                body = max(head, lineStart + width)
+                (lineStart, body) = markerPlacement(first: first, head: head, markerWidth: width,
+                                                    indentScale: indentScale)
                 addKern(body - lineStart - width, to: result, at: NSMaxRange(marker) - 1)
                 itemBodies[head] = body
                 lastItem = (first, head, body)
@@ -252,6 +216,26 @@ enum PreviewAppKitIndent {
         return result
     }
 
+    /// 行頭記号の位置と本文の左端。記号は列（`first`〜`head`）の中で左寄せし、広ければ左へはみ出させる。
+    private static func markerPlacement(first: CGFloat, head: CGFloat, markerWidth: CGFloat,
+                                        indentScale: CGFloat) -> (lineStart: CGFloat, body: CGFloat) {
+        let lineStart = max(0, first - maximumMarkerOverflow * indentScale, min(first, head - markerWidth))
+        return (lineStart, max(head, lineStart + markerWidth))
+    }
+
+    /// 1つのリスト項目の描画結果を `aligned` で描いたときの本文の左端。行頭記号がなければ `nil`。
+    /// 構造化プレビューは項目の続きの段落を別の行で描くため、これで項目の本文にそろえる。
+    static func itemBodyIndent(_ rendered: NSAttributedString, indentScale: CGFloat = 1) -> CGFloat? {
+        let range = NSRange(location: 0, length: rendered.length)
+        guard let marker = markerRange(in: rendered, within: range) else { return nil }
+        let style = contentStyle(of: rendered, in: range)
+        let width = layoutWidth(rendered.attributedSubstring(from:
+            NSRange(location: 0, length: NSMaxRange(marker))))
+        return markerPlacement(first: (style?.firstLineHeadIndent ?? 0) * indentScale,
+                               head: (style?.headIndent ?? 0) * indentScale,
+                               markerWidth: width, indentScale: indentScale).body
+    }
+
     /// 字下げ・行頭記号・引用記号のいずれかを含むか。
     nonisolated static func needsAlignment(_ text: NSAttributedString) -> Bool {
         var found = false
@@ -268,7 +252,7 @@ enum PreviewAppKitIndent {
         return found
     }
 
-    /// 段落スタイルの字下げ（リストの深さ）を含むか。`PreviewIndentedText.make` で分けた記号と本文は含まない。
+    /// 段落スタイルの字下げ（リストの深さ）を含むか。
     nonisolated static func containsListIndent(_ text: NSAttributedString) -> Bool {
         var found = false
         text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
