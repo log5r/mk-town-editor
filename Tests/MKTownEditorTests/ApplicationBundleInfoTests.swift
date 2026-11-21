@@ -44,6 +44,32 @@ final class ApplicationBundleInfoTests: XCTestCase {
         }
     }
 
+    /// Without these keys Finder keeps the generic text icon for Markdown files even when this app is the default.
+    /// The system draws the icon from the handler's own declaration of the type; the flag alone changes nothing.
+    func testMarkdownDocumentsAskForASystemGeneratedIconBadgedWithTheAppIcon() throws {
+        let plist = try infoPlist()
+        let markdown = "net.daringfireball.markdown"
+        let documentTypes = try XCTUnwrap(plist["CFBundleDocumentTypes"] as? [[String: Any]])
+        let claims = documentTypes.filter { ($0["LSItemContentTypes"] as? [String] ?? []).contains(markdown) }
+        XCTAssertEqual(claims.count, 1)
+        for claim in claims {
+            XCTAssertEqual(claim["CFBundleTypeIconSystemGenerated"] as? Bool, true)
+            // An icon file would replace the generated page with a fixed image.
+            XCTAssertNil(claim["CFBundleTypeIconFile"])
+        }
+
+        let declarations = try XCTUnwrap(plist["UTImportedTypeDeclarations"] as? [[String: Any]])
+        let declaration = try XCTUnwrap(declarations.first { $0["UTTypeIdentifier"] as? String == markdown })
+        let icons = try XCTUnwrap(declaration["UTTypeIcons"] as? [String: String])
+        XCTAssertEqual(icons["UTTypeIconText"], "md")
+        // The badge is looked up in Assets.car, which actool fills from the Icon Composer document of this name.
+        let badge = try XCTUnwrap(icons["UTTypeIconBadgeName"])
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("Support/\(badge).icon/icon.json").path), badge)
+    }
+
     func testServicesMenuItemCallsTheSelectionServiceProvider() throws {
         let plist = try infoPlist()
         let services = try XCTUnwrap(plist["NSServices"] as? [[String: Any]])
