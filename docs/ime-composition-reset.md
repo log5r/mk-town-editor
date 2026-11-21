@@ -22,3 +22,4 @@ Google日本語入力で本文に日本語を入力すると、ローマ字を�
 ## 関連
 
 - インプットメソッドが接続できていても文字が入力できない場合は、まず [`swift run` で起動したときに文字が入力できない問題](package-launch-activation.md) のactivation policyを確認する。
+- 編集コマンドが挿入した記号が細く描かれる場合は [日本語の後に挿入した記号が代替フォントで細く描かれる問題](editor-fallback-font-inheritance.md) を参照する。

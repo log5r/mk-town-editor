@@ -551,7 +551,7 @@ final class MarkdownEditorModel: ObservableObject {
         let edit = plan.edit
         guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
         textView.breakUndoCoalescing()
-        storage.replaceCharacters(in: edit.range, with: edit.replacement)
+        textView.replaceEditorCharacters(in: edit.range, with: edit.replacement)
         selectionHistory.removeAll()
         selectionHistoryText = nil
         textView.didChangeText()
@@ -898,7 +898,7 @@ final class MarkdownEditorModel: ObservableObject {
         }
         let originalSelection = textView.selectedRange()
         textView.breakUndoCoalescing()
-        storage.replaceCharacters(in: edit.range, with: edit.replacement)
+        textView.replaceEditorCharacters(in: edit.range, with: edit.replacement)
         selectionHistory.removeAll()
         selectionHistoryText = nil
         textView.didChangeText()
