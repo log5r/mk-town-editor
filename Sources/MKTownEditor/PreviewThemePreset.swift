@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// 標準装備のプレビュー配色。JSON拡張のテーマと同じ形（`DeclarativeExtension.Theme`）で定義する。
@@ -64,6 +65,24 @@ enum PreviewThemePreset: String, CaseIterable, Codable, Hashable, Sendable {
     ]
 }
 
+extension PreviewTheme {
+    /// 「システム」のプレビューの背景。macOSの外観に合わせて、GitHub風のライトかダークの背景にする。
+    static let systemPreviewBackground = systemPreviewColor(\.background)
+    /// 「システム」のプレビューで行内コードに敷く色。背景と同じくGitHub風のコード背景にする。
+    static let systemPreviewCodeBackground = systemPreviewColor(\.codeBackground)
+
+    /// プレビューの背景。文字色などは「システム」ではmacOSの色のままにする。
+    var previewBackground: NSColor? { self == .system ? Self.systemPreviewBackground : background }
+
+    private static func systemPreviewColor(_ keyPath: KeyPath<DeclarativeExtension.Theme, String> & Sendable) -> NSColor {
+        let light = PreviewThemePreset.githubLight.theme.color(keyPath) ?? .textBackgroundColor
+        let dark = PreviewThemePreset.githubDark.theme.color(keyPath) ?? .textBackgroundColor
+        return NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+        }
+    }
+}
+
 extension AppEditorSettings {
     /// 読み込み済みのJSON拡張が持つテーマ。同じ内容のテーマは1つにまとめる。
     var customPreviewThemes: [PreviewTheme] {
@@ -73,7 +92,7 @@ extension AppEditorSettings {
     }
 
     /// 配色の設定と、選んでいた拡張のテーマがなくなったときに戻す値。
-    /// プレビューは「システム」、編集画面は未設定（既定のダーク系）に戻す。
+    /// プレビューは「システム」、編集画面は未設定（既定の「システム」）に戻す。
     private static var themeSelections: [(WritableKeyPath<AppEditorSettings, PreviewTheme?>, PreviewTheme?)] {
         [(\.previewTheme, .system), (\.editorTheme, nil)]
     }

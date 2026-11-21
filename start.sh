@@ -30,8 +30,14 @@ if $rebuild; then
     swift package clean
 fi
 
-swift build --configuration release
-products=$(swift build --configuration release --show-bin-path)
+# swift-driver links through clang with --sysroot, and clang reads the SDK version only from
+# -isysroot or SDKROOT, which SwiftPM does not pass on. Without this the executable records the
+# deployment target (14.0) as its SDK and AppKit draws the pre-Liquid Glass compatibility look.
+# See docs/swiftpm-sdk-version.md.
+sdk=$(xcrun --sdk macosx --show-sdk-path)
+link_flags=(-Xswiftc -Xclang-linker -Xswiftc -isysroot -Xswiftc -Xclang-linker -Xswiftc "$sdk")
+swift build --configuration release "${link_flags[@]}"
+products=$(swift build --configuration release "${link_flags[@]}" --show-bin-path)
 app="$PWD/.build/MKTownEditor.app"
 Tools/make-app-bundle.sh "$products" "$app" > /dev/null
 

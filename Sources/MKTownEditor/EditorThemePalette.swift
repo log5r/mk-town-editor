@@ -8,7 +8,16 @@ import SwiftUI
 /// 対応は docs/preview-themes.md の「編集画面の配色」を参照。
 struct EditorThemePalette: Equatable {
     /// 設定が未保存のときの編集画面の配色。
-    static let defaultTheme: PreviewTheme = .preset(.githubDark)
+    static let defaultTheme: PreviewTheme = .system
+    /// 「システム」の編集画面の背景（紺）。
+    static let systemBackground = "#283264"
+    /// 「システム」の編集画面の色。GitHub風（ダーク）の文字色を紺の背景に載せる。
+    /// 背景が暗い色で固定のため、macOSの外観がライトでもダークの外観で表示する。
+    static let systemColors: PreviewTheme = {
+        var colors = PreviewThemePreset.githubDark.theme
+        colors.background = systemBackground
+        return .extensionTheme(colors)
+    }()
     /// 文字色に求める背景とのコントラスト比（WCAG AA）。テーマの色が届かなければ明度を補正する。
     static let minimumContrast = DeclarativeExtension.Theme.minimumContrast
     /// 選択範囲の背景に混ぜるリンク色の割合。
@@ -17,15 +26,13 @@ struct EditorThemePalette: Equatable {
     let theme: PreviewTheme
     let background: NSColor
     let text: NSColor
-    /// `nil` はシステムの既定（アクセントカラーに合わせた選択色と選択中の文字色）。
-    let selection: NSColor?
+    let selection: NSColor
     /// 選択中の文字の色。本文の色が選択範囲の背景に対して読みにくいテーマでは、明度を補正した色になる。
     let selectedText: NSColor
-    /// `nil` はシステムの既定のカーソル色。
-    let insertionPoint: NSColor?
+    let insertionPoint: NSColor
     let lineNumber: NSColor
-    /// テーマの背景の明るさに合わせた外観。`nil` はmacOSの外観に従う。
-    let appearanceName: NSAppearance.Name?
+    /// テーマの背景の明るさに合わせた外観。
+    let appearanceName: NSAppearance.Name
     let heading: NSColor
     let code: NSColor
     let link: NSColor
@@ -39,42 +46,24 @@ struct EditorThemePalette: Equatable {
     /// 色はテーマから決まるため、テーマが同じなら同じ配色とみなす。
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.theme == rhs.theme }
 
-    /// macOSの外観に追従するシステムの色。テーマを選ばない編集画面（テストの既定など）もこれを使う。
-    @MainActor static let system = EditorThemePalette(systemTheme: ())
+    /// 「システム」の配色。テーマを選ばない編集画面（テストの既定など）もこれを使う。
+    @MainActor static let system = EditorThemePalette(theme: .system, colors: systemColors)!
 
-    private init(systemTheme: Void) {
-        theme = .system
-        background = .textBackgroundColor
-        text = .textColor
-        selection = nil
-        selectedText = .selectedTextColor
-        insertionPoint = nil
-        lineNumber = .secondaryLabelColor
-        appearanceName = nil
-        heading = .systemBlue
-        code = .systemPurple
-        link = .linkColor
-        marker = .secondaryLabelColor
-        quoteMarker = .systemTeal
-        listMarker = .systemOrange
-        taskMarker = .systemGreen
-        tableMarker = .systemIndigo
-        tokens = Dictionary(uniqueKeysWithValues: CodeSyntaxToken.allCases.map {
-            ($0, CodeSyntaxPalette.color(for: $0))
-        })
-    }
-
+    /// `theme` が色を定めていなければ「システム」の配色にする。
     @MainActor
     init(theme: PreviewTheme) {
-        guard theme != .system, let background = theme.background, let body = theme.bodyColor,
-              let headingColor = theme.headingColor, let linkColor = theme.linkColor,
-              let codeColor = theme.codeColor else {
-            self = .system
-            return
-        }
+        self = Self(theme: theme, colors: theme.editorColors) ?? .system
+    }
+
+    /// `colors` の色で配色を作る。`theme` は設定で選ばれているテーマで、配色の同一性の判定に使う。
+    @MainActor
+    private init?(theme: PreviewTheme, colors: PreviewTheme) {
+        guard let background = colors.background, let body = colors.bodyColor,
+              let headingColor = colors.headingColor, let linkColor = colors.linkColor,
+              let codeColor = colors.codeColor else { return nil }
         func readable(_ color: NSColor) -> NSColor { Self.readable(color, on: background) }
         let syntax = Dictionary(uniqueKeysWithValues: CodeSyntaxToken.allCases.map { token in
-            (token, CodeSyntaxPalette.color(for: token, theme: theme))
+            (token, CodeSyntaxPalette.color(for: token, theme: colors))
         })
         self.theme = theme
         self.background = background
@@ -99,7 +88,7 @@ struct EditorThemePalette: Equatable {
         // 本文の色は背景に対して検査済みでも、リンク色を混ぜた選択範囲の背景では足りない場合がある。
         selectedText = Self.readable(text, on: selection)
         insertionPoint = text
-        appearanceName = theme.colorScheme == .dark ? .darkAqua : .aqua
+        appearanceName = colors.colorScheme == .dark ? .darkAqua : .aqua
     }
 
     func color(for role: MarkdownSyntaxSpan.Role) -> NSColor {
@@ -118,18 +107,14 @@ struct EditorThemePalette: Equatable {
 
     /// 選択中の文字の属性。選択範囲では字句の色をやめて本文の色にし、選択色とのコントラストを保つ。
     var selectedTextAttributes: [NSAttributedString.Key: Any] {
-        guard let selection else {
-            return [.backgroundColor: NSColor.selectedTextBackgroundColor,
-                    .foregroundColor: selectedText]
-        }
-        return [.backgroundColor: selection, .foregroundColor: selectedText]
+        [.backgroundColor: selection, .foregroundColor: selectedText]
     }
 
     /// 背景・文字・選択範囲・カーソル・行番号を反映する。字句の色は `MarkdownSyntaxHighlighter.apply` が当てる。
     /// システムの色（プレースホルダー、不可視文字、スクロールバー、検索の強調）は、外観を合わせて背景になじませる。
     @MainActor
     func apply(to textView: NSTextView, in scrollView: NSScrollView) {
-        let appearance = appearanceName.flatMap(NSAppearance.init(named:))
+        let appearance = NSAppearance(named: appearanceName)
         if scrollView.appearance?.name != appearance?.name { scrollView.appearance = appearance }
         scrollView.backgroundColor = background
         textView.backgroundColor = background
@@ -182,12 +167,17 @@ struct EditorThemeSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environment(\.colorScheme, theme.colorScheme ?? colorScheme)
-            .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
+            .environment(\.colorScheme, theme.editorColors.colorScheme ?? colorScheme)
+            .background(theme.editorColors.background.map { Color(nsColor: $0) } ?? Color.clear)
     }
 }
 
+extension PreviewTheme {
+    /// 編集画面で使う色。「システム」はプレビューと違い、外観に追従しない紺の配色にする。
+    var editorColors: PreviewTheme { self == .system ? EditorThemePalette.systemColors : self }
+}
+
 extension AppEditorSettings {
-    /// 編集画面の配色。未設定なら既定のダーク系テーマ。
+    /// 編集画面の配色。未設定なら既定の「システム」。
     var effectiveEditorTheme: PreviewTheme { editorTheme ?? EditorThemePalette.defaultTheme }
 }

@@ -26,7 +26,7 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
                 }
                 coordinator.refreshSyntax()
                 XCTAssertEqual(color(at: location, in: view),
-                               dialect == .basic ? .systemPurple : nil)
+                               dialect == .basic ? EditorThemePalette.system.code : nil)
                 XCTAssertEqual(view.string, source)
             }
         }
@@ -41,18 +41,18 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         coordinator.usesSharedAnalysis = true
         coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
 
         for addition in ["a", "b", "日本語"] {
             view.textStorage?.replaceCharacters(
                 in: NSRange(location: (view.string as NSString).length, length: 0), with: addition)
             coordinator.refreshSyntax()
-            XCTAssertEqual(color(at: 2, in: view), .systemBlue,
+            XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading,
                            "Pending analysis must not clear the heading's color")
         }
         coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
     }
 
     func testPendingAnalysisPreservesShiftedColorsThenClearsRemovedHeading() {
@@ -68,13 +68,13 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
         view.textStorage?.replaceCharacters(in: NSRange(location: 0, length: 0), with: "😀")
         let heading = (view.string as NSString).range(of: "Heading")
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: heading.location, in: view), .systemBlue)
+        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.system.heading)
 
         let marker = (view.string as NSString).range(of: "# ")
         view.textStorage?.replaceCharacters(in: marker, with: "")
         coordinator.refreshSyntax()
         let newHeading = (view.string as NSString).range(of: "Heading")
-        XCTAssertEqual(color(at: newHeading.location, in: view), .systemBlue)
+        XCTAssertEqual(color(at: newHeading.location, in: view), EditorThemePalette.system.heading)
         coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
         coordinator.refreshSyntax()
         XCTAssertNil(color(at: newHeading.location, in: view))
@@ -165,8 +165,8 @@ final class MarkdownSyntaxHighlighterTests: XCTestCase {
     }
 
     func testCodeTokenColorsUseSharedPalette() {
-        XCTAssertEqual(color(for: .codeToken(.keyword)), CodeSyntaxPalette.color(for: .keyword))
-        XCTAssertEqual(color(for: .codeToken(.string)), CodeSyntaxPalette.color(for: .string))
+        XCTAssertEqual(color(for: .codeToken(.keyword)), EditorThemePalette.system.color(for: .codeToken(.keyword)))
+        XCTAssertEqual(color(for: .codeToken(.string)), EditorThemePalette.system.color(for: .codeToken(.string)))
     }
 
     func testEscapedAndInlineCodeMarkersAreNotStyled() {

@@ -281,7 +281,7 @@ struct AppEditorSettings: Codable, Equatable {
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
     var previewTheme: PreviewTheme?
-    /// 編集画面の配色。プレビューと同じ選択肢を使う。未設定なら `effectiveEditorTheme` がダーク系を返す。
+    /// 編集画面の配色。プレビューと同じ選択肢を使う。未設定なら `effectiveEditorTheme` が既定の「システム」（紺の背景）を返す。
     var editorTheme: PreviewTheme?
     var extensionPackages: [DeclarativeExtension]?
     var previewBodyWidth: Int?

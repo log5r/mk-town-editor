@@ -132,6 +132,19 @@ class MakeAppBundleTests(unittest.TestCase):
         self.assertEqual(assets.returncode, 0, assets.stderr)
         self.assertIn(f'"Name" : "{name}"', assets.stdout)
 
+    def test_executable_recording_an_old_sdk_fails_without_creating_a_bundle(self):
+        """SwiftPM links with --sysroot, so clang records the deployment target as the SDK version.
+        AppKit would then draw the pre-Liquid Glass compatibility look (docs/swiftpm-sdk-version.md)."""
+        executable = self.products / "MKTownEditor"
+        subprocess.run(["xcrun", "vtool", "-set-build-version", "macos", "14.0", "14.0", "-replace",
+                        "-output", str(executable), "/usr/bin/true"],
+                       check=True, capture_output=True)
+        result = self.run_script(str(self.products), str(self.app))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("records SDK 14.0", result.stderr)
+        self.assertIn("-isysroot", result.stderr)
+        self.assertFalse(self.app.exists())
+
     def test_markdown_document_icon_is_badged_with_the_compiled_app_icon(self):
         """Finder draws a Markdown file's icon from these keys when this app is the default handler."""
         self.assertEqual(self.run_script(str(self.products), str(self.app)).returncode, 0)

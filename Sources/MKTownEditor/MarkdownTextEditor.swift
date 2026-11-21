@@ -22,7 +22,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var loadsExternalLinkPreviews = false
     var usesInlineLivePresentation = false
     var usesTypewriterMode = false
-    /// 編集画面の配色。設定の既定（ダーク系）は呼び出し側が渡す。
+    /// 編集画面の配色。
     var theme: PreviewTheme = .system
 
     func makeCoordinator() -> Coordinator {
