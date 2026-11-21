@@ -19,6 +19,8 @@ struct EditorThemePalette: Equatable {
     let text: NSColor
     /// `nil` はシステムの既定（アクセントカラーに合わせた選択色と選択中の文字色）。
     let selection: NSColor?
+    /// 選択中の文字の色。本文の色が選択範囲の背景に対して読みにくいテーマでは、明度を補正した色になる。
+    let selectedText: NSColor
     /// `nil` はシステムの既定のカーソル色。
     let insertionPoint: NSColor?
     let lineNumber: NSColor
@@ -45,6 +47,7 @@ struct EditorThemePalette: Equatable {
         background = .textBackgroundColor
         text = .textColor
         selection = nil
+        selectedText = .selectedTextColor
         insertionPoint = nil
         lineNumber = .secondaryLabelColor
         appearanceName = nil
@@ -91,7 +94,10 @@ struct EditorThemePalette: Equatable {
         tableMarker = readable(syntax[.type].flatMap { $0 } ?? comment)
         // プレビューと同じく、テーマが定めていない字句はコードの色にする。
         tokens = syntax.mapValues { readable($0 ?? codeColor) }
-        selection = Self.blend(linkColor, over: background, fraction: Self.selectionTint)
+        let selection = Self.blend(linkColor, over: background, fraction: Self.selectionTint)
+        self.selection = selection
+        // 本文の色は背景に対して検査済みでも、リンク色を混ぜた選択範囲の背景では足りない場合がある。
+        selectedText = Self.readable(text, on: selection)
         insertionPoint = text
         appearanceName = theme.colorScheme == .dark ? .darkAqua : .aqua
     }
@@ -114,9 +120,9 @@ struct EditorThemePalette: Equatable {
     var selectedTextAttributes: [NSAttributedString.Key: Any] {
         guard let selection else {
             return [.backgroundColor: NSColor.selectedTextBackgroundColor,
-                    .foregroundColor: NSColor.selectedTextColor]
+                    .foregroundColor: selectedText]
         }
-        return [.backgroundColor: selection, .foregroundColor: text]
+        return [.backgroundColor: selection, .foregroundColor: selectedText]
     }
 
     /// 背景・文字・選択範囲・カーソル・行番号を反映する。字句の色は `MarkdownSyntaxHighlighter.apply` が当てる。

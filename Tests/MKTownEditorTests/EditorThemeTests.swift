@@ -101,7 +101,9 @@ final class EditorThemeTests: XCTestCase {
             }
             let selection = try XCTUnwrap(palette.selection, theme.title)
             XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.text, selection), 4.5, theme.title)
-            XCTAssertEqual(palette.selectedTextAttributes[.foregroundColor] as? NSColor, palette.text)
+            // 標準のテーマでは本文の色が選択色に対しても読めるため、補正されない。
+            XCTAssertEqual(palette.selectedText, palette.text, theme.title)
+            XCTAssertEqual(palette.selectedTextAttributes[.foregroundColor] as? NSColor, palette.selectedText)
             XCTAssertEqual(palette.insertionPoint, palette.text)
             // 見出しは本文と区別できる色にする。
             XCTAssertNotEqual(palette.heading, palette.text, theme.title)
@@ -158,6 +160,22 @@ final class EditorThemeTests: XCTestCase {
         }
         // 字句の色がないテーマでは、記号は本文の色になる。
         XCTAssertEqual(palette.marker, theme.color(\.body))
+    }
+
+    /// PR #92のレビュー指摘の再発防止。本文の色が背景には足りても、リンク色を混ぜた選択色には足りないテーマがある。
+    func testSelectedTextStaysReadableOnDerivedSelectionBackground() throws {
+        let theme = DeclarativeExtension.Theme(
+            name: "Gray Body", background: "#FFFFFF", body: "#767676", heading: "#000000",
+            code: "#000000", link: "#000000", codeBackground: "#FFFFFF")
+        XCTAssertNoThrow(try theme.validate())
+        let palette = EditorThemePalette(theme: .extensionTheme(theme))
+        let selection = try XCTUnwrap(palette.selection)
+        // 本文の色は背景には足りるが、選択色には足りない。
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.text, palette.background), 4.5)
+        XCTAssertLessThan(PreviewTypography.contrastRatio(palette.text, selection), 4.5)
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.selectedText, selection), 4.5)
+        XCTAssertEqual(palette.selectedTextAttributes[.foregroundColor] as? NSColor, palette.selectedText)
+        XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, selection)
     }
 
     func testSystemPaletteKeepsAppearanceFollowingColors() {
