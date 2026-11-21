@@ -152,6 +152,12 @@ class MobileProjectTests(unittest.TestCase):
 
     def test_mobile_and_desktop_declare_the_same_markdown_type(self):
         desktop = plistlib.loads((ROOT / "Support/Info.plist").read_bytes())
+        # Only the Mac app declares the Finder document icon (docs/document-icon.md); it was not tried on iOS.
+        for declaration in desktop["UTImportedTypeDeclarations"]:
+            self.assertIn("UTTypeIcons", declaration)
+            del declaration["UTTypeIcons"]
+        for claim in desktop["CFBundleDocumentTypes"]:
+            self.assertIs(claim.pop("CFBundleTypeIconSystemGenerated"), True)
         self.assertEqual(self.info["UTImportedTypeDeclarations"], desktop["UTImportedTypeDeclarations"])
         self.assertEqual(self.info["CFBundleDocumentTypes"], desktop["CFBundleDocumentTypes"])
 

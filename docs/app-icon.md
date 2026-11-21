@@ -27,7 +27,9 @@
 - `Assets.car`：macOS 26以降が読む、レイヤー構成を保ったアイコン。外観（ライト、ダーク、クリア、ティント）に応じてシステムが描画する。
 - `AppIcon.icns`：macOS 14〜15向けの、描画済みのアイコン。
 
-あわせて `actool` は、Info.plistに足すキー（`CFBundleIconFile` と `CFBundleIconName`、どちらも `AppIcon`）を部分Info.plistとして出力する。Xcodeはこれを自動で統合し、`make-app-bundle.sh` は `plutil` で同じ2つのキーを書き込む。そのため `Support/Info.plist` にはアイコンのキーを書いていない。
+あわせて `actool` は、Info.plistに足すキー（`CFBundleIconFile` と `CFBundleIconName`、どちらも `AppIcon`）を部分Info.plistとして出力する。Xcodeはこれを自動で統合し、`make-app-bundle.sh` は `plutil` で同じ2つのキーを書き込む。そのため `Support/Info.plist` にはこの2つのキーを書いていない。
+
+Markdown書類のアイコンには、このアイコンがバッジとして描かれる。宣言と検証方法は[書類アイコン](document-icon.md)にまとめた。
 
 変換に失敗した場合、`make-app-bundle.sh` は `actool` のメッセージを表示して、バンドルを作らずに終了する。`.icon` の変換にはXcode 26以降の `actool` が必要である。
 
