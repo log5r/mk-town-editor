@@ -63,6 +63,7 @@
 		A10000000000000000000030 /* PreviewScrollSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000030 /* PreviewScrollSync.swift */; };
 		A10000000000000000000031 /* PreviewTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000031 /* PreviewTypography.swift */; };
 		A100000000000000000000F7 /* PreviewThemePreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000F7 /* PreviewThemePreset.swift */; };
+		A100000000000000000000F8 /* EditorThemePalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000F8 /* EditorThemePalette.swift */; };
 		A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000032 /* CodeSyntaxHighlighter.swift */; };
 		A10000000000000000000033 /* PreviewRenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000033 /* PreviewRenderCache.swift */; };
 		A10000000000000000000034 /* RegexSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000034 /* RegexSearch.swift */; };
@@ -256,6 +257,7 @@
 		A20000000000000000000030 /* PreviewScrollSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewScrollSync.swift; sourceTree = "<group>"; };
 		A20000000000000000000031 /* PreviewTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewTypography.swift; sourceTree = "<group>"; };
 		A200000000000000000000F7 /* PreviewThemePreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewThemePreset.swift; sourceTree = "<group>"; };
+		A200000000000000000000F8 /* EditorThemePalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorThemePalette.swift; sourceTree = "<group>"; };
 		A20000000000000000000032 /* CodeSyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSyntaxHighlighter.swift; sourceTree = "<group>"; };
 		A20000000000000000000033 /* PreviewRenderCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewRenderCache.swift; sourceTree = "<group>"; };
 		A20000000000000000000034 /* RegexSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegexSearch.swift; sourceTree = "<group>"; };
@@ -483,6 +485,7 @@
 				A20000000000000000000030 /* PreviewScrollSync.swift */,
 				A20000000000000000000031 /* PreviewTypography.swift */,
 				A200000000000000000000F7 /* PreviewThemePreset.swift */,
+				A200000000000000000000F8 /* EditorThemePalette.swift */,
 				A20000000000000000000032 /* CodeSyntaxHighlighter.swift */,
 				A200000000000000000000A6 /* CodeSyntaxLanguages.swift */,
 				A200000000000000000000A7 /* CodeSyntaxTokenizer.swift */,
@@ -910,6 +913,7 @@
 				A10000000000000000000030 /* PreviewScrollSync.swift in Sources */,
 				A10000000000000000000031 /* PreviewTypography.swift in Sources */,
 				A100000000000000000000F7 /* PreviewThemePreset.swift in Sources */,
+				A100000000000000000000F8 /* EditorThemePalette.swift in Sources */,
 				A10000000000000000000032 /* CodeSyntaxHighlighter.swift in Sources */,
 				A100000000000000000000A6 /* CodeSyntaxLanguages.swift in Sources */,
 				A100000000000000000000A7 /* CodeSyntaxTokenizer.swift in Sources */,

@@ -22,6 +22,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var loadsExternalLinkPreviews = false
     var usesInlineLivePresentation = false
     var usesTypewriterMode = false
+    /// 編集画面の配色。設定の既定（ダーク系）は呼び出し側が渡す。
+    var theme: PreviewTheme = .system
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -56,8 +58,6 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.whitespaceTabWidth = textStyle.tabWidth
         textView.refreshInvisibles()
         context.coordinator.appliedTextStyle = textStyle
-        textView.textColor = .textColor
-        textView.backgroundColor = .textBackgroundColor
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -83,6 +83,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRuler = lineNumberRuler
+        let palette = EditorThemePalette(theme: theme)
+        palette.apply(to: textView, in: scrollView)
+        context.coordinator.palette = palette
         scrollView.onManualScroll = { [weak coordinator = context.coordinator] in
             coordinator?.manualScrollDidStart()
         }
@@ -184,6 +187,12 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
+        if context.coordinator.palette.theme != theme {
+            // 字句の色は下の refreshSyntax が新しい配色で当て直す。
+            let palette = EditorThemePalette(theme: theme)
+            palette.apply(to: textView, in: scrollView)
+            context.coordinator.palette = palette
+        }
         if context.coordinator.appliedLayoutOptions != layoutOptions {
             layoutOptions.apply(to: textView, in: scrollView)
             context.coordinator.appliedLayoutOptions = layoutOptions
@@ -251,6 +260,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         var usesInlineLivePresentation = false
         var usesTypewriterMode = false
+        /// 構文の色を当てる配色。変わると次の `refreshSyntax` で全体を塗り直す。
+        var palette = EditorThemePalette.system
         private var lastManualScroll = Date.distantPast
         private var isUserScrolling = false
         private var typewriterFollowTask: Task<Void, Never>?
@@ -272,6 +283,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var highlightedDialect: MarkdownDialect?
         private var highlightedWithSharedAnalysis: Bool?
         private var highlightedWithLivePresentation: Bool?
+        private var highlightedPalette: EditorThemePalette?
         private var inlineLiveDisplay: MarkdownInlineLiveDisplay?
         var isRestoringSession = false
 
@@ -360,12 +372,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
             let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
                 highlightedDialect != dialect ||
                 highlightedWithSharedAnalysis != usesSharedAnalysis ||
-                highlightedWithLivePresentation != usesInlineLivePresentation
+                highlightedWithLivePresentation != usesInlineLivePresentation ||
+                highlightedPalette != palette
             if needsBase {
                 let analysis = snapshot?.analysis ?? MarkdownAnalysis(source, dialect: dialect)
                 let displaySpans = usesSharedAnalysis ? snapshot?.syntaxSpans
                     : MarkdownSyntaxHighlighter.spans(in: source, analysis: analysis)
-                MarkdownSyntaxHighlighter.apply(to: textView, spans: displaySpans ?? [])
+                MarkdownSyntaxHighlighter.apply(to: textView, spans: displaySpans ?? [], palette: palette)
                 if usesInlineLivePresentation,
                    let displaySpans {
                     inlineLiveDisplay = MarkdownInlineLiveDisplay(textView: textView,
@@ -380,6 +393,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
                 highlightedDialect = dialect
                 highlightedWithSharedAnalysis = usesSharedAnalysis
                 highlightedWithLivePresentation = usesInlineLivePresentation
+                highlightedPalette = palette
             }
             let selections = textView.window?.firstResponder === textView
                 ? textView.selectedRanges.map(\.rangeValue) : []

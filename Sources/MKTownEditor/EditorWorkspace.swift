@@ -2544,12 +2544,14 @@ struct EditorWorkspace: View {
                                documentContext: documentContext,
                                loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
                                usesInlineLivePresentation: settingsStore.app.usesInlineLivePresentation ?? false,
-                               usesTypewriterMode: settingsStore.app.usesTypewriterMode ?? false)
+                               usesTypewriterMode: settingsStore.app.usesTypewriterMode ?? false,
+                               theme: settingsStore.app.effectiveEditorTheme)
             if settingsStore.app.showsMinimap ?? false {
                 Divider()
                 MarkdownMinimapView(source: document.text, viewportState: editorModel.viewportState) { location in
                     editorModel.selectAndReveal(NSRange(location: location, length: 0))
                 }
+                .modifier(EditorThemeSurface(theme: settingsStore.app.effectiveEditorTheme))
             }
         }
     }
