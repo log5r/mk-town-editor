@@ -132,6 +132,19 @@ class MakeAppBundleTests(unittest.TestCase):
         self.assertEqual(assets.returncode, 0, assets.stderr)
         self.assertIn(f'"Name" : "{name}"', assets.stdout)
 
+    def test_markdown_document_icon_is_badged_with_the_compiled_app_icon(self):
+        """Finder draws a Markdown file's icon from these keys when this app is the default handler."""
+        self.assertEqual(self.run_script(str(self.products), str(self.app)).returncode, 0)
+        info = self.info()
+        markdown = "net.daringfireball.markdown"
+        claims = [claim for claim in info["CFBundleDocumentTypes"] if markdown in claim["LSItemContentTypes"]]
+        self.assertEqual([claim.get("CFBundleTypeIconSystemGenerated") for claim in claims], [True])
+        declarations = [declaration for declaration in info["UTImportedTypeDeclarations"]
+                        if declaration["UTTypeIdentifier"] == markdown]
+        self.assertEqual(len(declarations), 1)
+        # The badge has to name an image that actool put into Assets.car.
+        self.assertEqual(declarations[0]["UTTypeIcons"]["UTTypeIconBadgeName"], info["CFBundleIconName"])
+
     def test_missing_app_icon_fails_without_creating_a_bundle(self):
         project = self.root / "project"
         (project / "Tools").mkdir(parents=True)
