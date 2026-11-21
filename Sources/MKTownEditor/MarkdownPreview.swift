@@ -328,7 +328,7 @@ struct MarkdownPreview: View {
         }
         }
         .environment(\.colorScheme, theme.colorScheme ?? colorScheme)
-        .background(theme.background.map { Color(nsColor: $0) } ?? Color.clear)
+        .background(theme.previewBackground.map { Color(nsColor: $0) } ?? Color.clear)
         .task(id: remoteImageWork) {
             let work = remoteImageWork
             remoteImages.setEnabled(work.isEnabled)
@@ -1520,7 +1520,9 @@ struct PreviewUpdateControls: View {
             .buttonStyle(.borderless)
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
-            .background(Color(nsColor: .controlBackgroundColor))
+            // 「システム」のプレビューの白い背景（GitHub風）と同化しないよう、バーの素材と区切り線で分ける。
+            .background(.bar)
+            .overlay(alignment: .bottom) { Divider() }
             .accessibilityElement(children: .contain)
         }
     }

@@ -482,7 +482,7 @@ enum MarkdownRenderer {
             }
             if intent.contains(.code) {
                 font = .monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
-                result.addAttribute(.backgroundColor, value: NSColor.controlBackgroundColor, range: range)
+                result.addAttribute(.backgroundColor, value: PreviewTheme.systemPreviewCodeBackground, range: range)
             }
             if intent.contains(.strikethrough) {
                 result.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)

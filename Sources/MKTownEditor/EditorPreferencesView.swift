@@ -122,7 +122,7 @@ struct EditorPreferencesView: View {
                     PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
                 }
                 Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: \.editorTheme) }
-                Text("既定はGitHub風（ダーク）です。「システム」はmacOSの外観に合わせます。テーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。")
+                Text("既定の「システム」は紺の背景で表示します。ほかのテーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("行番号を表示", isOn: binding(\.showsLineNumbers, default: true))
                 Toggle("行を折り返す", isOn: binding(\.wrapsLines))

@@ -12,15 +12,17 @@ final class EditorThemeTests: XCTestCase {
 
     // MARK: - 設定
 
-    func testUnsavedSettingsUseDarkEditorThemeAndKeepPreviewDefault() throws {
+    func testUnsavedSettingsUseNavySystemEditorThemeAndKeepPreviewDefault() throws {
         let (defaults, suite) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
         let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
 
         XCTAssertNil(store.app.editorTheme)
-        XCTAssertEqual(store.app.effectiveEditorTheme, .preset(.githubDark))
-        XCTAssertEqual(store.app.effectiveEditorTheme.colorScheme, .dark)
-        XCTAssertEqual(EditorThemePalette(theme: store.app.effectiveEditorTheme).appearanceName, .darkAqua)
+        XCTAssertEqual(store.app.effectiveEditorTheme, .system)
+        XCTAssertEqual(store.app.effectiveEditorTheme.editorColors.colorScheme, .dark)
+        let palette = EditorThemePalette(theme: store.app.effectiveEditorTheme)
+        XCTAssertEqual(palette.appearanceName, .darkAqua)
+        XCTAssertEqual(palette.background, DeclarativeExtension.Theme.parse("#283264"))
         // プレビューの既定は従来どおり「システム」。
         XCTAssertNil(store.app.previewTheme)
     }
@@ -38,12 +40,12 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(reopened.app.effectiveEditorTheme, .preset(.nord))
         XCTAssertNil(reopened.app.previewTheme)
 
-        // 明示的に選んだ「システム」は、既定のダーク系に戻らない。
+        // 明示的に選んだ以前の既定（GitHub風（ダーク））は、新しい既定の「システム」に置き換わらない。
         settings = reopened.app
-        settings.editorTheme = .system
+        settings.editorTheme = .preset(.githubDark)
         reopened.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
-            .app.effectiveEditorTheme, .system)
+            .app.effectiveEditorTheme, .preset(.githubDark))
     }
 
     func testEditorThemeIsStoredWithTheSameEncodingAsPreviewTheme() throws {
@@ -80,7 +82,7 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(settings.extensionPackages?.count, 1)
 
         settings.removeExtension("example.theme")
-        XCTAssertNil(settings.editorTheme, "編集画面は既定のダーク系に戻る")
+        XCTAssertNil(settings.editorTheme, "編集画面は既定の「システム」に戻る")
         XCTAssertEqual(settings.previewTheme, .system)
         XCTAssertEqual(settings.extensionPackages, [])
     }
@@ -88,18 +90,19 @@ final class EditorThemeTests: XCTestCase {
     // MARK: - 配色
 
     func testEveryThemeGivesReadableEditorColors() throws {
-        for theme in PreviewTheme.allCases where theme != .system {
+        for theme in PreviewTheme.allCases {
             let palette = EditorThemePalette(theme: theme)
             let background = palette.background
-            XCTAssertEqual(palette.background, theme.background, theme.title)
-            XCTAssertEqual(palette.appearanceName, theme.colorScheme == .dark ? .darkAqua : .aqua, theme.title)
+            XCTAssertEqual(palette.background, theme.editorColors.background, theme.title)
+            XCTAssertEqual(palette.appearanceName, theme.editorColors.colorScheme == .dark ? .darkAqua : .aqua,
+                           theme.title)
             let roles: [MarkdownSyntaxSpan.Role] = [.heading, .code, .link, .marker, .quoteMarker, .listMarker,
                                                     .taskMarker, .tableMarker] +
                 CodeSyntaxToken.allCases.map(MarkdownSyntaxSpan.Role.codeToken)
             for color in [palette.text, palette.lineNumber] + roles.map(palette.color(for:)) {
                 XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, background), 4.5, theme.title)
             }
-            let selection = try XCTUnwrap(palette.selection, theme.title)
+            let selection = palette.selection
             XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.text, selection), 4.5, theme.title)
             // 標準のテーマでは本文の色が選択色に対しても読めるため、補正されない。
             XCTAssertEqual(palette.selectedText, palette.text, theme.title)
@@ -169,7 +172,7 @@ final class EditorThemeTests: XCTestCase {
             code: "#000000", link: "#000000", codeBackground: "#FFFFFF")
         XCTAssertNoThrow(try theme.validate())
         let palette = EditorThemePalette(theme: .extensionTheme(theme))
-        let selection = try XCTUnwrap(palette.selection)
+        let selection = palette.selection
         // 本文の色は背景には足りるが、選択色には足りない。
         XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.text, palette.background), 4.5)
         XCTAssertLessThan(PreviewTypography.contrastRatio(palette.text, selection), 4.5)
@@ -178,18 +181,51 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, selection)
     }
 
-    func testSystemPaletteKeepsAppearanceFollowingColors() {
+    /// 「システム」はGitHub風（ダーク）の文字色を紺（#283264）の背景に載せ、macOSの外観によらずダークの外観で表示する。
+    func testSystemPaletteUsesNavyBackgroundWithGitHubDarkColors() throws {
         let palette = EditorThemePalette(theme: .system)
+        let github = PreviewThemePreset.githubDark.theme
+        let navy = try XCTUnwrap(DeclarativeExtension.Theme.parse("#283264"))
         XCTAssertEqual(palette, .system)
-        XCTAssertNil(palette.appearanceName)
-        XCTAssertNil(palette.selection)
-        XCTAssertNil(palette.insertionPoint)
-        XCTAssertEqual(palette.background, .textBackgroundColor)
-        XCTAssertEqual(palette.text, .textColor)
-        XCTAssertEqual(palette.heading, .systemBlue)
-        XCTAssertEqual(palette.color(for: .codeToken(.keyword)), CodeSyntaxPalette.color(for: .keyword))
-        XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, .selectedTextBackgroundColor)
-        XCTAssertEqual(palette.selectedTextAttributes[.foregroundColor] as? NSColor, .selectedTextColor)
+        XCTAssertEqual(palette.theme, .system, "設定の値は「システム」のまま保つ")
+        XCTAssertEqual(palette.background, navy)
+        XCTAssertEqual(palette.appearanceName, .darkAqua)
+        XCTAssertEqual(palette.text, github.color(\.body))
+        // リンク色 #4493F8 とコメント色 #9198A1 は紺の背景で4.5:1に届かない（約3.9:1、約4.2:1）ため、明度を補正する。
+        let link = try XCTUnwrap(github.color(\.link))
+        let comment = try XCTUnwrap(github.syntaxColor(for: .comment))
+        XCTAssertLessThan(PreviewTypography.contrastRatio(link, navy), 4.5)
+        XCTAssertEqual(palette.link, EditorThemePalette.readable(link, on: navy))
+        XCTAssertEqual(palette.heading, palette.link, "見出しは本文と区別できるリンク色にする")
+        XCTAssertEqual(palette.marker, EditorThemePalette.readable(comment, on: navy))
+        // 補正の要らない字句の色はGitHub風（ダーク）のまま使う。
+        XCTAssertEqual(palette.color(for: .codeToken(.keyword)), github.syntaxColor(for: .keyword))
+        XCTAssertEqual(palette.insertionPoint, palette.text)
+        let roles: [MarkdownSyntaxSpan.Role] = [.heading, .code, .link, .marker, .quoteMarker, .listMarker,
+                                                .taskMarker, .tableMarker] +
+            CodeSyntaxToken.allCases.map(MarkdownSyntaxSpan.Role.codeToken)
+        for color in [palette.text, palette.lineNumber] + roles.map(palette.color(for:)) {
+            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, navy), 4.5)
+        }
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.selectedText, palette.selection), 4.5)
+        XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, palette.selection)
+
+        // 外観がライトでも同じ紺の配色になる（動的な色を使わない）。
+        let light = try XCTUnwrap(NSAppearance(named: .aqua))
+        var resolved: NSColor?
+        light.performAsCurrentDrawingAppearance { resolved = palette.background.usingColorSpace(.sRGB) }
+        XCTAssertEqual(resolved, navy)
+    }
+
+    /// 編集画面の隣のミニマップも、「システム」では紺の背景とダークの外観にそろえる。
+    func testSystemEditorSurfaceUsesNavyColors() {
+        XCTAssertEqual(PreviewTheme.system.editorColors.background, DeclarativeExtension.Theme.parse("#283264"))
+        XCTAssertEqual(PreviewTheme.system.editorColors.colorScheme, .dark)
+        // プレビュー用の「システム」の色は従来どおり定めない（文字色はmacOSの色に従う）。
+        XCTAssertNil(PreviewTheme.system.background)
+        XCTAssertNil(PreviewTheme.system.bodyColor)
+        // 「システム」以外のテーマは編集画面でもそのテーマの色を使う。
+        XCTAssertEqual(PreviewTheme.preset(.nord).editorColors, .preset(.nord))
     }
 
     func testHighlighterUsesPaletteColors() {
@@ -199,7 +235,7 @@ final class EditorThemeTests: XCTestCase {
         MarkdownSyntaxHighlighter.apply(to: view, palette: palette)
         XCTAssertEqual(color(at: 2, in: view), palette.heading)
         MarkdownSyntaxHighlighter.apply(to: view)
-        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
     }
 
     func testCoordinatorRecolorsSameSourceWhenPaletteChanges() {
@@ -209,7 +245,7 @@ final class EditorThemeTests: XCTestCase {
         let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string), model: MarkdownEditorModel())
         coordinator.textView = view
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: 2, in: view), .systemBlue)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
 
         let palette = EditorThemePalette(theme: .preset(.dracula))
         coordinator.palette = palette
@@ -281,10 +317,11 @@ final class EditorThemeTests: XCTestCase {
         defer { windows.forEach { $0.close() } }
         let scrollViews = try windows.map { try XCTUnwrap(findScrollView(in: $0.host)) }
 
-        // 初回起動（設定なし）はダーク系の既定テーマ。
+        // 初回起動（設定なし）は既定の「システム」（紺の背景）。
         for scrollView in scrollViews {
             try assertApplied(EditorThemePalette(theme: EditorThemePalette.defaultTheme), to: scrollView)
         }
+        XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua)
 
         for theme in [PreviewTheme.preset(.githubLight), .paper, .system] {
             var settings = store.app
@@ -297,6 +334,6 @@ final class EditorThemeTests: XCTestCase {
                 try assertApplied(EditorThemePalette(theme: theme), to: scrollView)
             }
         }
-        XCTAssertNil(scrollViews[0].appearance, "「システム」はmacOSの外観に従う")
+        XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua, "「システム」は紺の背景に合わせてダークの外観にする")
     }
 }

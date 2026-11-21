@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
@@ -113,5 +114,35 @@ final class PreviewAccessibilityTests: XCTestCase {
 
     func testPlainDocumentKeepsNativeSelectablePreview() {
         XCTAssertFalse(PreviewAccessibility.requiresStructuredView(MarkdownAnalysis("段落\n\n次の段落").blocks))
+    }
+
+    /// 一時停止中の帯は、「システム」のプレビューの白い背景（GitHub風）に置いても境目が見えること。
+    /// 以前は帯の背景が `controlBackgroundColor`（ライト外観では白）で、白いプレビューと同化した。
+    func testPausedBarStaysDistinctOnWhiteSystemPreviewBackground() throws {
+        let updates = PreviewUpdateController()
+        updates.pause(source: "# a")
+        let height: CGFloat = 40
+        let root = PreviewUpdateControls(updates: updates, source: "# a")
+            .frame(width: 400, height: height, alignment: .top)
+            .background(Color(nsColor: try XCTUnwrap(PreviewTheme.system.previewBackground)))
+        let host = NSHostingView(rootView: root)
+        host.appearance = NSAppearance(named: .aqua)
+        host.frame = NSRect(x: 0, y: 0, width: 400, height: height)
+        host.layoutSubtreeIfNeeded()
+        let bitmap = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: bitmap)
+        // 文字は幅の一部にしかないため、幅いっぱいに白でない行（区切り線や帯の面）があるかで境目を判定する。
+        // 帯の背景が白い `controlBackgroundColor` で区切り線もなかった以前の版では、そのような行はない。
+        func isWhite(_ x: Int, _ y: Int) -> Bool {
+            guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { return true }
+            return 0.2126 * color.redComponent + 0.7152 * color.greenComponent + 0.0722 * color.blueComponent > 0.985
+        }
+        let columns = Array(stride(from: 0, to: bitmap.pixelsWide, by: 4))
+        let distinctRows = (0..<bitmap.pixelsHigh).filter { y in
+            columns.filter { !isWhite($0, y) }.count > columns.count * 9 / 10
+        }
+        XCTAssertFalse(distinctRows.isEmpty, "一時停止中の帯が白いプレビューと同化している")
+        // 帯の下のプレビューの背景は白のまま。
+        XCTAssertTrue(isWhite(bitmap.pixelsWide / 2, bitmap.pixelsHigh - 1))
     }
 }

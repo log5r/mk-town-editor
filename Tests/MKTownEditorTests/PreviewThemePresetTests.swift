@@ -180,4 +180,51 @@ final class PreviewThemePresetTests: XCTestCase {
         }
         XCTAssertEqual(names, ["Plain Light", "Soft Dark"])
     }
+
+    // MARK: - 「システム」のプレビューの背景
+
+    private func resolved(_ color: NSColor, in name: NSAppearance.Name) throws -> NSColor? {
+        let appearance = try XCTUnwrap(NSAppearance(named: name))
+        var result: NSColor?
+        appearance.performAsCurrentDrawingAppearance { result = color.usingColorSpace(.sRGB) }
+        return result
+    }
+
+    /// 「システム」のプレビューは、外観がライトならGitHub風（ライト）、ダークならGitHub風（ダーク）の背景にする。
+    func testSystemPreviewBackgroundMatchesGitHubStyleForEachAppearance() throws {
+        let background = try XCTUnwrap(PreviewTheme.system.previewBackground)
+        XCTAssertEqual(try resolved(background, in: .aqua), PreviewThemePreset.githubLight.theme.color(\.background))
+        XCTAssertEqual(try resolved(background, in: .darkAqua), PreviewThemePreset.githubDark.theme.color(\.background))
+        // 文字色はmacOSの色のまま。背景の明暗が外観に従うため、本文の色が読める。
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            let text = try XCTUnwrap(try resolved(.textColor, in: name))
+            let surface = try XCTUnwrap(try resolved(background, in: name))
+            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(text, surface), 4.5, name.rawValue)
+        }
+        // ほかのテーマはテーマの背景を使い、「システム」の色を定めない値は従来どおり。
+        XCTAssertEqual(PreviewTheme.preset(.nord).previewBackground, PreviewTheme.preset(.nord).background)
+        XCTAssertEqual(PreviewTheme.paper.previewBackground, PreviewTheme.paper.background)
+        XCTAssertNil(PreviewTheme.system.background)
+    }
+
+    /// 白い背景でも行内コードの範囲が見えるよう、GitHub風のコード背景を敷く。
+    func testSystemInlineCodeBackgroundStaysVisibleOnPreviewBackground() throws {
+        let output = MarkdownRenderer.render("text `code`")
+        let location = (output.string as NSString).range(of: "code").location
+        let codeBackground = try XCTUnwrap(output.attribute(.backgroundColor, at: location, effectiveRange: nil) as? NSColor)
+        XCTAssertEqual(codeBackground, PreviewTheme.systemPreviewCodeBackground)
+        let background = try XCTUnwrap(PreviewTheme.system.previewBackground)
+        XCTAssertEqual(try resolved(codeBackground, in: .aqua), PreviewThemePreset.githubLight.theme.color(\.codeBackground))
+        XCTAssertEqual(try resolved(codeBackground, in: .darkAqua), PreviewThemePreset.githubDark.theme.color(\.codeBackground))
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            XCTAssertNotEqual(try resolved(codeBackground, in: name), try resolved(background, in: name), name.rawValue)
+            let text = try XCTUnwrap(try resolved(.textColor, in: name))
+            let surface = try XCTUnwrap(try resolved(codeBackground, in: name))
+            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(text, surface), 4.5, name.rawValue)
+        }
+        // テーマを選ぶと、行内コードの背景はテーマのコード背景に置き換わる。
+        let themed = PreviewTypography.themed(output, kind: .paragraph, theme: .preset(.nord))
+        XCTAssertEqual(themed.attribute(.backgroundColor, at: location, effectiveRange: nil) as? NSColor,
+                       PreviewTheme.preset(.nord).codeBackground)
+    }
 }
