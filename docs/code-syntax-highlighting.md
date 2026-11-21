@@ -81,7 +81,7 @@ JavaScript・TypeScript・TSX・Rubyは[Tree-sitter](tree-sitter-integration.md)
 | 変数 | シェル・PHPの`$name`、Rubyの`@name`・`:symbol`、HTMLの文字参照 |
 | 追加行・削除行 | Diffの`+`行・`-`行 |
 
-配色はXcodeの標準テーマに近い色です。システム配色では明るい外観と暗い外観で色を切り替え、紙色テーマでは紙色の背景向けの濃い色を使います。どの配色もコード背景に対して4.5:1以上のコントラストを保ちます（`CodeSyntaxHighlighterTests.testPalettesMeetTextContrastAgainstCodeBackgrounds`）。拡張テーマではテーマ作者が指定したコード色だけで表示します。テーマのコード色は背景との7:1のコントラストを検証済みですが、字句ごとの色はその保証を持たないためです。
+配色はXcodeの標準テーマに近い色です。システム配色では明るい外観と暗い外観で色を切り替え、紙色テーマでは紙色の背景向けの濃い色を使います。どの配色もコード背景に対して4.5:1以上のコントラストを保ちます（`CodeSyntaxHighlighterTests.testPalettesMeetTextContrastAgainstCodeBackgrounds`）。標準装備の配色（GitHub風、Tomorrow、Dracula、Nord）は配色ごとの字句の色を持ちます。カスタムテーマは `syntax` で字句の色を指定でき、指定のない字句はテーマのコード色で表示します。字句の色は読み込み時にコード背景との4.5:1のコントラストを検査します（[プレビューの配色](preview-themes.md)）。
 
 HTML書き出しでは字句を`<span class="tok-keyword">`のように囲み、スタイルシートで色を指定します。画面表示用のHTMLは`prefers-color-scheme`で暗い外観の色に切り替えます。PDFと印刷は紙に出すため、明るい外観の色だけを使います。
 

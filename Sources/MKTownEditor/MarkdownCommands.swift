@@ -397,6 +397,15 @@ struct MarkdownCommands: Commands {
             .disabled(previewUpdateActions == nil)
             Button("一時停止中のプレビューを更新") { previewUpdateActions?.refresh() }
                 .disabled(previewUpdateActions?.isStale != true)
+            Picker("プレビューの配色", selection: Binding(
+                get: { settingsStore.app.previewTheme ?? .system },
+                set: { theme in
+                    var settings = settingsStore.app
+                    settings.previewTheme = theme
+                    settingsStore.setAppSettings(settings)
+                })) {
+                PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
+            }
         }
         CommandMenu("書き出し") {
             Button("HTML…") { exportHTMLAction?() }

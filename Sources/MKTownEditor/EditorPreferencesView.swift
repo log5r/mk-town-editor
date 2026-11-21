@@ -141,12 +141,11 @@ struct EditorPreferencesView: View {
         Form {
             Section("表示") {
                 Picker("配色", selection: binding(\.previewTheme, default: .system)) {
-                    ForEach(PreviewTheme.allCases +
-                        (settingsStore.app.extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) },
-                        id: \.self) { theme in
-                        Text(theme.title).tag(theme)
-                    }
+                    PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
                 }
+                Button("カスタムテーマを読み込む…") { importExtension(selectsTheme: true) }
+                Text("「システム」はmacOSの外観に合わせます。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。")
+                    .font(.caption).foregroundStyle(.secondary)
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
                 }
@@ -288,17 +287,18 @@ struct EditorPreferencesView: View {
         .formStyle(.grouped)
     }
 
-    private func importExtension() {
+    /// `selectsTheme` が真なら、読み込んだ拡張のテーマをそのままプレビューの配色に選ぶ。
+    private func importExtension(selectsTheme: Bool = false) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.canChooseDirectories = false
         panel.beginAttached { response in
             guard response == .OK, let url = panel.url else { return }
-            loadExtension(from: url)
+            loadExtension(from: url, selectsTheme: selectsTheme)
         }
     }
 
-    private func loadExtension(from url: URL) {
+    private func loadExtension(from url: URL, selectsTheme: Bool = false) {
         do {
             let package = try DeclarativeExtension.load(from: url)
             var settings = settingsStore.app
@@ -308,6 +308,7 @@ struct EditorPreferencesView: View {
                 settings.previewTheme = package.theme.map(PreviewTheme.extensionTheme) ?? .system
             }
             settings.extensionPackages = (settings.extensionPackages ?? []).filter { $0.id != package.id } + [package]
+            if selectsTheme, let theme = package.theme { settings.previewTheme = .extensionTheme(theme) }
             settingsStore.setAppSettings(settings)
         } catch { extensionError = error.localizedDescription }
     }
