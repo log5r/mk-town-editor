@@ -410,7 +410,13 @@ struct MarkdownPreview: View {
     private func inlineText(_ rendered: NSAttributedString) -> some View {
         // SwiftUI Text drops NSTextAttachment when bridging to AttributedString.
         // Keep formula and image attachments in AppKit, including inside tables and notes.
-        if rendered.requiresAppKitText {
+        if PreviewAppKitIndent.containsListIndent(rendered) {
+            // 複数のブロックをまとめた文字列（コールアウト）の入れ子のリスト。`Text` は字下げを無視するため、
+            // 範囲選択を保ったまま `NSTextView` で字下げを表す。
+            HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered), source: markdown,
+                          context: documentContext, loadsExternalPages: loadsExternalLinkPreviews,
+                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme))
+        } else if rendered.requiresAppKitText {
             HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
                           loadsExternalPages: loadsExternalLinkPreviews,
                           linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme))
@@ -462,14 +468,21 @@ struct MarkdownPreview: View {
             .accessibilityAddTraits(.isHeader)
             .accessibilityLabel(PreviewAccessibility.headingLabel(level: level, text: rendered.string))
         } else {
-            inlineText(rendered)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // リスト項目と続きの段落の字下げは、文字列の段落スタイルではなく行の余白で表す。
+            PreviewIndentedLayout(layout: PreviewIndentedText.make(rendered), scale: CGFloat(zoom),
+                                  marker: { inlineText($0) }, content: { inlineText($0) })
         }
     }
 
     private func taskView(_ block: MarkdownBlock, task: MarkdownTask,
                           in analysis: MarkdownAnalysis) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
+                                          zoom: zoom, showsTaskPrefix: false,
+                                          remoteRevision: resourceRevision, theme: theme)
+        let layout = PreviewIndentedText.make(rendered)
+        // チェックボックスを行頭記号の位置に置き、入れ子の深さを行の余白で表す。
+        // 位置は深さから求める。本文が空のタスクは描画結果が空になり、字下げを読み取れないため。
+        return HStack(alignment: .top, spacing: 8) {
             Toggle(task.isChecked ? "完了" : "未完了", isOn: Binding(
                 get: { task.isChecked },
                 set: { _ in onToggleTask?(block.sourceRange.location) }
@@ -479,12 +492,16 @@ struct MarkdownPreview: View {
             .accessibilityLabel(PreviewAccessibility.taskLabel(task.content))
             .disabled(onToggleTask == nil)
 
-            let rendered = renderCache.render(block, in: analysis, context: renderContext(for: analysis),
-                                              zoom: zoom, showsTaskPrefix: false,
-                                              remoteRevision: resourceRevision, theme: theme)
-            inlineText(rendered)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .top, spacing: 0) {
+                // 番号付きのタスクは番号（`1.  `）を行頭記号として持ち、チェックボックスの後ろに置く。
+                if let marker = layout.marker {
+                    inlineText(marker).fixedSize()
+                }
+                inlineText(layout.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+        .padding(.leading, PreviewIndentedText.taskCheckboxIndent(for: block) * CGFloat(zoom))
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -559,18 +576,23 @@ private extension NSAttributedString {
     }
 }
 
-private struct HoverLinkText: NSViewRepresentable {
+/// `NSTextView` で描く選択可能な文字列。リンクのホバー表示を持つ。
+/// 埋め込み文書とコールアウトの入れ子のリストも、段落スタイルの字下げを効かせるためにこれで描く。
+struct HoverLinkText: NSViewRepresentable {
     @Environment(\.openURL) private var openURL
     let rendered: NSAttributedString
     let source: String
     let context: DocumentContext
     let loadsExternalPages: Bool
     var linkAttributes = PreviewLinkStyle.textViewAttributes(for: .system)
+    /// 行の左右の余白。`Text` で描く周りの文字や縦線と左端をそろえる箇所では0にする。
+    var lineFragmentPadding: CGFloat = 5
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> HoverPreviewTextView {
         let view = HoverPreviewTextView()
+        view.textContainer?.lineFragmentPadding = lineFragmentPadding
         view.isEditable = false
         view.isSelectable = true
         view.drawsBackground = false
@@ -731,6 +753,57 @@ struct PreviewQuotedCodeBlock<Content: View>: View {
     }
 }
 
+/// 字下げした段落（`PreviewIndentedText`）を、行頭の余白と行頭記号の列で配置する。
+/// `Text` は段落スタイルの字下げを無視するため、入れ子のリストの深さはこの余白で表す。
+/// 本文の左端は深さだけで決まり、折り返した行や項目の続きの段落と同じ位置にそろう。
+struct PreviewIndentedLayout<Marker: View, Content: View>: View {
+    var layout: PreviewIndentedText
+    /// 文字の拡大率。字下げの幅も文字と同じ割合で広げる。
+    var scale: CGFloat = 1
+    @ViewBuilder var marker: (NSAttributedString) -> Marker
+    @ViewBuilder var content: (NSAttributedString) -> Content
+
+    var body: some View {
+        if let markerText = layout.marker {
+            HStack(alignment: .top, spacing: 0) {
+                PreviewMarkerColumn(width: layout.markerWidth * scale) {
+                    marker(markerText)
+                }
+                content(layout.body)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, layout.markerIndent * scale)
+        } else {
+            content(layout.body)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, layout.bodyIndent * scale)
+        }
+    }
+}
+
+/// 行頭記号の列。記号は列の中で左寄せし、列より広い記号（`10.  `、`12345.  ` など）は左へはみ出させる。
+/// 本文を右へ押さないため、同じ項目の続きの段落（`applyContinuationIndent`）と本文の左端がそろう。
+struct PreviewMarkerColumn: Layout {
+    var width: CGFloat
+
+    /// 列の左端から見た記号の位置。列に収まれば0、収まらなければ負（左へはみ出す）。
+    static func markerOffset(markerWidth: CGFloat, columnWidth: CGFloat) -> CGFloat {
+        min(0, columnWidth - markerWidth)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: width, height: subviews.first?.sizeThatFits(.unspecified).height ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let marker = subviews.first else { return }
+        let size = marker.sizeThatFits(.unspecified)
+        marker.place(at: CGPoint(x: bounds.minX + Self.markerOffset(markerWidth: size.width, columnWidth: width),
+                                 y: bounds.minY),
+                     proposal: ProposedViewSize(size))
+    }
+}
+
 enum PreviewAccessibility {
     static func requiresStructuredView(_ blocks: [MarkdownBlock]) -> Bool {
         blocks.contains { block in
@@ -866,7 +939,9 @@ private struct MarkdownTextPreview: NSViewRepresentable {
             analysis.map { MarkdownRenderer.render($0, documentContext: documentContext) }
                 ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         }
-        textView.textStorage?.setAttributedString(PreviewTypography.scaled(rendered, by: zoom))
+        // 引用の中のリストの字下げと、幅の広い行頭記号の下の本文の位置をそろえる。
+        textView.textStorage?.setAttributedString(
+            PreviewAppKitIndent.aligned(PreviewTypography.scaled(rendered, by: zoom)))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom

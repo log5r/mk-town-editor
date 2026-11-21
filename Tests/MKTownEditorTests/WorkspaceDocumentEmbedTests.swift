@@ -247,7 +247,7 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
             let segments = WorkspaceEmbedSegment.render(analysis,
                 documentContext: DocumentContext(fileURL: nil, preservesSoftLineBreaks: enabled))
             guard case let .text(text) = segments.first else { return XCTFail("Missing text segment") }
-            XCTAssertEqual(String(text.characters), enabled ? "first\nsecond" : "first second")
+            XCTAssertEqual(text.string, enabled ? "first\nsecond" : "first second")
             guard case let .codeBlock(_, code, _) = segments.last else { return XCTFail("Missing code segment") }
             XCTAssertEqual(String(code.characters), "a\nb")
         }
@@ -278,8 +278,7 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
             XCTAssertEqual(backgrounds, 0)
         }
 
-        guard case let .text(text) = segments.first else { return XCTFail("\(segments)") }
-        let inline = try NSAttributedString(text, including: \.appKit)
+        guard case let .text(inline) = segments.first else { return XCTFail("\(segments)") }
         let location = (inline.string as NSString).range(of: "inline").location
         XCTAssertNotNil(inline.attribute(.backgroundColor, at: location, effectiveRange: nil))
     }
