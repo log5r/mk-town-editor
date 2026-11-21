@@ -218,7 +218,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         let selections = textView.selectedRanges.map(\.rangeValue)
         textView.clearFolds()
-        textView.string = text
+        textView.replaceEditorText(with: text)
         textView.refreshInvisibles()
         context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
@@ -673,6 +673,51 @@ private final class EditorScrollView: NSScrollView {
 
 extension NSTextView {
     var editorSource: String { (self as? EditorTextView)?.sourceText ?? string }
+
+    /// 編集コマンドで文字列を書き換える。新しい文字は置き換える位置の属性を引き継ぎ、フォントだけを本文フォントにする。
+    ///
+    /// `NSTextStorage.replaceCharacters(in:with: String)` は、置換範囲の先頭の文字（範囲が空なら直前の文字）の
+    /// 属性を新しい文字へ引き継ぐ。本文フォントにない日本語などの文字には AppKit が代替フォント（ヒラギノ）を
+    /// 割り当てるため、フォントまで引き継ぐと、日本語の直後で Return を押して続けたリスト記号や日本語を囲んだ
+    /// 強調記号が代替フォントで描かれ、記号の幅が本文フォントの約半分になる。
+    ///
+    /// 入力属性（`typingAttributes`）は丸ごと付けない。⌃⌘← などで変えた書字方向や文字方向が入力属性に残り、
+    /// キャレットを動かしても戻らないため、書き換えた段落の方向と揃えが変わる。段落スタイルは段落の先頭の文字で
+    /// 決まるので、挿入先の段落のものを付ける。
+    /// 呼び出し元はマーク付きテキスト（IMEの変換中）がないことを確認する。変換中の入力属性は代替フォントになり得る。
+    func replaceEditorCharacters(in range: NSRange, with replacement: String) {
+        guard let storage = textStorage else { return }
+        storage.replaceCharacters(in: range, with: NSAttributedString(
+            string: replacement, attributes: editorAttributes(replacing: range, in: storage)))
+    }
+
+    /// 外部からの変更（ファイルの再読み込みや別の文書への切り替え）で全文を置き換える。
+    /// 開いたとき（`makeNSView`）と同じく本文フォントと文字色だけを付け、段落スタイルと文字方向は付けない。
+    /// 元の段落と対応しない全文に、キャレット位置や先頭の文字の属性を広げないためである。
+    func replaceEditorText(with text: String) {
+        guard let storage = textStorage else { return }
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        attributes[.font] = typingAttributes[.font]
+        attributes[.foregroundColor] = typingAttributes[.foregroundColor]
+        storage.replaceCharacters(in: NSRange(location: 0, length: storage.length),
+                                  with: NSAttributedString(string: text, attributes: attributes))
+    }
+
+    private func editorAttributes(replacing range: NSRange,
+                                  in storage: NSTextStorage) -> [NSAttributedString.Key: Any] {
+        // 空の本文には引き継ぐ文字がない。キー入力と同じく入力属性を付ける。
+        guard storage.length > 0 else { return typingAttributes }
+        let source = range.length > 0 || range.location == 0 ? range.location : range.location - 1
+        var attributes = storage.attributes(at: min(source, storage.length - 1), effectiveRange: nil)
+        // 段落の先頭に空の範囲で挿入すると、直前の文字は前の段落の改行になる。
+        let paragraphStart = (storage.string as NSString)
+            .paragraphRange(for: NSRange(location: range.location, length: 0)).location
+        if paragraphStart < storage.length {
+            attributes[.paragraphStyle] = storage.attribute(.paragraphStyle, at: paragraphStart, effectiveRange: nil)
+        }
+        if let font = typingAttributes[.font] { attributes[.font] = font }
+        return attributes
+    }
 
     /// Reapplying AppKit settings can reset feedback in an active find session.
     func updateEditorEditability(_ editable: Bool) {
