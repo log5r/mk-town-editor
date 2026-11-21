@@ -36,4 +36,34 @@ final class WorkspaceToolbarTests: XCTestCase {
             XCTAssertEqual(source.components(separatedBy: "toolbarItem(.\(item)").count - 1, 1, "\(item)")
         }
     }
+
+    // MARK: - ツールバーの背景（Liquid Glass）
+
+    @MainActor
+    func testToolbarBackgroundIsOpaqueOnlyWithoutLiquidGlass() {
+        XCTAssertEqual(WorkspaceToolbarBackground.policy(usesLiquidGlass: false), .opaqueWindowBackground)
+        XCTAssertEqual(WorkspaceToolbarBackground.policy(usesLiquidGlass: true), .systemGlass)
+        if #available(macOS 26, *) {
+            XCTAssertEqual(WorkspaceToolbarBackground.current, .systemGlass)
+        } else {
+            XCTAssertEqual(WorkspaceToolbarBackground.current, .opaqueWindowBackground)
+        }
+        XCTAssertEqual(WorkspaceToolbarBackgroundModifier().background, .current)
+    }
+
+    /// 不透明な帯を直接指定すると、macOS 26以降でもシステムのガラスの帯を塗りつぶす。背景は方針を通してだけ指定する。
+    func testWorkspaceAppliesToolbarBackgroundOnlyThroughThePolicy() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Sources/MKTownEditor/EditorWorkspace.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let policy = try XCTUnwrap(source.range(of: "struct WorkspaceToolbarBackgroundModifier"))
+        let body = try XCTUnwrap(source.range(of: "/// ForEach cannot provide individually customizable toolbar items."))
+        let outside = String(source[..<policy.lowerBound]) + String(source[body.lowerBound...])
+        XCTAssertFalse(outside.contains(".toolbarBackground("))
+        XCTAssertFalse(outside.contains(".toolbarBackgroundVisibility("))
+        XCTAssertEqual(source.components(separatedBy: ".modifier(WorkspaceToolbarBackgroundModifier())").count - 1, 1)
+        // ツールバーの項目に独自のガラスを重ねない（システムが描く）。
+        XCTAssertFalse(source.contains(".buttonStyle(.glass"))
+        XCTAssertFalse(source.contains(".glassEffect("))
+    }
 }

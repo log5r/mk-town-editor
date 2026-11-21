@@ -62,6 +62,21 @@ fi
 plutil -lint -s "$bundle/Contents/Info.plist"
 printf 'APPL????' > "$bundle/Contents/PkgInfo"
 
+# AppKit picks the look (Liquid Glass or the older compatibility look) from the SDK version the
+# executable records, not from the SDK it was compiled against. SwiftPM links through clang with
+# --sysroot, from which clang does not read the SDK version, so the version falls back to the
+# deployment target unless the link also gets -isysroot (start.sh passes it). Refuse a binary that
+# claims an older major SDK than the active one. See docs/swiftpm-sdk-version.md.
+sdk_version=$(xcrun --sdk macosx --show-sdk-version)
+recorded_versions=$(xcrun vtool -show-build "$products/$executable_name" | awk '$1 == "sdk" { print $2 }')
+for recorded in $recorded_versions; do
+    if (( ${recorded%%.*} < ${sdk_version%%.*} )); then
+        echo "$0: $products/$executable_name records SDK $recorded, older than the active SDK $sdk_version;" >&2
+        echo "the app would run in the compatibility look. Link with -isysroot (see start.sh)." >&2
+        exit 1
+    fi
+done
+
 cp -- "$products/$executable_name" "$bundle/Contents/MacOS/$executable_name"
 shopt -s nullglob
 for resources in "$products"/*.bundle; do

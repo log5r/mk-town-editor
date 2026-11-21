@@ -88,6 +88,43 @@ enum WorkspaceToolbarItem: String, CaseIterable {
     }
 }
 
+/// ウインドウのツールバーの背景の方針。判断と検証は docs/hig-ux-decisions.md の「ツールバー」を参照。
+enum WorkspaceToolbarBackground: Equatable {
+    /// macOS 14・15：左右のペイン（紺のエディタと白いプレビュー）にまたがる1枚の不透明な帯にする。
+    case opaqueWindowBackground
+    /// macOS 26以降：背景を指定せず、システムのLiquid Glassのツールバーに任せる。
+    /// 不透明な色を指定すると、システムが描く半透明の帯とスクロールエッジ効果を色で塗りつぶすため指定しない。
+    /// ボタン・メニュー・表示モードのセグメントのガラスもシステムが描くため、独自のガラスは重ねない。
+    case systemGlass
+
+    static func policy(usesLiquidGlass: Bool) -> Self {
+        usesLiquidGlass ? .systemGlass : .opaqueWindowBackground
+    }
+
+    /// 実行中のmacOSでの方針。Liquid GlassはmacOS 26以降のSDKでリンクしたアプリだけに描かれる
+    /// （docs/swiftpm-sdk-version.md）。
+    static var current: Self {
+        if #available(macOS 26, *) { return policy(usesLiquidGlass: true) }
+        return policy(usesLiquidGlass: false)
+    }
+}
+
+/// `WorkspaceToolbarBackground` をウインドウのツールバーに適用する。
+struct WorkspaceToolbarBackgroundModifier: ViewModifier {
+    var background: WorkspaceToolbarBackground = .current
+
+    func body(content: Content) -> some View {
+        switch background {
+        case .opaqueWindowBackground:
+            content
+                .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
+                .toolbarBackground(.visible, for: .windowToolbar)
+        case .systemGlass:
+            content
+        }
+    }
+}
+
 /// ForEach cannot provide individually customizable toolbar items.
 /// Keep these declarations in the same order as EditorCommand.toolbar.
 struct EditorFormattingToolbar<Content: View>: CustomizableToolbarContent {
@@ -660,9 +697,8 @@ struct EditorWorkspace: View {
                 }
             }
             .onDisappear { documentOperation?.cancel() }
-            // Use one system toolbar background across both editor panes.
-            .toolbarBackground(Color(nsColor: .windowBackgroundColor), for: .windowToolbar)
-            .toolbarBackground(.visible, for: .windowToolbar)
+            // macOS 14・15は左右のペインで1枚の不透明な帯、macOS 26以降はシステムのLiquid Glassにする。
+            .modifier(WorkspaceToolbarBackgroundModifier())
         .sheet(isPresented: $showingGitHistory) {
             if let fileURL { GitHistorySheet(fileURL: fileURL) }
         }

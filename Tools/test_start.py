@@ -38,6 +38,8 @@ class StartScriptTests(unittest.TestCase):
             'exit "$BUILD_STATUS"\n'
         ))
         self.write_executable(binary_dir / "open", RECORDER + 'exit "$OPEN_STATUS"\n')
+        self.sdk = "/SDKs/Mac OS X.sdk"
+        self.write_executable(binary_dir / "xcrun", f'#!/bin/bash\necho "{self.sdk}"\n')
         self.write_executable(self.project / "Tools" / "make-app-bundle.sh",
                               RECORDER + 'exit "$BUNDLE_STATUS"\n')
         self.environment = {
@@ -71,10 +73,16 @@ class StartScriptTests(unittest.TestCase):
     def call(self, name, *arguments):
         return f"{self.project}|{name}|{''.join(f'[{argument}]' for argument in arguments)}"
 
+    def link_flags(self):
+        """clang records the SDK version only from -isysroot; SwiftPM links with --sysroot."""
+        return ["-Xswiftc", "-Xclang-linker", "-Xswiftc", "-isysroot",
+                "-Xswiftc", "-Xclang-linker", "-Xswiftc", self.sdk]
+
     def launch_calls(self, *documents):
         return [
-            self.call("swift", "build", "--configuration", "release"),
-            self.call("swift", "build", "--configuration", "release", "--show-bin-path"),
+            self.call("swift", "build", "--configuration", "release", *self.link_flags()),
+            self.call("swift", "build", "--configuration", "release", *self.link_flags(),
+                      "--show-bin-path"),
             self.call("make-app-bundle.sh", str(self.products), str(self.app)),
             self.call("open", "-a", str(self.app), *documents),
         ]

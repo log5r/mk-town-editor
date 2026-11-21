@@ -49,6 +49,19 @@ Human Interface Guidelinesから外れていたUXを2026-10に直した。各項
 
 ID・名前・シンボル・既定表示の有無を `WorkspaceToolbarItem` にまとめた。既定で表示するのは表示モード、書式（太字・斜体・リンク）、分割配置、別ウインドウのプレビュー、「書き出し・公開」「履歴」「文章ツール」メニューだけ。個別のボタンは「ツールバーをカスタマイズ」から追加できる。`WorkspaceToolbarTests` はシンボルの重複（書式コマンドと表示モードを含む）と、共有を意味する `square.and.arrow.up` の使用を検出する。
 
+### Liquid Glass（2026-11-22）
+
+macOS 26以降では、ツールバーのボタン・メニュー・表示モードのセグメントと帯の描き方を、システムの標準のLiquid Glassに任せる。HIGのとおり、ツールバーの項目に `.buttonStyle(.glass)` や `glassEffect` を自分で重ねない（システムが項目をガラスのカプセルにまとめるため、重ねると二重になる）。
+
+- **ガラスにならなかった原因**：`./start.sh` のビルドは、実行ファイルがSDKの版として14.0を記録しており、AppKitが互換表示で描いていた。ツールバーの不透明な背景は原因ではなかった。`start.sh` でリンクに `-isysroot` を渡して直した（[SwiftPMのビルドがLiquid Glassで描かれない](swiftpm-sdk-version.md)）。SDK 27.2を記録した版では、不透明な背景を指定したままでも項目はガラスのカプセルで描かれた。
+- **ツールバーの背景**：方針を `WorkspaceToolbarBackground`（`EditorWorkspace.swift`）に切り出した。macOS 14・15は従来どおり `windowBackgroundColor` の不透明な帯を `.visible` で敷き、紺のエディタと白いプレビューにまたがる1枚の帯にする。macOS 26以降（`.systemGlass`）は背景を指定しない。不透明な色を指定すると、システムが描く半透明の帯とスクロールエッジ効果を色で塗りつぶすと考えられるためである（外した版との見比べは実機では未確認）。適用は `WorkspaceToolbarBackgroundModifier` だけで行う。
+- **採らなかった案**
+  - 項目ごとの `.buttonStyle(.glass)`、`GlassEffectContainer`、`ToolbarSpacer`、`sharedBackgroundVisibility`：システムが標準で同じまとめ方をするため、重ねる理由がない。グループの分け方を変えたくなったときに `ToolbarSpacer` を検討する。
+  - 本文をツールバーの下まで広げて透かす（`ignoresSafeArea` とスクロールビューの `contentInsets`）：エディタとプレビューは `NSScrollView` で、ツールバーにはみ出さないよう `clipsToBounds = true` にしている（`EditorScrollClippingTests`）。下へ広げると、行番号のルーラー、スクロール同期、タイプライタースクロール、ミニマップの座標がすべて上端の余白を考慮する必要があり、実機で確かめられないまま入れるには影響が大きい。紺と白の2色の内容が透けると、帯の左右で色が変わる問題も出る。今回は広げず、帯の下にはウインドウの背景が見える。
+  - `scrollEdgeEffectStyle` / `backgroundExtensionEffect`：SwiftUIの `ScrollView` と内容がツールバーの下に入るときに効く。本文を広げない今の構成では効果がないため使っていない。
+- **テスト**：`WorkspaceToolbarTests` が、Liquid Glassの有無と方針の対応、実行中のOSでの方針、`EditorWorkspace.swift` が方針を通さずに `toolbarBackground` を指定しないこと、ツールバーに独自のガラスを使わないことを確かめる。
+- **実機での確認**：2026-11-22にmacOS 27.2のライト外観で、SDK 27.2を記録したReleaseビルド（バンドルIDを変えたコピー）を起動し、不透明な背景を指定したままの版でプレビュー表示のツールバーがガラスのカプセルで描かれることを見た。修正前（SDK 14.0）の版は従来の見た目だった。不透明な背景を外した版（`.systemGlass`）の見た目、本文のある書類の分割表示、ダーク外観は、画面操作が中断されたため確認していない。
+
 ## 設定ウインドウ（#52）
 
 `Settings` を `TabView` のタブ（一般・エディタ・プレビュー・校正・スニペット・拡張・キーボード）に分けた。記録したキーのうち、AppKitが私用領域の文字（U+F700〜U+F8FF）で表す矢印・ファンクション・Home/End・Pageキーは割り当てない。⌘←などをメニューに取られると、エディタの標準のカーソル移動ができなくなる。以前の版で保存した割り当てが、後の版でメニューに固定したキー（⌥⌘Rなど）と重なる場合は、固定のメニュー項目を優先する。設定値はバインディングから直接 `EditorSettingsStore` に書き込み、保存ボタンはない。ショートカットは `ShortcutRecorderView` でキー入力を記録して適用する。保存形式は[キーボードショートカットの割り当て方針](keyboard-shortcuts.md#記録したキーの保存形式52)を参照。行番号は `AppEditorSettings.showsLineNumbers` から `EditorLayoutOptions` を通じて `rulersVisible` に反映する。

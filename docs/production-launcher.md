@@ -16,8 +16,8 @@ Swift Packageの実行ファイルはアプリバンドルではなく、Info.pl
 `start.sh` は次の順に処理する。
 
 1. 第1引数が `rebuild` なら `swift package clean` を実行する。
-2. `swift build --configuration release` でビルドし、`--show-bin-path` で成果物のディレクトリを得る。
-3. `Tools/make-app-bundle.sh` でアプリバンドルを組み立て、アドホック署名する。
+2. `swift build --configuration release` でビルドし、`--show-bin-path` で成果物のディレクトリを得る。リンクには `-isysroot` を渡し、実行ファイルに使ったSDKの版を記録させる。これがないとmacOS 26以降でもLiquid Glassで描かれない（[SwiftPMのビルドがLiquid Glassで描かれない](swiftpm-sdk-version.md)）。
+3. `Tools/make-app-bundle.sh` でアプリバンドルを組み立て、アドホック署名する。実行ファイルが記録したSDKのメジャー版が使っているSDKより古ければ、組み立てずに失敗する。
 4. `open -a .build/MKTownEditor.app` で起動する。残りの引数に書類を渡すと、その書類を開く。表示は設定の「書類を開いたときの表示」に従い、既定ではプレビューで始まる（[設計判断](hig-ux-decisions.md#書類を開いたときの表示)）。相対パスは `start.sh` を実行したディレクトリを基準に解決する。存在しないパスやディレクトリを渡すと、ビルドせずに使い方を表示して終了する。
 
 ```sh
