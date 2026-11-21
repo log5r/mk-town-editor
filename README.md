@@ -137,7 +137,9 @@ CIと同じチェック（Pythonのスクリプトテスト、Swiftの全ユニ�
 bash Tools/ci.sh
 ```
 
-CIでは`Package.resolved`に固定した依存ライブラリを使い、テスト失敗時はReleaseビルドへ進みません。[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。実行ログはActionsの`ci-results`から7日間ダウンロードできます。
+このコマンドは3つのチェックを順に実行し、失敗した時点で止まります。`bash Tools/ci.sh test`のように`python`・`test`・`release`を指定すると、そのチェックだけを実行します。
+
+[GitHub ActionsのCI](.github/workflows/ci.yml)は`main`へのpush・Pull Request・手動実行時にmacOS 27 / Xcode 27.0で動作します。`xcode-27` runnerは公開プレビュー扱いです。CIでは`Package.resolved`に固定した依存ライブラリを使い、上の3つのチェックとiOSのコンパイルを別々のジョブで並列に実行します。依存ライブラリの取得結果は`Package.resolved`ごとにキャッシュします。実行ログはActionsの`ci-results-`で始まるジョブごとのアーティファクトから7日間ダウンロードできます。実行時間の内訳と短縮策は[CIの実行時間と短縮策](docs/ci-performance.md)にまとめています。
 
 CIではiOSアプリとiOSユニットテストのコンパイルも検査します。Duoシミュレータでのテスト実行手順は[iOS版の検証](docs/iphone-duo-support.md#検証)にあります。
 
