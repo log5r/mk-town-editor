@@ -109,6 +109,13 @@ enum PreviewListIndent {
         MarkdownRenderer.listMarkerIndent(depth: block.nestingDepth)
     }
 
+    /// 最後の行の後ろに空くはずの間隔（行間と段落の間隔）。`NSTextView` は最後の行ではこれを高さに含めない。
+    static func trailingSpacing(of text: NSAttributedString) -> CGFloat {
+        guard text.length > 0, let style = text.attribute(.paragraphStyle, at: text.length - 1,
+                                                          effectiveRange: nil) as? NSParagraphStyle else { return 0 }
+        return style.lineSpacing + style.paragraphSpacing
+    }
+
     /// 段落スタイルの字下げを除いた文字列。行の余白と二重にならないよう、`NSTextView` で描く場合も除く。
     static func withoutIndent(_ text: NSAttributedString) -> NSAttributedString {
         let range = NSRange(location: 0, length: text.length)
@@ -202,6 +209,10 @@ enum PreviewAppKitIndent {
             guard quoteRange.length > 0 || lineStart != 0 || body != 0 else { continue }
             let paragraphStyle = (style?.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
             if quoteRange.length > 0 {
+                // 引用記号は常に行頭の左に置く。右から左の文字で始まる段落も左から右へ書き、
+                // 縦線（`PreviewQuoteBars`）が深さごとに同じ位置に並び、折り返した行の本文と重ならないようにする。
+                // 本文の中の右から左の文字は、その向きのまま表示される。
+                paragraphStyle.baseWritingDirection = .leftToRight
                 let quoteWidth = layoutWidth(text.attributedSubstring(from: quoteRange))
                 addKern(lineStart, to: result, at: NSMaxRange(quoteRange) - 1)
                 paragraphStyle.firstLineHeadIndent = 0
@@ -257,6 +268,18 @@ enum PreviewAppKitIndent {
         var found = false
         text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
             if let style = value as? NSParagraphStyle, style.firstLineHeadIndent != 0 || style.headIndent != 0 {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
+    }
+
+    /// 引用記号（`│  `）を含むか。
+    nonisolated static func containsQuotePrefix(_ text: NSAttributedString) -> Bool {
+        var found = false
+        text.enumerateAttribute(.previewQuotePrefix, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+            if value != nil {
                 found = true
                 stop.pointee = true
             }
@@ -323,5 +346,117 @@ enum PreviewAppKitIndent {
         guard amount != 0, location >= 0, location < text.length else { return }
         let current = (text.attribute(.kern, at: location, effectiveRange: nil) as? NSNumber)?.doubleValue ?? 0
         text.addAttribute(.kern, value: current + Double(amount), range: NSRange(location: location, length: 1))
+    }
+}
+
+/// `NSTextView` で描く文字列の中の、引用の縦線。
+///
+/// `MarkdownRenderer.quote` は引用の各行の先頭に引用記号（`│  `）を文字として付ける。文字の高さは行の高さより短く、
+/// そのまま描くと行間と段落の間隔で線が途切れ、破線に見える。折り返した行には記号がなく、線が欠ける。
+/// `HoverPreviewTextView` は記号の縦線の文字を `NSLayoutManager` の一時属性で透明にし（`hideGlyphs`）、
+/// 同じ位置に段落の高さいっぱいの線を図形で描く。文字列（`NSTextStorage`）は変えないため、位置合わせ、範囲選択、
+/// コピーで得る文字列とリッチテキストの文字色は変わらない。
+@MainActor
+enum PreviewQuoteBars {
+    static let lineWidth: CGFloat = 1
+    nonisolated static let barCharacter: unichar = 0x2502
+
+    struct Bar: Equatable {
+        var rect: NSRect
+        var color: NSColor
+    }
+
+    /// 段落の先頭の引用記号に含まれる縦線の文字の位置。数が引用の深さになる。
+    /// 属性と文字だけから求め、レイアウトを起こさない。
+    nonisolated static func barCharacters(in text: NSAttributedString, paragraph: NSRange) -> [Int] {
+        guard paragraph.length > 0, NSMaxRange(paragraph) <= text.length else { return [] }
+        var prefix = NSRange(location: paragraph.location, length: 0)
+        guard text.attribute(.previewQuotePrefix, at: paragraph.location, longestEffectiveRange: &prefix,
+                             in: paragraph) != nil else { return [] }
+        let source = text.string as NSString
+        return (prefix.location..<NSMaxRange(prefix)).filter { source.character(at: $0) == barCharacter }
+    }
+
+    /// 引用記号の縦線の文字を含むか。
+    nonisolated static func containsBars(_ text: NSAttributedString) -> Bool {
+        let source = text.string as NSString
+        var found = false
+        text.enumerateAttribute(.previewQuotePrefix, in: NSRange(location: 0, length: text.length)) { value, range, stop in
+            guard value != nil else { return }
+            if source.range(of: "\u{2502}", options: .literal, range: range).location != NSNotFound {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
+    }
+
+    /// 引用記号の縦線の文字を、表示のときだけ透明にする。前に付けた一時属性は外してから付け直す。
+    /// 文字列の文字色は変えないため、リッチテキストのコピーでは記号がもとの色で出る。
+    static func hideGlyphs(in layoutManager: NSLayoutManager) {
+        guard let storage = layoutManager.textStorage else { return }
+        let whole = NSRange(location: 0, length: storage.length)
+        layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: whole)
+        let source = storage.string as NSString
+        storage.enumerateAttribute(.previewQuotePrefix, in: whole) { value, range, _ in
+            guard value != nil else { return }
+            for index in range.location..<NSMaxRange(range) where source.character(at: index) == barCharacter {
+                layoutManager.addTemporaryAttribute(.foregroundColor, value: NSColor.clear,
+                                                    forCharacterRange: NSRange(location: index, length: 1))
+            }
+        }
+    }
+
+    /// `characterRange` にかかる段落の縦線。位置はテキストコンテナの座標系で返す。
+    /// 線は段落のすべての行（折り返した行と、後ろの行間・段落の間隔を含む）を通し、続く段落の線とつながる。
+    /// 引用の最後の段落では、後ろの段落の間隔へはみ出さないよう、文字のある高さで止める。
+    /// 色は記号の文字色（文字列の属性）を使う。
+    static func bars(in storage: NSTextStorage, layoutManager: NSLayoutManager, container: NSTextContainer,
+                     characterRange: NSRange) -> [Bar] {
+        guard storage.length > 0 else { return [] }
+        let source = storage.string as NSString
+        let clamped = NSIntersectionRange(characterRange, NSRange(location: 0, length: storage.length))
+        let scope = source.paragraphRange(for: clamped)
+        var result: [Bar] = []
+        var location = scope.location
+        while location < NSMaxRange(scope) {
+            let paragraph = source.paragraphRange(for: NSRange(location: location, length: 0))
+            location = NSMaxRange(paragraph)
+            let characters = barCharacters(in: storage, paragraph: paragraph)
+            guard !characters.isEmpty else { continue }
+            // 次の段落の引用の深さだけで、線が続くかが決まる。次の段落はレイアウトしない。
+            let following = location < source.length
+                ? barCharacters(in: storage, paragraph: source.paragraphRange(
+                    for: NSRange(location: location, length: 0))).count
+                : 0
+            var top = CGFloat.greatestFiniteMagnitude, bottom: CGFloat = 0, usedBottom: CGFloat = 0
+            let glyphs = layoutManager.glyphRange(forCharacterRange: paragraph, actualCharacterRange: nil)
+            layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { rect, used, _, _, _ in
+                top = min(top, rect.minY)
+                bottom = max(bottom, rect.maxY)
+                usedBottom = max(usedBottom, used.maxY)
+            }
+            guard top < bottom else { continue }
+            for (depth, index) in characters.enumerated() {
+                let color = storage.attribute(.foregroundColor, at: index, effectiveRange: nil) as? NSColor
+                let end = depth < following ? bottom : usedBottom
+                result.append(Bar(rect: NSRect(x: barX(at: index, in: paragraph, layoutManager: layoutManager),
+                                               y: top, width: lineWidth, height: end - top),
+                                  color: color ?? .tertiaryLabelColor))
+            }
+        }
+        return result
+    }
+
+    /// 縦線の文字の幅の中央。記号の後ろには必ず空白が続き、その文字の位置を右端とする。
+    /// 引用記号を持つ段落は左から右へ書く（`PreviewAppKitIndent.aligned`）ため、深さが同じなら段落によらず同じ位置になる。
+    private static func barX(at index: Int, in paragraph: NSRange, layoutManager: NSLayoutManager) -> CGFloat {
+        let glyph = layoutManager.glyphIndexForCharacter(at: index)
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        let start = layoutManager.location(forGlyphAt: glyph).x
+        let end = index + 1 < NSMaxRange(paragraph)
+            ? layoutManager.location(forGlyphAt: layoutManager.glyphIndexForCharacter(at: index + 1)).x : start
+        let center = line.minX + start + max(0, end - start) / 2
+        return (center - lineWidth / 2).rounded()
     }
 }

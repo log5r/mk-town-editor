@@ -99,10 +99,8 @@ final class PreviewListAlignmentTests: XCTestCase {
             let bullets = try positions(of: "•", in: view)
             XCTAssertEqual(bullets.count, 3)
             assertStrictlyIncreasing(bullets, by: 16)
-            // 見出しの行を含め、引用記号は字下げの影響を受けない。
-            let bars = try positions(of: "│", in: view)
-            XCTAssertEqual(bars.count, 4)
-            assertAllEqual(bars)
+            // 縦線は図形で引くため、文字列に引用記号を含めない（`PreviewBlockStyleTests`）。
+            XCTAssertFalse(view.string.contains("│"))
         }
     }
 
@@ -290,6 +288,55 @@ final class PreviewListAlignmentTests: XCTestCase {
                 windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
                 clickCount: 1, pressure: 1))
             XCTAssertNotEqual(view.menu(for: event)?.items.first?.title, String(localized: "原文へ移動"))
+        }
+    }
+
+    /// `view` の文脈メニューの先頭の「原文へ移動」を実行する。項目がなければ失敗にする。
+    @MainActor
+    private func performRevealSource(in view: NSTextView, file: StaticString = #filePath,
+                                     line: UInt = #line) throws {
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: view.window?.windowNumber ?? 0, context: nil, eventNumber: 0,
+            clickCount: 1, pressure: 1), file: file, line: line)
+        let menu = try XCTUnwrap(view.menu(for: event), file: file, line: line)
+        XCTAssertEqual(menu.items.first?.title, String(localized: "原文へ移動"), file: file, line: line)
+        guard menu.items.first?.title == String(localized: "原文へ移動") else { return }
+        menu.performActionForItem(at: 0)
+    }
+
+    /// 不具合: 入れ子のリストや引用を含むコールアウトは `NSTextView` で描くが、「原文へ移動」を渡しておらず、
+    /// 右クリックで出なかった。コールアウトのブロックの範囲を示す。
+    @MainActor
+    func testCalloutTextViewContextMenuOffersRevealSource() throws {
+        let title = MarkdownCalloutKind.note.title
+        for (source, needle) in [("> [!note]\n> - alpha\n> - bravo\n", "\(title)\n•  alpha\n•  bravo"),
+                                 ("> [!note]\n> body\n>\n> > nested\n", "nested")] {
+            let analysis = MarkdownAnalysis(source)
+            let callout = try XCTUnwrap(analysis.blocks.first { $0.calloutKind != nil })
+            var revealed: [NSRange] = []
+            try hosted(Support.preview(source, onRevealSource: { revealed.append($0) })) { host in
+                let view = try XCTUnwrap(textViews(in: host).first { $0.string.contains(needle) }, source)
+                try performRevealSource(in: view)
+            }
+            XCTAssertEqual(revealed, [callout.sourceRange], source)
+        }
+    }
+
+    /// 同じ原因: リンクを含む見出し・段落・表のセルも `NSTextView` で描き、「原文へ移動」が出なかった。
+    @MainActor
+    func testLinkedTextViewsContextMenuOfferRevealSource() throws {
+        let source = "# [Head](https://example.com/h)\n\n[Para](https://example.com/p)\n\n| A |\n| --- |\n| [Cell](https://example.com/c) |\n"
+        let analysis = MarkdownAnalysis(source)
+        for needle in ["Head", "Para", "Cell"] {
+            let block = try XCTUnwrap(analysis.blocks.first {
+                needle == "Cell" ? $0.table != nil : $0.content.contains(needle)
+            }, needle)
+            var revealed: [NSRange] = []
+            try hosted(Support.preview(source, onRevealSource: { revealed.append($0) })) { host in
+                try performRevealSource(in: Support.textView(needle, in: host))
+            }
+            XCTAssertEqual(revealed, [block.sourceRange], needle)
         }
     }
 }

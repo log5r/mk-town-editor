@@ -177,8 +177,12 @@ enum MarkdownRenderer {
         case codeBlock(MarkdownBlock)
     }
 
+    ///
+    /// - Parameter quotesText: 文章の部分の各行に引用記号（`│  `）を付けるか。
+    ///   構造化プレビューは縦線を図形で引くため付けない。入れ子の引用の引用記号は常に付く。
     static func renderCalloutSegments(_ block: MarkdownBlock, in analysis: MarkdownAnalysis,
-                                      documentContext: DocumentContext) -> [CalloutSegment] {
+                                      documentContext: DocumentContext,
+                                      quotesText: Bool = true) -> [CalloutSegment] {
         guard let callout = block.calloutKind else {
             return [.text(renderCallout(block, in: analysis, documentContext: documentContext))]
         }
@@ -210,7 +214,7 @@ enum MarkdownRenderer {
                 if index > 0 { content.append(NSAttributedString(string: "\n")) }
                 content.append(item.text)
             }
-            segments.append(.text(quote(content)))
+            segments.append(.text(quotesText ? quote(content) : content))
             pending = []
             isFirstText = false
         }
@@ -696,12 +700,17 @@ enum MarkdownRenderer {
     /// 深さ `depth` のリスト項目の本文の左端。項目の続きの段落（深さ `depth + 1`）も同じ位置にそろう。
     nonisolated static func listBodyIndent(depth: Int) -> CGFloat { CGFloat(32 + depth * 24) }
 
+    /// リスト項目の行間。項目の間にも同じ間隔だけを空け、段落の間隔は足さない。
+    /// `Text` は段落スタイルの行間を無視して約19ptの間隔で行を並べる。`NSTextView`（行の高さ18pt）で描く項目も
+    /// 同じ間隔になるようにし、コールアウトの中と外、折り返した行と次の項目で間隔をそろえる。
+    nonisolated static let listLineSpacing: CGFloat = 1
+
     private static func applyListIndent(to text: NSMutableAttributedString, depth: Int) {
         let paragraph = NSMutableParagraphStyle()
         paragraph.firstLineHeadIndent = listMarkerIndent(depth: depth)
         paragraph.headIndent = listBodyIndent(depth: depth)
-        paragraph.lineSpacing = 3
-        paragraph.paragraphSpacing = 4
+        paragraph.lineSpacing = listLineSpacing
+        paragraph.paragraphSpacing = 0
         text.addAttribute(.paragraphStyle, value: paragraph, range: NSRange(location: 0, length: text.length))
     }
 
