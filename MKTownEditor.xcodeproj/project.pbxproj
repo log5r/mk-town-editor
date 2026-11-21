@@ -172,6 +172,7 @@
 		A10000000000000000000204 /* TreeSitterTypeScript in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000004 /* TreeSitterTypeScript */; };
 		A10000000000000000000205 /* TreeSitterRuby in Frameworks */ = {isa = PBXBuildFile; productRef = C10000000000000000000005 /* TreeSitterRuby */; };
 		A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AC47 /* ApplicationActivation.swift */; };
+		A1000000000000000000AD04 /* EditorWindowRestoration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD04 /* EditorWindowRestoration.swift */; };
 		A1000000000000000000AD01 /* PanelPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD01 /* PanelPresentation.swift */; };
 		A1000000000000000000AD02 /* SplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD02 /* SplitDividerHandle.swift */; };
 		A1000000000000000000AD03 /* ListKeyboardSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD03 /* ListKeyboardSelection.swift */; };
@@ -359,6 +360,7 @@
 		A200000000000000000000B2 /* PreviewUserScrollObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreviewUserScrollObserver.swift; sourceTree = "<group>"; };
 		A200000000000000000000B3 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A2000000000000000000AC47 /* ApplicationActivation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationActivation.swift; sourceTree = "<group>"; };
+		A2000000000000000000AD04 /* EditorWindowRestoration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorWindowRestoration.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD01 /* PanelPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPresentation.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD02 /* SplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitDividerHandle.swift; sourceTree = "<group>"; };
 		A2000000000000000000AD03 /* ListKeyboardSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListKeyboardSelection.swift; sourceTree = "<group>"; };
@@ -522,6 +524,7 @@
 				A20000000000000000000061 /* Localizable.xcstrings */,
 				A20000000000000000000062 /* ExternalDocumentOpen.swift */,
 				A2000000000000000000AC47 /* ApplicationActivation.swift */,
+				A2000000000000000000AD04 /* EditorWindowRestoration.swift */,
 				A20000000000000000000063 /* MarkdownSafeHTML.swift */,
 				A20000000000000000000064 /* MarkdownMultiSelection.swift */,
 				A20000000000000000000065 /* MarkdownLinkHover.swift */,
@@ -946,6 +949,7 @@
 				A10000000000000000000060 /* EditorShortcuts.swift in Sources */,
 				A10000000000000000000062 /* ExternalDocumentOpen.swift in Sources */,
 				A1000000000000000000AC47 /* ApplicationActivation.swift in Sources */,
+				A1000000000000000000AD04 /* EditorWindowRestoration.swift in Sources */,
 				A10000000000000000000063 /* MarkdownSafeHTML.swift in Sources */,
 				A10000000000000000000064 /* MarkdownMultiSelection.swift in Sources */,
 				A10000000000000000000065 /* MarkdownLinkHover.swift in Sources */,
