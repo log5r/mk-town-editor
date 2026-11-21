@@ -72,6 +72,11 @@ struct EditorPreferencesView: View {
     private var generalPane: some View {
         Form {
             Section("書類") {
+                Picker("書類を開いたときの表示", selection: binding(\.documentOpeningMode, default: .default)) {
+                    ForEach(DocumentOpeningMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
                 Picker("添付ファイルの保存先", selection: binding(\.attachmentDirectory, default: .assets)) {
                     ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
                         Text(directory.title).tag(directory)

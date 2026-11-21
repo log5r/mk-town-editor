@@ -153,6 +153,7 @@ struct EditorWorkspace: View {
     @StateObject private var previewUpdates = PreviewUpdateController()
     @SceneStorage("editorMode") private var legacyMode: String?
     @State private var unsavedMode: EditorMode = .split
+    @State private var sessionMode = EditorSessionMode()
     @State private var toolbarInstanceID: EditorToolbarInstanceID
     @State private var pasteNeedsSave = false
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .detailOnly
@@ -283,12 +284,29 @@ struct EditorWorkspace: View {
         let data: Data
     }
 
+    private var displayedMode: EditorMode {
+        let saved = fileURL.map(settingsStore.mode(for:)) ?? unsavedMode
+        return sessionMode.resolve(saved: saved, opening: openingMode,
+                                   usesSavedMode: opensWithSavedMode)
+    }
+
+    /// The opening setting for a saved document; untitled documents keep the app's default mode.
+    private var openingMode: DocumentOpeningMode? {
+        fileURL == nil ? nil : settingsStore.app.effectiveDocumentOpeningMode
+    }
+
+    private var opensWithSavedMode: Bool {
+        guard let fileURL else { return false }
+        return documentLinkNavigation.hasPendingEditorPosition(for: fileURL)
+            || layoutActivation.isOpening(fileURL)
+    }
+
     private var mode: Binding<EditorMode> {
         Binding(
-            get: { fileURL.map(settingsStore.mode(for:)) ?? unsavedMode },
+            get: { displayedMode },
             set: { newMode in
-                let currentMode = fileURL.map(settingsStore.mode(for:)) ?? unsavedMode
-                if currentMode != newMode { editorModel.prepareForViewTransition() }
+                if displayedMode != newMode { editorModel.prepareForViewTransition() }
+                sessionMode.select()
                 if let fileURL {
                     settingsStore.setMode(newMode, for: fileURL)
                 } else {
@@ -1192,7 +1210,9 @@ struct EditorWorkspace: View {
         .onAppear {
             if !workspaceViewActive {
                 workspaceViewActive = true
+                sessionMode.open(opening: openingMode, usesSavedMode: opensWithSavedMode)
                 if let fileURL {
+                    layoutActivation.finishOpening(fileURL)
                     workspaceStore.registerOpenDocument(fileURL)
                     registerOpenBuffer(for: fileURL)
                 }
@@ -1363,6 +1383,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: layoutActivation.event?.id) { _, _ in
             guard let fileURL, let layout = layoutActivation.layout(for: fileURL) else { return }
+            layoutActivation.finishOpening(fileURL)
             applyNamedLayoutState(layout)
         }
         .onDisappear {

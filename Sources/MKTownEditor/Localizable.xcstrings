@@ -1,6 +1,36 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "書類を開いたときの表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When opening a document"
+          }
+        }
+      }
+    },
+    "常にプレビュー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always preview"
+          }
+        }
+      }
+    },
+    "前回の表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last used view"
+          }
+        }
+      }
+    },
     "Markdownの解釈" : {
       "localizations" : {
         "en" : {

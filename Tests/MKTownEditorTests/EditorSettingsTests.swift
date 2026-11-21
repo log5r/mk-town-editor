@@ -647,6 +647,28 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertTrue(store.hasDocumentState(for: unmounted))
     }
 
+    func testDocumentOpeningModeDefaultsToPreviewAndPersists() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertNil(store.app.documentOpeningMode)
+        XCTAssertEqual(store.app.effectiveDocumentOpeningMode, .alwaysPreview)
+        var settings = store.app
+        settings.documentOpeningMode = .lastUsed
+        store.setAppSettings(settings)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.effectiveDocumentOpeningMode, .lastUsed)
+    }
+
+    func testSettingsSavedBeforeDocumentOpeningModeExistedLoadWithTheDefault() throws {
+        let defaults = isolatedDefaults()
+        let old = #"{"app":{"defaultMode":"editor","fontSize":15,"lineSpacing":3,"wrapsLines":true},"folders":{},"documents":{}}"#
+        defaults.set(Data(old.utf8), forKey: "MKTownEditor.editorSettings.v1")
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(store.app.fontSize, 15, "the old settings were dropped instead of read")
+        XCTAssertEqual(store.app.defaultMode, .editor)
+        XCTAssertNil(store.app.documentOpeningMode)
+        XCTAssertEqual(store.app.effectiveDocumentOpeningMode, .alwaysPreview)
+    }
+
     private func isolatedDefaults() -> UserDefaults {
         let suite = "MKTownEditorTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

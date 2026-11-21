@@ -18,7 +18,7 @@ Swift Packageの実行ファイルはアプリバンドルではなく、Info.pl
 1. 第1引数が `rebuild` なら `swift package clean` を実行する。
 2. `swift build --configuration release` でビルドし、`--show-bin-path` で成果物のディレクトリを得る。
 3. `Tools/make-app-bundle.sh` でアプリバンドルを組み立て、アドホック署名する。
-4. `open -a .build/MKTownEditor.app` で起動する。残りの引数に書類を渡すと、その書類を開く。相対パスは `start.sh` を実行したディレクトリを基準に解決する。存在しないパスやディレクトリを渡すと、ビルドせずに使い方を表示して終了する。
+4. `open -a .build/MKTownEditor.app` で起動する。残りの引数に書類を渡すと、その書類を開く。表示は設定の「書類を開いたときの表示」に従い、既定ではプレビューで始まる（[設計判断](hig-ux-decisions.md#書類を開いたときの表示)）。相対パスは `start.sh` を実行したディレクトリを基準に解決する。存在しないパスやディレクトリを渡すと、ビルドせずに使い方を表示して終了する。
 
 ```sh
 ./start.sh                      # 差分ビルドして起動

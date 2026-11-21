@@ -270,6 +270,10 @@ struct AppEditorSettings: Codable, Equatable {
     var showsIndentGuides: Bool?
     var showsLineNumbers: Bool?
     var shortcutOverrides: [String: ShortcutChord]?
+    /// Missing in settings saved before the option existed; those read as `.default`.
+    var documentOpeningMode: DocumentOpeningMode?
+
+    var effectiveDocumentOpeningMode: DocumentOpeningMode { documentOpeningMode ?? .default }
 
     var effectiveSnippets: [EditorSnippet] {
         (snippets ?? []) + (extensionPackages ?? []).flatMap { package in
