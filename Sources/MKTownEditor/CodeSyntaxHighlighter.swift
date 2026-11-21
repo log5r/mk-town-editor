@@ -31,12 +31,12 @@ enum CodeSyntaxPalette {
     /// 外観に追従する色。編集画面とシステム配色のプレビューで使う。
     static func color(for token: CodeSyntaxToken) -> NSColor { dynamicColors[token]! }
 
-    /// プレビューテーマ用の色。拡張テーマは作者がコード色を決めるため `nil`（単色のまま）。
+    /// プレビューテーマ用の色。標準装備の配色とJSON拡張は、テーマが字句の色を定めていなければ `nil`（コード色のまま）。
     static func color(for token: CodeSyntaxToken, theme: PreviewTheme) -> NSColor? {
         switch theme {
         case .system: color(for: token)
         case .paper: paper[token].map(color)
-        case .extensionTheme: nil
+        case .preset, .extensionTheme: theme.definition?.syntaxColor(for: token)
         }
     }
 

@@ -412,9 +412,12 @@ struct MarkdownPreview: View {
         // Keep formula and image attachments in AppKit, including inside tables and notes.
         if rendered.requiresAppKitText {
             HoverLinkText(rendered: rendered, source: markdown, context: documentContext,
-                          loadsExternalPages: loadsExternalLinkPreviews)
+                          loadsExternalPages: loadsExternalLinkPreviews,
+                          linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme))
         } else {
+            // Text はリンクの文字色に属性の色ではなく tint を使う。
             Text(AttributedString(rendered)).textSelection(.enabled)
+                .tint(PreviewLinkStyle.tint(for: theme))
         }
     }
 
@@ -562,6 +565,7 @@ private struct HoverLinkText: NSViewRepresentable {
     let source: String
     let context: DocumentContext
     let loadsExternalPages: Bool
+    var linkAttributes = PreviewLinkStyle.textViewAttributes(for: .system)
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -593,6 +597,7 @@ private struct HoverLinkText: NSViewRepresentable {
         view.hoverDocumentContext = self.context
         view.hoverSource = source
         view.loadsExternalLinkPreviews = loadsExternalPages
+        view.linkTextAttributes = linkAttributes
         if !view.attributedString().isEqual(to: rendered) {
             view.textStorage?.setAttributedString(rendered)
             view.cancelHover()
@@ -620,6 +625,22 @@ private struct HoverLinkText: NSViewRepresentable {
             onOpenURL?(url)
             return true
         }
+    }
+}
+
+/// プレビューのリンクの色。
+/// `Text` は tint、`NSTextView` は `linkTextAttributes` でリンクを描き、どちらも文字列に付けた文字色を無視する。
+/// テーマのリンク色は文字列の属性に加えて、ここから両方の描画へ渡す。
+enum PreviewLinkStyle {
+    /// テーマのリンク色。システム配色では `nil` を返し、アクセントカラーのままにする。
+    static func tint(for theme: PreviewTheme) -> Color? {
+        theme.linkColor.map { Color(nsColor: $0) }
+    }
+
+    static func textViewAttributes(for theme: PreviewTheme) -> [NSAttributedString.Key: Any] {
+        [.foregroundColor: theme.linkColor ?? NSColor.linkColor,
+         .underlineStyle: NSUnderlineStyle.single.rawValue,
+         .cursor: NSCursor.pointingHand]
     }
 }
 

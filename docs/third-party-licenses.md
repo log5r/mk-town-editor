@@ -139,3 +139,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## プレビューの配色
+
+標準装備のプレビュー配色は、次のプロジェクトが公開している色の値に基づく。ファイルは同梱せず、色の値だけを `PreviewThemePreset` に定義している。いずれもMIT Licenseで、条文は上のtree-sitterの節と同じ。採用の判断と補正した色は[プレビューの配色](preview-themes.md#標準装備の配色の出典と権利)を参照。
+
+| 配色 | 著作権表示 | 出典 |
+| --- | --- | --- |
+| GitHub風 | Copyright (c) 2018 GitHub Inc. | [primer/primitives](https://github.com/primer/primitives/blob/main/LICENSE) |
+| GitHub風 | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com) | [github-markdown-css](https://github.com/sindresorhus/github-markdown-css/blob/main/license) |
+| Tomorrow / Tomorrow Night | Copyright (C) 2011 Chris Kempson | [tomorrow-theme](https://github.com/chriskempson/tomorrow-theme/blob/master/LICENSE.md) |
+| Dracula | Copyright (c) 2023 Dracula Theme | [dracula-theme](https://github.com/dracula/dracula-theme/blob/main/LICENSE) |
+| Nord | Copyright (c) 2016-present Sven Greb <development@svengreb.de> (https://www.svengreb.de) | [nord](https://github.com/nordtheme/nord/blob/develop/license) |

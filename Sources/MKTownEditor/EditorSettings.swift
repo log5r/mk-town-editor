@@ -64,9 +64,11 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
 enum PreviewTheme: Codable, Hashable, Sendable {
     case system
     case paper
+    case preset(PreviewThemePreset)
     case extensionTheme(DeclarativeExtension.Theme)
 
-    static let allCases: [Self] = [.system, .paper]
+    /// 標準装備の配色。設定とメニューの選択肢に、この順で並べる。
+    static let allCases: [Self] = [.system, .paper] + PreviewThemePreset.allCases.map(Self.preset)
 
     init(from decoder: Decoder) throws {
         let value = try decoder.singleValueContainer()
@@ -74,7 +76,11 @@ enum PreviewTheme: Codable, Hashable, Sendable {
             switch name {
             case "system": self = .system
             case "paper": self = .paper
-            default: throw DecodingError.dataCorruptedError(in: value, debugDescription: "Unknown theme")
+            default:
+                guard let preset = PreviewThemePreset(rawValue: name) else {
+                    throw DecodingError.dataCorruptedError(in: value, debugDescription: "Unknown theme")
+                }
+                self = .preset(preset)
             }
         } else {
             self = .extensionTheme(try value.decode(DeclarativeExtension.Theme.self))
@@ -86,6 +92,7 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         switch self {
         case .system: try value.encode("system")
         case .paper: try value.encode("paper")
+        case .preset(let preset): try value.encode(preset.rawValue)
         case .extensionTheme(let theme): try value.encode(theme)
         }
     }
@@ -94,7 +101,17 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         switch self {
         case .system: String(localized: "システム")
         case .paper: String(localized: "紙色")
+        case .preset(let preset): preset.title
         case .extensionTheme(let theme): theme.name
+        }
+    }
+
+    /// 色を16進数で定義するテーマ（標準装備の配色とJSON拡張）。システムと紙色は `nil`。
+    var definition: DeclarativeExtension.Theme? {
+        switch self {
+        case .system, .paper: nil
+        case .preset(let preset): preset.theme
+        case .extensionTheme(let theme): theme
         }
     }
 
@@ -102,42 +119,42 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.background)
+        case .preset, .extensionTheme: definition?.color(\.background)
         }
     }
     var bodyColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.18, green: 0.16, blue: 0.13, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.body)
+        case .preset, .extensionTheme: definition?.color(\.body)
         }
     }
     var headingColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.31, green: 0.19, blue: 0.11, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.heading)
+        case .preset, .extensionTheme: definition?.color(\.heading)
         }
     }
     var codeColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.34, green: 0.18, blue: 0.10, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.code)
+        case .preset, .extensionTheme: definition?.color(\.code)
         }
     }
     var linkColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.10, green: 0.22, blue: 0.38, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.link)
+        case .preset, .extensionTheme: definition?.color(\.link)
         }
     }
     var codeBackground: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.91, green: 0.87, blue: 0.79, alpha: 1)
-        case .extensionTheme(let theme): theme.color(\.codeBackground)
+        case .preset, .extensionTheme: definition?.color(\.codeBackground)
         }
     }
     var colorScheme: ColorScheme? {

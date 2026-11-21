@@ -11,6 +11,15 @@ struct DeclarativeExtension: Codable, Equatable, Identifiable {
         var code: String
         var link: String
         var codeBackground: String
+        /// コードブロックの字句ごとの色（`CodeSyntaxToken` の名前 → 16進数）。省略した字句は `code` の色で表示する。
+        var syntax: [String: String]? = nil
+
+        /// 本文とコードの文字に求めるコントラスト比（WCAG AA）。
+        static let minimumContrast = 4.5
+
+        func syntaxColor(for token: CodeSyntaxToken) -> NSColor? {
+            syntax?[token.rawValue].flatMap(Self.parse)
+        }
 
         func color(_ keyPath: KeyPath<Self, String>) -> NSColor? {
             Self.parse(self[keyPath: keyPath])
@@ -32,14 +41,21 @@ struct DeclarativeExtension: Codable, Equatable, Identifiable {
             let background = try Self.parse(background).unwrap(or: ExtensionError.invalidTheme)
             for value in [body, heading, code, link] {
                 let color = try Self.parse(value).unwrap(or: ExtensionError.invalidTheme)
-                guard PreviewTypography.contrastRatio(color, background) >= 7 else {
+                guard PreviewTypography.contrastRatio(color, background) >= Self.minimumContrast else {
                     throw ExtensionError.lowContrast
                 }
             }
             let codeBackground = try Self.parse(codeBackground).unwrap(or: ExtensionError.invalidTheme)
             let codeColor = try Self.parse(code).unwrap(or: ExtensionError.invalidTheme)
-            guard PreviewTypography.contrastRatio(codeColor, codeBackground) >= 7 else {
+            guard PreviewTypography.contrastRatio(codeColor, codeBackground) >= Self.minimumContrast else {
                 throw ExtensionError.lowContrast
+            }
+            for (name, value) in syntax ?? [:] {
+                guard CodeSyntaxToken(rawValue: name) != nil,
+                      let color = Self.parse(value) else { throw ExtensionError.invalidTheme }
+                guard PreviewTypography.contrastRatio(color, codeBackground) >= Self.minimumContrast else {
+                    throw ExtensionError.lowContrast
+                }
             }
         }
     }
@@ -89,7 +105,7 @@ struct DeclarativeExtension: Codable, Equatable, Identifiable {
             case .tooLarge: String(localized: "拡張ファイルは100KB以下にしてください。")
             case .invalidManifest: String(localized: "拡張ファイルの形式を確認してください。")
             case .invalidTheme: String(localized: "テーマの色指定を確認してください。")
-            case .lowContrast: String(localized: "テーマの文字色と背景色のコントラストを高くしてください。")
+            case .lowContrast: String(localized: "テーマの文字色と背景色のコントラストを4.5:1以上にしてください。")
             case .invalidSnippet: String(localized: "スニペットの短縮語と本文を確認してください。")
             }
         }

@@ -3110,12 +3110,62 @@
         }
       }
     },
-    "テーマの文字色と背景色のコントラストを高くしてください。" : {
+    "GitHub風（ライト）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Increase the contrast between the theme's text and background colors."
+            "value" : "GitHub-style (Light)"
+          }
+        }
+      }
+    },
+    "GitHub風（ダーク）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub-style (Dark)"
+          }
+        }
+      }
+    },
+    "プレビューの配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Color Theme"
+          }
+        }
+      }
+    },
+    "カスタムテーマを読み込む…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Custom Theme…"
+          }
+        }
+      }
+    },
+    "「システム」はmacOSの外観に合わせます。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“System” follows the macOS appearance. You can add color themes from JSON files and remove them in Extensions."
+          }
+        }
+      }
+    },
+    "テーマの文字色と背景色のコントラストを4.5:1以上にしてください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a contrast ratio of at least 4.5:1 between the theme's text and background colors."
           }
         }
       }

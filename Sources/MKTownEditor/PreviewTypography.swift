@@ -36,10 +36,20 @@ enum PreviewTypography {
         result.addAttribute(.foregroundColor, value: color, range: range)
         if kind == .codeBlock {
             // コードブロックの背景は文字ごとではなく、囲み枠（`PreviewCodeBlockFrame`）が受け持つ。
+            // 字句の色は種類ごとに一度だけ求める。16進数のテーマでは、範囲ごとに解釈し直さない。
+            var tokenColors: [CodeSyntaxToken: NSColor?] = [:]
             result.enumerateAttribute(.codeSyntaxToken, in: range) { value, subrange, _ in
-                guard let token = (value as? String).flatMap(CodeSyntaxToken.init(rawValue:)),
-                      let tokenColor = CodeSyntaxPalette.color(for: token, theme: theme) else { return }
-                result.addAttribute(.foregroundColor, value: tokenColor, range: subrange)
+                guard let token = (value as? String).flatMap(CodeSyntaxToken.init(rawValue:)) else { return }
+                let tokenColor: NSColor?
+                if let cached = tokenColors[token] {
+                    tokenColor = cached
+                } else {
+                    tokenColor = CodeSyntaxPalette.color(for: token, theme: theme)
+                    tokenColors[token] = tokenColor
+                }
+                if let tokenColor {
+                    result.addAttribute(.foregroundColor, value: tokenColor, range: subrange)
+                }
             }
         }
         result.enumerateAttribute(.link, in: range) { value, subrange, _ in
