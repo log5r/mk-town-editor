@@ -130,11 +130,14 @@ enum MarkdownMathRenderer {
         surrounding * fontScale
     }
 
-    /// HTMLに埋め込むPNGの画素密度（CSSの1pxあたりの画素数）。
+    /// HTMLに埋め込むPNGの標準の画素密度（CSSの1pxあたりの画素数）。
     /// Retinaの画面（2倍）と印刷（PDF。3倍で約288dpi）でぼやけないよう3倍にする。
     /// 数式の画像は余白が多く、PNGの圧縮が効くため、1倍に比べたファイルの増え方は小さい
     /// （`ax+b` を19.2pxで描いた場合、1倍723バイト・2倍882バイト・3倍982バイト）。
     nonisolated static let htmlPixelDensity: CGFloat = 3
+
+    /// 1つの数式に使う画素数の上限。8ビットRGBAの画素データで16 MiB。
+    private nonisolated static let maximumPixelCount = 2048 * 2048
 
     /// 描いた数式の画像と、画像の下端から数式のベースラインまでの高さ。
     struct Rendered {
@@ -262,13 +265,27 @@ enum MarkdownMathRenderer {
         return "<img class=\"math\" src=\"data:image/png;base64,\(png.base64EncodedString())\" alt=\"\(alt)\" style=\"\(style)\" width=\"\(Int(size.width))\" height=\"\(Int(size.height))\">"
     }
 
-    /// `image` を `density` 倍の画素で描いたPNG。画像の大きさ（`size`）はポイントのままにし、
+    /// 指定した密度で描くと上限を超える場合は、幅と高さを同じ倍率で縮める。
+    nonisolated static func bitmapDimensions(for size: NSSize, density: CGFloat) -> (width: Int, height: Int)? {
+        let width = ceil(size.width * density)
+        let height = ceil(size.height * density)
+        let pixelCount = width * height
+        guard density > 0, width >= 1, height >= 1, pixelCount.isFinite else { return nil }
+
+        let limit = CGFloat(maximumPixelCount)
+        // 短辺を最低1画素にしても上限に収まるよう、長辺も制限する。
+        let scale = min(1, sqrt(limit / pixelCount), limit / max(width, height))
+        return (max(1, Int(width * scale)), max(1, Int(height * scale)))
+    }
+
+    /// `image` を画素数の上限内で描いたPNG。画像の大きさ（`size`）はポイントのままにし、
     /// PNGの解像度の情報（3倍なら216dpi）から読み込み側が元の大きさを求められるようにする。
     /// 文字色は従来どおり、書き出すときのアプリの外観で決める。
     static func pngData(_ image: NSImage, density: CGFloat) -> Data? {
         let size = image.size
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(ceil(size.width * density)),
-                                         pixelsHigh: Int(ceil(size.height * density)), bitsPerSample: 8,
+        guard let pixels = bitmapDimensions(for: size, density: density),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels.width,
+                                         pixelsHigh: pixels.height, bitsPerSample: 8,
                                          samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
                                          colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
         // 描画の文脈は作った時点の `size` で倍率を決めるため、先に大きさ（ポイント）を設定する。
@@ -300,8 +317,8 @@ enum MarkdownMathRenderer {
                                 as? NSNumber).map({ CGFloat($0.doubleValue) }), offset < 0,
                   let image = (attachment.attachmentCell as? NSTextAttachmentCell)?.image ?? attachment.image
             else { return }
-            // 大きさは読み込みが決めた枠（HTMLの `width`・`height`）を使う。PNGは `htmlPixelDensity` 倍の画素で
-            // 描いてあり、読み込み方によっては画像の大きさが画素数になるため、画像の大きさは使わない。
+            // 大きさは読み込みが決めた枠（HTMLの `width`・`height`）を使う。
+            // 読み込み方によっては画像の大きさがPNGの画素数になるため、画像の大きさは使わない。
             let size = (attachment.attachmentCell as? NSTextAttachmentCell)?.cellSize() ?? image.size
             let replacement = NSTextAttachment()
             replacement.image = image

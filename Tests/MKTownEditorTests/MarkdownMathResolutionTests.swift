@@ -119,6 +119,52 @@ final class MarkdownMathResolutionTests: XCTestCase {
         }
     }
 
+    func testBitmapDimensionsAtMaximumFormulaSize() throws {
+        // fittingSize が4000ポイント未満でも、整数に切り上げた画像は4000ポイントになり得る。
+        let pixels = try XCTUnwrap(MarkdownMathRenderer.bitmapDimensions(
+            for: NSSize(width: 4000, height: 4000), density: 3))
+        XCTAssertEqual(pixels.width, 2048)
+        XCTAssertEqual(pixels.height, 2048)
+    }
+
+    func testBitmapDimensionsAtPixelBudgetBoundary() throws {
+        let under = try XCTUnwrap(MarkdownMathRenderer.bitmapDimensions(
+            for: NSSize(width: 1400, height: 332), density: 3))
+        XCTAssertEqual(under.width, 4200)
+        XCTAssertEqual(under.height, 996)
+
+        // 1ポイント増やすと上限を超える。縮小後の縦横を両方切り上げると、再び上限を超える。
+        for size in [NSSize(width: 1400, height: 333), NSSize(width: 333, height: 1400)] {
+            let pixels = try XCTUnwrap(MarkdownMathRenderer.bitmapDimensions(for: size, density: 3))
+            XCTAssertLessThanOrEqual(pixels.width * pixels.height, 2048 * 2048)
+            let horizontalDensity = CGFloat(pixels.width) / size.width
+            let verticalDensity = CGFloat(pixels.height) / size.height
+            XCTAssertGreaterThan(horizontalDensity, 2.99)
+            XCTAssertEqual(horizontalDensity, verticalDensity, accuracy: 1 / min(size.width, size.height))
+        }
+    }
+
+    func testHTMLEmbedsLargeFormulaAtItsOriginalPointSize() throws {
+        let formula = inline("ax+b")
+        let rendered = try XCTUnwrap(MarkdownMathRenderer.render(formula, fontSize: 600))
+        let size = rendered.image.size
+        let width = Int(size.width)
+        let height = Int(size.height)
+        XCTAssertGreaterThan(width * 3 * height * 3, 2048 * 2048)
+
+        let html = try XCTUnwrap(MarkdownMathRenderer.htmlImage(formula, fontSize: 600))
+        XCTAssertTrue(html.contains("width=\"\(width)\""))
+        XCTAssertTrue(html.contains("height=\"\(height)\""))
+        XCTAssertTrue(html.contains("vertical-align:\(MarkdownMathRenderer.cssLength(-rendered.baseline));"))
+        let source = try XCTUnwrap(html.components(separatedBy: "base64,").last?.components(separatedBy: "\"").first)
+        let data = try XCTUnwrap(Data(base64Encoded: source))
+        let png = try XCTUnwrap(NSBitmapImageRep(data: data))
+        let expected = try XCTUnwrap(MarkdownMathRenderer.bitmapDimensions(for: size, density: 3))
+        XCTAssertEqual(png.pixelsWide, expected.width)
+        XCTAssertEqual(png.pixelsHigh, expected.height)
+        XCTAssertLessThanOrEqual(png.pixelsWide * png.pixelsHigh, 2048 * 2048)
+    }
+
     func testPDFKeepsPointSizeAndExtraResolution() throws {
         let info = MarkdownPDFExporter.printInfo(destination:
             URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("resolution.pdf"))
