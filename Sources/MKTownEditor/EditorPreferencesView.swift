@@ -118,11 +118,8 @@ struct EditorPreferencesView: View {
                 }
             }
             Section("表示") {
-                Picker("配色", selection: binding(\.editorTheme, default: EditorThemePalette.defaultTheme)) {
-                    PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
-                }
-                Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: \.editorTheme) }
-                Text("既定の「システム」は紺の背景で表示します。ほかのテーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。")
+                themeControls(for: .editor)
+                Text("既定は紺色です。外観に合わせて切り替えると、macOSのライトとダークの外観でそれぞれ選んだ配色を使います。ほかのテーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("行番号を表示", isOn: binding(\.showsLineNumbers, default: true))
                 Toggle("行を折り返す", isOn: binding(\.wrapsLines))
@@ -151,11 +148,8 @@ struct EditorPreferencesView: View {
     private var previewPane: some View {
         Form {
             Section("表示") {
-                Picker("配色", selection: binding(\.previewTheme, default: .system)) {
-                    PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
-                }
-                Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: \.previewTheme) }
-                Text("「システム」はmacOSの外観に合わせます。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。")
+                themeControls(for: .preview)
+                Text("「システム」は切り替えをオフにしていても、macOSの外観に合わせて明るさが変わります。外観に合わせて切り替えると、ライトとダークの外観でそれぞれ選んだ配色を使います。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。")
                     .font(.caption).foregroundStyle(.secondary)
                 Stepper(value: binding(\.previewBodyWidth, default: 900), in: 560...1200, step: 40) {
                     Text("本文の最大幅: \(settingsStore.app.previewBodyWidth ?? 900) pt")
@@ -298,8 +292,39 @@ struct EditorPreferencesView: View {
         .formStyle(.grouped)
     }
 
+    /// 配色の選択。外観に合わせて切り替えるときはライト用とダーク用の2つ、切り替えないときは1つを出す。
+    @ViewBuilder
+    private func themeControls(for target: ThemeTarget) -> some View {
+        Toggle("macOSの外観に合わせて配色を切り替える", isOn: binding(target.followsAppearanceKeyPath, default: false))
+        if settingsStore.app.followsAppearance(for: target) {
+            Picker("ライト外観の配色", selection: themeBinding(for: target, slot: .light)) {
+                PreviewThemeOptions(target: target, customThemes: settingsStore.app.customPreviewThemes)
+            }
+            Picker("ダーク外観の配色", selection: themeBinding(for: target, slot: .dark)) {
+                PreviewThemeOptions(target: target, customThemes: settingsStore.app.customPreviewThemes)
+            }
+        } else {
+            Picker("配色", selection: themeBinding(for: target, slot: .fixed)) {
+                PreviewThemeOptions(target: target, customThemes: settingsStore.app.customPreviewThemes)
+            }
+        }
+        Button("カスタムテーマを読み込む…") { importExtension(selectingThemeFor: target) }
+    }
+
+    private func themeBinding(for target: ThemeTarget, slot: ThemeSlot) -> Binding<PreviewTheme> {
+        Binding(
+            get: { settingsStore.app.theme(for: target, slot: slot) },
+            set: { theme in
+                var settings = settingsStore.app
+                settings[keyPath: target.keyPath(for: slot)] = theme
+                settingsStore.setAppSettings(settings)
+            }
+        )
+    }
+
     /// `target` を指定すると、読み込んだ拡張のテーマをそのままその配色（プレビューか編集画面）に選ぶ。
-    private func importExtension(selectingThemeFor target: WritableKeyPath<AppEditorSettings, PreviewTheme?>? = nil) {
+    /// 外観に合わせて切り替えている場合は、読み込んだときの外観の側に選ぶ。
+    private func importExtension(selectingThemeFor target: ThemeTarget? = nil) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.json]
         panel.canChooseDirectories = false
@@ -309,11 +334,11 @@ struct EditorPreferencesView: View {
         }
     }
 
-    private func loadExtension(from url: URL,
-                               selectingThemeFor target: WritableKeyPath<AppEditorSettings, PreviewTheme?>? = nil) {
+    private func loadExtension(from url: URL, selectingThemeFor target: ThemeTarget? = nil) {
         do {
             var settings = settingsStore.app
-            try settings.installExtension(DeclarativeExtension.load(from: url), selectingThemeFor: target)
+            let keyPath = target.map { $0.keyPath(for: settings.themeSlot(for: $0, appearance: settingsStore.appearance)) }
+            try settings.installExtension(DeclarativeExtension.load(from: url), selectingThemeFor: keyPath)
             settingsStore.setAppSettings(settings)
         } catch { extensionError = error.localizedDescription }
     }

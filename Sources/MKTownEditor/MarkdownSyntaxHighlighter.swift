@@ -230,7 +230,7 @@ enum MarkdownSyntaxHighlighter {
     /// `palette` は編集画面の配色。字句・見出し・記号などの色をここから求める。
     @MainActor
     static func apply(to textView: NSTextView, spans providedSpans: [MarkdownSyntaxSpan]? = nil,
-                      palette: EditorThemePalette = .system) {
+                      palette: EditorThemePalette = .navy) {
         guard !textView.hasMarkedText(), let layoutManager = textView.layoutManager,
               let length = textView.textStorage?.length, length > 0 else { return }
         let desired = coloredRuns(providedSpans ?? spans(in: textView.string), length: length)

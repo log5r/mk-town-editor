@@ -1530,7 +1530,7 @@ struct EditorWorkspace: View {
             zoom: settingsStore.zoom(for: .preview),
             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
             loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
-            theme: settingsStore.app.previewTheme ?? .system,
+            theme: settingsStore.previewTheme,
             bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         return VStack(spacing: 0) {
             PreviewUpdateControls(updates: previewUpdates, source: document.text,
@@ -2581,13 +2581,13 @@ struct EditorWorkspace: View {
                                loadsExternalLinkPreviews: settingsStore.app.loadsExternalLinkPreviews ?? false,
                                usesInlineLivePresentation: settingsStore.app.usesInlineLivePresentation ?? false,
                                usesTypewriterMode: settingsStore.app.usesTypewriterMode ?? false,
-                               theme: settingsStore.app.effectiveEditorTheme)
+                               theme: settingsStore.editorTheme)
             if settingsStore.app.showsMinimap ?? false {
                 Divider()
                 MarkdownMinimapView(source: document.text, viewportState: editorModel.viewportState) { location in
                     editorModel.selectAndReveal(NSRange(location: location, length: 0))
                 }
-                .modifier(EditorThemeSurface(theme: settingsStore.app.effectiveEditorTheme))
+                .modifier(EditorThemeSurface(theme: settingsStore.editorTheme))
             }
         }
     }

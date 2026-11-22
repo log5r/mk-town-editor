@@ -1375,7 +1375,7 @@ private struct DetachedPreviewContent: View {
                             formatsFrontMatter: settingsStore.app.formatsFrontMatterInPreview ?? false,
                             zoom: settingsStore.zoom(for: .preview),
                             loadsRemoteImages: settingsStore.app.loadsRemoteImages ?? false,
-                            theme: settingsStore.app.previewTheme ?? .system,
+                            theme: settingsStore.previewTheme,
                             bodyWidth: settingsStore.app.previewBodyWidth ?? 900)
         }
         .frame(minWidth: 420, minHeight: 300)

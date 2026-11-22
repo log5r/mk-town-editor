@@ -12,19 +12,75 @@ final class EditorThemeTests: XCTestCase {
 
     // MARK: - 設定
 
-    func testUnsavedSettingsUseNavySystemEditorThemeAndKeepPreviewDefault() throws {
+    func testUnsavedSettingsUseNavyEditorThemeAndKeepPreviewDefault() throws {
         let (defaults, suite) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .light)
 
         XCTAssertNil(store.app.editorTheme)
-        XCTAssertEqual(store.app.effectiveEditorTheme, .system)
-        XCTAssertEqual(store.app.effectiveEditorTheme.editorColors.colorScheme, .dark)
-        let palette = EditorThemePalette(theme: store.app.effectiveEditorTheme)
-        XCTAssertEqual(palette.appearanceName, .darkAqua)
-        XCTAssertEqual(palette.background, DeclarativeExtension.Theme.parse("#283264"))
-        // プレビューの既定は従来どおり「システム」。
+        XCTAssertFalse(store.app.followsAppearance(for: .editor), "外観に合わせた切り替えは既定でオフ")
+        XCTAssertFalse(store.app.followsAppearance(for: .preview))
+        // 切り替えがオフなら、外観によらず既定の「紺色」。
+        for appearance in [InterfaceAppearance.light, .dark] {
+            store.updateAppearance(appearance)
+            XCTAssertEqual(store.editorTheme, .navy)
+            XCTAssertEqual(store.editorTheme.colorScheme, .dark)
+            let palette = EditorThemePalette(theme: store.editorTheme)
+            XCTAssertEqual(palette.appearanceName, .darkAqua)
+            XCTAssertEqual(palette.background, DeclarativeExtension.Theme.parse("#283264"))
+            // プレビューの既定は従来どおり「システム」。
+            XCTAssertEqual(store.previewTheme, .system)
+        }
         XCTAssertNil(store.app.previewTheme)
+    }
+
+    /// 以前の版で保存した設定（新しい項目なし）を読む。編集画面の「システム」と未設定は「紺色」になり、
+    /// 明示的に選んだテーマはそのまま残る。保存データは書き換えない。
+    func testLegacyEditorThemeValuesAreReadAsNavy() throws {
+        func decode(_ editorTheme: String?) throws -> AppEditorSettings {
+            let field = editorTheme.map { ",\"editorTheme\":\"\($0)\"" } ?? ""
+            return try JSONDecoder().decode(AppEditorSettings.self, from: Data(
+                "{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3,\"wrapsLines\":true\(field)}".utf8))
+        }
+        let legacySystem = try decode("system")
+        XCTAssertEqual(legacySystem.editorTheme, .system, "保存値は書き換えない")
+        XCTAssertNil(legacySystem.editorThemeFollowsAppearance)
+        XCTAssertNil(legacySystem.previewThemeFollowsAppearance)
+        for appearance in [InterfaceAppearance.light, .dark] {
+            XCTAssertEqual(legacySystem.theme(for: .editor, appearance: appearance), .navy)
+            XCTAssertEqual(try decode(nil).theme(for: .editor, appearance: appearance), .navy)
+            XCTAssertEqual(try decode("github-dark").theme(for: .editor, appearance: appearance), .preset(.githubDark))
+            // プレビューの「システム」は「紺色」に置き換えない。
+            XCTAssertEqual(legacySystem.theme(for: .preview, appearance: appearance), .system)
+        }
+        // 設定画面の選択状態も「紺色」になる。
+        XCTAssertEqual(legacySystem.theme(for: .editor, slot: .fixed), .navy)
+
+        let (defaults, suite) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data("{\"app\":{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3,\"wrapsLines\":true,\"editorTheme\":\"system\"},\"folders\":{},\"documents\":{}}".utf8),
+                     forKey: "MKTownEditor.editorSettings.v1")
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .dark)
+        XCTAssertEqual(store.app.editorTheme, .system)
+        XCTAssertEqual(store.editorTheme, .navy)
+        XCTAssertEqual(EditorThemePalette(theme: store.editorTheme), .navy)
+    }
+
+    func testNavyIsStoredByNameAndOfferedOnlyForEditor() throws {
+        var settings = AppEditorSettings()
+        settings.editorTheme = .navy
+        let json = try XCTUnwrap(String(data: JSONEncoder().encode(settings), encoding: .utf8))
+        XCTAssertTrue(json.contains("\"editorTheme\":\"navy\""), json)
+        XCTAssertEqual(try JSONDecoder().decode(AppEditorSettings.self, from: Data(json.utf8)).editorTheme, .navy)
+        XCTAssertEqual(PreviewTheme.navy.title, "紺色")
+
+        // 編集画面の選択肢は紺色が先頭で「システム」がない。プレビューは「システム」が先頭で「紺色」がない。
+        XCTAssertEqual(ThemeTarget.editor.basicThemes, [.navy, .paper])
+        XCTAssertEqual(ThemeTarget.preview.basicThemes, [.system, .paper])
+        XCTAssertFalse(ThemeTarget.editor.basicThemes.contains(.system))
+        XCTAssertFalse(ThemeTarget.preview.basicThemes.contains(.navy))
+        XCTAssertFalse(PreviewThemeOptions.presetThemes.contains(.navy))
+        XCTAssertFalse(PreviewThemeOptions.presetThemes.contains(.system))
     }
 
     func testEditorThemePersistsIndependentlyOfPreviewTheme() throws {
@@ -37,15 +93,15 @@ final class EditorThemeTests: XCTestCase {
 
         let reopened = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
         XCTAssertEqual(reopened.app.editorTheme, .preset(.nord))
-        XCTAssertEqual(reopened.app.effectiveEditorTheme, .preset(.nord))
+        XCTAssertEqual(reopened.app.theme(for: .editor, slot: .fixed), .preset(.nord))
         XCTAssertNil(reopened.app.previewTheme)
 
-        // 明示的に選んだ以前の既定（GitHub風（ダーク））は、新しい既定の「システム」に置き換わらない。
+        // 明示的に選んだ以前の既定（GitHub風（ダーク））は、新しい既定の「紺色」に置き換わらない。
         settings = reopened.app
         settings.editorTheme = .preset(.githubDark)
         reopened.setAppSettings(settings)
         XCTAssertEqual(EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
-            .app.effectiveEditorTheme, .preset(.githubDark))
+            .app.theme(for: .editor, slot: .fixed), .preset(.githubDark))
     }
 
     func testEditorThemeIsStoredWithTheSameEncodingAsPreviewTheme() throws {
@@ -56,7 +112,7 @@ final class EditorThemeTests: XCTestCase {
         // 以前の版で保存した設定（項目なし）は未設定として読む。
         let legacy = try JSONDecoder().decode(AppEditorSettings.self, from: Data("{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3,\"wrapsLines\":true}".utf8))
         XCTAssertNil(legacy.editorTheme)
-        XCTAssertEqual(legacy.effectiveEditorTheme, EditorThemePalette.defaultTheme)
+        XCTAssertEqual(legacy.theme(for: .editor, slot: .fixed), EditorThemePalette.defaultTheme)
     }
 
     func testExtensionThemeCanBeSelectedForEditorAndIsResetOnRemoval() throws {
@@ -82,7 +138,7 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(settings.extensionPackages?.count, 1)
 
         settings.removeExtension("example.theme")
-        XCTAssertNil(settings.editorTheme, "編集画面は既定の「システム」に戻る")
+        XCTAssertNil(settings.editorTheme, "編集画面は既定の「紺色」に戻る")
         XCTAssertEqual(settings.previewTheme, .system)
         XCTAssertEqual(settings.extensionPackages, [])
     }
@@ -181,13 +237,13 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, selection)
     }
 
-    /// 「システム」はGitHub風（ダーク）の文字色を紺（#283264）の背景に載せ、macOSの外観によらずダークの外観で表示する。
-    func testSystemPaletteUsesNavyBackgroundWithGitHubDarkColors() throws {
-        let palette = EditorThemePalette(theme: .system)
+    /// 「紺色」はGitHub風（ダーク）の文字色を紺（#283264）の背景に載せ、macOSの外観によらずダークの外観で表示する。
+    func testNavyPaletteUsesNavyBackgroundWithGitHubDarkColors() throws {
+        let palette = EditorThemePalette(theme: .navy)
         let github = PreviewThemePreset.githubDark.theme
         let navy = try XCTUnwrap(DeclarativeExtension.Theme.parse("#283264"))
-        XCTAssertEqual(palette, .system)
-        XCTAssertEqual(palette.theme, .system, "設定の値は「システム」のまま保つ")
+        XCTAssertEqual(palette, .navy)
+        XCTAssertEqual(palette.theme, .navy)
         XCTAssertEqual(palette.background, navy)
         XCTAssertEqual(palette.appearanceName, .darkAqua)
         XCTAssertEqual(palette.text, github.color(\.body))
@@ -217,8 +273,36 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(resolved, navy)
     }
 
-    /// 編集画面の隣のミニマップも、「システム」では紺の背景とダークの外観にそろえる。
-    func testSystemEditorSurfaceUsesNavyColors() {
+    /// 改名前（2026-11-22より前）の既定「システム」と同じ見た目であること。当時の色の作り方
+    /// （GitHub風（ダーク）の定義の背景だけを #283264 にしたテーマ）と、補正後の色まで一致させる。
+    func testNavyPaletteMatchesPreviousSystemEditorColors() throws {
+        var previous = PreviewThemePreset.githubDark.theme
+        previous.background = "#283264"
+        let expected = EditorThemePalette(theme: .extensionTheme(previous))
+        let roles: [MarkdownSyntaxSpan.Role] = [.heading, .code, .link, .marker, .quoteMarker, .listMarker,
+                                                .taskMarker, .tableMarker] +
+            CodeSyntaxToken.allCases.map(MarkdownSyntaxSpan.Role.codeToken)
+        // エディタに「システム」が渡ってきても同じ紺の配色にする。
+        for palette in [EditorThemePalette(theme: .navy), EditorThemePalette(theme: .system)] {
+            XCTAssertEqual(palette, .navy)
+            XCTAssertEqual(palette.background, expected.background)
+            XCTAssertEqual(palette.text, expected.text)
+            XCTAssertEqual(palette.selection, expected.selection)
+            XCTAssertEqual(palette.selectedText, expected.selectedText)
+            XCTAssertEqual(palette.insertionPoint, expected.insertionPoint)
+            XCTAssertEqual(palette.lineNumber, expected.lineNumber)
+            XCTAssertEqual(palette.appearanceName, .darkAqua)
+            for role in roles {
+                XCTAssertEqual(palette.color(for: role), expected.color(for: role), "\(role)")
+            }
+        }
+    }
+
+    /// 編集画面の隣のミニマップも、「紺色」では紺の背景とダークの外観にそろえる。以前の「システム」も同じ。
+    func testNavyEditorSurfaceUsesNavyColors() {
+        XCTAssertEqual(PreviewTheme.navy.background, DeclarativeExtension.Theme.parse("#283264"))
+        XCTAssertEqual(PreviewTheme.navy.colorScheme, .dark)
+        XCTAssertEqual(PreviewTheme.system.editorColors, .navy)
         XCTAssertEqual(PreviewTheme.system.editorColors.background, DeclarativeExtension.Theme.parse("#283264"))
         XCTAssertEqual(PreviewTheme.system.editorColors.colorScheme, .dark)
         // プレビュー用の「システム」の色は従来どおり定めない（文字色はmacOSの色に従う）。
@@ -235,7 +319,7 @@ final class EditorThemeTests: XCTestCase {
         MarkdownSyntaxHighlighter.apply(to: view, palette: palette)
         XCTAssertEqual(color(at: 2, in: view), palette.heading)
         MarkdownSyntaxHighlighter.apply(to: view)
-        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.navy.heading)
     }
 
     func testCoordinatorRecolorsSameSourceWhenPaletteChanges() {
@@ -245,7 +329,7 @@ final class EditorThemeTests: XCTestCase {
         let coordinator = MarkdownTextEditor.Coordinator(text: .constant(view.string), model: MarkdownEditorModel())
         coordinator.textView = view
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.system.heading)
+        XCTAssertEqual(color(at: 2, in: view), EditorThemePalette.navy.heading)
 
         let palette = EditorThemePalette(theme: .preset(.dracula))
         coordinator.palette = palette
@@ -263,7 +347,7 @@ final class EditorThemeTests: XCTestCase {
         let model: MarkdownEditorModel
 
         var body: some View {
-            MarkdownTextEditor(text: $text, model: model, theme: settings.app.effectiveEditorTheme)
+            MarkdownTextEditor(text: $text, model: model, theme: settings.editorTheme)
         }
     }
 
@@ -310,20 +394,20 @@ final class EditorThemeTests: XCTestCase {
     func testThemeChangeAppliesToEveryOpenEditorImmediately() async throws {
         let (defaults, suite) = try makeDefaults()
         defer { defaults.removePersistentDomain(forName: suite) }
-        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .light)
         let source = "# Title\n\n```js\nconst a = 1\n```\n"
         let windows = [Window(Host(settings: store, text: .constant(source), model: MarkdownEditorModel())),
                        Window(Host(settings: store, text: .constant(source), model: MarkdownEditorModel()))]
         defer { windows.forEach { $0.close() } }
         let scrollViews = try windows.map { try XCTUnwrap(findScrollView(in: $0.host)) }
 
-        // 初回起動（設定なし）は既定の「システム」（紺の背景）。
+        // 初回起動（設定なし）は既定の「紺色」。
         for scrollView in scrollViews {
             try assertApplied(EditorThemePalette(theme: EditorThemePalette.defaultTheme), to: scrollView)
         }
         XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua)
 
-        for theme in [PreviewTheme.preset(.githubLight), .paper, .system] {
+        for theme in [PreviewTheme.preset(.githubLight), .paper, .navy] {
             var settings = store.app
             settings.editorTheme = theme
             store.setAppSettings(settings)
@@ -334,6 +418,48 @@ final class EditorThemeTests: XCTestCase {
                 try assertApplied(EditorThemePalette(theme: theme), to: scrollView)
             }
         }
-        XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua, "「システム」は紺の背景に合わせてダークの外観にする")
+        XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua, "「紺色」は紺の背景に合わせてダークの外観にする")
+    }
+
+    /// 外観に合わせて切り替えているとき、macOSの外観が変わると開いている全エディタを塗り直す。
+    func testAppearanceChangeRecolorsEveryOpenEditorWhenFollowingAppearance() async throws {
+        let (defaults, suite) = try makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .light)
+        let source = "# Title\n\n```js\nconst a = 1\n```\n"
+        let windows = [Window(Host(settings: store, text: .constant(source), model: MarkdownEditorModel())),
+                       Window(Host(settings: store, text: .constant(source), model: MarkdownEditorModel()))]
+        defer { windows.forEach { $0.close() } }
+        let scrollViews = try windows.map { try XCTUnwrap(findScrollView(in: $0.host)) }
+
+        func settle() async throws {
+            for window in windows { window.host.layoutSubtreeIfNeeded() }
+            try await Task.sleep(for: .milliseconds(50))
+            for window in windows { window.host.layoutSubtreeIfNeeded() }
+        }
+
+        var settings = store.app
+        settings.editorThemeFollowsAppearance = true
+        store.setAppSettings(settings)
+        try await settle()
+        // ライト外観では既定のGitHub風（ライト）。
+        for scrollView in scrollViews {
+            try assertApplied(EditorThemePalette(theme: .preset(.githubLight)), to: scrollView)
+        }
+        XCTAssertEqual(scrollViews[0].appearance?.name, .aqua)
+
+        store.updateAppearance(.dark)
+        try await settle()
+        // ダーク外観では既定の「紺色」。
+        for scrollView in scrollViews {
+            try assertApplied(EditorThemePalette(theme: .navy), to: scrollView)
+        }
+        XCTAssertEqual(scrollViews[0].appearance?.name, .darkAqua)
+
+        store.updateAppearance(.light)
+        try await settle()
+        for scrollView in scrollViews {
+            try assertApplied(EditorThemePalette(theme: .preset(.githubLight)), to: scrollView)
+        }
     }
 }

@@ -117,7 +117,7 @@ final class MarkdownLineNumberRulerView: NSRulerView {
     private weak var editor: NSTextView?
     private(set) var index: MarkdownLineNumberIndex
     /// 背景と番号の色。編集画面の配色に合わせる。
-    var palette = EditorThemePalette.system {
+    var palette = EditorThemePalette.navy {
         didSet { if palette != oldValue { needsDisplay = true } }
     }
 
