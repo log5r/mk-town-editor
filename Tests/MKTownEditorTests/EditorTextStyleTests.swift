@@ -26,7 +26,7 @@ final class EditorTextStyleTests: XCTestCase {
         let selection = NSRange(location: 3, length: 2)
         textView.setSelectedRange(selection)
 
-        EditorTextStyle(fontChoice: .menlo, fontSize: 17, lineSpacing: 6,
+        EditorTextStyle(font: .builtIn(.menlo), fontSize: 17, lineSpacing: 6,
                         horizontalMargin: 22, verticalMargin: 16).apply(to: textView)
 
         XCTAssertEqual(textView.font?.pointSize, 17)

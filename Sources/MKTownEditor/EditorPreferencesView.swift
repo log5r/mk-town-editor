@@ -4,6 +4,8 @@ import SwiftUI
 struct EditorPreferencesView: View {
     @ObservedObject var settingsStore: EditorSettingsStore
     @State private var extensionError: String?
+    /// エディタのフォントの候補。エディタの設定を開いたときと、フォントの追加・削除の通知で読み直す。
+    @State private var installedFontFamilies: [EditorFontFamily] = []
     @AppStorage("graphvizRendererPath") private var graphvizPath = ""
     @AppStorage("plantUMLJarPath") private var plantUMLPath = ""
 
@@ -99,11 +101,7 @@ struct EditorPreferencesView: View {
     private var editorPane: some View {
         Form {
             Section("文字") {
-                Picker("フォント", selection: binding(\.fontChoice, default: .monospacedSystem)) {
-                    ForEach(EditorFontChoice.allCases, id: \.self) { choice in
-                        Text(choice.title).tag(choice)
-                    }
-                }
+                fontControls
                 Stepper(value: binding(\.fontSize), in: 10...32, step: 1) {
                     Text("文字サイズ: \(Int(settingsStore.app.fontSize)) pt")
                 }
@@ -290,6 +288,65 @@ struct EditorPreferencesView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// エディタのフォント。ほかの設定と同じポップアップボタンで、標準装備・等幅・その他の順に並べる。
+    /// フォントパネルを使わない理由は docs/editor-font-selection.md を参照。
+    @ViewBuilder
+    private var fontControls: some View {
+        let selected = settingsStore.app.editorFont
+        let options = EditorFontOptions(installed: installedFontFamilies, selected: selected)
+        Picker("フォント", selection: binding(\.editorFont)) {
+            Section("標準") {
+                ForEach(EditorFontChoice.allCases, id: \.self) { choice in
+                    Text(choice.title).tag(EditorFont.builtIn(choice))
+                }
+            }
+            if let unlisted = options.unlistedFamily {
+                // 保存したフォントが見つからないときも選択中の項目を出し、ポップアップを空欄にしない。
+                Group {
+                    if options.isMissing {
+                        Text("\(unlisted)（見つかりません）")
+                    } else {
+                        Text(verbatim: selected.title)
+                    }
+                }
+                .tag(EditorFont.family(unlisted))
+            }
+            if !options.monospaced.isEmpty {
+                Section("等幅フォント") {
+                    ForEach(options.monospaced, id: \.name) { family in
+                        Text(family.displayName).tag(EditorFont.family(family.name))
+                    }
+                }
+            }
+            if !options.proportional.isEmpty {
+                Section("その他のフォント") {
+                    ForEach(options.proportional, id: \.name) { family in
+                        Text(family.displayName).tag(EditorFont.family(family.name))
+                    }
+                }
+            }
+        }
+        .onAppear { reloadInstalledFontFamilies() }
+        .onReceive(NotificationCenter.default.publisher(for: NSFont.fontSetChangedNotification)) { _ in
+            reloadInstalledFontFamilies()
+        }
+        if options.isMissing {
+            Text("選んだフォントが見つからないため、システム等幅で表示しています。フォントをインストールし直すと元に戻ります。")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        Text(verbatim: EditorFontOptions.sampleText)
+            .font(Font(selected.font(size: 13) as CTFont))
+            .lineLimit(1)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(Text("フォントの見本"))
+            .accessibilityValue(Text(verbatim: selected.title))
+    }
+
+    private func reloadInstalledFontFamilies() {
+        let families = EditorFontFamily.installed()
+        if families != installedFontFamilies { installedFontFamilies = families }
     }
 
     /// 配色の選択。外観に合わせて切り替えるときはライト用とダーク用の2つ、切り替えないときは1つを出す。

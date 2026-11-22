@@ -13,6 +13,7 @@
 		0442F1659973E0ED68374135 /* MobileMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */; };
 		0846BD5C4682504E662A6B1B /* MobilePreviewStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */; };
 		329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68415AC928FC514625D3B348 /* MobileEditorLayout.swift */; };
+		362BE5A3FFBAC8F50D41C08E /* MobileEditorFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 055F770A5734742262CEFC2E /* MobileEditorFont.swift */; };
 		34AF324D60BD0E4B09E2BF39 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B8A0EEAA379943E284578C8C /* Localizable.xcstrings */; };
 		A84B0C1E5D2F4A6B8C9D0E1F /* MobileMarkdownTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B95C1D2F6E3A5B7C9D0E1F2A /* MobileMarkdownTextView.swift */; };
 		357D8CE668AB39E0EB416CD8 /* MobileEditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */; };
@@ -180,6 +181,7 @@
 		A1000000000000000000AD03 /* ListKeyboardSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000AD03 /* ListKeyboardSelection.swift */; };
 		C0F816112D8D88BE4DBC3080 /* MKTownMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */; };
 		C1EA09B7D1F54F9561D43D73 /* MobileEditorLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */; };
+		361A0294A48E0EECCEE6AFDC /* MobileEditorFontTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C36177340A363A92B984B97 /* MobileEditorFontTests.swift */; };
 		EE8D20AA6654ED2A9EBE4A4B /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = A200000000000000000000B0 /* AppIcon.icon */; };
 /* End PBXBuildFile section */
 
@@ -208,6 +210,7 @@
 		5C27FE56A2C7B98DB5D3A7C7 /* MKTownMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MKTownMobileApp.swift; sourceTree = "<group>"; };
 		65FABA01D6D1FA59F7DA6F53 /* MobileDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDocumentTests.swift; sourceTree = "<group>"; };
 		68415AC928FC514625D3B348 /* MobileEditorLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorLayout.swift; sourceTree = "<group>"; };
+		055F770A5734742262CEFC2E /* MobileEditorFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorFont.swift; sourceTree = "<group>"; };
 		6C7CCDEB3609F1FAA874E941 /* MKTownEditorMobileTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MKTownEditorMobileTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownPreview.swift; sourceTree = "<group>"; };
 		92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePreviewStoreTests.swift; sourceTree = "<group>"; };
@@ -373,6 +376,7 @@
 		B95C1D2F6E3A5B7C9D0E1F2A /* MobileMarkdownTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownTextView.swift; sourceTree = "<group>"; };
 		DDD994705C7ACFB84DB3006F /* MobileEditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorWorkspace.swift; sourceTree = "<group>"; };
 		EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorLayoutTests.swift; sourceTree = "<group>"; };
+		1C36177340A363A92B984B97 /* MobileEditorFontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileEditorFontTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -635,6 +639,7 @@
 			children = (
 				3ECABECCA7B36681774F0AC7 /* MobilePreviewStore.swift */,
 				68415AC928FC514625D3B348 /* MobileEditorLayout.swift */,
+				055F770A5734742262CEFC2E /* MobileEditorFont.swift */,
 				77F24E9613D399389B779337 /* MobileMarkdownPreview.swift */,
 			);
 			path = Sources/MKTownMobileCore;
@@ -655,6 +660,7 @@
 				92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */,
 				9D61650C61C3274006430FE0 /* MobileMarkdownPreviewTests.swift */,
 				EA6E019BA1B55AC2984D8A6B /* MobileEditorLayoutTests.swift */,
+				1C36177340A363A92B984B97 /* MobileEditorFontTests.swift */,
 			);
 			path = Tests/MKTownMobileCoreTests;
 			sourceTree = "<group>";
@@ -845,6 +851,7 @@
 				5A150E8F7B3AD0AA4307263D /* MobileDocumentTests.swift in Sources */,
 				9C444A90A010B32F849D84D8 /* MobileWorkspaceTests.swift in Sources */,
 				C1EA09B7D1F54F9561D43D73 /* MobileEditorLayoutTests.swift in Sources */,
+				361A0294A48E0EECCEE6AFDC /* MobileEditorFontTests.swift in Sources */,
 				776FE4899C78E807A439C9CF /* MobileMarkdownPreviewTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -861,6 +868,7 @@
 				686623455B7C59C528A2883D /* MarkdownDocument.swift in Sources */,
 				02FA37F182392CE187209DDE /* MarkdownTextFormat.swift in Sources */,
 				329E338B9D53911578AEA992 /* MobileEditorLayout.swift in Sources */,
+				362BE5A3FFBAC8F50D41C08E /* MobileEditorFont.swift in Sources */,
 				0442F1659973E0ED68374135 /* MobileMarkdownPreview.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -6,6 +6,7 @@ struct MobileEditorWorkspace: View {
     @AppStorage private(set) var showsFrontMatter: Bool
     @AppStorage private(set) var formatsFrontMatter: Bool
     @AppStorage private(set) var preservesSoftLineBreaks: Bool
+    @AppStorage private(set) var editorFont: MobileEditorFont
     @State private var showingSettings = false
     @State private var editorState = MobileEditorState()
     @State private var selection = MobileTextSelection()
@@ -21,6 +22,8 @@ struct MobileEditorWorkspace: View {
         _showsFrontMatter = AppStorage(wrappedValue: false, "mobile.showsFrontMatterInPreview", store: preferences)
         _formatsFrontMatter = AppStorage(wrappedValue: false, "mobile.formatsFrontMatterInPreview", store: preferences)
         _preservesSoftLineBreaks = AppStorage(wrappedValue: false, "mobile.preservesSoftLineBreaksInPreview", store: preferences)
+        // AppStorage reads an unknown stored value as the default.
+        _editorFont = AppStorage(wrappedValue: .default, MobileEditorFont.storageKey, store: preferences)
     }
 
     var body: some View {
@@ -32,7 +35,7 @@ struct MobileEditorWorkspace: View {
                 if layout.showsEditor {
                     // Not TextEditor: it jumps while typing in long wrapped documents (issue #84).
                     MobileMarkdownTextView(text: $document.text, selection: selection, isFocused: $editorFocused,
-                        isFindNavigatorPresented: $editorState.showsFindNavigator)
+                        isFindNavigatorPresented: $editorState.showsFindNavigator, font: editorFont)
                         .modifier(MobileFindNavigator(editorState: $editorState))
                 }
                 if layout.showsEditor && layout.showsPreview { Divider() }
@@ -88,7 +91,7 @@ struct MobileEditorWorkspace: View {
         .onChange(of: document.text) { _, source in previewStore.update(source: source) }
         .onDisappear { previewStore.cancel() }
         .sheet(isPresented: $showingSettings) {
-            MobilePreferencesView(preservesSoftLineBreaks: $preservesSoftLineBreaks,
+            MobilePreferencesView(editorFont: $editorFont, preservesSoftLineBreaks: $preservesSoftLineBreaks,
                 showsFrontMatter: $showsFrontMatter, formatsFrontMatter: $formatsFrontMatter)
         }
         .fileExporter(isPresented: $exporting, document: document,
@@ -266,14 +269,36 @@ struct MobileFindResultCounter: UIViewRepresentable {
 }
 
 struct MobilePreferencesView: View {
+    @Binding var editorFont: MobileEditorFont
     @Binding var preservesSoftLineBreaks: Bool
     @Binding var showsFrontMatter: Bool
     @Binding var formatsFrontMatter: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Picker("フォント", selection: $editorFont) {
+                        ForEach(MobileEditorFont.Category.allCases, id: \.self) { category in
+                            Section(category.title) {
+                                ForEach(MobileEditorFont.options(in: category), id: \.self) { font in
+                                    // Each option is shown in its own font, at the editor's size.
+                                    Text(verbatim: font.title)
+                                        .font(Font(MobileMarkdownTextView.font(for: dynamicTypeSize, choice: font)))
+                                        .tag(font)
+                                }
+                            }
+                        }
+                    }
+                    .pickerStyle(.navigationLink)
+                    .accessibilityIdentifier("editorFont")
+                } header: {
+                    Text("エディタ")
+                } footer: {
+                    Text("文字の大きさは、システムのテキストサイズの設定に従います。")
+                }
                 Section {
                     Toggle("本文の改行をそのまま表示", isOn: $preservesSoftLineBreaks)
                         .accessibilityIdentifier("preserveLineBreaks")
@@ -302,6 +327,34 @@ struct MobilePreferencesView: View {
                         .accessibilityIdentifier("closeSettings")
                 }
             }
+        }
+    }
+}
+
+extension MobileEditorFont {
+    var title: String {
+        switch self {
+        case .monospacedSystem: String(localized: "システム等幅")
+        case .menlo: "Menlo"
+        case .courierNew: "Courier New"
+        case .system: String(localized: "システム")
+        case .hiraginoSans: String(localized: "ヒラギノ角ゴシック")
+        case .serifSystem: String(localized: "システムセリフ（New York）")
+        case .hiraginoMincho: String(localized: "ヒラギノ明朝")
+        case .georgia: "Georgia"
+        case .roundedSystem: String(localized: "システム丸ゴシック（SF Rounded）")
+        case .hiraginoMaruGothic: String(localized: "ヒラギノ丸ゴ")
+        }
+    }
+}
+
+extension MobileEditorFont.Category {
+    var title: String {
+        switch self {
+        case .monospaced: String(localized: "等幅")
+        case .gothic: String(localized: "ゴシック")
+        case .serif: String(localized: "明朝・セリフ")
+        case .rounded: String(localized: "丸ゴシック")
         }
     }
 }

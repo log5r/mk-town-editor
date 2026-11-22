@@ -731,6 +731,12 @@ final class EditorTextView: NSTextView {
     private var pendingCharacterEdit: (range: NSRange, delta: Int)?
     private(set) var sourceRevision = 0
     private(set) var sourceReadCount = 0
+    /// フォントファミリーから書体を取り出す処理。テストでフォントの追加・削除を再現するときだけ差し替える。
+    var fontResolver = EditorFontResolver.system
+    /// 最後に適用したスタイルと、そのときに解決した本文フォント。
+    private var appliedTextStyle: EditorTextStyle?
+    private(set) var appliedBodyFont: NSFont?
+    private var observesFontSetChanges = false
 
     var sourceText: String {
         if let cachedSource { return cachedSource }
@@ -763,6 +769,45 @@ final class EditorTextView: NSTextView {
         observesSourceEdits = true
         NotificationCenter.default.addObserver(self, selector: #selector(sourceStorageDidChange(_:)),
             name: NSTextStorage.didProcessEditingNotification, object: textStorage)
+    }
+
+    /// `EditorTextStyle.apply(to:)` から呼ばれる。フォントファミリーを使っている間だけ、フォントの
+    /// 追加・削除の通知を受ける。スタイルの値は同じでも、解決するフォントが変わることがあるため（#103）。
+    func didApplyTextStyle(_ style: EditorTextStyle, font: NSFont) {
+        appliedTextStyle = style
+        appliedBodyFont = font
+        let usesFamily = style.font.isFamily
+        guard usesFamily != observesFontSetChanges else { return }
+        observesFontSetChanges = usesFamily
+        if usesFamily {
+            NotificationCenter.default.addObserver(self, selector: #selector(fontSetDidChange(_:)),
+                name: NSFont.fontSetChangedNotification, object: nil)
+        } else {
+            NotificationCenter.default.removeObserver(self, name: NSFont.fontSetChangedNotification, object: nil)
+        }
+    }
+
+    /// 選んだフォントファミリーが解決する書体が、適用したときと変わっていればスタイルを適用し直す。
+    /// 見つからなかったフォントがインストールされたときや、使っているフォントが削除されたときに変わる。
+    /// 書体が同じなら何もしないので、通知のたびに全文をレイアウトし直すことはない。
+    @discardableResult
+    func reapplyTextStyleIfFontResolutionChanged() -> Bool {
+        guard let style = appliedTextStyle, style.font.isFamily else { return false }
+        let font = style.font.font(size: CGFloat(style.fontSize), resolver: fontResolver)
+        guard font != appliedBodyFont else { return false }
+        style.apply(to: self)
+        // 行番号は本文フォントの行の高さで位置を決める。折り返さない表示では本文の幅も変わる。
+        (enclosingScrollView?.verticalRulerView as? MarkdownLineNumberRulerView)?.refresh()
+        enclosingScrollView?.needsLayout = true
+        return true
+    }
+
+    @objc nonisolated private func fontSetDidChange(_ notification: Notification) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated { _ = self.reapplyTextStyleIfFontResolutionChanged() }
+        } else {
+            Task { @MainActor [weak self] in self?.reapplyTextStyleIfFontResolutionChanged() }
+        }
     }
 
     override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
