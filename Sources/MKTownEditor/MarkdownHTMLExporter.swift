@@ -220,7 +220,7 @@ enum MarkdownHTMLExporter {
         :root { color-scheme: light dark; }
         body { box-sizing: border-box; max-width: \(preset.bodyWidth)px; margin: 0 auto; padding: 32px 24px;
                font: \(preset.fontSize)px/1.65 \(preset.font.cssFamily); overflow-wrap: anywhere; }
-        pre { overflow-x: auto; padding: 16px; border-radius: 8px; background: color-mix(in srgb, currentColor 8%, transparent); }
+        pre { overflow-x: auto; padding: 16px; border-radius: 8px; line-height: 1.45; background: color-mix(in srgb, currentColor 8%, transparent); }
         code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
         \(codeTokenStyles(printLayout: printLayout))
         img { max-width: 100%; height: auto; }

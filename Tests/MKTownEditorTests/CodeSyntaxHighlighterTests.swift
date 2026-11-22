@@ -520,6 +520,23 @@ final class CodeSyntaxHighlighterTests: XCTestCase {
         XCTAssertNotNil(highlighted.attribute(.font, at: keyword.location, effectiveRange: nil))
     }
 
+    /// コードは1行ごとに段落が分かれる。段落の間隔を付けると行ごとに隙間が空き、行間が広く見えた不具合の再発防止。
+    func testCodeLinesUseTightLineSpacingWithoutParagraphSpacing() throws {
+        let rendered = CodeSyntaxHighlighter.render("let a = 1\nif a != b {\n    return c\n}", language: "swift")
+        let lineStarts = [0, 10, 22, 35]
+        for location in lineStarts {
+            let style = try XCTUnwrap(rendered.attribute(.paragraphStyle, at: location,
+                                                         effectiveRange: nil) as? NSParagraphStyle)
+            XCTAssertEqual(style.paragraphSpacing, 0)
+            XCTAssertEqual(style.paragraphSpacingBefore, 0)
+            XCTAssertEqual(style.lineSpacing, CodeSyntaxHighlighter.lineSpacing)
+        }
+        let font = try XCTUnwrap(rendered.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        let lineHeight = NSLayoutManager().defaultLineHeight(for: font) + CodeSyntaxHighlighter.lineSpacing
+        // 一般的なコードエディタやGitHubと同じく、行の高さを文字の大きさの1.5倍以下に収める。
+        XCTAssertLessThanOrEqual(lineHeight / font.pointSize, 1.5)
+    }
+
     func testPaperThemeRecolorsTokensAndExtensionThemeKeepsCodeColor() throws {
         let rendered = CodeSyntaxHighlighter.render("let x = \"a\"", language: "swift")
         let paper = PreviewTypography.themed(rendered, kind: .codeBlock, theme: .paper)

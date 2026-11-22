@@ -52,12 +52,16 @@ extension NSAttributedString.Key {
 
 @MainActor
 enum CodeSyntaxHighlighter {
+    /// コードの行間。コードは1行ごとに段落が分かれるため、段落の間隔は付けず行間だけで間隔を決める。
+    /// 13pt の等幅フォントで行の高さが約1.4倍（GitHub やコードエディタと同程度）になる値。
+    static let lineSpacing: CGFloat = 3
+
     /// `tokens` は解析済みの字句（`DocumentSnapshot.codeSyntaxTokens`）。`nil` の場合は解析キャッシュ経由で求める。
     static func render(_ source: String, language: String?,
                        tokens: [CodeSyntaxTokenRange]? = nil) -> NSAttributedString {
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineSpacing = 3
-        paragraph.paragraphSpacing = 8
+        paragraph.lineSpacing = lineSpacing
+        paragraph.paragraphSpacing = 0
         let result = NSMutableAttributedString(string: source, attributes: [
             .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
             .foregroundColor: NSColor.textColor,
