@@ -397,23 +397,16 @@ struct MarkdownCommands: Commands {
             .disabled(previewUpdateActions == nil)
             Button("一時停止中のプレビューを更新") { previewUpdateActions?.refresh() }
                 .disabled(previewUpdateActions?.isStale != true)
+            // 外観に合わせて切り替えている場合は、現在の外観で使う配色を表示し、選ぶとその側を変える。
             Picker("エディタの配色", selection: Binding(
-                get: { settingsStore.app.effectiveEditorTheme },
-                set: { theme in
-                    var settings = settingsStore.app
-                    settings.editorTheme = theme
-                    settingsStore.setAppSettings(settings)
-                })) {
-                PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
+                get: { settingsStore.editorTheme },
+                set: { settingsStore.selectTheme($0, for: .editor) })) {
+                PreviewThemeOptions(target: .editor, customThemes: settingsStore.app.customPreviewThemes)
             }
             Picker("プレビューの配色", selection: Binding(
-                get: { settingsStore.app.previewTheme ?? .system },
-                set: { theme in
-                    var settings = settingsStore.app
-                    settings.previewTheme = theme
-                    settingsStore.setAppSettings(settings)
-                })) {
-                PreviewThemeOptions(customThemes: settingsStore.app.customPreviewThemes)
+                get: { settingsStore.previewTheme },
+                set: { settingsStore.selectTheme($0, for: .preview) })) {
+                PreviewThemeOptions(target: .preview, customThemes: settingsStore.app.customPreviewThemes)
             }
         }
         CommandMenu("書き出し") {

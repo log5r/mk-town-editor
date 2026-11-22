@@ -3140,12 +3140,12 @@
         }
       }
     },
-    "既定の「システム」は紺の背景で表示します。ほかのテーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。" : {
+    "既定は紺色です。外観に合わせて切り替えると、macOSのライトとダークの外観でそれぞれ選んだ配色を使います。ほかのテーマはプレビューと共通で、追加したテーマは「拡張」で削除できます。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The default, “System”, uses a navy background. The other themes are shared with the preview, and themes you add can be removed in “Extensions”."
+            "value" : "The default is Navy. When the theme follows the appearance, the theme chosen for the current macOS appearance, light or dark, is used. The other themes are shared with the preview, and themes you add can be removed in “Extensions”."
           }
         }
       }
@@ -3170,12 +3170,12 @@
         }
       }
     },
-    "「システム」はmacOSの外観に合わせます。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。" : {
+    "「システム」は切り替えをオフにしていても、macOSの外観に合わせて明るさが変わります。外観に合わせて切り替えると、ライトとダークの外観でそれぞれ選んだ配色を使います。JSONファイルで配色を追加でき、追加したテーマは「拡張」で削除できます。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“System” follows the macOS appearance. You can add color themes from JSON files and remove them in Extensions."
+            "value" : "“System” follows the macOS appearance even when switching is off. When the theme follows the appearance, the theme chosen for the current appearance, light or dark, is used. You can add color themes from JSON files and remove them in Extensions."
           }
         }
       }
@@ -8766,6 +8766,16 @@
         }
       }
     },
+    "紺色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Navy"
+          }
+        }
+      }
+    },
     "終了コード %d" : {
       "localizations" : {
         "en" : {
@@ -10496,6 +10506,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Color theme"
+          }
+        }
+      }
+    },
+    "macOSの外観に合わせて配色を切り替える" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match color theme to macOS appearance"
+          }
+        }
+      }
+    },
+    "ライト外観の配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color theme for Light appearance"
+          }
+        }
+      }
+    },
+    "ダーク外観の配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color theme for Dark appearance"
           }
         }
       }

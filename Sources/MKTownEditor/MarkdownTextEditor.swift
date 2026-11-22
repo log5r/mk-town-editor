@@ -23,7 +23,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var usesInlineLivePresentation = false
     var usesTypewriterMode = false
     /// 編集画面の配色。
-    var theme: PreviewTheme = .system
+    var theme: PreviewTheme = .navy
 
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text, model: model)
@@ -187,7 +187,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
-        if context.coordinator.palette.theme != theme {
+        if context.coordinator.palette.theme != theme.editorColors {
             // 字句の色は下の refreshSyntax が新しい配色で当て直す。
             let palette = EditorThemePalette(theme: theme)
             palette.apply(to: textView, in: scrollView)
@@ -261,7 +261,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         var usesInlineLivePresentation = false
         var usesTypewriterMode = false
         /// 構文の色を当てる配色。変わると次の `refreshSyntax` で全体を塗り直す。
-        var palette = EditorThemePalette.system
+        var palette = EditorThemePalette.navy
         private var lastManualScroll = Date.distantPast
         private var isUserScrolling = false
         private var typewriterFollowTask: Task<Void, Never>?

@@ -21,18 +21,18 @@ final class MarkdownInlineLivePresentationTests: XCTestCase {
         let marker = (view.string as NSString).range(of: "#")
         let heading = (view.string as NSString).range(of: "Heading")
         XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
-        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.system.heading)
+        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.navy.heading)
 
         // A late snapshot for an intermediate edit must not replace the current colors.
         coordinator.sharedSnapshot = DocumentSnapshot(source: "different")
         coordinator.refreshSyntax()
         XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
-        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.system.heading)
+        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.navy.heading)
 
         coordinator.sharedSnapshot = DocumentSnapshot(source: view.string)
         coordinator.refreshSyntax()
         XCTAssertEqual(color(at: marker.location, in: view), .tertiaryLabelColor)
-        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.system.heading)
+        XCTAssertEqual(color(at: heading.location, in: view), EditorThemePalette.navy.heading)
     }
 
     func testMarkersExcludeCodeBlocksAndKeepVisibleLabels() {
@@ -123,18 +123,18 @@ final class MarkdownInlineLivePresentationTests: XCTestCase {
         coordinator.usesInlineLivePresentation = true
         coordinator.refreshSyntax()
 
-        XCTAssertEqual(color(at: 0, in: view), EditorThemePalette.system.marker)
+        XCTAssertEqual(color(at: 0, in: view), EditorThemePalette.navy.marker)
         let second = (source as NSString).range(of: "**second")
         XCTAssertEqual(color(at: second.location, in: view), .tertiaryLabelColor)
         view.setSelectedRange(NSRange(location: second.location + 3, length: 0))
         coordinator.refreshSyntax()
         XCTAssertEqual(color(at: 0, in: view), .tertiaryLabelColor)
-        XCTAssertEqual(color(at: second.location, in: view), EditorThemePalette.system.marker)
+        XCTAssertEqual(color(at: second.location, in: view), EditorThemePalette.navy.marker)
 
         coordinator.usesInlineLivePresentation = false
         coordinator.refreshSyntax()
-        XCTAssertEqual(color(at: 0, in: view), EditorThemePalette.system.marker)
-        XCTAssertEqual(color(at: second.location, in: view), EditorThemePalette.system.marker)
+        XCTAssertEqual(color(at: 0, in: view), EditorThemePalette.navy.marker)
+        XCTAssertEqual(color(at: second.location, in: view), EditorThemePalette.navy.marker)
     }
 
     private func color(at location: Int, in view: NSTextView) -> NSColor? {

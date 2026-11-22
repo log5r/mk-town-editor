@@ -1,23 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// 編集画面の配色。プレビューと同じ `PreviewTheme`（システム・紙色・標準装備・カスタム）から作る。
+/// 編集画面の配色。プレビューと同じ `PreviewTheme`（紺色・紙色・標準装備・カスタム）から作る。
 ///
 /// テーマはプレビュー向けの色（背景、本文、見出し、リンク、コード、コードの字句）しか持たないため、
 /// 編集画面だけにある要素（Markdownの記号、選択範囲、カーソル、行番号）の色はそこから導く。
 /// 対応は docs/preview-themes.md の「編集画面の配色」を参照。
 struct EditorThemePalette: Equatable {
     /// 設定が未保存のときの編集画面の配色。
-    static let defaultTheme: PreviewTheme = .system
-    /// 「システム」の編集画面の背景（紺）。
-    static let systemBackground = "#283264"
-    /// 「システム」の編集画面の色。GitHub風（ダーク）の文字色を紺の背景に載せる。
-    /// 背景が暗い色で固定のため、macOSの外観がライトでもダークの外観で表示する。
-    static let systemColors: PreviewTheme = {
-        var colors = PreviewThemePreset.githubDark.theme
-        colors.background = systemBackground
-        return .extensionTheme(colors)
-    }()
+    static let defaultTheme: PreviewTheme = .navy
     /// 文字色に求める背景とのコントラスト比（WCAG AA）。テーマの色が届かなければ明度を補正する。
     static let minimumContrast = DeclarativeExtension.Theme.minimumContrast
     /// 選択範囲の背景に混ぜるリンク色の割合。
@@ -46,18 +37,18 @@ struct EditorThemePalette: Equatable {
     /// 色はテーマから決まるため、テーマが同じなら同じ配色とみなす。
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.theme == rhs.theme }
 
-    /// 「システム」の配色。テーマを選ばない編集画面（テストの既定など）もこれを使う。
-    @MainActor static let system = EditorThemePalette(theme: .system, colors: systemColors)!
+    /// 「紺色」の配色。テーマを選ばない編集画面（テストの既定など）もこれを使う。
+    @MainActor static let navy = EditorThemePalette(colors: .navy)!
 
-    /// `theme` が色を定めていなければ「システム」の配色にする。
+    /// `theme` が色を定めていなければ「紺色」の配色にする。「システム」は「紺色」として扱う。
     @MainActor
     init(theme: PreviewTheme) {
-        self = Self(theme: theme, colors: theme.editorColors) ?? .system
+        self = Self(colors: theme.editorColors) ?? .navy
     }
 
-    /// `colors` の色で配色を作る。`theme` は設定で選ばれているテーマで、配色の同一性の判定に使う。
+    /// `colors` の色で配色を作る。`colors` は配色の同一性の判定にも使う。
     @MainActor
-    private init?(theme: PreviewTheme, colors: PreviewTheme) {
+    private init?(colors: PreviewTheme) {
         guard let background = colors.background, let body = colors.bodyColor,
               let headingColor = colors.headingColor, let linkColor = colors.linkColor,
               let codeColor = colors.codeColor else { return nil }
@@ -65,7 +56,7 @@ struct EditorThemePalette: Equatable {
         let syntax = Dictionary(uniqueKeysWithValues: CodeSyntaxToken.allCases.map { token in
             (token, CodeSyntaxPalette.color(for: token, theme: colors))
         })
-        self.theme = theme
+        theme = colors
         self.background = background
         text = readable(body)
         // 見出しの色が本文と同じテーマ（GitHub風、Tomorrow、Tomorrow Night）は、見出しをリンク色で区別する。
@@ -173,11 +164,7 @@ struct EditorThemeSurface: ViewModifier {
 }
 
 extension PreviewTheme {
-    /// 編集画面で使う色。「システム」はプレビューと違い、外観に追従しない紺の配色にする。
-    var editorColors: PreviewTheme { self == .system ? EditorThemePalette.systemColors : self }
-}
-
-extension AppEditorSettings {
-    /// 編集画面の配色。未設定なら既定の「システム」。
-    var effectiveEditorTheme: PreviewTheme { editorTheme ?? EditorThemePalette.defaultTheme }
+    /// 編集画面で使う配色。編集画面には「システム」がないため、以前の版で保存した「システム」は
+    /// 当時と同じ見た目の「紺色」として扱う。
+    var editorColors: PreviewTheme { self == .system ? .navy : self }
 }

@@ -62,19 +62,33 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
 }
 
 enum PreviewTheme: Codable, Hashable, Sendable {
+    /// プレビューではmacOSの外観に追従する配色。編集画面では選べず、以前の版の保存値は「紺色」として読む。
     case system
+    /// 編集画面の既定の配色。GitHub風（ダーク）の文字色を紺の背景に載せる。プレビューの選択肢には出さない。
+    case navy
     case paper
     case preset(PreviewThemePreset)
     case extensionTheme(DeclarativeExtension.Theme)
 
-    /// 標準装備の配色。設定とメニューの選択肢に、この順で並べる。
-    static let allCases: [Self] = [.system, .paper] + PreviewThemePreset.allCases.map(Self.preset)
+    /// 標準装備の配色。編集画面とプレビューで選べるものは `ThemeTarget.basicThemes` が決める。
+    static let allCases: [Self] = [.system, .navy, .paper] + PreviewThemePreset.allCases.map(Self.preset)
+
+    /// 「紺色」の背景。
+    static let navyBackground = "#283264"
+    /// 「紺色」の色。GitHub風（ダーク）の文字色を紺の背景に載せる。背景が暗い色で固定のため、
+    /// macOSの外観がライトでもダークの外観で表示する。
+    static let navyDefinition: DeclarativeExtension.Theme = {
+        var colors = PreviewThemePreset.githubDark.theme
+        colors.background = navyBackground
+        return colors
+    }()
 
     init(from decoder: Decoder) throws {
         let value = try decoder.singleValueContainer()
         if let name = try? value.decode(String.self) {
             switch name {
             case "system": self = .system
+            case "navy": self = .navy
             case "paper": self = .paper
             default:
                 guard let preset = PreviewThemePreset(rawValue: name) else {
@@ -91,6 +105,7 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         var value = encoder.singleValueContainer()
         switch self {
         case .system: try value.encode("system")
+        case .navy: try value.encode("navy")
         case .paper: try value.encode("paper")
         case .preset(let preset): try value.encode(preset.rawValue)
         case .extensionTheme(let theme): try value.encode(theme)
@@ -100,16 +115,18 @@ enum PreviewTheme: Codable, Hashable, Sendable {
     var title: String {
         switch self {
         case .system: String(localized: "システム")
+        case .navy: String(localized: "紺色")
         case .paper: String(localized: "紙色")
         case .preset(let preset): preset.title
         case .extensionTheme(let theme): theme.name
         }
     }
 
-    /// 色を16進数で定義するテーマ（標準装備の配色とJSON拡張）。システムと紙色は `nil`。
+    /// 色を16進数で定義するテーマ（紺色、標準装備の配色、JSON拡張）。システムと紙色は `nil`。
     var definition: DeclarativeExtension.Theme? {
         switch self {
         case .system, .paper: nil
+        case .navy: Self.navyDefinition
         case .preset(let preset): preset.theme
         case .extensionTheme(let theme): theme
         }
@@ -119,42 +136,42 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.98, green: 0.965, blue: 0.93, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.background)
+        case .navy, .preset, .extensionTheme: definition?.color(\.background)
         }
     }
     var bodyColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.18, green: 0.16, blue: 0.13, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.body)
+        case .navy, .preset, .extensionTheme: definition?.color(\.body)
         }
     }
     var headingColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.31, green: 0.19, blue: 0.11, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.heading)
+        case .navy, .preset, .extensionTheme: definition?.color(\.heading)
         }
     }
     var codeColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.34, green: 0.18, blue: 0.10, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.code)
+        case .navy, .preset, .extensionTheme: definition?.color(\.code)
         }
     }
     var linkColor: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.10, green: 0.22, blue: 0.38, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.link)
+        case .navy, .preset, .extensionTheme: definition?.color(\.link)
         }
     }
     var codeBackground: NSColor? {
         switch self {
         case .system: nil
         case .paper: NSColor(srgbRed: 0.91, green: 0.87, blue: 0.79, alpha: 1)
-        case .preset, .extensionTheme: definition?.color(\.codeBackground)
+        case .navy, .preset, .extensionTheme: definition?.color(\.codeBackground)
         }
     }
     var colorScheme: ColorScheme? {
@@ -280,9 +297,23 @@ struct AppEditorSettings: Codable, Equatable {
     var terminologyOptions: TerminologyOptions?
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
+    /// プレビューの配色。外観に合わせて切り替えないときに使う。未設定は「システム」。
     var previewTheme: PreviewTheme?
-    /// 編集画面の配色。プレビューと同じ選択肢を使う。未設定なら `effectiveEditorTheme` が既定の「システム」（紺の背景）を返す。
+    /// 編集画面の配色。外観に合わせて切り替えないときに使う。未設定は既定の「紺色」。
+    /// 以前の版で保存した「システム」は「紺色」として読む（`theme(for:slot:)`）。
     var editorTheme: PreviewTheme?
+    /// macOSの外観（ライト・ダーク）に合わせて編集画面の配色を切り替えるか。未設定はオフ。
+    var editorThemeFollowsAppearance: Bool?
+    /// 外観に合わせて切り替えるときの、ライト外観の編集画面の配色。未設定は `ThemeTarget.editor` の既定。
+    var editorLightTheme: PreviewTheme?
+    /// 外観に合わせて切り替えるときの、ダーク外観の編集画面の配色。
+    var editorDarkTheme: PreviewTheme?
+    /// macOSの外観に合わせてプレビューの配色を切り替えるか。未設定はオフ。
+    var previewThemeFollowsAppearance: Bool?
+    /// 外観に合わせて切り替えるときの、ライト外観のプレビューの配色。
+    var previewLightTheme: PreviewTheme?
+    /// 外観に合わせて切り替えるときの、ダーク外観のプレビューの配色。
+    var previewDarkTheme: PreviewTheme?
     var extensionPackages: [DeclarativeExtension]?
     var previewBodyWidth: Int?
     var showsInvisibleCharacters: Bool?
@@ -298,6 +329,99 @@ struct AppEditorSettings: Codable, Equatable {
         (snippets ?? []) + (extensionPackages ?? []).flatMap { package in
             package.snippets.map { EditorSnippet(id: $0.id, trigger: $0.trigger, template: $0.template) }
         }
+    }
+}
+
+/// macOSの外観の明暗。配色を外観に合わせて切り替えるときに使う。
+enum InterfaceAppearance: Sendable {
+    case light
+    case dark
+
+    init(_ appearance: NSAppearance) {
+        self = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
+    }
+}
+
+/// 配色を保存する項目。外観に合わせないときの固定の配色と、合わせるときのライト用・ダーク用がある。
+enum ThemeSlot: CaseIterable, Sendable {
+    case fixed
+    case light
+    case dark
+}
+
+/// 配色を選ぶ対象（編集画面かプレビュー）。保存先の項目と既定の配色、選択肢をまとめる。
+enum ThemeTarget: CaseIterable, Sendable {
+    case editor
+    case preview
+
+    var followsAppearanceKeyPath: WritableKeyPath<AppEditorSettings, Bool?> {
+        switch self {
+        case .editor: \.editorThemeFollowsAppearance
+        case .preview: \.previewThemeFollowsAppearance
+        }
+    }
+
+    func keyPath(for slot: ThemeSlot) -> WritableKeyPath<AppEditorSettings, PreviewTheme?> {
+        switch (self, slot) {
+        case (.editor, .fixed): \.editorTheme
+        case (.editor, .light): \.editorLightTheme
+        case (.editor, .dark): \.editorDarkTheme
+        case (.preview, .fixed): \.previewTheme
+        case (.preview, .light): \.previewLightTheme
+        case (.preview, .dark): \.previewDarkTheme
+        }
+    }
+
+    /// 項目が未設定のときの配色。
+    func defaultTheme(for slot: ThemeSlot) -> PreviewTheme {
+        switch (self, slot) {
+        case (.editor, .fixed): EditorThemePalette.defaultTheme
+        case (.editor, .light), (.preview, .light): .preset(.githubLight)
+        case (.editor, .dark): .navy
+        case (.preview, .fixed): .system
+        case (.preview, .dark): .preset(.githubDark)
+        }
+    }
+
+    /// 選択肢の先頭に並べる基本の配色。「システム」はプレビューだけ、「紺色」は編集画面だけに出す。
+    /// 紺の背景ではリンク色が約3.9:1になり、色を補正しないプレビューの基準（4.5:1）に届かないため。
+    var basicThemes: [PreviewTheme] {
+        switch self {
+        case .editor: [.navy, .paper]
+        case .preview: [.system, .paper]
+        }
+    }
+
+    /// 保存値を対象で使える配色にする。編集画面には「システム」がないため「紺色」にする。
+    func normalized(_ theme: PreviewTheme) -> PreviewTheme {
+        self == .editor ? theme.editorColors : theme
+    }
+}
+
+extension AppEditorSettings {
+    func followsAppearance(for target: ThemeTarget) -> Bool {
+        self[keyPath: target.followsAppearanceKeyPath] ?? false
+    }
+
+    /// `appearance` のときに使う項目。外観に合わせないなら固定の配色の項目。
+    func themeSlot(for target: ThemeTarget, appearance: InterfaceAppearance) -> ThemeSlot {
+        guard followsAppearance(for: target) else { return .fixed }
+        return appearance == .dark ? .dark : .light
+    }
+
+    /// 項目に保存した配色。未設定なら既定の配色を返す。
+    func theme(for target: ThemeTarget, slot: ThemeSlot) -> PreviewTheme {
+        target.normalized(self[keyPath: target.keyPath(for: slot)] ?? target.defaultTheme(for: slot))
+    }
+
+    /// 設定と外観から決まる、対象で使う配色。
+    func theme(for target: ThemeTarget, appearance: InterfaceAppearance) -> PreviewTheme {
+        theme(for: target, slot: themeSlot(for: target, appearance: appearance))
+    }
+
+    /// `appearance` のときに使う項目に `theme` を保存する。外観に合わせるなら現在の外観の側、合わせないなら固定の配色を変える。
+    mutating func selectTheme(_ theme: PreviewTheme, for target: ThemeTarget, appearance: InterfaceAppearance) {
+        self[keyPath: target.keyPath(for: themeSlot(for: target, appearance: appearance))] = theme
     }
 }
 
@@ -424,6 +548,11 @@ final class EditorSettingsStore: ObservableObject {
     private var savedDocumentsData: Data?
     private(set) var settingsWriteCount = 0
     private(set) var documentWriteCount = 0
+    /// 現在のmacOSの外観。外観に合わせて切り替える配色を決めるのに使う。
+    /// SwiftUIの `colorScheme` はメニュー（Commands）から読めず、プレビューとミニマップでは
+    /// テーマの明暗で上書きしているため、アプリの外観をここで持つ。
+    private(set) var appearance: InterfaceAppearance
+    private var appearanceObservation: NSKeyValueObservation?
     private static let storageKey = "MKTownEditor.editorSettings.v1"
     private static let documentStorageKey = "MKTownEditor.documentDisplayStates.v1"
     /// 内容が同じなら同じバイト列になるようにし、変更のない保存を省けるようにする。
@@ -433,8 +562,11 @@ final class EditorSettingsStore: ObservableObject {
         return encoder
     }()
 
-    init(defaults: UserDefaults = .standard, prunesMissingDocuments: Bool = true) {
+    /// `appearance` を渡すと、その外観で始めてmacOSの外観を監視しない（テストでホストの外観に左右されないようにする）。
+    init(defaults: UserDefaults = .standard, prunesMissingDocuments: Bool = true,
+         appearance: InterfaceAppearance? = nil) {
         self.defaults = defaults
+        self.appearance = appearance ?? InterfaceAppearance(NSApplication.shared.effectiveAppearance)
         let storedData = defaults.data(forKey: Self.storageKey)
         var stored = storedData.flatMap { try? JSONDecoder().decode(StoredEditorSettings.self, from: $0) }
             ?? StoredEditorSettings()
@@ -458,9 +590,50 @@ final class EditorSettingsStore: ObservableObject {
             saveDocuments()
         }
         if prunesMissingDocuments { schedulePruningMissingDocuments() }
+        if appearance == nil { observeApplicationAppearance() }
     }
 
     var app: AppEditorSettings { values.app }
+
+    /// 設定と現在の外観から決まる、対象で使う配色。
+    func theme(for target: ThemeTarget) -> PreviewTheme {
+        values.app.theme(for: target, appearance: appearance)
+    }
+
+    /// 編集画面で使う配色。「システム」は「紺色」になっている。
+    var editorTheme: PreviewTheme { theme(for: .editor) }
+    /// プレビューで使う配色。
+    var previewTheme: PreviewTheme { theme(for: .preview) }
+
+    /// メニューなどで選んだ配色を保存する。外観に合わせて切り替えるなら、現在の外観の側を変える。
+    func selectTheme(_ theme: PreviewTheme, for target: ThemeTarget) {
+        values.app.selectTheme(theme, for: target, appearance: appearance)
+        save()
+    }
+
+    /// 外観を更新する。明暗が変わったときだけ変更を通知する。テストからも外観の変化を再現するのに使う。
+    func updateAppearance(_ appearance: InterfaceAppearance) {
+        guard appearance != self.appearance else { return }
+        objectWillChange.send()
+        self.appearance = appearance
+    }
+
+    /// アプリの外観（`effectiveAppearance`）の変化を監視する。システム設定で外観を変えたときや、
+    /// 自動切り替えで明暗が変わったときに通知される。
+    private func observeApplicationAppearance() {
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance) { [weak self] _, _ in
+            // KVOは値を変えたスレッドで呼ばれる。外観はメインスレッドで変わるが、念のため別スレッドにも備える。
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { self?.updateAppearanceFromApplication() }
+            } else {
+                Task { @MainActor in self?.updateAppearanceFromApplication() }
+            }
+        }
+    }
+
+    private func updateAppearanceFromApplication() {
+        updateAppearance(InterfaceAppearance(NSApplication.shared.effectiveAppearance))
+    }
 
     func shortcut(for command: EditorCommand) -> ShortcutChord? {
         EditorShortcutRegistry.shortcut(for: command,

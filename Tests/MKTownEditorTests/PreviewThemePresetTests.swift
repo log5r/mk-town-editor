@@ -45,8 +45,8 @@ final class PreviewThemePresetTests: XCTestCase {
     }
 
     func testPresetsAreOfferedAndFollowTheirBackgroundBrightness() {
-        XCTAssertEqual(PreviewTheme.allCases.prefix(2), [.system, .paper])
-        XCTAssertEqual(Array(PreviewTheme.allCases.dropFirst(2)),
+        XCTAssertEqual(PreviewTheme.allCases.prefix(3), [.system, .navy, .paper])
+        XCTAssertEqual(Array(PreviewTheme.allCases.dropFirst(3)),
                        PreviewThemePreset.allCases.map(PreviewTheme.preset))
         XCTAssertEqual(PreviewTheme.preset(.githubLight).colorScheme, .light)
         XCTAssertEqual(PreviewTheme.preset(.tomorrow).colorScheme, .light)

@@ -92,9 +92,13 @@ extension AppEditorSettings {
     }
 
     /// 配色の設定と、選んでいた拡張のテーマがなくなったときに戻す値。
-    /// プレビューは「システム」、編集画面は未設定（既定の「システム」）に戻す。
+    /// プレビューの固定の配色は「システム」、ほかは未設定（それぞれの既定）に戻す。
     private static var themeSelections: [(WritableKeyPath<AppEditorSettings, PreviewTheme?>, PreviewTheme?)] {
-        [(\.previewTheme, .system), (\.editorTheme, nil)]
+        ThemeTarget.allCases.flatMap { target in
+            ThemeSlot.allCases.map { slot in
+                (target.keyPath(for: slot), target == .preview && slot == .fixed ? target.defaultTheme(for: slot) : nil)
+            }
+        }
     }
 
     /// 拡張を追加する。同じ `id` の拡張は置き換え、そのテーマを選んでいた配色は新しいテーマに移す。
@@ -124,15 +128,15 @@ extension AppEditorSettings {
 }
 
 /// 配色の選択肢。設定の「配色」（エディタとプレビュー）と表示メニューの「エディタの配色」「プレビューの配色」で共有する。
-/// 基本の配色、標準装備の配色、読み込んだカスタムテーマの順に区切って並べる。
+/// 基本の配色（`ThemeTarget.basicThemes`）、標準装備の配色、読み込んだカスタムテーマの順に区切って並べる。
 struct PreviewThemeOptions: View {
+    let target: ThemeTarget
     let customThemes: [PreviewTheme]
 
-    static let basicThemes: [PreviewTheme] = [.system, .paper]
     static let presetThemes = PreviewThemePreset.allCases.map(PreviewTheme.preset)
 
     var body: some View {
-        ForEach(Self.basicThemes, id: \.self) { Text($0.title).tag($0) }
+        ForEach(target.basicThemes, id: \.self) { Text($0.title).tag($0) }
         Divider()
         ForEach(Self.presetThemes, id: \.self) { Text($0.title).tag($0) }
         if !customThemes.isEmpty {

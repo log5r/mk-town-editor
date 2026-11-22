@@ -28,7 +28,7 @@ enum CodeSyntaxPalette {
             })
         })
 
-    /// 外観に追従する色。「システム」配色の編集画面とプレビューで使う。
+    /// 外観に追従する色。「システム」配色のプレビューで使う（編集画面に「システム」はない）。
     static func color(for token: CodeSyntaxToken) -> NSColor { dynamicColors[token]! }
 
     /// プレビューテーマ用の色。標準装備の配色とJSON拡張は、テーマが字句の色を定めていなければ `nil`（コード色のまま）。
@@ -36,7 +36,7 @@ enum CodeSyntaxPalette {
         switch theme {
         case .system: color(for: token)
         case .paper: paper[token].map(color)
-        case .preset, .extensionTheme: theme.definition?.syntaxColor(for: token)
+        case .navy, .preset, .extensionTheme: theme.definition?.syntaxColor(for: token)
         }
     }
 
