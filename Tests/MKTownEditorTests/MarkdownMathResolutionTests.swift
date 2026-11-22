@@ -135,4 +135,160 @@ final class MarkdownMathResolutionTests: XCTestCase {
         let pixels = try XCTUnwrap(attachment.image?.representations.map(\.pixelsWide).max())
         XCTAssertEqual(pixels, Int(rendered.image.size.width) * 3)
     }
+
+    // MARK: - 色を指定した部分（`\color`・`\textcolor`・`\colorbox`）
+
+    private struct Pixel {
+        let x: Int, red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat
+        var isRed: Bool { alpha > 0.5 && red > 0.8 && green < 0.3 && blue < 0.3 }
+        var isYellow: Bool { alpha > 0.5 && red > 0.85 && green > 0.85 && blue < 0.3 }
+        var luminance: CGFloat { (red + green + blue) / 3 }
+    }
+
+    /// 透明な背景に描いた画素（色は不透明度で割り戻した値）。
+    private func pixels(of rep: NSBitmapImageRep) -> [Pixel] {
+        (0..<rep.pixelsHigh).flatMap { y in (0..<rep.pixelsWide).compactMap { x -> Pixel? in
+            guard let color = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB), color.alphaComponent > 0.5 else {
+                return nil
+            }
+            return Pixel(x: x, red: color.redComponent, green: color.greenComponent, blue: color.blueComponent,
+                         alpha: color.alphaComponent)
+        } }
+    }
+
+    /// `image` を `scale` 倍（既定は2倍）の画素の透明な背景に、`appearance` の外観で描く。
+    private func drawTransparent(_ image: NSImage, appearance: NSAppearance.Name,
+                                 scale: CGFloat = 2) throws -> NSBitmapImageRep {
+        let rep = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(image.size.width * scale), pixelsHigh: Int(image.size.height * scale),
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0))
+        rep.size = image.size
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: rep))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        try XCTUnwrap(NSAppearance(named: appearance)).performAsCurrentDrawingAppearance {
+            image.draw(in: NSRect(origin: .zero, size: image.size))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
+    }
+
+    /// `\color{#FF0000}{x} + y` の `x` は赤のまま、`+ y` は外観に合わせた文字色で描く。
+    private func assertColoredX(_ rep: NSBitmapImageRep, dark: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let inked = pixels(of: rep)
+        let half = rep.pixelsWide / 2
+        let red = inked.filter(\.isRed)
+        XCTAssertGreaterThan(red.count, 10, "x must stay red", file: file, line: line)
+        XCTAssertTrue(red.allSatisfy { $0.x < half }, "only x is red", file: file, line: line)
+        let rest = inked.filter { $0.x >= half }
+        XCTAssertGreaterThan(rest.count, 10, file: file, line: line)
+        XCTAssertFalse(rest.contains(where: \.isRed), file: file, line: line)
+        let darkest = rest.map(\.luminance).min() ?? 1, lightest = rest.map(\.luminance).max() ?? 0
+        if dark {
+            XCTAssertGreaterThan(lightest, 0.8, "+ y must be light in dark appearance", file: file, line: line)
+        } else {
+            XCTAssertLessThan(darkest, 0.3, "+ y must be dark in light appearance", file: file, line: line)
+        }
+    }
+
+    /// `\colorbox{#FFFF00}{x}` は黄色の背景と、背景と異なる色の文字を描く。
+    private func assertColorBox(_ rep: NSBitmapImageRep, dark: Bool, file: StaticString = #filePath, line: UInt = #line) {
+        let inked = pixels(of: rep)
+        XCTAssertGreaterThan(inked.filter(\.isYellow).count, inked.count / 2, "yellow background", file: file, line: line)
+        let glyph = inked.filter { !$0.isYellow && $0.alpha > 0.9 }
+        if dark {
+            XCTAssertTrue(glyph.contains { $0.luminance > 0.85 && $0.blue > 0.8 }, "light glyph", file: file, line: line)
+        } else {
+            XCTAssertTrue(glyph.contains { $0.luminance < 0.3 }, "dark glyph", file: file, line: line)
+        }
+    }
+
+    func testExplicitColorsSurviveInEveryAppearance() throws {
+        let colored = try XCTUnwrap(MarkdownMathRenderer.image(inline(#"\color{#FF0000}{x} + y"#), fontSize: fontSize))
+        let textColored = try XCTUnwrap(MarkdownMathRenderer.image(inline(#"\textcolor{#FF0000}{x} + y"#),
+                                                                   fontSize: fontSize))
+        let box = try XCTUnwrap(MarkdownMathRenderer.image(inline(#"\colorbox{#FFFF00}{x}"#), fontSize: fontSize))
+        for (appearance, dark) in [(NSAppearance.Name.aqua, false), (.darkAqua, true)] {
+            assertColoredX(try drawTransparent(colored, appearance: appearance), dark: dark)
+            assertColoredX(try drawTransparent(textColored, appearance: appearance), dark: dark)
+            assertColorBox(try drawTransparent(box, appearance: appearance), dark: dark)
+        }
+        // 外観を戻しても既定の色の部分は戻る（色を設定し直す）。
+        assertColoredX(try drawTransparent(colored, appearance: .aqua), dark: false)
+    }
+
+    func testHTMLKeepsExplicitColors() throws {
+        let previous = NSApplication.shared.appearance
+        defer { NSApplication.shared.appearance = previous }
+        for (appearance, dark) in [(NSAppearance.Name.aqua, false), (.darkAqua, true)] {
+            // HTMLの数式の既定の文字色は、書き出すときのアプリの外観で決まる（従来どおり）。
+            NSApplication.shared.appearance = NSAppearance(named: appearance)
+            for (latex, check) in [(#"\color{#FF0000}{x} + y"#, assertColoredX),
+                                   (#"\colorbox{#FFFF00}{x}"#, assertColorBox)] {
+                let html = try XCTUnwrap(MarkdownMathRenderer.htmlImage(inline(latex), fontSize: fontSize), latex)
+                let source = try XCTUnwrap(html.components(separatedBy: "base64,").last?
+                    .components(separatedBy: "\"").first)
+                let rep = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(Data(base64Encoded: source))))
+                check(rep, dark, #filePath, #line)
+            }
+        }
+    }
+
+    /// 構造化プレビューで数式ブロックを描く `MTMathUILabel`（ビュー）と同じ画素になる。
+    func testImageMatchesTheLiveLabelForColoredFormula() throws {
+        let formula = inline(#"\color{#FF0000}{x} + \colorbox{#FFFF00}{y} + z"#)
+        let rendered = try XCTUnwrap(MarkdownMathRenderer.render(formula, fontSize: fontSize))
+        let label = try XCTUnwrap(MarkdownMathRenderer.label(formula, fontSize: fontSize))
+        label.appearance = NSAppearance(named: .aqua)
+        label.frame = NSRect(origin: .zero, size: rendered.image.size)
+        try XCTUnwrap(NSAppearance(named: .aqua)).performAsCurrentDrawingAppearance {
+            label.textColor = .labelColor
+            label.needsLayout = true
+            label.layoutSubtreeIfNeeded()
+        }
+        let live = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: Int(rendered.image.size.width * 2),
+            pixelsHigh: Int(rendered.image.size.height * 2), bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        live.size = rendered.image.size
+        label.cacheDisplay(in: label.bounds, to: live)
+        let drawn = try drawTransparent(rendered.image, appearance: .aqua)
+        var largest: CGFloat = 0
+        for y in 0..<live.pixelsHigh {
+            for x in 0..<live.pixelsWide {
+                let a = live.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                let b = drawn.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                let difference = [abs((a?.redComponent ?? 0) - (b?.redComponent ?? 0)),
+                                  abs((a?.greenComponent ?? 0) - (b?.greenComponent ?? 0)),
+                                  abs((a?.blueComponent ?? 0) - (b?.blueComponent ?? 0)),
+                                  abs((a?.alphaComponent ?? 0) - (b?.alphaComponent ?? 0))].max() ?? 0
+                largest = max(largest, difference)
+            }
+        }
+        XCTAssertLessThan(largest, 0.05)
+    }
+
+    /// HTMLのPNGは、画像全体を3倍の画素で描く（画像の左下の一部に1倍で描かない）。
+    func testHTMLPNGDrawsTheWholeFormulaAtThreeTimes() throws {
+        let previous = NSApplication.shared.appearance
+        defer { NSApplication.shared.appearance = previous }
+        NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        for latex in ["ax+b", #"\displaystyle\frac{1}{k}"#, #"\color{#FF0000}{x} + y"#] {
+            let image = try XCTUnwrap(MarkdownMathRenderer.image(inline(latex), fontSize: fontSize), latex)
+            let png = try XCTUnwrap(NSBitmapImageRep(data: try XCTUnwrap(MarkdownMathRenderer.pngData(image, density: 3))))
+            let expected = try drawTransparent(image, appearance: .aqua, scale: 3)
+            XCTAssertEqual(png.pixelsWide, expected.pixelsWide, latex)
+            XCTAssertEqual(png.pixelsHigh, expected.pixelsHigh, latex)
+            var largest: CGFloat = 0
+            for y in 0..<png.pixelsHigh {
+                for x in 0..<png.pixelsWide {
+                    let a = png.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                    let b = expected.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                    largest = max(largest, abs((a?.alphaComponent ?? 0) - (b?.alphaComponent ?? 0)))
+                }
+            }
+            XCTAssertLessThan(largest, 0.05, latex)
+        }
+    }
 }

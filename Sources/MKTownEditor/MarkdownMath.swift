@@ -149,8 +149,8 @@ enum MarkdownMathRenderer {
         label.latex = formula.swiftMathLaTeX
         guard label.error == nil else { return nil }
         label.fontSize = fontSize
-        // 色は描くときに `MathDrawing` が付け直す。ここでは不透明な色であればよい。
-        label.textColor = .black
+        // 既定の文字色は描くときに `MathDrawing` が外観に合わせて設定し直す。
+        label.textColor = .labelColor
         label.labelMode = formula.display ? .display : .text
         return label
     }
@@ -174,8 +174,17 @@ enum MarkdownMathRenderer {
         let baseline = (size.height - layoutHeight) / 2 + display.descent
         // 画素の画像にせず、描くたびに描く先の解像度と外観で式を描く画像にする（`MathDrawing`）。
         // 1倍の画素の画像は、Retinaの画面で引き伸ばされてぼやけ、置かれた位置の端数によって濃さも変わった。
-        let drawing = MathDrawing(display: display)
-        let image = NSImage(size: size, flipped: false) { rect in drawing.draw(in: rect) }
+        let drawing = MathDrawing(label: label)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // 描画処理はビュー（`MTMathUILabel`）に触れるため、メインスレッドでだけ描く。
+            // この画像を描くのは、プレビューの `NSTextView` の描画とコピー、HTML書き出しの `pngData` で、
+            // いずれもメインスレッドから呼ばれる（PDFと印刷はHTMLから読み込んだPNGを描き、この画像は使わない）。
+            guard Thread.isMainThread else {
+                assertionFailure("数式の画像はメインスレッドで描く")
+                return false
+            }
+            return MainActor.assumeIsolated { drawing.draw(in: rect) }
+        }
         // 外観（ライト・ダーク）が変わったときに古い色で描かないよう、描いた結果を画像に残さない。
         image.cacheMode = .never
         return Rendered(image: image, baseline: baseline)
@@ -183,27 +192,37 @@ enum MarkdownMathRenderer {
 
     /// 数式を、描く先の解像度で描く処理。`NSImage` の描画処理から呼ばれる。
     ///
-    /// 式の組版結果（`MTMathListDisplay`）は `render` で作った後は変えず、描くときは読むだけなので、
-    /// どのスレッドから描いても安全（`@unchecked Sendable`）。文字色は描くときの外観（`NSAppearance.currentDrawing()`、
-    /// 文字列を描くビューの外観）で `labelColor` を解決し、式の形（不透明部分）をその色で塗る。
-    /// `MTMathListDisplay` の色の設定は公開されておらず、設定した時点で色が決まるため、塗り直しで色を付ける。
-    private final class MathDrawing: @unchecked Sendable {
-        let display: MTMathListDisplay
+    /// 文字色は描くときの外観（`NSAppearance.currentDrawing()`、文字列を描くビューの外観）で `labelColor` を解決し、
+    /// `MTMathUILabel.textColor` に設定する。SwiftMathはこの色を式の組版結果（`displayList`）へ伝えるとき、
+    /// `\color`・`\textcolor` で色を指定した部分には指定の色を残し、`\colorbox` の背景色も変えない
+    /// （構造化プレビューの `MarkdownMathView` と同じ描き方になる）。組版結果の色の設定は公開されていないため、
+    /// ラベルを持ち続け、色が変わったときだけ設定し直す（設定すると色付きの文字列を作り直すため）。
+    @MainActor
+    private final class MathDrawing {
+        private let label: MTMathUILabel
+        private var color: CGColor?
 
-        init(display: MTMathListDisplay) { self.display = display }
+        init(label: MTMathUILabel) {
+            self.label = label
+            // 式の誤りを表示する文字欄（`NSTextField`）は使わない。数式ごとに持ち続けないよう外す。
+            label.errorLabel?.removeFromSuperview()
+            label.errorLabel = nil
+        }
 
         func draw(in rect: NSRect) -> Bool {
-            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            guard let context = NSGraphicsContext.current?.cgContext, let display = label.displayList else {
+                return false
+            }
+            let resolved = NSColor.labelColor.cgColor
+            if color != resolved {
+                label.textColor = NSColor(cgColor: resolved)
+                color = resolved
+            }
             context.saveGState()
             defer { context.restoreGState() }
             // 文字列を描くビューの文字の行列を引き継がないよう、Core Text の行列を初期値に戻す。
             context.textMatrix = .identity
-            context.beginTransparencyLayer(auxiliaryInfo: nil)
             display.draw(context)
-            context.setBlendMode(.sourceIn)
-            context.setFillColor(NSColor.labelColor.cgColor)
-            context.fill(rect)
-            context.endTransparencyLayer()
             return true
         }
     }
@@ -251,9 +270,11 @@ enum MarkdownMathRenderer {
         guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(ceil(size.width * density)),
                                          pixelsHigh: Int(ceil(size.height * density)), bitsPerSample: 8,
                                          samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-              let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        // 描画の文脈は作った時点の `size` で倍率を決めるため、先に大きさ（ポイント）を設定する。
+        // 後から設定すると1倍で描かれ、画像の左下の一部にだけ式が入る。
         rep.size = size
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
         NSApplication.shared.effectiveAppearance.performAsCurrentDrawingAppearance {
