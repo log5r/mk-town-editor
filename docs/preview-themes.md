@@ -110,7 +110,7 @@ Nordのコード背景は、公式のnord1（#3B4252）では多くの字句が�
 
 ## 実装
 
-- `PreviewTheme`（`EditorSettings.swift`）に `.preset(PreviewThemePreset)` を追加した。設定には `"nord"` のような名前で保存する。システムと紙色は従来どおり `"system"`、`"paper"`、紺色は `"navy"`、カスタムテーマは色の定義そのものを保存する。
+- `PreviewTheme`（`EditorSettings.swift`）に `.preset(PreviewThemePreset)` を追加した。設定には `"nord"` のような名前で保存する。システムと紙色は従来どおり `"system"`、`"paper"`、カスタムテーマは色の定義そのものを保存する。紺色は以前の版が読めるよう `"system"` で保存する（[設定の保存値と以前の版との互換](settings-backward-compatibility.md)）。知らないテーマ名と読めない色の定義は、投げずに「システム」として読む。
 - 標準装備の配色はカスタムテーマと同じ `DeclarativeExtension.Theme` で定義する（`PreviewThemePreset.swift`）。`PreviewTheme.definition` が両者を同じ経路で扱うため、色の適用（`PreviewTypography.themed`）、コードブロックの枠、明暗の判定に分岐はない。
 - `DeclarativeExtension.Theme.syntax` は省略可能で、項目のない既存のJSONと保存済みの設定はそのまま読める。
 - 字句の色は `CodeSyntaxPalette.color(for:theme:)` が返す。`PreviewTypography.themed` は1ブロックにつき字句の種類ごとに一度だけ色を求める。
@@ -173,7 +173,7 @@ DraculaとNordには4.5:1付近の色が残っている。読みにくいとい�
 
 この配色は当初、編集画面の「システム」として入れた（`102130e`）。プレビューの「システム」は外観に追従するのに、編集画面の「システム」は外観に追従しない固定の紺で、同じ名前が別の振る舞いを指していた。外観に合わせた配色の切り替えを入れるにあたり、紙色と並ぶ独立した配色「紺色」（英語は "Navy"）に改名し、編集画面の選択肢から「システム」を外した。
 
-- 保存値は `"navy"`。以前の版で編集画面に保存した `"system"` は書き換えず、読むときに「紺色」として扱う。置き換えは `PreviewTheme.editorColors`（`.system` を `.navy` にする）の1か所で、`ThemeTarget.normalized` と `EditorThemePalette.init(theme:)` がこれを通す。設定画面とメニューの表示・選択状態も「紺色」になる。
+- 保存値は当初 `"navy"` だったが、PR #98 より前の版が読めずに全設定を失うため（Issue #107）、`"system"` で保存するように変えた。`"navy"` も読む。詳細は[設定の保存値と以前の版との互換](settings-backward-compatibility.md)。以前の版で編集画面に保存した `"system"` は書き換えず、読むときに「紺色」として扱う。置き換えは `PreviewTheme.editorColors`（`.system` を `.navy` にする）の1か所で、`ThemeTarget.normalized` と `EditorThemePalette.init(theme:)` がこれを通す。設定画面とメニューの表示・選択状態も「紺色」になる。
 - 編集画面に `.system` が渡ってきた場合も、落ちたり外観に追従する色に戻したりせず、紺の配色にする。
 - 改名の時点では色を変えなかった。その後、文字色を明るくした（上の「文字色を明るくした経緯」）。編集画面に `.system` を渡したときに「紺色」と同じ配色になることは `testSystemEditorThemeUsesNavyPalette` が確かめる。
 
@@ -260,7 +260,7 @@ SwiftUIの `@Environment(\.colorScheme)` で決める方式は採らなかった
 
 - 設定が未保存なら編集画面は「紺色」（背景 #283264、`darkAqua`）で、外観によらず変わらないこと。切り替えは編集画面・プレビューともオフで、プレビューは未設定（システム）のままであること
 - 以前の版の設定（新しい項目なし）で、編集画面の `"system"` と未設定が「紺色」、`"github-dark"` がそのままになること。保存値は書き換えないこと（`testLegacyEditorThemeValuesAreReadAsNavy`）
-- 「紺色」が `"navy"` で保存・復元されること。編集画面の選択肢に「システム」がなく「紺色」があり、プレビューの選択肢に「紺色」がないこと
+- 「紺色」が `"system"` で保存され、読み込むと「紺色」に戻ること（`testNavyIsStoredAsSystemAndOfferedOnlyForEditor`。以前の版との互換は `SettingsBackwardCompatibilityTests`）。編集画面の選択肢に「システム」がなく「紺色」があり、プレビューの選択肢に「紺色」がないこと
 - 編集画面の配色の保存と復元、以前の既定（GitHub風（ダーク））を明示的に選んだ設定が新しい既定に置き換わらないこと
 - 「紺色」の配色が紺の背景（#283264）・ダークの外観で、着色した全要素が背景に対して7:1以上あり、本文と別の色であること。見出しとリンクが #7ADCFF で、定義の色が補正されずに使われること、ライト外観でも同じ紺であること（`testNavyPaletteKeepsNavyBackgroundAndUsesBrightColors`）。`.system` を渡しても同じ配色になること（`testSystemEditorThemeUsesNavyPalette`）
 - ミニマップ用の色（`editorColors`）が「紺色」と以前の「システム」で紺とダークになり、ほかのテーマは変わらないこと
