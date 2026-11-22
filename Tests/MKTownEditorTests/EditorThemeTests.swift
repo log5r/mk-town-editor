@@ -237,33 +237,53 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, selection)
     }
 
-    /// 「紺色」はGitHub風（ダーク）の文字色を紺（#283264）の背景に載せ、macOSの外観によらずダークの外観で表示する。
-    func testNavyPaletteUsesNavyBackgroundWithGitHubDarkColors() throws {
+    /// 「紺色」は紺（#283264）の背景を変えず、着色した文字を背景に対して7:1以上の明るい色にする（Issue #99）。
+    /// macOSの外観によらずダークの外観で表示する。
+    func testNavyPaletteKeepsNavyBackgroundAndUsesBrightColors() throws {
         let palette = EditorThemePalette(theme: .navy)
         let github = PreviewThemePreset.githubDark.theme
+        let definition = PreviewTheme.navyDefinition
         let navy = try XCTUnwrap(DeclarativeExtension.Theme.parse("#283264"))
         XCTAssertEqual(palette, .navy)
         XCTAssertEqual(palette.theme, .navy)
         XCTAssertEqual(palette.background, navy)
         XCTAssertEqual(palette.appearanceName, .darkAqua)
         XCTAssertEqual(palette.text, github.color(\.body))
-        // リンク色 #4493F8 とコメント色 #9198A1 は紺の背景で4.5:1に届かない（約3.9:1、約4.2:1）ため、明度を補正する。
-        let link = try XCTUnwrap(github.color(\.link))
-        let comment = try XCTUnwrap(github.syntaxColor(for: .comment))
-        XCTAssertLessThan(PreviewTypography.contrastRatio(link, navy), 4.5)
-        XCTAssertEqual(palette.link, EditorThemePalette.readable(link, on: navy))
-        XCTAssertEqual(palette.heading, palette.link, "見出しは本文と区別できるリンク色にする")
-        XCTAssertEqual(palette.marker, EditorThemePalette.readable(comment, on: navy))
-        // 補正の要らない字句の色はGitHub風（ダーク）のまま使う。
-        XCTAssertEqual(palette.color(for: .codeToken(.keyword)), github.syntaxColor(for: .keyword))
         XCTAssertEqual(palette.insertionPoint, palette.text)
+
+        // Issue #99の再現条件：GitHub風（ダーク）のリンク・キーワード・コメントの色は、紺の背景で7:1に届かない。
+        for color in [github.color(\.link), github.syntaxColor(for: .keyword), github.syntaxColor(for: .comment)] {
+            XCTAssertLessThan(PreviewTypography.contrastRatio(try XCTUnwrap(color), navy),
+                              PreviewTheme.navyMinimumContrast)
+        }
+        // 見出しとリンクは明るい水色。定義の色がそのまま使われ、明度の補正（白へ寄せる処理）に頼らない。
+        let link = try XCTUnwrap(DeclarativeExtension.Theme.parse("#7ADCFF"))
+        XCTAssertEqual(palette.link, link)
+        XCTAssertEqual(palette.heading, link, "見出しは本文と区別できるリンク色にする")
+        XCTAssertEqual(palette.marker, definition.syntaxColor(for: .comment))
+        XCTAssertEqual(palette.lineNumber, definition.syntaxColor(for: .comment))
+        XCTAssertEqual(palette.color(for: .listMarker), definition.syntaxColor(for: .keyword))
+        for token in CodeSyntaxToken.allCases {
+            XCTAssertEqual(palette.color(for: .codeToken(token)), definition.syntaxColor(for: token), "\(token)")
+        }
+        // 7:1に届いていた字句の色はGitHub風（ダーク）のまま使う。
+        for token in [CodeSyntaxToken.string, .attribute, .inserted, .deleted] {
+            XCTAssertEqual(definition.syntaxColor(for: token), github.syntaxColor(for: token), "\(token)")
+        }
+
         let roles: [MarkdownSyntaxSpan.Role] = [.heading, .code, .link, .marker, .quoteMarker, .listMarker,
                                                 .taskMarker, .tableMarker] +
             CodeSyntaxToken.allCases.map(MarkdownSyntaxSpan.Role.codeToken)
-        for color in [palette.text, palette.lineNumber] + roles.map(palette.color(for:)) {
-            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, navy), 4.5)
+        for (role, color) in zip(roles, roles.map(palette.color(for:))) {
+            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, navy),
+                                        PreviewTheme.navyMinimumContrast, "\(role)")
+            // 着色した文字は本文と区別できる色のままにする（白に寄せすぎない）。
+            XCTAssertNotEqual(color, palette.text, "\(role)")
         }
+        XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.lineNumber, navy),
+                                    PreviewTheme.navyMinimumContrast)
         XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.selectedText, palette.selection), 4.5)
+        XCTAssertEqual(palette.selectedText, palette.text, "明るいリンク色を混ぜた選択色でも本文を補正しない")
         XCTAssertEqual(palette.selectedTextAttributes[.backgroundColor] as? NSColor, palette.selection)
 
         // 外観がライトでも同じ紺の配色になる（動的な色を使わない）。
@@ -273,28 +293,23 @@ final class EditorThemeTests: XCTestCase {
         XCTAssertEqual(resolved, navy)
     }
 
-    /// 改名前（2026-11-22より前）の既定「システム」と同じ見た目であること。当時の色の作り方
-    /// （GitHub風（ダーク）の定義の背景だけを #283264 にしたテーマ）と、補正後の色まで一致させる。
-    func testNavyPaletteMatchesPreviousSystemEditorColors() throws {
-        var previous = PreviewThemePreset.githubDark.theme
-        previous.background = "#283264"
-        let expected = EditorThemePalette(theme: .extensionTheme(previous))
+    /// 以前の版で編集画面に保存した「システム」は、「紺色」と同じ配色で表示する。
+    func testSystemEditorThemeUsesNavyPalette() throws {
+        let navy = EditorThemePalette(theme: .navy)
+        let palette = EditorThemePalette(theme: .system)
         let roles: [MarkdownSyntaxSpan.Role] = [.heading, .code, .link, .marker, .quoteMarker, .listMarker,
                                                 .taskMarker, .tableMarker] +
             CodeSyntaxToken.allCases.map(MarkdownSyntaxSpan.Role.codeToken)
-        // エディタに「システム」が渡ってきても同じ紺の配色にする。
-        for palette in [EditorThemePalette(theme: .navy), EditorThemePalette(theme: .system)] {
-            XCTAssertEqual(palette, .navy)
-            XCTAssertEqual(palette.background, expected.background)
-            XCTAssertEqual(palette.text, expected.text)
-            XCTAssertEqual(palette.selection, expected.selection)
-            XCTAssertEqual(palette.selectedText, expected.selectedText)
-            XCTAssertEqual(palette.insertionPoint, expected.insertionPoint)
-            XCTAssertEqual(palette.lineNumber, expected.lineNumber)
-            XCTAssertEqual(palette.appearanceName, .darkAqua)
-            for role in roles {
-                XCTAssertEqual(palette.color(for: role), expected.color(for: role), "\(role)")
-            }
+        XCTAssertEqual(palette, .navy)
+        XCTAssertEqual(palette.background, navy.background)
+        XCTAssertEqual(palette.text, navy.text)
+        XCTAssertEqual(palette.selection, navy.selection)
+        XCTAssertEqual(palette.selectedText, navy.selectedText)
+        XCTAssertEqual(palette.insertionPoint, navy.insertionPoint)
+        XCTAssertEqual(palette.lineNumber, navy.lineNumber)
+        XCTAssertEqual(palette.appearanceName, .darkAqua)
+        for role in roles {
+            XCTAssertEqual(palette.color(for: role), navy.color(for: role), "\(role)")
         }
     }
 

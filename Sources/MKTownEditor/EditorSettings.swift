@@ -64,7 +64,7 @@ enum MarkdownDialect: String, Codable, CaseIterable, Sendable {
 enum PreviewTheme: Codable, Hashable, Sendable {
     /// プレビューではmacOSの外観に追従する配色。編集画面では選べず、以前の版の保存値は「紺色」として読む。
     case system
-    /// 編集画面の既定の配色。GitHub風（ダーク）の文字色を紺の背景に載せる。プレビューの選択肢には出さない。
+    /// 編集画面の既定の配色。GitHub風（ダーク）を明るくした文字色を紺の背景に載せる。プレビューの選択肢には出さない。
     case navy
     case paper
     case preset(PreviewThemePreset)
@@ -75,11 +75,19 @@ enum PreviewTheme: Codable, Hashable, Sendable {
 
     /// 「紺色」の背景。
     static let navyBackground = "#283264"
-    /// 「紺色」の色。GitHub風（ダーク）の文字色を紺の背景に載せる。背景が暗い色で固定のため、
-    /// macOSの外観がライトでもダークの外観で表示する。
+    /// 「紺色」の着色した文字（見出し・リンク・記号・行番号・コードの字句）に求める、背景とのコントラスト比（WCAG AAA）。
+    /// 紺の背景は彩度があり、4.5:1では青や赤の文字が沈んで見えるため、ほかのテーマより高くする（Issue #99）。
+    static let navyMinimumContrast = 7.0
+    /// 「紺色」の色。GitHub風（ダーク）の文字色を紺の背景に載せ、紺の背景で `navyMinimumContrast` に
+    /// 届かない色は、同じ色相の明るい色に置き換える。背景は配色のコンセプトなので変えない。
+    /// 背景が暗い色で固定のため、macOSの外観がライトでもダークの外観で表示する。
     static let navyDefinition: DeclarativeExtension.Theme = {
         var colors = PreviewThemePreset.githubDark.theme
         colors.background = navyBackground
+        // 見出しとリンクは明るい水色にする。
+        colors.link = "#7ADCFF"
+        colors.syntax?.merge(["keyword": "#FFB4AC", "type": "#DABAFF", "comment": "#C0C6D0",
+                              "number": "#92CDFF", "variable": "#FFB76E"]) { _, bright in bright }
         return colors
     }()
 
@@ -384,7 +392,7 @@ enum ThemeTarget: CaseIterable, Sendable {
     }
 
     /// 選択肢の先頭に並べる基本の配色。「システム」はプレビューだけ、「紺色」は編集画面だけに出す。
-    /// 紺の背景ではリンク色が約3.9:1になり、色を補正しないプレビューの基準（4.5:1）に届かないため。
+    /// 「紺色」は編集画面のための配色で、プレビューには出さない。
     var basicThemes: [PreviewTheme] {
         switch self {
         case .editor: [.navy, .paper]
