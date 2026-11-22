@@ -681,7 +681,10 @@ struct HoverLinkText: NSViewRepresentable {
         view.textContainerInset = .zero
         view.isVerticallyResizable = true
         view.isHorizontallyResizable = false
-        view.textContainer?.widthTracksTextView = false
+        // 文字は、SwiftUI が決めたビューの幅で折り返す（`hugsContent` によらない）。
+        // 行の幅いっぱいを使う場合、`sizeThatFits` は尋ねられた幅にコンテナを合わせる。`LazyVStack` は置いた後の
+        // 先頭の行を幅の指定のない提案（500）で測り直すことがあり、従わせないとコンテナの幅が置かれた幅と食い違う（#102）。
+        view.textContainer?.widthTracksTextView = true
         view.delegate = context.coordinator
         updateNSView(view, context: context)
         return view
@@ -703,8 +706,6 @@ struct HoverLinkText: NSViewRepresentable {
         view.loadsExternalLinkPreviews = loadsExternalPages
         view.linkTextAttributes = linkAttributes
         view.revealSource = onRevealSource
-        // 文字の幅に合わせる場合は、SwiftUI が決めたビューの幅で折り返す。幅は `sizeThatFits` が別のレイアウトで測る。
-        view.textContainer?.widthTracksTextView = hugsContent
         // `NSTextStorage` はフォントを置き換えるため、ビューの文字列は渡した文字列と等しくならないことがある。
         // 渡した文字列を覚えておいて比べ、更新のたびに同じ内容を入れ直さないようにする。
         if !(view.appliedRendered?.isEqual(to: rendered) ?? false) {
@@ -718,6 +719,8 @@ struct HoverLinkText: NSViewRepresentable {
                       context: Context) -> CGSize? {
         guard let container = view.textContainer, let manager = view.layoutManager else { return nil }
         guard hugsContent else {
+            // 提案された幅いっぱいを使う。表示中のビューのコンテナで測り、同じ幅に置かれたときはこのレイアウトをそのまま使う。
+            // 別の幅に置かれた場合は、コンテナがビューの幅に従ってレイアウトし直す（`widthTracksTextView`）。
             let width = max(1, proposal.width ?? 500)
             container.containerSize = NSSize(width: width, height: CGFloat.greatestFiniteMagnitude)
             view.frame.size.width = width
