@@ -151,6 +151,7 @@ struct MarkdownPreview: View {
                                     if let callout = block.calloutKind {
                                         HStack(alignment: .top, spacing: 8) {
                                             Image(systemName: callout.symbolName)
+                                                .font(PreviewSupplementaryFont.body(zoom: zoom))
                                                 .accessibilityHidden(true)
                                             calloutContent(block, in: analysis)
                                         }
@@ -171,7 +172,8 @@ struct MarkdownPreview: View {
                                             documentIndex: workspaceIndex,
                                             loadOpenBuffers: loadWorkspaceOpenBuffers,
                                             onOpen: onOpenEmbeddedDocument,
-                                            preservesSoftLineBreaks: documentContext.preservesSoftLineBreaks)
+                                            preservesSoftLineBreaks: documentContext.preservesSoftLineBreaks,
+                                            zoom: zoom)
                                     } else if let media = MarkdownMedia(block, dialect: analysis.dialect) {
                                         MarkdownMediaPreview(media: media, documentContext: documentContext)
                                     } else if documentContext.markdownDialect == .extended,
@@ -182,14 +184,17 @@ struct MarkdownPreview: View {
                                             MarkdownMathView(formula: formula, zoom: zoom)
                                                 .accessibilityLabel(formula.latex)
                                             if let target = analysis.crossReferences.target(forBlockID: block.id) {
-                                                Text(target.label).foregroundStyle(.secondary)
+                                                Text(target.label)
+                                                    .font(PreviewSupplementaryFont.body(zoom: zoom))
+                                                    .foregroundStyle(.secondary)
                                             }
                                         }
                                         .frame(maxWidth: .infinity)
                                     } else if let table = block.table {
                                         VStack(alignment: .leading) {
                                             if let target = analysis.crossReferences.target(forBlockID: block.id) {
-                                                Text(target.label).font(.caption).foregroundStyle(.secondary)
+                                                Text(target.label).font(PreviewSupplementaryFont.caption(zoom: zoom))
+                                                    .foregroundStyle(.secondary)
                                             }
                                             tableView(table, sourceRange: block.sourceRange, in: analysis)
                                         }
@@ -225,15 +230,15 @@ struct MarkdownPreview: View {
                                 }
                             }
                             if !analysis.footnotes.entries.isEmpty {
-                                Text("脚注").font(.headline)
+                                Text("脚注").font(PreviewSupplementaryFont.headline(zoom: zoom))
                                     .padding(.top, 20)
                                 ForEach(analysis.footnotes.entries, id: \.number) { note in
                                     HStack(alignment: .top, spacing: 8) {
-                                        Text("\(note.number).")
-                                        inlineText(MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
-                                            MarkdownRenderer.renderTableCell(note.content, in: analysis,
-                                                                             documentContext: renderContext)
-                                        })
+                                        Text("\(note.number).").font(PreviewSupplementaryFont.body(zoom: zoom))
+                                        // 表のセルと同じ描画で、表示倍率とテーマを本文と同じく反映する。
+                                        inlineText(renderCache.renderCell(note.content, in: analysis,
+                                            context: renderContext, zoom: zoom,
+                                            remoteRevision: resourceRevision, theme: theme))
                                         Button("本文に戻る", systemImage: "arrow.uturn.backward") {
                                             if let block = layout.visibleBlocks.first(where: {
                                                 NSLocationInRange(note.firstReferenceRange.location,
@@ -249,9 +254,10 @@ struct MarkdownPreview: View {
                             }
                             if documentContext.markdownDialect == .extended,
                                citationCatalog.hasCitation(in: analysis) {
-                                Text("参考文献").font(.headline).padding(.top, 20)
+                                Text("参考文献").font(PreviewSupplementaryFont.headline(zoom: zoom)).padding(.top, 20)
                                 ForEach(Array(citationCatalog.entries.enumerated()), id: \.element.key) { index, entry in
                                     Text(verbatim: "\(index + 1). \(entry.bibliographyText)")
+                                        .font(PreviewSupplementaryFont.body(zoom: zoom))
                                         .textSelection(.enabled)
                                 }
                             }
@@ -416,8 +422,9 @@ struct MarkdownPreview: View {
     private func inlineText(_ rendered: NSAttributedString, sourceRange: NSRange? = nil) -> some View {
         if PreviewAppKitIndent.containsListIndent(rendered) || PreviewAppKitIndent.containsQuotePrefix(rendered) {
             // 複数のブロックをまとめた文字列（コールアウト）の入れ子のリストと引用。
-            // 字下げと引用の縦線を行の幅いっぱいで描く。
-            HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered), source: markdown,
+            // 字下げと引用の縦線を行の幅いっぱいで描く。字下げは文字と同じく表示倍率で広げる。
+            HoverLinkText(rendered: PreviewAppKitIndent.aligned(rendered, indentScale: CGFloat(zoom)),
+                          source: markdown,
                           context: documentContext, loadsExternalPages: loadsExternalLinkPreviews,
                           linkAttributes: PreviewLinkStyle.textViewAttributes(for: theme),
                           onRevealSource: revealAction(for: sourceRange))
@@ -450,6 +457,7 @@ struct MarkdownPreview: View {
     }
 
     /// コールアウトの中身。直下のコードブロックは文字列に含めず、通常のコードブロックと同じ枠で囲む。
+    /// 文章の部分は描画結果のキャッシュを通らないため、ここで表示倍率を反映する（コードブロックは `blockText` が反映する）。
     private func calloutContent(_ block: MarkdownBlock, in analysis: MarkdownAnalysis) -> some View {
         let segments = MarkdownRenderer.$localImageRequester.withValue(renderCache.imageRequester) {
             MarkdownRenderer.renderCalloutSegments(block, in: analysis,
@@ -463,7 +471,7 @@ struct MarkdownPreview: View {
                 ForEach(segments.indices, id: \.self) { index in
                     switch segments[index] {
                     case let .text(rendered):
-                        inlineText(rendered, sourceRange: block.sourceRange)
+                        inlineText(PreviewTypography.scaled(rendered, by: zoom), sourceRange: block.sourceRange)
                     case let .codeBlock(code):
                         codeBlockView(code, in: analysis, isSearchMatch: isSearchMatch(code))
                     }
@@ -1051,8 +1059,8 @@ private struct MarkdownTextPreview: NSViewRepresentable {
                 ?? MarkdownRenderer.render(markdown, documentContext: documentContext)
         }
         // 引用の中のリストの字下げと、幅の広い行頭記号の下の本文の位置をそろえる。
-        textView.textStorage?.setAttributedString(
-            PreviewAppKitIndent.aligned(PreviewTypography.scaled(rendered, by: zoom)))
+        // 字下げは構造化プレビューのリスト項目と同じく、文字と同じ倍率で広げる。
+        textView.textStorage?.setAttributedString(PreviewTypography.scaledAndAligned(rendered, by: zoom))
         coordinator.renderedSource = markdown
         coordinator.renderedContext = documentContext
         coordinator.renderedZoom = zoom

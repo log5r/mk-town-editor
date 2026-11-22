@@ -166,13 +166,47 @@ SwiftMath 1.7.3の色は `#RRGGBB` の16進数だけを解釈する。`\color{re
 プレビューの文字の大きさを変える操作はこの表示倍率だけで、ほかの経路は次のとおり。
 
 - 編集欄の文字の大きさ（設定の文字サイズ、フォルダごとの文字サイズ、「編集を拡大・縮小」）は編集欄だけに効き、プレビューには届かない。編集欄は数式を描かない（数式の描画は `MarkdownRenderer`・`MarkdownMathView`・HTML書き出しだけ）。
-- 構造化プレビューのコールアウトと脚注、埋め込み文書は、文字も数式も表示倍率を受け取らない（従来どおり。文字と数式の大きさの比は保たれる）。
+- 構造化プレビューのコールアウトと脚注、埋め込み文書は、文字も数式も表示倍率を受け取らなかった。issue #101 で直した（次節）。
 
 ### 修正
 
 - インライン数式（構造化プレビューの各ブロックと、文書全体を1つの `NSTextView` で描く経路の数式ブロックを含む）は、`MarkdownMathRenderer.attachment` が作る添付を `MarkdownMathAttachment`（`NSTextAttachment` の派生）にして、ほかの画像と区別する。`PreviewTypography.scaled` はフォントと同じ倍率で、数式の添付の大きさとベースラインの下げ幅（`bounds` の幅・高さ・`origin.y`）を変えた新しい添付に置き換える。元の文字列の添付は変えない。画像は描く先の解像度で描くため（前節）、広げてもぼやけない。分数の横線や根号の線も式と同じ倍率で太くなる。広げた大きさは、倍率を掛けた文字の大きさで組み直した場合と、画像の大きさの切り上げの分（1pt未満）しか違わない。
 - 構造化プレビューの数式ブロック（`MarkdownMathView`）は `zoom` を受け取り、文字の大きさを `fontSize(surrounding: bodyFontSize × zoom)` にする。倍率が変わったら `updateNSView` で大きさを設定し直し、SwiftUI に大きさを測り直させる。
 - 描画結果のキャッシュ（`PreviewRenderCache`）は倍率が変わると捨てて描き直すため、古い倍率の数式は残らない。HTML・PDF・スライド・リッチテキストのコピーは表示倍率を使わず、変わらない。
+
+## コールアウト・脚注・埋め込み文書を表示倍率に合わせる（issue #101）
+
+### 症状
+
+表示倍率を変えても、構造化プレビューのコールアウト、脚注、埋め込み文書は、文字も数式も大きさが変わらなかった。本文・見出し・リスト・表は追従していた。
+
+### 原因
+
+表示倍率は描画結果のキャッシュ（`PreviewRenderCache.render`・`renderCell`）の中で `PreviewTypography.scaled` を通して反映していた。次の3か所はキャッシュを通らずに `MarkdownRenderer` の結果をそのまま描き、`scaled` を通していなかった。
+
+- コールアウト: `MarkdownPreview.calloutContent` が `MarkdownRenderer.renderCalloutSegments` の文章の部分をそのまま `inlineText` に渡していた。字下げを整える `PreviewAppKitIndent.aligned` にも倍率（`indentScale`）を渡していなかった。コールアウトの中のコードブロックは `blockText`（キャッシュ）を通るため、もともと追従していた。
+- 脚注: `MarkdownPreview` の脚注の一覧が `MarkdownRenderer.renderTableCell` を直接呼んでいた。表のセルは同じ描画を `renderCell` で通していたため追従していた。番号と見出しは SwiftUI の `Text` の文字スタイル（`body`・`headline`）で、倍率を受け取らなかった。
+- 埋め込み文書: `WorkspaceEmbeddedDocumentView` が `zoom` を受け取っておらず、`WorkspaceEmbedSegment.render` は文章の部分を `aligned` だけ、コードブロックを `codeBlockBody` だけで描いていた。
+
+数式は `scaled` が数式の添付（`MarkdownMathAttachment`）を広げる（前節）ため、文字と同じ経路を通せば一緒に追従する。
+
+### 修正
+
+- コールアウトの文章の部分を `PreviewTypography.scaled` で広げ、`inlineText` の `aligned` に `indentScale: zoom` を渡す。`inlineText` で `aligned` を通る文字列は、構造化プレビューではコールアウトだけ（段落は字下げを除いてから渡し、表のセルと脚注は字下げを持たない）。
+- 脚注は表のセルと同じく `renderCache.renderCell(… zoom:theme:)` で描く。キャッシュも倍率の変更で捨てられる。表のセルと同じくテーマの文字色も付くようになった。
+- `WorkspaceEmbeddedDocumentView` に `zoom` を渡し、`WorkspaceEmbedSegment.render(_:documentContext:zoom:)` で文章の部分を `PreviewTypography.scaledAndAligned`（`scaled` と `aligned(indentScale:)`）、コードブロックを `scaled` で描く。倍率が変わったら（`onChange(of: zoom)`）、読み込み直さず、読み込み済みの解析結果から描き直す。
+- SwiftUI の `Text` で描く補助の文字（脚注・参考文献の見出しと番号、コールアウトの記号、埋め込み文書の見出しと警告、数式ブロックと表の相互参照のラベル）は `PreviewSupplementaryFont` で倍率を掛ける。倍率1では従来の文字スタイルと同じ大きさ（`body`・`headline` は13pt、`caption` は10pt）。
+- 同じ原因の別の経路として、次も直した。
+  - 全体を1つの `NSTextView` で描くプレビュー（`MarkdownTextPreview`）は、文字だけ広げてリストの字下げを広げていなかった。`PreviewTypography.scaledAndAligned` で構造化プレビューと同じく字下げも広げる。
+  - `MarkdownRenderer` が本文の後ろに付ける脚注・参考文献の見出しと番号（全体を1つで描くプレビューと埋め込み文書が使う）は、フォントも文字色も持たず、`NSTextView` の既定（Helvetica 12pt、黒）で描かれていた。`scaled` はフォントのある範囲だけを変えるため倍率にも追従しなかった。13pt（見出しは太字）と `textColor` を付ける。
+- 余白（コールアウトの `padding`、ブロックの間隔、引用の縦線の幅、コードブロックの枠の余白）は、本文側でも表示倍率で変えていないため、そのままにした。変えるのは文字と、文字の位置を決める字下げだけ。
+
+### 残したもの
+
+- 画像（`MarkdownImageAttachment`）、Mermaid・外部の図、音声・動画（`MarkdownMediaPreview` の見出しを含む）は表示倍率を受け取らない。
+- 表の列の幅（`tableView` の `widths`、120〜360pt）は文字数から決め、倍率を掛けていない。倍率を上げるとセルの折り返しが増える。
+- 操作部品（脚注の「本文に戻る」ボタン、埋め込み文書の「元の書類を開く」ボタン、読み込み中の表示）は本文の文字ではないため、倍率を掛けない。
+- コールアウトの文章の部分はキャッシュを通らず、描くたびに `MarkdownRenderer` で描き直す（従来どおり）。
 
 ## 設計上の判断
 
@@ -184,6 +218,8 @@ SwiftMath 1.7.3の色は `#RRGGBB` の16進数だけを解釈する。`\color{re
 
 - 表示倍率は `Tests/MKTownEditorTests/MarkdownMathZoomTests.swift` で確認する。倍率0.8・1.5の実際の構造化プレビューで、インライン数式の `bounds` が倍率1の倍率倍になり、倍率を掛けた文字の1.2倍で組んだ大きさと一致し、数式のベースラインが文字のベースラインにそろうこと。`$ax+b$`・`$\displaystyle ax+b$`・数式ブロックが同じ大きさであること。表示中のプレビューで倍率を変えると両方が更新され、倍率1に戻すと元の大きさに戻ること（キャッシュした文字列を変えていない）。広げた数式を2倍の画面に描いてもぼやけないこと。
 
+- コールアウト・脚注・埋め込み文書は `Tests/MKTownEditorTests/PreviewZoomContainerTests.swift` で確認する。実際の構造化プレビュー（`NSHostingView`）を倍率1と1.5で描き、それぞれの `NSTextView` の文字の大きさ（本文15pt、脚注14pt）、数式の添付の `bounds`（幅・高さ・`origin.y`）、入れ子のリストの本文の左端の差が倍率倍になること。コールアウトの記号と脚注の番号（SwiftUI の `Text`）が広がること（本文の左端からの位置で測る）。埋め込み文書は表示中に倍率を変えて描き直され、倍率1に戻すと元に戻り、読み込みが1回であること。埋め込み文書のコードブロックのフォント、後ろに付く脚注の見出しと番号のフォント・文字色、全体を1つで描くプレビューのリストの字下げ、`PreviewSupplementaryFont` の大きさ（倍率1で文字スタイルと同じ）も確かめる。`PreviewSupplementaryFont` の1件を除く6件は修正前に失敗した（倍率1.5で文字が15ptのまま、数式の幅が50ptのまま、字下げが24ptのまま、脚注の番号の幅が9.5ptのまま、など）。
+
 - 大きさの規則（1.2倍）と、プレビューで同じ段落の `$ax+b$`・`$\displaystyle ax+b$`・`$$ax+b$$` の画像が同じ大きさ（本文15ptの1.2倍）であること。構造化プレビューの `MarkdownMathView` の大きさも同じであること。見出しの数式が見出しの文字の1.2倍であること。`$\displaystyle\frac{1}{k}$` と `$\frac{1}{k}$` が同じ文字の大きさで描かれ、書体の違いだけで高さが変わること。
 - 添付の `bounds.origin.y` が `-baseline` に等しいこと。画像のピクセルから、`x` の下端がベースラインにあり、分数の横線がベースラインの0.1〜0.45em上（数式の軸）にあること。
 - 実際の構造化プレビュー（`NSHostingView` の `MarkdownPreview`、倍率0.8・1・1.5）で、段落の途中の行に置いた分数が前後の行の文字に重ならず、数式のベースラインが同じ行の文字のベースラインと一致し、行とビューの高さが広がること。`HoverLinkTextMeasurer` の測定とビューのレイアウトの高さが一致すること。
@@ -194,6 +230,7 @@ SwiftMath 1.7.3の色は `#RRGGBB` の16進数だけを解釈する。`\color{re
 
 ```sh
 swift test --filter MarkdownMath
+swift test --filter PreviewZoomContainerTests
 swift test
 ```
 

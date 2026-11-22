@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 @MainActor
 enum PreviewTypography {
@@ -26,6 +27,12 @@ enum PreviewTypography {
             result.addAttribute(.attachment, value: formula.scaled(by: CGFloat(zoom)), range: range)
         }
         return result
+    }
+
+    /// 複数のブロックを1つの `NSTextView` で描く文字列（文書全体を1つで描くプレビュー、埋め込み文書）を表示倍率で拡大・縮小し、
+    /// リストの字下げも同じ倍率で整える。構造化プレビューのリスト項目（`PreviewAppKitIndent.aligned(_:indentScale:)`）と同じ扱い。
+    static func scaledAndAligned(_ rendered: NSAttributedString, by zoom: Double) -> NSAttributedString {
+        PreviewAppKitIndent.aligned(scaled(rendered, by: zoom), indentScale: CGFloat(zoom))
     }
 
     static func themed(_ rendered: NSAttributedString, kind: MarkdownBlock.Kind?,
@@ -468,5 +475,20 @@ enum PreviewQuoteBars {
             ? layoutManager.location(forGlyphAt: layoutManager.glyphIndexForCharacter(at: index + 1)).x : start
         let center = line.minX + start + max(0, end - start) / 2
         return (center - lineWidth / 2).rounded()
+    }
+}
+
+/// 構造化プレビューで SwiftUI の `Text` が描く補助の文字（脚注と参考文献の見出し・番号、コールアウトの記号、
+/// 埋め込み文書の見出し、相互参照のラベル）の大きさ。
+/// 倍率1では従来の文字スタイル（`body`・`headline` は13pt、`caption` は10pt）と同じ大きさにし、表示倍率で拡大・縮小する。
+/// 文字スタイルのままでは、`MarkdownRenderer` が描く本文だけが表示倍率で変わり、隣の補助の文字が取り残される。
+enum PreviewSupplementaryFont {
+    static let bodySize: CGFloat = 13
+    static let captionSize: CGFloat = 10
+
+    static func body(zoom: Double) -> Font { .system(size: bodySize * zoom) }
+    static func headline(zoom: Double) -> Font { .system(size: bodySize * zoom, weight: .bold) }
+    static func caption(zoom: Double, weight: Font.Weight = .regular) -> Font {
+        .system(size: captionSize * zoom, weight: weight)
     }
 }

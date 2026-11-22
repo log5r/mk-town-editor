@@ -65,28 +65,37 @@ enum MarkdownRenderer {
     }
 
     /// 脚注と参考文献を本文の後ろに付ける。
+    /// 見出しと番号にもフォントと文字色を付ける。属性がないと `NSTextView` の既定（Helvetica 12pt、黒）で描かれ、
+    /// 暗い外観で読めず、プレビューの表示倍率（`PreviewTypography.scaled` はフォントのある範囲だけを変える）にも追従しない。
     private static func appendBackMatter(to output: NSMutableAttributedString, analysis: MarkdownAnalysis,
                                          context: DocumentContext) {
+        let text: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 13),
+                                                   .foregroundColor: NSColor.textColor]
+        var heading = text
+        heading[.font] = NSFont.boldSystemFont(ofSize: 13)
         if !analysis.footnotes.entries.isEmpty {
-            output.append(NSAttributedString(string: "\n\n" + String(localized: "脚注") + "\n"))
+            output.append(NSAttributedString(string: "\n\n", attributes: text))
+            output.append(NSAttributedString(string: String(localized: "脚注") + "\n", attributes: heading))
             for note in analysis.footnotes.entries {
-                let prefix = NSMutableAttributedString(string: "\(note.number). ")
+                let prefix = NSMutableAttributedString(string: "\(note.number). ", attributes: text)
                 prefix.append(inline(note.content, baseFont: .systemFont(ofSize: 13),
                     references: analysis.references, context: context))
-                let back = NSMutableAttributedString(string: " ↩")
+                let back = NSMutableAttributedString(string: " ↩", attributes: text)
                 back.addAttribute(.link, value: URL(string: "mktown-footnote-back:///\(note.number)")!,
                     range: NSRange(location: 1, length: 1))
                 prefix.append(back)
-                prefix.append(NSAttributedString(string: "\n"))
+                prefix.append(NSAttributedString(string: "\n", attributes: text))
                 output.append(prefix)
             }
         }
         if analysis.dialect == .extended,
            let catalog = context.citationCatalog,
            catalog.hasCitation(in: analysis) {
-            output.append(NSAttributedString(string: "\n\n" + String(localized: "参考文献") + "\n"))
+            output.append(NSAttributedString(string: "\n\n", attributes: text))
+            output.append(NSAttributedString(string: String(localized: "参考文献") + "\n", attributes: heading))
             for (index, entry) in catalog.entries.enumerated() {
-                output.append(NSAttributedString(string: "\(index + 1). \(entry.bibliographyText)\n"))
+                output.append(NSAttributedString(string: "\(index + 1). \(entry.bibliographyText)\n",
+                                                 attributes: text))
             }
         }
     }
