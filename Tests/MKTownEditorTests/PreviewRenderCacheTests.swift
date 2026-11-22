@@ -215,8 +215,8 @@ final class PreviewRenderCacheTests: XCTestCase {
         let cache = PreviewRenderCache()
         let valid = try XCTUnwrap(MarkdownMath.displayFormula("$$\nx^2+y^2\n$$"))
         let invalid = try XCTUnwrap(MarkdownMath.displayFormula("$$\n\\frac{\n$$"))
-        XCTAssertEqual(cache.canRenderDisplayFormula(valid), MarkdownMathRenderer.label(valid) != nil)
-        XCTAssertEqual(cache.canRenderDisplayFormula(invalid), MarkdownMathRenderer.label(invalid) != nil)
+        XCTAssertEqual(cache.canRenderDisplayFormula(valid), MarkdownMathRenderer.label(valid, fontSize: MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize)) != nil)
+        XCTAssertEqual(cache.canRenderDisplayFormula(invalid), MarkdownMathRenderer.label(invalid, fontSize: MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize)) != nil)
         XCTAssertTrue(cache.canRenderDisplayFormula(valid))
         XCTAssertFalse(cache.canRenderDisplayFormula(invalid))
     }

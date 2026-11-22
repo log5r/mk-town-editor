@@ -3,6 +3,9 @@ import Foundation
 
 @MainActor
 enum MarkdownRenderer {
+    /// プレビューの本文の文字の大きさ。数式ブロックの大きさもこれから決める（`MarkdownMathRenderer.fontSize(surrounding:)`）。
+    nonisolated static let bodyFontSize: CGFloat = 15
+
     /// プレビューではローカル画像を背景でデコードし、完了まで読み込み中の表示にする。
     /// 値は要求元のプレビューで、閉じた時に待機中のデコードを取り消すために使う。
     /// 書き出し・印刷では既定の `nil` のまま同期的にデコードし、画像を欠かさない。
@@ -104,7 +107,7 @@ enum MarkdownRenderer {
             if block.kind == .quote {
                 if let callout = block.calloutKind {
                     builder.appendText(NSAttributedString(string: "\(callout.title)\n",
-                        attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                        attributes: baseAttributes(font: .systemFont(ofSize: bodyFontSize, weight: .semibold),
                                                    color: .labelColor)), quoteDepth: quoteDepth + 1)
                 }
                 appendSegments(children, in: analysis, context: context, quoteDepth: quoteDepth + 1,
@@ -206,7 +209,7 @@ enum MarkdownRenderer {
             let content = NSMutableAttributedString()
             if isFirstText {
                 content.append(NSAttributedString(string: callout.title,
-                    attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                    attributes: baseAttributes(font: .systemFont(ofSize: bodyFontSize, weight: .semibold),
                                                color: .labelColor)))
                 if !pending.isEmpty { content.append(NSAttributedString(string: "\n")) }
             }
@@ -255,7 +258,7 @@ enum MarkdownRenderer {
             let content = renderSequence(children, in: analysis, context: context)
             if let callout = block.calloutKind {
                 let result = NSMutableAttributedString(string: "\(callout.title)\n",
-                    attributes: baseAttributes(font: .systemFont(ofSize: 15, weight: .semibold),
+                    attributes: baseAttributes(font: .systemFont(ofSize: bodyFontSize, weight: .semibold),
                                                color: .labelColor))
                 result.append(content)
                 return quote(result)
@@ -275,7 +278,7 @@ enum MarkdownRenderer {
     fileprivate static func quote(_ content: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString()
         let source = content.string as NSString
-        var prefixAttributes = baseAttributes(font: .systemFont(ofSize: 15), color: .tertiaryLabelColor)
+        var prefixAttributes = baseAttributes(font: .systemFont(ofSize: bodyFontSize), color: .tertiaryLabelColor)
         // AppKit で描く箇所（`PreviewAppKitIndent`）は、引用記号を行頭に固定し、リストの字下げをその内側に置く。
         prefixAttributes[.previewQuotePrefix] = true
         let prefix = NSAttributedString(string: "│  ", attributes: prefixAttributes)
@@ -330,7 +333,7 @@ enum MarkdownRenderer {
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content,
                                                   preservesSoftLineBreaks: context.preservesSoftLineBreaks),
-                                 baseFont: .systemFont(ofSize: 15), references: references,
+                                 baseFont: .systemFont(ofSize: bodyFontSize), references: references,
                                  footnotes: footnotes, context: context)
             if showTaskPrefix || task == nil {
                 let prefix = task.map { $0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ") } ?? "•  "
@@ -342,7 +345,7 @@ enum MarkdownRenderer {
             let task = block.task
             let content = inline(paragraphContent(block, content: task?.content,
                                                   preservesSoftLineBreaks: context.preservesSoftLineBreaks),
-                                 baseFont: .systemFont(ofSize: 15), references: references,
+                                 baseFont: .systemFont(ofSize: bodyFontSize), references: references,
                                  footnotes: footnotes, context: context)
             let prefix = showTaskPrefix
                 ? task.map { "\(number).  " + ($0.isChecked ? String(localized: "☑ 完了  ") : String(localized: "☐ 未完了  ")) }
@@ -369,12 +372,12 @@ enum MarkdownRenderer {
                 let output = NSMutableAttributedString(string: "")
                 for entry in definitionList.entries {
                     if output.length > 0 { output.append(NSAttributedString(string: "\n")) }
-                    let term = inline(entry.term, baseFont: .boldSystemFont(ofSize: 15),
+                    let term = inline(entry.term, baseFont: .boldSystemFont(ofSize: bodyFontSize),
                                       references: references, footnotes: footnotes, context: context)
                     output.append(term)
                     for definition in entry.definitions {
                         output.append(NSAttributedString(string: "\n    "))
-                        output.append(inline(definition, baseFont: .systemFont(ofSize: 15),
+                        output.append(inline(definition, baseFont: .systemFont(ofSize: bodyFontSize),
                                              references: references, footnotes: footnotes, context: context))
                     }
                 }
@@ -383,7 +386,7 @@ enum MarkdownRenderer {
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
                 let output = NSMutableAttributedString(attributedString:
-                    MarkdownMathRenderer.attachment(formula, fontSize: 21)
+                    MarkdownMathRenderer.attachment(formula, fontSize: MarkdownMathRenderer.fontSize(surrounding: bodyFontSize))
                     ?? NSAttributedString(string: formula.source)
                 )
                 if let target = context.crossReferences?.target(forBlockID: block.id) {
@@ -393,7 +396,7 @@ enum MarkdownRenderer {
             }
             let content = inline(paragraphContent(block,
                                                   preservesSoftLineBreaks: context.preservesSoftLineBreaks),
-                                 baseFont: .systemFont(ofSize: 15),
+                                 baseFont: .systemFont(ofSize: bodyFontSize),
                                  captionStandaloneImage: true,
                                  references: references, footnotes: footnotes, context: context)
             // リスト項目の続きの段落だけを字下げする。引用の直下の段落（深さ0）は引用記号の後ろに続ける。
@@ -463,7 +466,8 @@ enum MarkdownRenderer {
             let range = (result.string as NSString).range(of: token)
             guard range.location != NSNotFound else { continue }
             result.replaceCharacters(in: range, with:
-                MarkdownMathRenderer.attachment(formula, fontSize: baseFont.pointSize)
+                MarkdownMathRenderer.attachment(formula, fontSize: MarkdownMathRenderer.fontSize(
+                    surrounding: baseFont.pointSize))
                     ?? NSAttributedString(string: formula.source))
         }
         let fullRange = NSRange(location: 0, length: result.length)
@@ -689,7 +693,7 @@ enum MarkdownRenderer {
     /// リストの行頭記号（`•  `、`1.  `、タスクの状態）の属性。
     /// `NSTextView` で描く箇所は記号の範囲を `previewListMarker` で見分け、本文の左端をそろえる（`PreviewAppKitIndent`）。
     private static func listMarkerAttributes() -> [NSAttributedString.Key: Any] {
-        var attributes = baseAttributes(font: .systemFont(ofSize: 15))
+        var attributes = baseAttributes(font: .systemFont(ofSize: bodyFontSize))
         attributes[.previewListMarker] = true
         return attributes
     }

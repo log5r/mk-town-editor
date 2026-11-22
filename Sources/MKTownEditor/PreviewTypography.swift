@@ -2,17 +2,28 @@ import AppKit
 
 @MainActor
 enum PreviewTypography {
+    /// プレビューの表示倍率 `zoom` で文字を拡大・縮小する。数式の添付（`MarkdownMathAttachment`）も同じ倍率で
+    /// 大きさとベースラインの下げ幅を変え、周りの文字の1.2倍の大きさとベースラインの位置を保つ。
+    /// 数式の添付は新しいものに置き換え、元の文字列（キャッシュしている場合がある）の添付は変えない。
     static func scaled(_ rendered: NSAttributedString, by zoom: Double) -> NSAttributedString {
         guard zoom != 1, rendered.length > 0 else { return rendered }
         let result = NSMutableAttributedString(attributedString: rendered)
+        let whole = NSRange(location: 0, length: result.length)
         var fonts: [(NSRange, NSFont)] = []
-        result.enumerateAttribute(.font, in: NSRange(location: 0, length: result.length)) { value, range, _ in
+        result.enumerateAttribute(.font, in: whole) { value, range, _ in
             if let font = value as? NSFont { fonts.append((range, font)) }
         }
         for (range, font) in fonts {
             result.addAttribute(.font,
                                 value: NSFontManager.shared.convert(font, toSize: font.pointSize * zoom),
                                 range: range)
+        }
+        var formulas: [(NSRange, MarkdownMathAttachment)] = []
+        result.enumerateAttribute(.attachment, in: whole) { value, range, _ in
+            if let formula = value as? MarkdownMathAttachment { formulas.append((range, formula)) }
+        }
+        for (range, formula) in formulas {
+            result.addAttribute(.attachment, value: formula.scaled(by: CGFloat(zoom)), range: range)
         }
         return result
     }
