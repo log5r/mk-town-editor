@@ -15,6 +15,12 @@ final class MarkdownHTMLExporterTests: XCTestCase {
         XCTAssertTrue(basic.contains("[^n]: Note"))
     }
 
+    /// 本文の行の高さ（1.65）をコードブロックが継がず、コードエディタと同程度に詰める。
+    func testCodeBlocksUseTighterLineHeightThanBody() {
+        let html = MarkdownHTMLExporter.render("```swift\nlet a = 1\n```")
+        XCTAssertTrue(html.contains("border-radius: 8px; line-height: 1.45;"))
+    }
+
     func testHTMLLanguageComesFromFrontMatterOrTheAppLocalization() {
         XCTAssertTrue(MarkdownHTMLExporter.render("---\nlang: en-GB\n---\n\nText").contains(#"<html lang="en-GB">"#))
         XCTAssertTrue(MarkdownHTMLExporter.render("---\nlang: \"fr\"\n---\n\nText").contains(#"<html lang="fr">"#))

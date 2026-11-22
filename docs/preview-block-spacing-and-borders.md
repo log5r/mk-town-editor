@@ -1,4 +1,4 @@
-# プレビューの表の罫線・コールアウトの縦線・リストの行間
+# プレビューの表の罫線・コールアウトの縦線・リスト・コードブロックの行間
 
 構造化プレビュー（`MarkdownPreview` の `LazyVStack` の経路）で報告された、見た目の3件の原因と修正をまとめる。
 
@@ -85,6 +85,16 @@ PDF・HTMLの書き出しは `MarkdownHTMLExporter` が `<blockquote>` を出力
 
 全体を1つの `NSTextView` で描くプレビューと埋め込み文書のリストも、同じ段落スタイルを使うため21ptの間隔になる。
 
+## コードブロックの行間が広い
+
+コードブロックの各行の間に、文字の高さの半分ほどの隙間が空き、コードエディタより行間がかなり広く見えた。
+
+原因は `CodeSyntaxHighlighter.render` の段落スタイルだった。`lineSpacing` 3 に加えて `paragraphSpacing` 8 を付けていた。コードは改行ごとに段落が分かれるため、段落の間隔が全行に付き、行の間隔は約26.5pt（13ptの等幅フォントで約2倍）になっていた。
+
+`paragraphSpacing` を0にし、行間は `CodeSyntaxHighlighter.lineSpacing`（3）だけにした。行の間隔は約18.5ptで、文字の大きさの約1.4倍になる。GitHub のコード表示（1.45）や一般的なコードエディタと同程度。コードブロックは常に囲み枠（`PreviewCodeBlockFrame`）で別に描くため、段落の間隔がなくても前後のブロックとの間は変わらない。
+
+HTML 書き出しでも `pre` が本文の `line-height: 1.65` を継いでいたため、`pre` に `line-height: 1.45` を指定した。
+
 ## 検証方法
 
 `PreviewBlockStyleTests` で、実際の `MarkdownPreview` を `NSHostingView` に載せて確かめる。
@@ -98,3 +108,4 @@ PDF・HTMLの書き出しは `MarkdownHTMLExporter` が `<blockquote>` を出力
 - 「原文へ移動」は、文脈メニューの項目を実行して範囲が渡ることを確かめる（`PreviewListAlignmentTests`）。
 - リストの間隔は、コールアウトの中は `NSLayoutManager` の行の位置、外は項目ごとの `NSTextView` の位置から求めて比べる。
 - 行の高さを調べるときは、全体を1つで描く経路ではなく構造化プレビューの経路で測る。`MarkdownPreview` は `onRevealSource` などを渡したときに構造化プレビューになる（`PreviewLayoutTestSupport.preview(_:onRevealSource:)`）。
+- コードブロックの行間は、`CodeSyntaxHighlighterTests.testCodeLinesUseTightLineSpacingWithoutParagraphSpacing` で各行の段落スタイルと行の高さの比（1.5以下）を、`MarkdownHTMLExporterTests.testCodeBlocksUseTighterLineHeightThanBody` で書き出しの `pre` の指定を確かめる。
