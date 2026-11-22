@@ -13,28 +13,12 @@ enum MarkdownMath {
         /// SwiftMathが解釈できる形へ書き換えたLaTeX。描画と妥当性判定にはこちらを使い、
         /// 代替テキストや読み上げには元の `latex` を使う。
         let swiftMathLaTeX: String
-        /// 数式ブロック（`$$...$$`）と同じ大きさで描くか。数式ブロックと、先頭で `\displaystyle` を指定した
-        /// インライン数式（`$\displaystyle \frac{1}{k}$`）で真になる。
-        let usesDisplaySize: Bool
 
         init(source: String, latex: String, display: Bool) {
             self.source = source
             self.latex = latex
             self.display = display
             swiftMathLaTeX = MarkdownMathCompatibility.normalize(latex, display: display)
-            usesDisplaySize = display || Self.startsWithDisplayStyle(latex)
-        }
-
-        /// 先頭の空白の後、波括弧の外で `\displaystyle` コマンドから始まるか。
-        /// 式全体の書体を指定した場合だけを対象にする。`\displaystylefoo` のような別名のコマンド、
-        /// 途中の `\displaystyle`（式の一部だけの書体）、`\dfrac`（分数1つの書体）は対象にしない。
-        static func startsWithDisplayStyle(_ latex: String) -> Bool {
-            let command = "\\displaystyle"
-            let body = latex.drop(while: \.isWhitespace)
-            guard body.hasPrefix(command) else { return false }
-            // TeXのコマンド名は英字の並びなので、直後が英字なら別のコマンドになる。
-            guard let next = body.dropFirst(command.count).first else { return true }
-            return !(next.isASCII && next.isLetter)
         }
     }
 
@@ -135,16 +119,15 @@ enum MarkdownMath {
 
 @MainActor
 enum MarkdownMathRenderer {
-    /// 数式ブロック（`$$...$$`）の文字の大きさ。プレビュー、HTML、PDFで共通にする。
-    nonisolated static let displayFontSize: CGFloat = 21
+    /// 数式の文字の大きさの、周りの文字に対する倍率。数式用の書体は同じ大きさの本文の文字より小さく見えるため、
+    /// KaTeXと同じく1.2倍で描く。インライン数式（`\displaystyle` の有無によらない）も数式ブロックもこの倍率だけで決め、
+    /// `\displaystyle` は分数や極限の組み方（TeXの書体）だけを変える。
+    nonisolated static let fontScale: CGFloat = 1.2
 
-    /// 数式を描く文字の大きさ。`inlineSize` は周りの文字の大きさ（インライン数式の既定の大きさ）。
-    /// 数式ブロックと同じ大きさで描く式（`usesDisplaySize`）は数式ブロックの大きさ（`displaySize`）にそろえる。
-    /// 見出しのように周りの文字のほうが大きければ、周りの文字に合わせる。
-    /// `displaySize` はプレビューでは `displayFontSize`。HTMLでは本文の大きさに比例させる（`MarkdownHTMLExporter`）。
-    nonisolated static func fontSize(for formula: MarkdownMath.Formula, inlineSize: CGFloat,
-                                     displaySize: CGFloat = displayFontSize) -> CGFloat {
-        formula.usesDisplaySize ? max(displaySize, inlineSize) : inlineSize
+    /// 周りの文字の大きさ `surrounding` のところに置く数式の文字の大きさ。
+    /// インライン数式は置く場所の文字、数式ブロックは本文の文字の大きさを渡す。
+    nonisolated static func fontSize(surrounding: CGFloat) -> CGFloat {
+        surrounding * fontScale
     }
 
     /// 描いた数式の画像と、画像の下端から数式のベースラインまでの高さ。
@@ -155,7 +138,7 @@ enum MarkdownMathRenderer {
         let baseline: CGFloat
     }
 
-    static func label(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> MTMathUILabel? {
+    static func label(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> MTMathUILabel? {
         let label = MTMathUILabel(frame: .zero)
         label.latex = formula.swiftMathLaTeX
         guard label.error == nil else { return nil }
@@ -165,7 +148,7 @@ enum MarkdownMathRenderer {
         return label
     }
 
-    static func render(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> Rendered? {
+    static func render(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> Rendered? {
         guard let label = label(formula, fontSize: fontSize) else { return nil }
         let fitting = label.fittingSize
         guard fitting.width > 0, fitting.height > 0, fitting.width < 4000, fitting.height < 4000 else { return nil }
@@ -189,14 +172,14 @@ enum MarkdownMathRenderer {
         return Rendered(image: image, baseline: baseline)
     }
 
-    static func image(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> NSImage? {
+    static func image(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> NSImage? {
         render(formula, fontSize: fontSize)?.image
     }
 
     /// 本文に置く数式の添付。数式のベースラインを本文のベースラインに合わせるため、
     /// ベースラインより下の部分（`baseline`）だけ下げて置く。TextKitは添付の下げた分も行の高さに含める
-    /// （docs/inline-math-baseline-and-display-size.md）。
-    static func attachment(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> NSAttributedString? {
+    /// （docs/math-font-size-and-baseline.md）。
+    static func attachment(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> NSAttributedString? {
         guard let rendered = render(formula, fontSize: fontSize) else { return nil }
         let attachment = NSTextAttachment()
         attachment.image = rendered.image
@@ -205,7 +188,7 @@ enum MarkdownMathRenderer {
         return NSAttributedString(attachment: attachment)
     }
 
-    static func htmlImage(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> String? {
+    static func htmlImage(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> String? {
         guard let rendered = render(formula, fontSize: fontSize),
               let tiff = rendered.image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
@@ -269,7 +252,7 @@ struct MarkdownMathView: NSViewRepresentable {
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel(frame: .zero)
         view.setContentHuggingPriority(.required, for: .vertical)
-        view.fontSize = MarkdownMathRenderer.displayFontSize
+        view.fontSize = MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize)
         view.labelMode = .display
         view.textColor = .labelColor
         return view

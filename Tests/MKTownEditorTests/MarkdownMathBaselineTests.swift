@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
+import SwiftMath
 import WebKit
 import XCTest
 @testable import MKTownEditor
 
-/// インライン数式の `\displaystyle` の大きさと、数式のベースラインの位置（issue #97）。
-/// docs/inline-math-baseline-and-display-size.md
+/// 数式の文字の大きさ（周りの文字の1.2倍、`\displaystyle` によらない）と、数式のベースラインの位置（issue #97）。
+/// docs/math-font-size-and-baseline.md
 @MainActor
 final class MarkdownMathBaselineTests: XCTestCase {
     private func inline(_ latex: String) -> MarkdownMath.Formula {
@@ -24,55 +25,72 @@ final class MarkdownMathBaselineTests: XCTestCase {
         return result
     }
 
-    // MARK: - 数式ブロックと同じ大きさで描く式の判定
+    // MARK: - 数式の文字の大きさ（1つの規則）
 
-    func testUsesDisplaySizeOnlyForLeadingDisplayStyle() {
-        for latex in [#"\displaystyle\frac{1}{k}"#, #"\displaystyle \frac{1}{k}"#, #"  \displaystyle x"#,
-                      #"\displaystyle"#, #"\displaystyle{x}"#, "\\displaystyle\n\\sum_k x_k"] {
-            XCTAssertTrue(inline(latex).usesDisplaySize, latex)
-        }
-        for latex in [#"\displaystylefoo x"#, #"x + \displaystyle\frac{1}{k}"#, #"\dfrac{1}{k}"#,
-                      #"{\displaystyle x}"#, #"\textstyle\frac{1}{k}"#, #"\frac{1}{k}"#, "x"] {
-            XCTAssertFalse(inline(latex).usesDisplaySize, latex)
-        }
-        XCTAssertTrue(block("x").usesDisplaySize)
-        XCTAssertTrue(block(#"\textstyle x"#).usesDisplaySize)
-        // 本文から切り出したインライン数式でも判定する。
-        let formulas = MarkdownMath.segments(#"確率 $\displaystyle\frac{1}{k}$ と $\frac{1}{k}$"#)
-            .compactMap { segment -> MarkdownMath.Formula? in
-                if case let .formula(formula) = segment { return formula }
-                return nil
+    /// 周りの文字の大きさ（プレビューの本文は15pt）。
+    private let body = MarkdownRenderer.bodyFontSize
+
+    func testFontSizeIsSurroundingSizeTimesOnePointTwo() {
+        XCTAssertEqual(MarkdownMathRenderer.fontScale, 1.2)
+        XCTAssertEqual(MarkdownRenderer.bodyFontSize, 15)
+        XCTAssertEqual(MarkdownMathRenderer.fontSize(surrounding: 15), 18, accuracy: 0.0001)
+        XCTAssertEqual(MarkdownMathRenderer.fontSize(surrounding: 16), 19.2, accuracy: 0.0001)
+        XCTAssertEqual(MarkdownMathRenderer.fontSize(surrounding: 24), 28.8, accuracy: 0.0001)
+    }
+
+    /// 1つの段落の `$ax+b$`・`$\displaystyle ax+b$` と、続く `$$ax+b$$` は同じ大きさの文字で描く。
+    /// `ax+b` は書体（`\displaystyle`）で組み方が変わらない式なので、画像の大きさも一致する。
+    func testPreviewDrawsInlineDisplayStyleInlineAndBlockAtOneSize() throws {
+        let rendered = MarkdownRenderer.render("本文 $ax+b$ と $\\displaystyle ax+b$\n\n$$\nax+b\n$$")
+        let sizes = attachments(in: rendered).compactMap { $0.image?.size }
+        XCTAssertEqual(sizes.count, 3)
+        let expected = try XCTUnwrap(MarkdownMathRenderer.image(inline("ax+b"), fontSize: body * 1.2)).size
+        XCTAssertEqual(sizes, [expected, expected, expected])
+        // 小さい文字で描いた場合（従来のインライン数式の15pt）より大きい。
+        let unscaled = try XCTUnwrap(MarkdownMathRenderer.image(inline("ax+b"), fontSize: body)).size
+        XCTAssertGreaterThan(expected.width, unscaled.width)
+    }
+
+    /// 構造化プレビューは数式ブロックを `MarkdownMathView`（`MTMathUILabel`）で描く。その大きさも本文の1.2倍。
+    func testStructuredPreviewBlockMathUsesTheSameSize() throws {
+        try PreviewLayoutTestSupport.hosted(PreviewLayoutTestSupport.preview("本文 $ax+b$\n\n$$\nax+b\n$$")) { host in
+            func labels(in view: NSView) -> [MTMathUILabel] {
+                (view as? MTMathUILabel).map { [$0] } ?? view.subviews.flatMap { labels(in: $0) }
             }
-        XCTAssertEqual(formulas.map(\.usesDisplaySize), [true, false])
+            let label = try XCTUnwrap(labels(in: host).first)
+            XCTAssertEqual(label.fontSize, body * 1.2, accuracy: 0.0001)
+            let inlineView = try XCTUnwrap(PreviewLayoutTestSupport.textViews(in: host)
+                .first { $0.string.contains("\u{FFFC}") })
+            let location = (inlineView.string as NSString).range(of: "\u{FFFC}").location
+            let attachment = try XCTUnwrap(inlineView.attributedString().attribute(
+                .attachment, at: location, effectiveRange: nil) as? NSTextAttachment)
+            let inlineSize = try XCTUnwrap(attachment.image?.size)
+            // 画像は整数に切り上げているため、ラベルの大きさも切り上げて比べる。
+            XCTAssertEqual(ceil(label.fittingSize.width), inlineSize.width)
+            XCTAssertEqual(ceil(label.fittingSize.height), inlineSize.height)
+        }
     }
 
-    func testFontSizeResolvesDisplaySizeAgainstSurroundingText() {
-        let display = inline(#"\displaystyle\frac{1}{k}"#)
-        let plain = inline(#"\frac{1}{k}"#)
-        XCTAssertEqual(MarkdownMathRenderer.displayFontSize, 21)
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: display, inlineSize: 15), 21)
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: display, inlineSize: 16), 21)
-        // 見出しのように周りの文字が大きければ、周りに合わせる。
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: display, inlineSize: 28), 28)
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: plain, inlineSize: 15), 15)
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: block("x"), inlineSize: 15), 21)
+    func testHeadingInlineMathFollowsHeadingSize() throws {
+        let rendered = MarkdownRenderer.render("# 見出し $ax+b$")
+        let font = try XCTUnwrap(rendered.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)
+        XCTAssertGreaterThan(font.pointSize, body)
+        let size = try XCTUnwrap(attachments(in: rendered).first?.image?.size)
+        XCTAssertEqual(size, try XCTUnwrap(MarkdownMathRenderer.image(inline("ax+b"), fontSize: font.pointSize * 1.2)).size)
     }
 
-    // MARK: - プレビューの大きさ
-
-    func testInlineDisplayStyleRendersAtBlockSizeInPreview() throws {
+    /// `\displaystyle` は組み方（分数の大きさ）だけを変え、文字の大きさは変えない。
+    func testDisplayStyleChangesOnlyTheTeXStyle() throws {
         let rendered = MarkdownRenderer.render(#"確率 $\displaystyle\frac{1}{k}$ と $\frac{1}{k}$ で当選する。"#)
-        let found = attachments(in: rendered)
-        XCTAssertEqual(found.count, 2)
-        let display = try XCTUnwrap(found.first?.image?.size)
-        let plain = try XCTUnwrap(found.last?.image?.size)
-        let blockImage = try XCTUnwrap(MarkdownMathRenderer.image(block(#"\frac{1}{k}"#),
-                                                                  fontSize: MarkdownMathRenderer.displayFontSize))
-        // `$$\frac{1}{k}$$` と同じ大きさで描く。
-        XCTAssertEqual(display.height, blockImage.size.height, accuracy: 0.5)
-        XCTAssertEqual(display.width, blockImage.size.width, accuracy: 0.5)
-        XCTAssertGreaterThan(display.height, plain.height + 10)
-        XCTAssertGreaterThan(display.width, plain.width)
+        let sizes = attachments(in: rendered).compactMap { $0.image?.size }
+        XCTAssertEqual(sizes.count, 2)
+        // どちらも本文の1.2倍の文字で描く。
+        XCTAssertEqual(sizes[0], try XCTUnwrap(MarkdownMathRenderer.image(inline(#"\displaystyle\frac{1}{k}"#),
+                                                                         fontSize: body * 1.2)).size)
+        XCTAssertEqual(sizes[1], try XCTUnwrap(MarkdownMathRenderer.image(inline(#"\frac{1}{k}"#),
+                                                                         fontSize: body * 1.2)).size)
+        // 表示用の書体の分数は分子・分母を小さくしないため、高い。
+        XCTAssertGreaterThan(sizes[0].height, sizes[1].height + 5)
     }
 
     // MARK: - ベースライン
@@ -104,7 +122,7 @@ final class MarkdownMathBaselineTests: XCTestCase {
         for latex in ["x", "E = mc^2", "x_i", #"\frac{a}{b}"#, #"\displaystyle\frac{1}{k}"#,
                       #"\lim_{k\to\infty} P_k"#, "-"] {
             let formula = inline(latex)
-            let size = MarkdownMathRenderer.fontSize(for: formula, inlineSize: 15)
+            let size = MarkdownMathRenderer.fontSize(surrounding: body)
             let rendered = try XCTUnwrap(MarkdownMathRenderer.render(formula, fontSize: size), latex)
             let string = try XCTUnwrap(MarkdownMathRenderer.attachment(formula, fontSize: size), latex)
             let attachment = try XCTUnwrap(string.attribute(.attachment, at: 0, effectiveRange: nil)
@@ -119,13 +137,13 @@ final class MarkdownMathBaselineTests: XCTestCase {
         }
 
         // `x` はベースラインの上に乗り、ほとんど下げない（以前は一律に2pt下げていた）。
-        let x = try XCTUnwrap(MarkdownMathRenderer.render(inline("x"), fontSize: 15))
+        let x = try XCTUnwrap(MarkdownMathRenderer.render(inline("x"), fontSize: body * 1.2))
         XCTAssertLessThan(x.baseline, 1.5)
         XCTAssertEqual(try inkBottom(in: x.image), x.baseline, accuracy: 1.5)
 
         // 分数は分母がベースラインの下に出る。横線は数式の軸（ベースラインの約0.25em上）に来る。
         let fraction = inline(#"\displaystyle\frac{1}{k}"#)
-        let fractionSize = MarkdownMathRenderer.fontSize(for: fraction, inlineSize: 15)
+        let fractionSize = MarkdownMathRenderer.fontSize(surrounding: body)
         let rendered = try XCTUnwrap(MarkdownMathRenderer.render(fraction, fontSize: fractionSize))
         XCTAssertGreaterThan(rendered.baseline, rendered.image.size.height * 0.25)
         XCTAssertGreaterThan(rendered.baseline, 8)
@@ -134,7 +152,7 @@ final class MarkdownMathBaselineTests: XCTestCase {
         XCTAssertLessThan(axis, fractionSize * 0.45)
 
         // `\lim` の下付きはベースラインの下に出る。
-        let limit = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\lim_{k\to\infty} P_k"#), fontSize: 15))
+        let limit = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\lim_{k\to\infty} P_k"#), fontSize: body * 1.2))
         XCTAssertGreaterThan(limit.baseline, 2)
     }
 
@@ -189,7 +207,8 @@ final class MarkdownMathBaselineTests: XCTestCase {
                 let used = manager.usedRect(for: container)
                 XCTAssertGreaterThanOrEqual(view.frame.height, used.maxY - 0.5, "zoom \(zoom)")
                 let extra = line.rect.height - lines[index - 1].rect.height
-                XCTAssertGreaterThan(extra, 10, "zoom \(zoom)")
+                // 数式は本文の1.2倍（18pt）。倍率1.5では文字も大きくなるため、広がる分は小さくなる（約10pt）。
+                XCTAssertGreaterThan(extra, 5, "zoom \(zoom)")
                 // 同じ文字列の数式を文字（`1/k`）に置き換えた場合より、少なくとも数式の行が広がった分だけ高い。
                 let plain = NSMutableAttributedString(attributedString: view.attributedString())
                 plain.replaceCharacters(in: NSRange(location: location, length: 1), with: NSAttributedString(
@@ -213,43 +232,47 @@ final class MarkdownMathBaselineTests: XCTestCase {
         return tag[range.upperBound...].components(separatedBy: "\"").first
     }
 
-    func testHTMLUsesBlockSizeAndBaselineForInlineDisplayStyle() throws {
+    /// 標準のプリセット（本文16px）では、インライン数式も数式ブロックも19.2で描く。
+    private let htmlSize = MarkdownMathRenderer.fontSize(surrounding: CGFloat(MarkdownExportPreset.standard.fontSize))
+
+    func testHTMLUsesOneSizeAndTheBaselineForInlineMath() throws {
         let html = MarkdownHTMLExporter.render(#"確率 $\displaystyle\frac{1}{k}$ と $\frac{1}{k}$ で当選する。"#)
         let tags = imageTags(in: html)
         XCTAssertEqual(tags.count, 2)
-        let blockTag = try XCTUnwrap(imageTags(in: MarkdownHTMLExporter.render("$$\n\\frac{1}{k}\n$$")).first)
-        XCTAssertEqual(attribute("height", in: tags[0]), attribute("height", in: blockTag))
-        XCTAssertEqual(attribute("width", in: tags[0]), attribute("width", in: blockTag))
-        XCTAssertGreaterThan(Int(attribute("height", in: tags[0]) ?? "") ?? 0,
-                             Int(attribute("height", in: tags[1]) ?? "") ?? .max)
         XCTAssertFalse(html.contains("vertical-align:middle"))
-
-        let display = inline(#"\displaystyle\frac{1}{k}"#)
-        let rendered = try XCTUnwrap(MarkdownMathRenderer.render(display, fontSize: MarkdownMathRenderer.displayFontSize))
+        let display = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\displaystyle\frac{1}{k}"#), fontSize: htmlSize))
+        let plain = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\frac{1}{k}"#), fontSize: htmlSize))
         XCTAssertEqual(attribute("style", in: tags[0]),
-                       "vertical-align:\(MarkdownMathRenderer.cssLength(-rendered.baseline));max-width:none")
-        XCTAssertTrue(attribute("style", in: tags[0])?.hasPrefix("vertical-align:-") == true)
-        let plain = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\frac{1}{k}"#), fontSize: 16))
+                       "vertical-align:\(MarkdownMathRenderer.cssLength(-display.baseline));max-width:none")
         XCTAssertEqual(attribute("style", in: tags[1]),
                        "vertical-align:\(MarkdownMathRenderer.cssLength(-plain.baseline));max-width:none")
+        XCTAssertEqual(attribute("height", in: tags[0]), "\(Int(display.image.size.height))")
+        XCTAssertEqual(attribute("height", in: tags[1]), "\(Int(plain.image.size.height))")
         // 数式ブロックは縮めてよい（`max-width:none` を付けない）。
+        let blockTag = try XCTUnwrap(imageTags(in: MarkdownHTMLExporter.render("$$\n\\frac{1}{k}\n$$")).first)
         XCTAssertEqual(attribute("style", in: blockTag), "display:block;margin:1em auto")
     }
 
-    func testHTMLKeepsBlockAndInlineDisplaySizeFormulasApart() throws {
+    func testHTMLKeepsBlockAndInlineFormulasApart() throws {
         // 同じ式・同じ大きさでも、数式ブロックとインライン数式は置き方（`style`）が異なる。
-        let latex = #"\displaystyle\frac{1}{k}"#
-        let source = "$$\(latex)$$\n\n確率 $\(latex)$ で当選する。\n\n脚注[^1]\n\n[^1]: 脚注の $\(latex)$"
+        let latex = "ax+b"
+        let source = "$$\(latex)$$\n\n本文 $\(latex)$ と $\\displaystyle \(latex)$\n\n脚注[^1]\n\n[^1]: 脚注の $\(latex)$"
         let html = MarkdownHTMLExporter.render(source)
         let tags = imageTags(in: html)
-        XCTAssertEqual(tags.count, 3)
+        XCTAssertEqual(tags.count, 4)
         XCTAssertEqual(tags.filter { attribute("style", in: $0)?.hasPrefix("display:block") == true }.count, 1)
-        XCTAssertEqual(tags.filter { attribute("style", in: $0)?.hasPrefix("vertical-align:-") == true }.count, 2)
-        // 脚注のインライン数式も数式ブロックと同じ大きさで描く。
-        XCTAssertEqual(Set(tags.compactMap { attribute("height", in: $0) }).count, 1)
+        XCTAssertEqual(tags.filter { attribute("style", in: $0)?.hasPrefix("vertical-align:-") == true ||
+                                     attribute("style", in: $0)?.hasPrefix("vertical-align:0") == true }.count, 3)
+        // 数式ブロック・本文のインライン数式・`\displaystyle` は同じ大きさ。脚注は脚注の文字に合わせて小さい。
+        let found = sizes(of: tags)
+        XCTAssertEqual(found[0], try expectedSize(block(latex), fontSize: htmlSize))
+        XCTAssertEqual(found[1], found[0])
+        XCTAssertEqual(found[2], found[0])
+        XCTAssertEqual(found[3], try expectedSize(inline(latex), fontSize: MarkdownMathRenderer.fontSize(
+            surrounding: 16 * MarkdownHTMLExporter.footnoteFontScale)))
     }
 
-    func testHTMLAsyncMatchesSyncForInlineDisplayStyle() async throws {
+    func testHTMLAsyncMatchesSync() async throws {
         let source = #"確率 $\displaystyle\frac{1}{k}$ で当選する。"#
         let sync = MarkdownHTMLExporter.render(source)
         let async = try await MarkdownHTMLExporter.renderAsync(source)
@@ -280,7 +303,7 @@ final class MarkdownMathBaselineTests: XCTestCase {
         // HTMLの `vertical-align` から読み込んだ下げ幅は、文字の `NSBaselineOffset` ではなく添付の位置に移す。
         XCTAssertNil(storage.attribute(.baselineOffset, at: location, effectiveRange: nil))
         let rendered = try XCTUnwrap(MarkdownMathRenderer.render(inline(#"\displaystyle\frac{1}{k}"#),
-                                                                fontSize: MarkdownMathRenderer.displayFontSize))
+                                                                fontSize: htmlSize))
         XCTAssertEqual(attachment.bounds.minY, -rendered.baseline, accuracy: 0.01)
         XCTAssertEqual(attachment.bounds.size, rendered.image.size)
 
@@ -355,7 +378,7 @@ final class MarkdownMathBaselineTests: XCTestCase {
         XCTAssertEqual(inlineImage[0], inlineImage[2], accuracy: 0.5)
         XCTAssertEqual(inlineImage[1], inlineImage[3], accuracy: 0.5)
         // 画像の下端は、ベースラインより `baseline`（`vertical-align` の値）だけ下にある。
-        let rendered = try XCTUnwrap(MarkdownMathRenderer.render(inline(latex), fontSize: 16))
+        let rendered = try XCTUnwrap(MarkdownMathRenderer.render(inline(latex), fontSize: htmlSize))
         XCTAssertEqual(inlineImage[4], rendered.baseline, accuracy: 0.6)
         // 数式ブロックは本文の幅に合わせて縮む（従来どおり）。
         XCTAssertLessThanOrEqual(blockImage[0], blockImage[5] + 0.5)
@@ -381,32 +404,32 @@ final class MarkdownMathBaselineTests: XCTestCase {
         tags.map { [attribute("width", in: $0) ?? "", attribute("height", in: $0) ?? ""] }
     }
 
-    func testStandardPresetKeepsBodyMathSizes() throws {
+    func testStandardPresetDrawsAllBodyMathAt19Point2() throws {
         let html = MarkdownHTMLExporter.render("本文 $x^2+1$ と $\\displaystyle\\frac{1}{k}$\n\n$$\\frac{1}{k}$$")
+        XCTAssertEqual(htmlSize, 19.2, accuracy: 0.0001)
         XCTAssertEqual(sizes(of: imageTags(in: html)), [
-            try expectedSize(inline("x^2+1"), fontSize: 16),
-            try expectedSize(inline(#"\displaystyle\frac{1}{k}"#), fontSize: 21),
-            try expectedSize(block(#"\frac{1}{k}"#), fontSize: 21)
+            try expectedSize(inline("x^2+1"), fontSize: htmlSize),
+            try expectedSize(inline(#"\displaystyle\frac{1}{k}"#), fontSize: htmlSize),
+            try expectedSize(block(#"\frac{1}{k}"#), fontSize: htmlSize)
         ])
     }
 
-    func testLargerPresetScalesInlineAndBlockMath() async throws {
-        let source = "本文 $x^2+1$ と $\\displaystyle\\frac{1}{k}$\n\n$$\\frac{1}{k}$$"
+    func testLargerPresetScalesAllMath() async throws {
+        let source = "本文 $ax+b$ と $\\displaystyle ax+b$\n\n$$ax+b$$\n\n# 見出し $ax+b$\n\n脚注[^1]\n\n[^1]: 脚注の $ax+b$"
         let large = preset(fontSize: 24)
+        let size = MarkdownMathRenderer.fontSize(surrounding: 24)
+        XCTAssertEqual(size, 28.8, accuracy: 0.0001)
         let expected = [
-            try expectedSize(inline("x^2+1"), fontSize: 24),
-            // 数式ブロックは 21 × 24 / 16 = 31.5（丸めない）。
-            try expectedSize(inline(#"\displaystyle\frac{1}{k}"#), fontSize: 31.5),
-            try expectedSize(block(#"\frac{1}{k}"#), fontSize: 31.5)
+            try expectedSize(inline("ax+b"), fontSize: size),
+            try expectedSize(inline("ax+b"), fontSize: size),
+            try expectedSize(block("ax+b"), fontSize: size),
+            // 見出し1は本文の2倍、脚注は0.9倍。
+            try expectedSize(inline("ax+b"), fontSize: MarkdownMathRenderer.fontSize(surrounding: 24 * 2)),
+            try expectedSize(inline("ax+b"), fontSize: MarkdownMathRenderer.fontSize(surrounding: 24 * 0.9))
         ]
-        let sync = sizes(of: imageTags(in: MarkdownHTMLExporter.render(source, preset: large)))
-        XCTAssertEqual(sync, expected)
-        // 先頭の `\displaystyle` は、どの本文の大きさでも数式ブロックと同じ大きさになる。
-        XCTAssertEqual(sync[1], sync[2])
+        XCTAssertEqual(sizes(of: imageTags(in: MarkdownHTMLExporter.render(source, preset: large))), expected)
         let async = try await MarkdownHTMLExporter.renderAsync(source, preset: large)
         XCTAssertEqual(sizes(of: imageTags(in: async)), expected)
-        XCTAssertEqual(MarkdownMathRenderer.fontSize(for: inline(#"\displaystyle x"#), inlineSize: 24,
-                                                     displaySize: 31.5), 31.5)
     }
 
     func testHeadingAndParagraphGetSeparateImagesForSameFormula() throws {
@@ -414,9 +437,9 @@ final class MarkdownMathBaselineTests: XCTestCase {
         let html = MarkdownHTMLExporter.render("# 見出し $\(latex)$\n\n本文 $\(latex)$")
         let found = sizes(of: imageTags(in: html))
         XCTAssertEqual(found.count, 2)
-        // 見出し1は本文の2倍（32px）で、数式ブロックの大きさ（21）より大きい。本文は21。
-        XCTAssertEqual(found[0], try expectedSize(inline(latex), fontSize: 32))
-        XCTAssertEqual(found[1], try expectedSize(inline(latex), fontSize: 21))
+        // 見出し1は本文の2倍（32px）なので、数式は38.4。本文は19.2。
+        XCTAssertEqual(found[0], try expectedSize(inline(latex), fontSize: MarkdownMathRenderer.fontSize(surrounding: 16 * 2)))
+        XCTAssertEqual(found[1], try expectedSize(inline(latex), fontSize: htmlSize))
         XCTAssertNotEqual(found[0], found[1])
     }
 
@@ -444,7 +467,8 @@ final class MarkdownMathBaselineTests: XCTestCase {
         for bodySize in [16, 24] {
             let preset = preset(fontSize: bodySize)
             for (source, scale) in cases {
-                let expected = try expectedSize(formula, fontSize: CGFloat(bodySize) * scale)
+                let expected = try expectedSize(formula,
+                                                fontSize: MarkdownMathRenderer.fontSize(surrounding: CGFloat(bodySize) * scale))
                 let asyncHTML = try await MarkdownHTMLExporter.renderAsync(source, preset: preset)
                 for html in [MarkdownHTMLExporter.render(source, preset: preset), asyncHTML] {
                     XCTAssertFalse(html.contains("$\(latex)$"), "\(source) (\(bodySize)px)")

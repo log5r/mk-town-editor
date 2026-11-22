@@ -19,7 +19,7 @@
 
 2026-11-22 からは、リンクや添付画像の有無によらず、構造化プレビューの文字列をすべて `NSTextView`（`HoverLinkText`）で描き、`Text` を使う分岐はない。添付を含む文字列は、画像が行の残りの幅に合わせて大きさを決めるため、行の幅いっぱいに描く（[preview-text-backend-performance.md](preview-text-backend-performance.md)）。
 
-インライン数式の大きさ（先頭の `\displaystyle`）と、本文のベースラインへの置き方は[インライン数式の `\displaystyle` の大きさとベースライン](inline-math-baseline-and-display-size.md)にまとめている。
+数式の文字の大きさ（周りの文字の1.2倍）と、本文のベースラインへの置き方は[数式の文字の大きさとベースライン](math-font-size-and-baseline.md)にまとめている。
 
 ## 回帰確認
 

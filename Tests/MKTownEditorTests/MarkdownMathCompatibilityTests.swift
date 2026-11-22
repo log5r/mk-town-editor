@@ -8,6 +8,9 @@ import XCTest
 /// 数式の題材は docs-local/test-samples の無限反復指数関数のメモから取っている。
 @MainActor
 final class MarkdownMathCompatibilityTests: XCTestCase {
+    /// プレビューの本文に置く数式の文字の大きさ。
+    private let inlineFontSize = MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize)
+
     private func normalized(_ latex: String, display: Bool = true) -> String {
         MarkdownMath.Formula(source: latex, latex: latex, display: display).swiftMathLaTeX
     }
@@ -19,7 +22,7 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         let list = MTMathListBuilder.build(fromString: formula.swiftMathLaTeX, error: &error)
         XCTAssertNotNil(list, "\(latex) => \(formula.swiftMathLaTeX)", file: file, line: line)
         XCTAssertNil(error, "\(latex): \(error?.localizedDescription ?? "")", file: file, line: line)
-        XCTAssertNotNil(MarkdownMathRenderer.image(formula), latex, file: file, line: line)
+        XCTAssertNotNil(MarkdownMathRenderer.image(formula, fontSize: inlineFontSize), latex, file: file, line: line)
     }
 
     func testEquationEnvironmentIsUnwrappedAndAmsVariantsAreRenamed() {
@@ -70,8 +73,8 @@ final class MarkdownMathCompatibilityTests: XCTestCase {
         XCTAssertEqual(normalized("\\\\"), "")
         let withBreak = MarkdownMath.Formula(source: "", latex: "x = y \\\\", display: true)
         let without = MarkdownMath.Formula(source: "", latex: "x = y", display: true)
-        XCTAssertEqual(MarkdownMathRenderer.image(withBreak)?.size.height,
-                       MarkdownMathRenderer.image(without)?.size.height)
+        XCTAssertEqual(MarkdownMathRenderer.image(withBreak, fontSize: inlineFontSize)?.size.height,
+                       MarkdownMathRenderer.image(without, fontSize: inlineFontSize)?.size.height)
     }
 
     func testAliasesAndAddedSymbolsRender() {

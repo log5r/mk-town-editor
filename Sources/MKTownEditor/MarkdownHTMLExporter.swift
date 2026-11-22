@@ -101,24 +101,16 @@ enum MarkdownHTMLExporter {
     }
 
     /// 書き出す数式の画像。集めるとき（`formulas(in:bodyFontSize:)`）と埋め込むとき（`mathImage`）で、
-    /// 同じ式・同じ場所（`fontScale`）から同じ大きさとキーを求める。
+    /// 同じ式・同じ場所（`textScale`）から同じ大きさとキーを求める。
     private struct MathImage: Sendable {
         let formula: MarkdownMath.Formula
-        /// 数式のある場所の文字の大きさの、本文に対する倍率（本文・表・リスト・引用は1、見出し・脚注は各倍率）。
-        let fontScale: CGFloat
+        /// 数式のある場所の文字の大きさの、本文に対する倍率（本文・表・リスト・引用・数式ブロックは1、見出し・脚注は各倍率）。
+        let textScale: CGFloat
         let bodyFontSize: CGFloat
 
-        /// 数式ブロックの大きさ。本文が標準（16px）のときに `displayFontSize`（21）になるよう、本文の大きさに比例させる。
-        var displaySize: CGFloat {
-            MarkdownMathRenderer.displayFontSize * bodyFontSize / CGFloat(MarkdownExportPreset.standard.fontSize)
-        }
-
-        /// インライン数式は周りの文字の大きさ。数式ブロックと、先頭で `\displaystyle` を指定したインライン数式は
-        /// 数式ブロックの大きさ（周りの文字のほうが大きければ周りの文字の大きさ）で描く。
-        var size: CGFloat {
-            MarkdownMathRenderer.fontSize(for: formula, inlineSize: bodyFontSize * fontScale,
-                                          displaySize: displaySize)
-        }
+        /// 置く場所の文字の大きさの1.2倍（`MarkdownMathRenderer.fontSize(surrounding:)`）。
+        /// インライン数式も数式ブロックも、`\displaystyle` の有無によらず同じ規則で決める。
+        var size: CGFloat { MarkdownMathRenderer.fontSize(surrounding: bodyFontSize * textScale) }
 
         /// 数式ブロックとインライン数式は同じ大きさ・同じ式でも `style` が異なるため、キーを分ける。
         /// 大きさをキーに含め、見出しと本文の同じ式を別の画像にする。
@@ -126,38 +118,38 @@ enum MarkdownHTMLExporter {
     }
 
     /// 書き出す数式を、書き出す場所の大きさごとに集める。
-    /// 場所の倍率は、描くとき（`element`・`inline` の `fontScale`）と同じ規則で決める。
+    /// 場所の倍率は、描くとき（`element`・`inline` の `textScale`）と同じ規則で決める。
     private static func formulas(in analysis: MarkdownAnalysis, bodyFontSize: CGFloat) -> [MathImage] {
         guard analysis.dialect == .extended else { return [] }
         var result: [String: MathImage] = [:]
-        func add(_ formula: MarkdownMath.Formula, fontScale: CGFloat) {
-            let item = MathImage(formula: formula, fontScale: fontScale, bodyFontSize: bodyFontSize)
+        func add(_ formula: MarkdownMath.Formula, textScale: CGFloat) {
+            let item = MathImage(formula: formula, textScale: textScale, bodyFontSize: bodyFontSize)
             result[item.key] = item
         }
         for block in analysis.blocks where block.kind != .codeBlock {
-            let fontScale: CGFloat
+            let textScale: CGFloat
             if case let .heading(level) = block.kind {
-                fontScale = headingFontScale(level: level)
+                textScale = headingFontScale(level: level)
             } else {
-                fontScale = 1
+                textScale = 1
             }
             var texts = [block.content]
             if let table = block.table { texts += table.header + table.rows.flatMap { $0 } }
             for text in texts {
-                if let formula = MarkdownMath.displayFormula(text) { add(formula, fontScale: 1) }
-                for (_, formula) in MarkdownMath.placeholders(in: text).formulas { add(formula, fontScale: fontScale) }
+                if let formula = MarkdownMath.displayFormula(text) { add(formula, textScale: 1) }
+                for (_, formula) in MarkdownMath.placeholders(in: text).formulas { add(formula, textScale: textScale) }
             }
         }
         for note in analysis.footnotes.entries {
             for (_, formula) in MarkdownMath.placeholders(in: note.content).formulas {
-                add(formula, fontScale: footnoteFontScale)
+                add(formula, textScale: footnoteFontScale)
             }
         }
         return Array(result.values)
     }
 
-    private static func mathImage(_ formula: MarkdownMath.Formula, fontScale: CGFloat) -> String? {
-        mathResources.images[MathImage(formula: formula, fontScale: fontScale,
+    private static func mathImage(_ formula: MarkdownMath.Formula, textScale: CGFloat) -> String? {
+        mathResources.images[MathImage(formula: formula, textScale: textScale,
                                        bodyFontSize: mathResources.bodyFontSize).key]
     }
 
@@ -194,7 +186,7 @@ enum MarkdownHTMLExporter {
             for note in analysis.footnotes.entries {
                 body += "<li id=\"fn-\(note.number)\">" +
                     inline(note.content, analysis: analysis,
-                           context: context, fontScale: footnoteFontScale) +
+                           context: context, textScale: footnoteFontScale) +
                     " <a href=\"#fnref-\(note.number)\" aria-label=\"\(escape(String(localized: "本文に戻る")))\">↩</a></li>"
             }
             body += "</ol></section>"
@@ -323,7 +315,7 @@ enum MarkdownHTMLExporter {
         case .blank: return ""
         case let .heading(level):
             let anchor = escape(anchors[block.id] ?? "section")
-            return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context, fontScale: headingFontScale(level: level)))</h\(level)>\n"
+            return "<h\(level) id=\"\(anchor)\">\(inline(block.content, analysis: analysis, context: context, textScale: headingFontScale(level: level)))</h\(level)>\n"
         case .paragraph:
             if analysis.crossReferences.markerBlockIDs.contains(block.id) { return "" }
             if let media = MarkdownMedia(block, dialect: context.markdownDialect) {
@@ -348,7 +340,7 @@ enum MarkdownHTMLExporter {
                let formula = MarkdownMath.displayFormula(block.content) {
                 let id = target.map { " id=\"\(escape($0.key))\"" } ?? ""
                 let number = target.map { "<span class=\"number\">\(escape($0.label))</span>" } ?? ""
-                return "<div class=\"math-block\"\(id)>\(mathImage(formula, fontScale: 1) ?? escape(formula.source))\(number)</div>\n"
+                return "<div class=\"math-block\"\(id)>\(mathImage(formula, textScale: 1) ?? escape(formula.source))\(number)</div>\n"
             }
             let content = MarkdownRenderer.paragraphContent(block)
             let layout = MarkdownImageLayout.parse(
@@ -394,9 +386,9 @@ enum MarkdownHTMLExporter {
         }
     }
 
-    /// `fontScale` は書き出す場所の文字の大きさの、本文に対する倍率。インライン数式の大きさに使う。
+    /// `textScale` は書き出す場所の文字の大きさの、本文に対する倍率。インライン数式の大きさに使う。
     private static func inline(_ markdown: String, analysis: MarkdownAnalysis,
-                               context: DocumentContext, fontScale: CGFloat = 1) -> String {
+                               context: DocumentContext, textScale: CGFloat = 1) -> String {
         let cross = context.crossReferences?.placeholders(in: markdown)
         let linked = cross?.text ?? markdown
         let cited = context.markdownDialect == .extended && linked.contains("[@")
@@ -420,7 +412,7 @@ enum MarkdownHTMLExporter {
             var fallback = escape(resolved)
             for (token, formula) in math.formulas {
                 fallback = fallback.replacingOccurrences(of: token,
-                    with: mathImage(formula, fontScale: fontScale) ?? escape(formula.source))
+                    with: mathImage(formula, textScale: textScale) ?? escape(formula.source))
             }
             for (token, target) in cross?.targets ?? [] {
                 fallback = fallback.replacingOccurrences(of: token,
@@ -469,7 +461,7 @@ enum MarkdownHTMLExporter {
         }
         for (token, formula) in math.formulas {
             html = html.replacingOccurrences(of: token,
-                with: mathImage(formula, fontScale: fontScale) ?? escape(formula.source))
+                with: mathImage(formula, textScale: textScale) ?? escape(formula.source))
         }
         for (token, target) in cross?.targets ?? [] {
             html = html.replacingOccurrences(of: token,
