@@ -236,10 +236,10 @@ enum MarkdownMathRenderer {
     /// （docs/math-font-size-and-baseline.md）。
     static func attachment(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> NSAttributedString? {
         guard let rendered = render(formula, fontSize: fontSize) else { return nil }
-        let attachment = NSTextAttachment()
-        attachment.image = rendered.image
-        attachment.bounds = NSRect(x: 0, y: -rendered.baseline,
-                                   width: rendered.image.size.width, height: rendered.image.size.height)
+        let attachment = MarkdownMathAttachment(image: rendered.image,
+                                                bounds: NSRect(x: 0, y: -rendered.baseline,
+                                                               width: rendered.image.size.width,
+                                                               height: rendered.image.size.height))
         return NSAttributedString(attachment: attachment)
     }
 
@@ -325,13 +325,41 @@ enum MarkdownMathRenderer {
     }
 }
 
+/// 本文に置いた数式の添付。プレビューの表示倍率（`PreviewTypography.scaled`）で、周りの文字と同じ倍率に
+/// 大きさとベースラインの下げ幅（`bounds`）を広げるため、ほかの画像の添付と区別する。
+/// 画像（`MarkdownMathRenderer.render`）は描く先の解像度で描くため、広げてもぼやけない。
+final class MarkdownMathAttachment: NSTextAttachment {
+    init(image: NSImage, bounds: NSRect) {
+        super.init(data: nil, ofType: nil)
+        self.image = image
+        self.bounds = bounds
+    }
+
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+
+    /// 大きさとベースラインの下げ幅を `scale` 倍にした新しい添付。キャッシュした文字列と添付を共有しないよう、
+    /// 自身は変えない。画像は同じものを使う。
+    func scaled(by scale: CGFloat) -> MarkdownMathAttachment {
+        MarkdownMathAttachment(image: image ?? NSImage(),
+                               bounds: NSRect(x: bounds.minX * scale, y: bounds.minY * scale,
+                                              width: bounds.width * scale, height: bounds.height * scale))
+    }
+}
+
+/// 構造化プレビューの数式ブロック。文字の大きさは本文の大きさに表示倍率（`zoom`）を掛けた文字の1.2倍で、
+/// 本文に置いたインライン数式（`MarkdownMathAttachment`）と同じになる。
 struct MarkdownMathView: NSViewRepresentable {
     let formula: MarkdownMath.Formula
+    var zoom: Double = 1
+
+    private var fontSize: CGFloat {
+        MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize * CGFloat(zoom))
+    }
 
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel(frame: .zero)
         view.setContentHuggingPriority(.required, for: .vertical)
-        view.fontSize = MarkdownMathRenderer.fontSize(surrounding: MarkdownRenderer.bodyFontSize)
+        view.fontSize = fontSize
         view.labelMode = .display
         view.textColor = .labelColor
         return view
@@ -348,6 +376,11 @@ struct MarkdownMathView: NSViewRepresentable {
         if context.coordinator.colorScheme != context.environment.colorScheme {
             context.coordinator.colorScheme = context.environment.colorScheme
             view.effectiveAppearance.performAsCurrentDrawingAppearance { view.textColor = .labelColor }
+        }
+        // 表示倍率が変わったら文字の大きさを変え、SwiftUI に大きさを測り直させる。
+        if view.fontSize != fontSize {
+            view.fontSize = fontSize
+            view.invalidateIntrinsicContentSize()
         }
         // latexの再設定は再解析を伴うため、式が変わった時だけ行う。
         guard view.latex != formula.swiftMathLaTeX else { return }

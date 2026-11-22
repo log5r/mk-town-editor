@@ -179,7 +179,7 @@ struct MarkdownPreview: View {
                                               let formula = MarkdownMath.displayFormula(block.content),
                                               renderCache.canRenderDisplayFormula(formula) {
                                         HStack {
-                                            MarkdownMathView(formula: formula)
+                                            MarkdownMathView(formula: formula, zoom: zoom)
                                                 .accessibilityLabel(formula.latex)
                                             if let target = analysis.crossReferences.target(forBlockID: block.id) {
                                                 Text(target.label).foregroundStyle(.secondary)

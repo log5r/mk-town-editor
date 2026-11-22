@@ -164,18 +164,21 @@ final class MarkdownMathBaselineTests: XCTestCase {
         let before = String(repeating: "前", count: 50)
         let after = String(repeating: "後", count: 80)
         let source = "\(before) 確率 $\\displaystyle\\frac{1}{k}$ で当選する\(after)"
-        for zoom in [1.0, 1.5] {
+        for zoom in [0.8, 1.0, 1.5] {
             try PreviewLayoutTestSupport.hosted(PreviewLayoutTestSupport.preview(source, zoom: zoom)) { host in
                 let view = try XCTUnwrap(PreviewLayoutTestSupport.textViews(in: host)
                     .first { $0.string.contains("\u{FFFC}") }, "zoom \(zoom)")
                 let manager = try XCTUnwrap(view.layoutManager)
                 let container = try XCTUnwrap(view.textContainer)
+                // `HoverLinkText.sizeThatFits` は SwiftUI が試しに尋ねた幅（幅の指定のない提案では500）をコンテナに残す。
+                // ビューに置かれた幅で測る。
+                container.containerSize = NSSize(width: view.frame.width, height: CGFloat.greatestFiniteMagnitude)
                 manager.ensureLayout(for: container)
                 let storage = try XCTUnwrap(view.textStorage)
                 let location = (view.string as NSString).range(of: "\u{FFFC}").location
                 let attachment = try XCTUnwrap(storage.attribute(.attachment, at: location,
                                                                   effectiveRange: nil) as? NSTextAttachment)
-                XCTAssertLessThan(attachment.bounds.minY, -8, "zoom \(zoom)")
+                XCTAssertLessThan(attachment.bounds.minY, -8 * zoom, "zoom \(zoom)")
 
                 var lines: [(rect: NSRect, used: NSRect, glyphs: NSRange)] = []
                 manager.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: manager.numberOfGlyphs)) {
@@ -207,8 +210,8 @@ final class MarkdownMathBaselineTests: XCTestCase {
                 let used = manager.usedRect(for: container)
                 XCTAssertGreaterThanOrEqual(view.frame.height, used.maxY - 0.5, "zoom \(zoom)")
                 let extra = line.rect.height - lines[index - 1].rect.height
-                // 数式は本文の1.2倍（18pt）。倍率1.5では文字も大きくなるため、広がる分は小さくなる（約10pt）。
-                XCTAssertGreaterThan(extra, 5, "zoom \(zoom)")
+                // 数式は本文の1.2倍（倍率1で18pt）。数式も文字も倍率に合わせて大きさが変わる。
+                XCTAssertGreaterThan(extra, 5 * zoom, "zoom \(zoom)")
                 // 同じ文字列の数式を文字（`1/k`）に置き換えた場合より、少なくとも数式の行が広がった分だけ高い。
                 let plain = NSMutableAttributedString(attributedString: view.attributedString())
                 plain.replaceCharacters(in: NSRange(location: location, length: 1), with: NSAttributedString(
