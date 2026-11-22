@@ -170,9 +170,8 @@ final class MarkdownMathBaselineTests: XCTestCase {
                     .first { $0.string.contains("\u{FFFC}") }, "zoom \(zoom)")
                 let manager = try XCTUnwrap(view.layoutManager)
                 let container = try XCTUnwrap(view.textContainer)
-                // `HoverLinkText.sizeThatFits` は SwiftUI が試しに尋ねた幅（幅の指定のない提案では500）をコンテナに残す。
-                // ビューに置かれた幅で測る。
-                container.containerSize = NSSize(width: view.frame.width, height: CGFloat.greatestFiniteMagnitude)
+                // コンテナはビューに置かれた幅で折り返す（#102）。
+                XCTAssertEqual(container.size.width, view.frame.width, accuracy: 0.5, "zoom \(zoom)")
                 manager.ensureLayout(for: container)
                 let storage = try XCTUnwrap(view.textStorage)
                 let location = (view.string as NSString).range(of: "\u{FFFC}").location

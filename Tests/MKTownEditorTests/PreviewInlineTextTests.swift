@@ -165,4 +165,33 @@ final class PreviewInlineTextTests: XCTestCase {
             XCTAssertLessThan(plain.frame.width, 250)
         }
     }
+
+    /// 不具合（#102）: 行の幅いっぱいを使う文字列（添付を含む段落、リスト項目）が文書の先頭にあると、
+    /// ウインドウに載せたときに `LazyVStack` が先頭の行を幅の指定のない提案で測り直し、`sizeThatFits` が
+    /// コンテナの幅を500にしたまま残していた。ビューは置かれた幅（544pt）の高さなのに、文字は500ptで折り返し、
+    /// 最後の行が次のブロックに重なった。プレビューを別ウインドウで開いたときにアプリでも起きた。
+    func testFullWidthTextAtTheTopWrapsAtItsPlacedWidth() throws {
+        let item = String(repeating: "リスト項目の長い本文。", count: 12)
+        let formula = String(repeating: "前", count: 50) + " 確率 $\\displaystyle\\frac{1}{k}$ で当選する"
+            + String(repeating: "後", count: 80)
+        let cases = [(source: "- \(item)\n\n本文。\n", marker: "リスト項目"),
+                     (source: formula + "\n\n- \(item)\n", marker: "\u{FFFC}")]
+        for (source, marker) in cases {
+            for zoom in [0.8, 1.0] {
+                let label = "\(marker) zoom \(zoom)"
+                try Support.hosted(Support.preview(source, zoom: zoom, onRevealSource: { _ in })) { host in
+                    let view = try XCTUnwrap(Support.textViews(in: host).first { $0.string.contains(marker) }, label)
+                    let manager = try XCTUnwrap(view.layoutManager)
+                    let container = try XCTUnwrap(view.textContainer)
+                    XCTAssertGreaterThan(view.frame.width, 520, label)
+                    XCTAssertEqual(container.size.width, view.frame.width, accuracy: 0.5, label)
+                    manager.ensureLayout(for: container)
+                    let used = manager.usedRect(for: container)
+                    XCTAssertLessThanOrEqual(used.height, view.frame.height + 0.5, label)
+                    let measured = HoverLinkTextMeasurer.usedRect(of: view.attributedString(), width: view.frame.width)
+                    XCTAssertEqual(used.height, measured.height, accuracy: 0.5, label)
+                }
+            }
+        }
+    }
 }
