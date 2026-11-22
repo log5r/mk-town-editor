@@ -328,6 +328,7 @@ final class MobileWorkspaceTests: XCTestCase {
     }
 
     private final class PreferenceBox: ObservableObject {
+        @Published var font = MobileEditorFont.default
         @Published var preserves = false
         @Published var shows = false
         @Published var formats = true
@@ -336,7 +337,7 @@ final class MobileWorkspaceTests: XCTestCase {
     private struct PreferencesContainer: View {
         @ObservedObject var model: PreferenceBox
         var body: some View {
-            MobilePreferencesView(preservesSoftLineBreaks: $model.preserves,
+            MobilePreferencesView(editorFont: $model.font, preservesSoftLineBreaks: $model.preserves,
                 showsFrontMatter: $model.shows, formatsFrontMatter: $model.formats)
         }
     }
@@ -630,6 +631,7 @@ final class MobileWorkspaceTests: XCTestCase {
         @Published var findShown = false
         @Published var showsEditor = true
         @Published var dynamicTypeSize = DynamicTypeSize.large
+        @Published var font = MobileEditorFont.default
         let selection = MobileTextSelection()
     }
 
@@ -639,7 +641,7 @@ final class MobileWorkspaceTests: XCTestCase {
             VStack {
                 if model.showsEditor {
                     MobileMarkdownTextView(text: $model.text, selection: model.selection,
-                        isFocused: $model.focused, isFindNavigatorPresented: $model.findShown)
+                        isFocused: $model.focused, isFindNavigatorPresented: $model.findShown, font: model.font)
                 } else {
                     Text(model.text)
                 }
@@ -832,6 +834,74 @@ final class MobileWorkspaceTests: XCTestCase {
             XCTAssertFalse(interaction.isFindNavigatorVisible)
             XCTAssertTrue(textViews(in: host.view).first === editor)
         }
+    }
+
+    // MARK: - Editor font (issue #103, docs/editor-font-selection.md)
+
+    func testEditorFontPreferenceDefaultsToSystemMonospacedAndPersists() throws {
+        let suite = "MobileWorkspaceTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let document = MarkdownDocument(text: "first")
+        XCTAssertEqual(MobileEditorWorkspace(document: .constant(document), preferences: defaults).editorFont,
+                       .monospacedSystem)
+        for font in MobileEditorFont.allCases {
+            defaults.set(font.rawValue, forKey: "mobile.editorFont")
+            XCTAssertEqual(MobileEditorWorkspace(document: .constant(document), preferences: defaults).editorFont, font)
+        }
+        defaults.set("fontAddedInALaterVersion", forKey: "mobile.editorFont")
+        XCTAssertEqual(MobileEditorWorkspace(document: .constant(document), preferences: defaults).editorFont,
+                       .monospacedSystem)
+    }
+
+    func testEveryEditorFontLoadsAtTheDynamicTypeBodySize() throws {
+        for size in [DynamicTypeSize.large, .xSmall, .accessibility3] {
+            let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
+            let body = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits).pointSize
+            let standard = UIFont.systemFont(ofSize: body)
+            // The default is unchanged from before fonts could be chosen.
+            XCTAssertEqual(MobileMarkdownTextView.font(for: size),
+                           .monospacedSystemFont(ofSize: body, weight: .regular))
+            for choice in MobileEditorFont.allCases {
+                let font = MobileMarkdownTextView.font(for: size, choice: choice)
+                XCTAssertEqual(font.pointSize, body, accuracy: 0.01, "\(choice) at \(size)")
+                switch choice.face {
+                case .named(let name):
+                    XCTAssertEqual(font.fontName, name, "\(choice) is bundled with iOS")
+                case .system(.standard):
+                    XCTAssertEqual(font.familyName, standard.familyName)
+                case .system(.monospaced):
+                    XCTAssertEqual(font, .monospacedSystemFont(ofSize: body, weight: .regular))
+                case .system(.serif), .system(.rounded):
+                    XCTAssertNotEqual(font.familyName, standard.familyName, "\(choice) uses its system design")
+                }
+                let cascade = font.fontDescriptor.fontAttributes[.cascadeList] as? [UIFontDescriptor]
+                XCTAssertEqual(cascade?.first?.postscriptName, choice.japaneseFallback, "\(choice)")
+            }
+        }
+    }
+
+    func testChangingTheEditorFontRestylesTheEditorWithoutChangingTextOrSelection() async throws {
+        let model = EditorBox()
+        model.text = "# 見出し\n日本語とEnglish"
+        model.selection.range = NSRange(location: 3, length: 2)
+        let (window, host) = try await showEditor(model)
+        defer { window.isHidden = true }
+        let editor = try XCTUnwrap(textViews(in: host.view).first)
+        XCTAssertEqual(editor.font, MobileMarkdownTextView.font(for: .large))
+        for choice in [MobileEditorFont.hiraginoMincho, .serifSystem, .menlo, .monospacedSystem] {
+            model.font = choice
+            let expected = MobileMarkdownTextView.font(for: .large, choice: choice)
+            for _ in 0..<50 where editor.font != expected { try await Task.sleep(for: .milliseconds(20)) }
+            XCTAssertEqual(editor.font, expected, "\(choice)")
+            XCTAssertTrue(textViews(in: host.view).first === editor, "the same editor is restyled")
+            XCTAssertEqual(editor.text, "# 見出し\n日本語とEnglish")
+            XCTAssertEqual(editor.selectedRange, NSRange(location: 3, length: 2))
+        }
+        model.dynamicTypeSize = .accessibility2
+        let larger = MobileMarkdownTextView.font(for: .accessibility2, choice: .monospacedSystem)
+        for _ in 0..<50 where editor.font != larger { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(editor.font, larger, "the chosen font still follows Dynamic Type")
     }
 
     private func textViews(in view: UIView) -> [UITextView] {

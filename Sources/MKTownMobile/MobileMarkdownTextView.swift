@@ -20,6 +20,7 @@ struct MobileMarkdownTextView: UIViewRepresentable {
     let selection: MobileTextSelection
     @Binding var isFocused: Bool
     @Binding var isFindNavigatorPresented: Bool
+    var font: MobileEditorFont = .default
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -27,7 +28,7 @@ struct MobileMarkdownTextView: UIViewRepresentable {
         let view = EditorTextView()
         view.backgroundColor = .systemBackground
         view.textColor = .label
-        view.font = Self.font(for: context.environment.dynamicTypeSize)
+        view.font = Self.font(for: context.environment.dynamicTypeSize, choice: font)
         context.coordinator.appliedFont = view.font
         view.isFindInteractionEnabled = true
         view.accessibilityLabel = String(localized: "Markdown本文")
@@ -47,8 +48,8 @@ struct MobileMarkdownTextView: UIViewRepresentable {
         coordinator.parent = self
 
         // Setting the font re-attributes and lays out the whole document, so only apply
-        // Dynamic Type changes.
-        let font = Self.font(for: context.environment.dynamicTypeSize)
+        // Dynamic Type changes and a different font chosen in Settings.
+        let font = Self.font(for: context.environment.dynamicTypeSize, choice: self.font)
         if font != coordinator.appliedFont {
             coordinator.appliedFont = font
             view.font = font
@@ -88,11 +89,12 @@ struct MobileMarkdownTextView: UIViewRepresentable {
         }
     }
 
-    /// Matches SwiftUI's `.body.monospaced()` and follows the environment's Dynamic Type size.
-    static func font(for size: DynamicTypeSize) -> UIFont {
+    /// The chosen font at the body size of the environment's Dynamic Type size. The default
+    /// matches SwiftUI's `.body.monospaced()`.
+    static func font(for size: DynamicTypeSize, choice: MobileEditorFont = .default) -> UIFont {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
         let body = UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits)
-        return .monospacedSystemFont(ofSize: body.pointSize, weight: .regular)
+        return choice.uiFont(ofSize: body.pointSize)
     }
 
     static func clamped(_ range: NSRange, to text: String) -> NSRange {
@@ -227,6 +229,42 @@ struct MobileMarkdownTextView: UIViewRepresentable {
                 super.findInteraction(interaction, didEnd: session)
             }
             findSessionDidChange?(false)
+        }
+    }
+}
+
+extension MobileEditorFont {
+    /// The font at `size`. A bundled font that cannot be loaded falls back to the system
+    /// monospaced font, the editor's default.
+    func uiFont(ofSize size: CGFloat) -> UIFont {
+        let base: UIFont
+        switch face {
+        case .system(.monospaced):
+            base = .monospacedSystemFont(ofSize: size, weight: .regular)
+        case .system(let design):
+            let system = UIFont.systemFont(ofSize: size)
+            let descriptor = system.fontDescriptor.withDesign(design.uiDesign) ?? system.fontDescriptor
+            base = UIFont(descriptor: descriptor, size: size)
+        case .named(let name):
+            guard let font = UIFont(name: name, size: size) else {
+                return .monospacedSystemFont(ofSize: size, weight: .regular)
+            }
+            base = font
+        }
+        guard let japaneseFallback,
+              UIFont(name: japaneseFallback, size: size) != nil else { return base }
+        let cascade = UIFontDescriptor(name: japaneseFallback, size: size)
+        return UIFont(descriptor: base.fontDescriptor.addingAttributes([.cascadeList: [cascade]]), size: size)
+    }
+}
+
+extension MobileEditorFont.SystemDesign {
+    var uiDesign: UIFontDescriptor.SystemDesign {
+        switch self {
+        case .standard: .default
+        case .monospaced: .monospaced
+        case .serif: .serif
+        case .rounded: .rounded
         }
     }
 }

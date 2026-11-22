@@ -3,6 +3,9 @@ import Combine
 import Foundation
 import SwiftUI
 
+/// 標準装備のエディタのフォント。`AppEditorSettings.fontChoice` に raw value で保存する。
+/// 以前の版も同じ値を読むため、ケースを消したり raw value を変えたりしない。
+/// インストール済みの任意のフォントは `EditorFont.family` で表し、別の項目に保存する（docs/editor-font-selection.md）。
 enum EditorFontChoice: String, Codable, CaseIterable {
     case monospacedSystem
     case system
@@ -23,6 +26,126 @@ enum EditorFontChoice: String, Codable, CaseIterable {
         case .system: .systemFont(ofSize: size)
         case .menlo: NSFont(name: "Menlo-Regular", size: size)
             ?? .monospacedSystemFont(ofSize: size, weight: .regular)
+        }
+    }
+}
+
+/// エディタの本文に使うフォント。標準装備の選択肢か、Macにインストールされているフォントファミリー。
+enum EditorFont: Hashable, Sendable {
+    case builtIn(EditorFontChoice)
+    /// フォントファミリー名（`NSFontManager.availableFontFamilies` の値。表示名ではない）。
+    case family(String)
+
+    static let `default` = EditorFont.builtIn(.monospacedSystem)
+
+    /// フォントファミリーがこのMacにあるか。標準装備の選択肢は常にある。
+    @MainActor
+    var isAvailable: Bool {
+        switch self {
+        case .builtIn: true
+        case .family(let name): Self.familyIsInstalled(name)
+        }
+    }
+
+    /// 設定画面に出す名前。フォントファミリーは表示言語での名前（例: ヒラギノ角ゴシック）。
+    @MainActor
+    var title: String {
+        switch self {
+        case .builtIn(let choice): choice.title
+        case .family(let name): NSFontManager.shared.localizedName(forFamily: name, face: nil)
+        }
+    }
+
+    /// 本文のフォント。フォントファミリーが見つからないとき（削除した、外付けの書体を外したなど）は
+    /// 既定のフォント（システム等幅）にする。設定の値は消さないので、フォントを戻すとまた使われる。
+    @MainActor
+    func font(size: CGFloat) -> NSFont {
+        switch self {
+        case .builtIn(let choice):
+            return choice.font(size: size)
+        case .family(let name):
+            // weight 5 は標準の太さ。ファミリーにない場合は近い太さの書体を返す。
+            if let font = NSFontManager.shared.font(withFamily: name, traits: [], weight: 5, size: size) {
+                return font
+            }
+            // 斜体だけのファミリーなどで標準の書体が見つからないときは、ファミリーの最初の書体を使う。
+            if let first = NSFontManager.shared.availableMembers(ofFontFamily: name)?.first?.first as? String,
+               let font = NSFont(name: first, size: size) {
+                return font
+            }
+            return Self.default.font(size: size)
+        }
+    }
+
+    @MainActor
+    private static func familyIsInstalled(_ name: String) -> Bool {
+        !name.isEmpty && !(NSFontManager.shared.availableMembers(ofFontFamily: name) ?? []).isEmpty
+    }
+}
+
+/// 設定画面のフォントの選択肢。インストール済みのファミリーを等幅とそれ以外に分け、
+/// 一覧にない選択中のファミリー（見つからないフォント）を別に持つ。
+struct EditorFontOptions: Equatable {
+    /// フォントの見本。英数字の見分けやすさ（0とO、1とlとI）、括弧、日本語の字形を並べる。
+    static let sampleText = "AaBbCc 0O 1lI {}[] — あア漢字"
+
+    var monospaced: [EditorFontFamily]
+    var proportional: [EditorFontFamily]
+    /// 選択中だが一覧にないフォントファミリー。ポップアップボタンを空欄にしないため項目として出す。
+    var unlistedFamily: String?
+    /// `unlistedFamily` が見つからないフォントか。一覧を読み込む前は判断しない。
+    var isMissing: Bool
+
+    init(installed: [EditorFontFamily], selected: EditorFont) {
+        monospaced = installed.filter(\.isMonospaced)
+        proportional = installed.filter { !$0.isMonospaced }
+        if case .family(let name) = selected, !installed.contains(where: { $0.name == name }) {
+            unlistedFamily = name
+            isMissing = !installed.isEmpty
+        } else {
+            unlistedFamily = nil
+            isMissing = false
+        }
+    }
+}
+
+/// 設定画面でエディタのフォントの候補に出す、インストール済みのフォントファミリー。
+struct EditorFontFamily: Hashable, Sendable {
+    /// 保存に使うファミリー名。
+    var name: String
+    /// 表示言語でのファミリー名。
+    var displayName: String
+    /// 等幅の書体か。設定画面で等幅とそれ以外を分けて並べる。
+    var isMonospaced: Bool
+
+    /// インストール済みのフォントファミリーを表示名の順に返す。
+    /// 書体を作らずにフォントの記述子から属性を読むので、数百ファミリーあっても軽い。
+    /// 名前が `.` で始まるシステム内部用のファミリーは除く。
+    static func installed() -> [EditorFontFamily] {
+        let collection = CTFontCollectionCreateFromAvailableFonts(nil)
+        let descriptors = CTFontCollectionCreateMatchingFontDescriptors(collection) as? [CTFontDescriptor] ?? []
+        var families: [String: EditorFontFamily] = [:]
+        for descriptor in descriptors {
+            guard let name = CTFontDescriptorCopyAttribute(descriptor, kCTFontFamilyNameAttribute) as? String,
+                  !name.isEmpty, !name.hasPrefix(".") else { continue }
+            let traits = CTFontDescriptorCopyAttribute(descriptor, kCTFontTraitsAttribute) as? [CFString: Any]
+            let symbolic = (traits?[kCTFontSymbolicTrait] as? NSNumber)?.uint32Value ?? 0
+            let monospaced = symbolic & CTFontSymbolicTraits.traitMonoSpace.rawValue != 0
+            if var existing = families[name] {
+                // ファミリーのどれかの書体が等幅なら等幅として扱う。
+                if monospaced, !existing.isMonospaced {
+                    existing.isMonospaced = true
+                    families[name] = existing
+                }
+                continue
+            }
+            let displayName = CTFontDescriptorCopyLocalizedAttribute(descriptor, kCTFontFamilyNameAttribute, nil)
+                as? String ?? name
+            families[name] = EditorFontFamily(name: name, displayName: displayName, isMonospaced: monospaced)
+        }
+        return families.values.sorted {
+            let order = $0.displayName.localizedStandardCompare($1.displayName)
+            return order == .orderedSame ? $0.name < $1.name : order == .orderedAscending
         }
     }
 }
@@ -210,7 +333,7 @@ struct EditorSnippet: Codable, Equatable, Identifiable {
 }
 
 struct EditorTextStyle: Equatable {
-    var fontChoice: EditorFontChoice = .monospacedSystem
+    var font: EditorFont = .default
     var fontSize: Double = 13
     var lineSpacing: Double = 3
     var horizontalMargin: Double = 18
@@ -219,7 +342,7 @@ struct EditorTextStyle: Equatable {
 
     @MainActor
     func apply(to textView: NSTextView) {
-        let font = fontChoice.font(size: CGFloat(fontSize))
+        let font = self.font.font(size: CGFloat(fontSize))
         textView.font = font
         textView.textContainerInset = NSSize(width: horizontalMargin, height: verticalMargin)
         let paragraph = NSMutableParagraphStyle()
@@ -279,7 +402,11 @@ struct AppEditorSettings: Codable, Equatable {
     var lineSpacing: Double = 3
     var wrapsLines = true
     var imageImportMode: ImageImportMode?
+    /// 標準装備のフォント。`fontFamily` があればそちらを使う。読み書きは `editorFont` を通す。
     var fontChoice: EditorFontChoice?
+    /// インストール済みのフォントから選んだフォントファミリー名。この項目を知らない以前の版は
+    /// 無視して `fontChoice` を使うので、以前の版に戻しても設定全体が読めなくなることはない。
+    var fontFamily: String?
     var horizontalMargin: Double?
     var verticalMargin: Double?
     var tabWidth: Int?
@@ -332,6 +459,24 @@ struct AppEditorSettings: Codable, Equatable {
     var documentOpeningMode: DocumentOpeningMode?
 
     var effectiveDocumentOpeningMode: DocumentOpeningMode { documentOpeningMode ?? .default }
+
+    /// エディタのフォント。フォントファミリーを選ぶと `fontFamily` だけを書き、`fontChoice` は
+    /// 以前の版が使う値として残す。標準装備の選択肢を選ぶと `fontFamily` を消す。
+    var editorFont: EditorFont {
+        get {
+            if let fontFamily, !fontFamily.isEmpty { return .family(fontFamily) }
+            return .builtIn(fontChoice ?? .monospacedSystem)
+        }
+        set {
+            switch newValue {
+            case .builtIn(let choice):
+                fontChoice = choice
+                fontFamily = nil
+            case .family(let name):
+                fontFamily = name.isEmpty ? nil : name
+            }
+        }
+    }
 
     var effectiveSnippets: [EditorSnippet] {
         (snippets ?? []) + (extensionPackages ?? []).flatMap { package in
@@ -723,7 +868,7 @@ final class EditorSettingsStore: ObservableObject {
 
     func textStyle(for documentURL: URL?) -> EditorTextStyle {
         EditorTextStyle(
-            fontChoice: values.app.fontChoice ?? .monospacedSystem,
+            font: values.app.editorFont,
             fontSize: min(32, max(10, fontSize(for: documentURL))) * zoom(for: .editor),
             lineSpacing: min(12, max(0, values.app.lineSpacing)) * zoom(for: .editor),
             horizontalMargin: min(48, max(8, values.app.horizontalMargin ?? 18)),

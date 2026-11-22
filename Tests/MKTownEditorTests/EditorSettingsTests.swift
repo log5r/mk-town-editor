@@ -468,11 +468,11 @@ final class EditorSettingsTests: XCTestCase {
         store.setFolderSettings(FolderEditorSettings(fontSize: 19), for: folder)
 
         XCTAssertEqual(store.textStyle(for: document), EditorTextStyle(
-            fontChoice: .menlo, fontSize: 19, lineSpacing: 5,
+            font: .builtIn(.menlo), fontSize: 19, lineSpacing: 5,
             horizontalMargin: 24, verticalMargin: 20
         ))
         XCTAssertEqual(store.textStyle(for: nil).fontSize, 15)
-        XCTAssertEqual(EditorSettingsStore(defaults: defaults).textStyle(for: document).fontChoice, .menlo)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).textStyle(for: document).font, .builtIn(.menlo))
     }
 
     func testFontSizeCommandsPreserveFontAndSpacing() {

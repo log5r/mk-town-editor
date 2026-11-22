@@ -139,7 +139,7 @@ final class EditorCommandFontTests: XCTestCase {
         return (view, model)
     }
 
-    private var editorFont: NSFont { EditorTextStyle().fontChoice.font(size: CGFloat(EditorTextStyle().fontSize)) }
+    private var editorFont: NSFont { EditorTextStyle().font.font(size: CGFloat(EditorTextStyle().fontSize)) }
 
     private func type(_ text: String, into view: NSTextView) {
         view.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))

@@ -5,10 +5,14 @@ import XCTest
 @MainActor
 final class MarkdownLineNumberRulerTests: XCTestCase {
     func testLineNumberVerticalPositionStaysStableWhenAddingAndRemovingNewlines() throws {
-        for font in EditorFontChoice.allCases {
+        // 標準装備のフォントに加え、インストール済みのフォントから選べる、行の高さや
+        // 上下の余白が大きく異なる書体（日本語・セリフ）でも行番号が揺れないことを確かめる。
+        let families = ["Hiragino Sans", "Hiragino Mincho ProN", "Times New Roman"]
+            .map(EditorFont.family).filter(\.isAvailable)
+        for font in EditorFontChoice.allCases.map(EditorFont.builtIn) + families {
             for spacing in [0.0, 3.0, 12.0] {
                 let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 400, height: 400))
-                EditorTextStyle(fontChoice: font, lineSpacing: spacing).apply(to: view)
+                EditorTextStyle(font: font, lineSpacing: spacing).apply(to: view)
                 let manager = try XCTUnwrap(view.layoutManager)
                 let container = try XCTUnwrap(view.textContainer)
                 var firstY: CGFloat?

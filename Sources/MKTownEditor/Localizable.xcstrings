@@ -11176,6 +11176,56 @@
           }
         }
       }
+    },
+    "等幅フォント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Monospaced Fonts"
+          }
+        }
+      }
+    },
+    "その他のフォント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other Fonts"
+          }
+        }
+      }
+    },
+    "%@（見つかりません）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (Not Found)"
+          }
+        }
+      }
+    },
+    "選んだフォントが見つからないため、システム等幅で表示しています。フォントをインストールし直すと元に戻ります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected font can't be found, so System Monospaced is used instead. Reinstall the font to use it again."
+          }
+        }
+      }
+    },
+    "フォントの見本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Font Sample"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

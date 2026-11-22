@@ -185,7 +185,7 @@ final class EditorReplacementParagraphStyleTests: XCTestCase {
         return layoutManager.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil).height
     }
 
-    private var editorFont: NSFont { EditorTextStyle().fontChoice.font(size: CGFloat(EditorTextStyle().fontSize)) }
+    private var editorFont: NSFont { EditorTextStyle().font.font(size: CGFloat(EditorTextStyle().fontSize)) }
 
     private func assertEditorFont(in view: NSTextView, range: NSRange,
                                   file: StaticString = #filePath, line: UInt = #line) {
