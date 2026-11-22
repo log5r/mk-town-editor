@@ -383,7 +383,7 @@ enum MarkdownRenderer {
             if context.markdownDialect == .extended,
                let formula = MarkdownMath.displayFormula(block.content) {
                 let output = NSMutableAttributedString(attributedString:
-                    MarkdownMathRenderer.attachment(formula, fontSize: 21)
+                    MarkdownMathRenderer.attachment(formula, fontSize: MarkdownMathRenderer.displayFontSize)
                     ?? NSAttributedString(string: formula.source)
                 )
                 if let target = context.crossReferences?.target(forBlockID: block.id) {
@@ -463,7 +463,8 @@ enum MarkdownRenderer {
             let range = (result.string as NSString).range(of: token)
             guard range.location != NSNotFound else { continue }
             result.replaceCharacters(in: range, with:
-                MarkdownMathRenderer.attachment(formula, fontSize: baseFont.pointSize)
+                MarkdownMathRenderer.attachment(formula, fontSize: MarkdownMathRenderer.fontSize(
+                    for: formula, inlineSize: baseFont.pointSize))
                     ?? NSAttributedString(string: formula.source))
         }
         let fullRange = NSRange(location: 0, length: result.length)

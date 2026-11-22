@@ -13,12 +13,28 @@ enum MarkdownMath {
         /// SwiftMathが解釈できる形へ書き換えたLaTeX。描画と妥当性判定にはこちらを使い、
         /// 代替テキストや読み上げには元の `latex` を使う。
         let swiftMathLaTeX: String
+        /// 数式ブロック（`$$...$$`）と同じ大きさで描くか。数式ブロックと、先頭で `\displaystyle` を指定した
+        /// インライン数式（`$\displaystyle \frac{1}{k}$`）で真になる。
+        let usesDisplaySize: Bool
 
         init(source: String, latex: String, display: Bool) {
             self.source = source
             self.latex = latex
             self.display = display
             swiftMathLaTeX = MarkdownMathCompatibility.normalize(latex, display: display)
+            usesDisplaySize = display || Self.startsWithDisplayStyle(latex)
+        }
+
+        /// 先頭の空白の後、波括弧の外で `\displaystyle` コマンドから始まるか。
+        /// 式全体の書体を指定した場合だけを対象にする。`\displaystylefoo` のような別名のコマンド、
+        /// 途中の `\displaystyle`（式の一部だけの書体）、`\dfrac`（分数1つの書体）は対象にしない。
+        static func startsWithDisplayStyle(_ latex: String) -> Bool {
+            let command = "\\displaystyle"
+            let body = latex.drop(while: \.isWhitespace)
+            guard body.hasPrefix(command) else { return false }
+            // TeXのコマンド名は英字の並びなので、直後が英字なら別のコマンドになる。
+            guard let next = body.dropFirst(command.count).first else { return true }
+            return !(next.isASCII && next.isLetter)
         }
     }
 
@@ -119,6 +135,26 @@ enum MarkdownMath {
 
 @MainActor
 enum MarkdownMathRenderer {
+    /// 数式ブロック（`$$...$$`）の文字の大きさ。プレビュー、HTML、PDFで共通にする。
+    nonisolated static let displayFontSize: CGFloat = 21
+
+    /// 数式を描く文字の大きさ。`inlineSize` は周りの文字の大きさ（インライン数式の既定の大きさ）。
+    /// 数式ブロックと同じ大きさで描く式（`usesDisplaySize`）は数式ブロックの大きさ（`displaySize`）にそろえる。
+    /// 見出しのように周りの文字のほうが大きければ、周りの文字に合わせる。
+    /// `displaySize` はプレビューでは `displayFontSize`。HTMLでは本文の大きさに比例させる（`MarkdownHTMLExporter`）。
+    nonisolated static func fontSize(for formula: MarkdownMath.Formula, inlineSize: CGFloat,
+                                     displaySize: CGFloat = displayFontSize) -> CGFloat {
+        formula.usesDisplaySize ? max(displaySize, inlineSize) : inlineSize
+    }
+
+    /// 描いた数式の画像と、画像の下端から数式のベースラインまでの高さ。
+    struct Rendered {
+        let image: NSImage
+        /// 画像の下端から数式のベースラインまでの高さ（ポイント）。分数の分母や `\lim` の下付きなど、
+        /// ベースラインより下に出る部分の深さ（descent）に当たる。
+        let baseline: CGFloat
+    }
+
     static func label(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> MTMathUILabel? {
         let label = MTMathUILabel(frame: .zero)
         label.latex = formula.swiftMathLaTeX
@@ -129,30 +165,49 @@ enum MarkdownMathRenderer {
         return label
     }
 
-    static func image(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> NSImage? {
+    static func render(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> Rendered? {
         guard let label = label(formula, fontSize: fontSize) else { return nil }
-        let size = label.fittingSize
-        guard size.width > 0, size.height > 0, size.width < 4000, size.height < 4000 else { return nil }
+        let fitting = label.fittingSize
+        guard fitting.width > 0, fitting.height > 0, fitting.width < 4000, fitting.height < 4000 else { return nil }
+        // 大きさは整数に切り上げ、HTMLの `width`・`height` で拡大縮小されないようにする。
+        // `MTMathUILabel` は式の高さを文字の大きさの半分以上として上下中央に置くため、
+        // 低い式（`-` など）が画像の下にはみ出さないよう、高さもそれ以上にする。
+        let size = NSSize(width: ceil(fitting.width), height: ceil(max(fitting.height, fontSize / 2)))
         label.frame = NSRect(origin: .zero, size: size)
+        label.needsLayout = true
         label.layoutSubtreeIfNeeded()
-        guard let rep = label.bitmapImageRepForCachingDisplay(in: label.bounds) else { return nil }
+        guard let display = label.displayList,
+              let rep = label.bitmapImageRepForCachingDisplay(in: label.bounds) else { return nil }
+        // 式を置いた位置（`MTDisplay.position`）は公開されていないため、`MTMathUILabel` の配置
+        // （`_layoutSubviews`：高さを文字の大きさの半分以上として上下中央に置く。余白 `contentInsets` は0）を
+        // 同じ式で求める。切り上げで空いた分も含めて、画像の下端から数式のベースラインまでの高さになる。
+        let layoutHeight = max(display.ascent + display.descent, fontSize / 2)
+        let baseline = (size.height - layoutHeight) / 2 + display.descent
         label.cacheDisplay(in: label.bounds, to: rep)
         let image = NSImage(size: size)
         image.addRepresentation(rep)
-        return image
+        return Rendered(image: image, baseline: baseline)
     }
 
+    static func image(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> NSImage? {
+        render(formula, fontSize: fontSize)?.image
+    }
+
+    /// 本文に置く数式の添付。数式のベースラインを本文のベースラインに合わせるため、
+    /// ベースラインより下の部分（`baseline`）だけ下げて置く。TextKitは添付の下げた分も行の高さに含める
+    /// （docs/inline-math-baseline-and-display-size.md）。
     static func attachment(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> NSAttributedString? {
-        guard let image = image(formula, fontSize: fontSize) else { return nil }
+        guard let rendered = render(formula, fontSize: fontSize) else { return nil }
         let attachment = NSTextAttachment()
-        attachment.image = image
-        attachment.bounds = NSRect(x: 0, y: -2, width: image.size.width, height: image.size.height)
+        attachment.image = rendered.image
+        attachment.bounds = NSRect(x: 0, y: -rendered.baseline,
+                                   width: rendered.image.size.width, height: rendered.image.size.height)
         return NSAttributedString(attachment: attachment)
     }
 
     static func htmlImage(_ formula: MarkdownMath.Formula, fontSize: CGFloat = 16) -> String? {
-        guard let image = image(formula, fontSize: fontSize),
-              let tiff = image.tiffRepresentation,
+        guard let rendered = render(formula, fontSize: fontSize),
+              let tiff = rendered.image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
             return nil
         }
@@ -160,8 +215,51 @@ enum MarkdownMathRenderer {
             .replacingOccurrences(of: "\"", with: "&quot;")
             .replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-        let style = formula.display ? "display:block;margin:1em auto" : "vertical-align:middle"
-        return "<img class=\"math\" src=\"data:image/png;base64,\(png.base64EncodedString())\" alt=\"\(alt)\" style=\"\(style)\" width=\"\(Int(ceil(image.size.width)))\" height=\"\(Int(ceil(image.size.height)))\">"
+        // インライン数式は画像の下端を本文のベースラインより `baseline` だけ下げ、数式のベースラインを本文にそろえる。
+        // 下げ幅は画像の元の大きさでの値なので、書き出しのスタイルシートの `img { max-width: 100% }` で
+        // 縮むと数式が本文より下がる。インライン数式の画像は縮めない（`max-width:none`。KaTeX・MathJaxと同じ）。
+        // 数式ブロックはそろえるベースラインがないため、従来どおり幅に合わせて縮む。
+        let style = formula.display ? "display:block;margin:1em auto"
+            : "vertical-align:\(cssLength(-rendered.baseline));max-width:none"
+        let size = rendered.image.size
+        return "<img class=\"math\" src=\"data:image/png;base64,\(png.base64EncodedString())\" alt=\"\(alt)\" style=\"\(style)\" width=\"\(Int(size.width))\" height=\"\(Int(size.height))\">"
+    }
+
+    /// HTMLから読み込んだ文字列（PDF書き出し）のインライン数式を、プレビューと同じ置き方にする。
+    ///
+    /// HTMLの読み込みは `vertical-align:-Npx` を画像の文字の `NSBaselineOffset`（-N）に変える。
+    /// TextKitは下げた画像でも元の位置の高さを行の上側に取るため、行の上に画像の深さ分の空きができる。
+    /// 下げた量を添付の `bounds.origin.y` に移すと、プレビュー（`attachment(_:fontSize:)`）と同じく、
+    /// ベースラインの上下に画像が実際に占める分だけ行が広がる。
+    /// `vertical-align` に負の長さを付けるのは数式の画像だけなので、ほかの画像は変えない。
+    static func alignImportedMathAttachments(in text: NSMutableAttributedString) {
+        let whole = NSRange(location: 0, length: text.length)
+        var replacements: [(NSRange, NSTextAttachment)] = []
+        text.enumerateAttribute(.attachment, in: whole) { value, range, _ in
+            guard let attachment = value as? NSTextAttachment,
+                  let offset = (text.attribute(.baselineOffset, at: range.location, effectiveRange: nil)
+                                as? NSNumber).map({ CGFloat($0.doubleValue) }), offset < 0,
+                  let image = (attachment.attachmentCell as? NSTextAttachmentCell)?.image ?? attachment.image
+            else { return }
+            let replacement = NSTextAttachment()
+            replacement.image = image
+            replacement.bounds = NSRect(x: 0, y: offset, width: image.size.width, height: image.size.height)
+            replacements.append((range, replacement))
+        }
+        guard !replacements.isEmpty else { return }
+        text.beginEditing()
+        for (range, replacement) in replacements {
+            text.addAttribute(.attachment, value: replacement, range: range)
+            text.removeAttribute(.baselineOffset, range: range)
+        }
+        text.endEditing()
+    }
+
+    /// CSSの長さ（px）。小数第2位までにし、地域の設定によらず小数点を `.` にする。
+    nonisolated static func cssLength(_ value: CGFloat) -> String {
+        let rounded = (value * 100).rounded() / 100
+        if rounded == 0 { return "0" }
+        return "\(Double(rounded))px".replacingOccurrences(of: ".0px", with: "px")
     }
 }
 
@@ -171,7 +269,7 @@ struct MarkdownMathView: NSViewRepresentable {
     func makeNSView(context: Context) -> MTMathUILabel {
         let view = MTMathUILabel(frame: .zero)
         view.setContentHuggingPriority(.required, for: .vertical)
-        view.fontSize = 21
+        view.fontSize = MarkdownMathRenderer.displayFontSize
         view.labelMode = .display
         view.textColor = .labelColor
         return view

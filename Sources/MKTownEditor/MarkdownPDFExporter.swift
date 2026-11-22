@@ -188,6 +188,8 @@ enum MarkdownPDFExporter {
         textView.headerTitle = title
         textView.showsHeader = header
         textView.showsFooter = footer
+        // インライン数式をプレビューと同じくベースラインにそろえ、その行だけを広げる。
+        MarkdownMathRenderer.alignImportedMathAttachments(in: attributed)
         let markerRange = (attributed.string as NSString).range(of: MarkdownHTMLExporter.coverBreakMarker)
         if markerRange.location != NSNotFound {
             attributed.deleteCharacters(in: markerRange)

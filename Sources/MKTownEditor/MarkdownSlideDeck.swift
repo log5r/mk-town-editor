@@ -52,7 +52,8 @@ enum MarkdownSlidePDFExporter {
         for slide in deck.slides {
             try Task.checkCancellation()
             let html = try await MarkdownHTMLExporter.renderAsync(slide, documentURL: documentURL, dialect: dialect)
-            let attributed = try await DocumentWork.loadHTML(html)
+            let attributed = NSMutableAttributedString(attributedString: try await DocumentWork.loadHTML(html))
+            MarkdownMathRenderer.alignImportedMathAttachments(in: attributed)
             let pageView = MarkdownSlidePDFPage(frame: NSRect(x: 0, y: 0, width: 842, height: 595), content: attributed)
             guard let page = PDFDocument(data: pageView.dataWithPDF(inside: pageView.bounds))?.page(at: 0) else {
                 throw MarkdownSlidePDFError.invalidPage
@@ -73,8 +74,9 @@ enum MarkdownSlidePDFExporter {
                 .documentType: NSAttributedString.DocumentType.html,
                 .characterEncoding: String.Encoding.utf8.rawValue
             ]
-            let attributed = try NSAttributedString(data: Data(html.utf8), options: options,
-                                                     documentAttributes: nil)
+            let attributed = NSMutableAttributedString(attributedString: try NSAttributedString(
+                data: Data(html.utf8), options: options, documentAttributes: nil))
+            MarkdownMathRenderer.alignImportedMathAttachments(in: attributed)
             let pageView = MarkdownSlidePDFPage(frame: NSRect(x: 0, y: 0, width: 842, height: 595),
                                                 content: attributed)
             guard let page = PDFDocument(data: pageView.dataWithPDF(inside: pageView.bounds))?.page(at: 0) else {
