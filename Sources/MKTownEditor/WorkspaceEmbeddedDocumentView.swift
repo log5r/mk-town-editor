@@ -10,6 +10,8 @@ struct WorkspaceEmbeddedDocumentView: View {
     let loadOpenBuffers: ((Set<URL>) throws -> [URL: Data])?
     let onOpen: ((URL) -> Void)?
     var preservesSoftLineBreaks = false
+    /// プレビューの表示倍率。文字・数式・字下げを本文と同じ倍率で拡大・縮小する。
+    var zoom: Double = 1
     @State private var targetURL: URL?
     @State private var cachedIndex: WorkspaceDocumentIndex?
     @State private var indexedDocuments: [URL] = []
@@ -41,7 +43,7 @@ struct WorkspaceEmbeddedDocumentView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Label(reference.target, systemImage: "doc.on.doc")
-                    .font(.caption.weight(.semibold))
+                    .font(PreviewSupplementaryFont.caption(zoom: zoom, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
                 if let targetURL, let onOpen {
@@ -60,7 +62,7 @@ struct WorkspaceEmbeddedDocumentView: View {
                 }
                 ForEach(expansion.issues.indices, id: \.self) { index in
                     Label(expansion.issues[index], systemImage: "exclamationmark.triangle")
-                        .font(.caption)
+                        .font(PreviewSupplementaryFont.caption(zoom: zoom))
                         .foregroundStyle(.secondary)
                 }
             } else {
@@ -90,6 +92,10 @@ struct WorkspaceEmbeddedDocumentView: View {
             completedRefreshKey = nil
         }
         .onChange(of: preservesSoftLineBreaks) { _, _ in
+            updateSegments()
+        }
+        .onChange(of: zoom) { _, _ in
+            // 読み込み直さず、読み込み済みの解析結果を新しい倍率で描き直す。
             updateSegments()
         }
         .onChange(of: renderedAnalysis?.identity) { _, _ in
@@ -146,7 +152,8 @@ struct WorkspaceEmbeddedDocumentView: View {
         guard let renderedAnalysis else { return }
         segments = WorkspaceEmbedSegment.render(renderedAnalysis,
             documentContext: DocumentContext(fileURL: targetURL,
-                preservesSoftLineBreaks: preservesSoftLineBreaks))
+                preservesSoftLineBreaks: preservesSoftLineBreaks),
+            zoom: zoom)
     }
 }
 
@@ -173,15 +180,17 @@ enum WorkspaceEmbedSegment: Equatable {
     case text(NSAttributedString)
     case codeBlock(MarkdownBlock, AttributedString, quoteDepth: Int)
 
+    /// - Parameter zoom: プレビューの表示倍率。文字と数式（`PreviewTypography.scaled`）と字下げを同じ倍率で広げる。
     @MainActor
-    static func render(_ analysis: MarkdownAnalysis, documentContext: DocumentContext) -> [Self] {
+    static func render(_ analysis: MarkdownAnalysis, documentContext: DocumentContext,
+                       zoom: Double = 1) -> [Self] {
         MarkdownRenderer.renderSegments(analysis, documentContext: documentContext).map { segment in
             switch segment {
             case let .text(text):
-                .text(PreviewAppKitIndent.aligned(text))
+                .text(PreviewTypography.scaledAndAligned(text, by: zoom))
             case let .codeBlock(block, rendered, quoteDepth):
-                .codeBlock(block, AttributedString(PreviewTypography.codeBlockBody(rendered)),
-                           quoteDepth: quoteDepth)
+                .codeBlock(block, AttributedString(PreviewTypography.codeBlockBody(
+                    PreviewTypography.scaled(rendered, by: zoom))), quoteDepth: quoteDepth)
             }
         }
     }
