@@ -130,6 +130,12 @@ enum MarkdownMathRenderer {
         surrounding * fontScale
     }
 
+    /// HTMLに埋め込むPNGの画素密度（CSSの1pxあたりの画素数）。
+    /// Retinaの画面（2倍）と印刷（PDF。3倍で約288dpi）でぼやけないよう3倍にする。
+    /// 数式の画像は余白が多く、PNGの圧縮が効くため、1倍に比べたファイルの増え方は小さい
+    /// （`ax+b` を19.2pxで描いた場合、1倍723バイト・2倍882バイト・3倍982バイト）。
+    nonisolated static let htmlPixelDensity: CGFloat = 3
+
     /// 描いた数式の画像と、画像の下端から数式のベースラインまでの高さ。
     struct Rendered {
         let image: NSImage
@@ -143,7 +149,8 @@ enum MarkdownMathRenderer {
         label.latex = formula.swiftMathLaTeX
         guard label.error == nil else { return nil }
         label.fontSize = fontSize
-        label.textColor = .labelColor
+        // 色は描くときに `MathDrawing` が付け直す。ここでは不透明な色であればよい。
+        label.textColor = .black
         label.labelMode = formula.display ? .display : .text
         return label
     }
@@ -159,17 +166,46 @@ enum MarkdownMathRenderer {
         label.frame = NSRect(origin: .zero, size: size)
         label.needsLayout = true
         label.layoutSubtreeIfNeeded()
-        guard let display = label.displayList,
-              let rep = label.bitmapImageRepForCachingDisplay(in: label.bounds) else { return nil }
+        guard let display = label.displayList else { return nil }
         // 式を置いた位置（`MTDisplay.position`）は公開されていないため、`MTMathUILabel` の配置
         // （`_layoutSubviews`：高さを文字の大きさの半分以上として上下中央に置く。余白 `contentInsets` は0）を
         // 同じ式で求める。切り上げで空いた分も含めて、画像の下端から数式のベースラインまでの高さになる。
         let layoutHeight = max(display.ascent + display.descent, fontSize / 2)
         let baseline = (size.height - layoutHeight) / 2 + display.descent
-        label.cacheDisplay(in: label.bounds, to: rep)
-        let image = NSImage(size: size)
-        image.addRepresentation(rep)
+        // 画素の画像にせず、描くたびに描く先の解像度と外観で式を描く画像にする（`MathDrawing`）。
+        // 1倍の画素の画像は、Retinaの画面で引き伸ばされてぼやけ、置かれた位置の端数によって濃さも変わった。
+        let drawing = MathDrawing(display: display)
+        let image = NSImage(size: size, flipped: false) { rect in drawing.draw(in: rect) }
+        // 外観（ライト・ダーク）が変わったときに古い色で描かないよう、描いた結果を画像に残さない。
+        image.cacheMode = .never
         return Rendered(image: image, baseline: baseline)
+    }
+
+    /// 数式を、描く先の解像度で描く処理。`NSImage` の描画処理から呼ばれる。
+    ///
+    /// 式の組版結果（`MTMathListDisplay`）は `render` で作った後は変えず、描くときは読むだけなので、
+    /// どのスレッドから描いても安全（`@unchecked Sendable`）。文字色は描くときの外観（`NSAppearance.currentDrawing()`、
+    /// 文字列を描くビューの外観）で `labelColor` を解決し、式の形（不透明部分）をその色で塗る。
+    /// `MTMathListDisplay` の色の設定は公開されておらず、設定した時点で色が決まるため、塗り直しで色を付ける。
+    private final class MathDrawing: @unchecked Sendable {
+        let display: MTMathListDisplay
+
+        init(display: MTMathListDisplay) { self.display = display }
+
+        func draw(in rect: NSRect) -> Bool {
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.saveGState()
+            defer { context.restoreGState() }
+            // 文字列を描くビューの文字の行列を引き継がないよう、Core Text の行列を初期値に戻す。
+            context.textMatrix = .identity
+            context.beginTransparencyLayer(auxiliaryInfo: nil)
+            display.draw(context)
+            context.setBlendMode(.sourceIn)
+            context.setFillColor(NSColor.labelColor.cgColor)
+            context.fill(rect)
+            context.endTransparencyLayer()
+            return true
+        }
     }
 
     static func image(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> NSImage? {
@@ -190,8 +226,7 @@ enum MarkdownMathRenderer {
 
     static func htmlImage(_ formula: MarkdownMath.Formula, fontSize: CGFloat) -> String? {
         guard let rendered = render(formula, fontSize: fontSize),
-              let tiff = rendered.image.tiffRepresentation,
-              let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
+              let png = pngData(rendered.image, density: htmlPixelDensity) else {
             return nil
         }
         let alt = formula.latex.replacingOccurrences(of: "&", with: "&amp;")
@@ -206,6 +241,26 @@ enum MarkdownMathRenderer {
             : "vertical-align:\(cssLength(-rendered.baseline));max-width:none"
         let size = rendered.image.size
         return "<img class=\"math\" src=\"data:image/png;base64,\(png.base64EncodedString())\" alt=\"\(alt)\" style=\"\(style)\" width=\"\(Int(size.width))\" height=\"\(Int(size.height))\">"
+    }
+
+    /// `image` を `density` 倍の画素で描いたPNG。画像の大きさ（`size`）はポイントのままにし、
+    /// PNGの解像度の情報（3倍なら216dpi）から読み込み側が元の大きさを求められるようにする。
+    /// 文字色は従来どおり、書き出すときのアプリの外観で決める。
+    static func pngData(_ image: NSImage, density: CGFloat) -> Data? {
+        let size = image.size
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(ceil(size.width * density)),
+                                         pixelsHigh: Int(ceil(size.height * density)), bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSApplication.shared.effectiveAppearance.performAsCurrentDrawingAppearance {
+            image.draw(in: NSRect(origin: .zero, size: size))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
     }
 
     /// HTMLから読み込んだ文字列（PDF書き出し）のインライン数式を、プレビューと同じ置き方にする。
@@ -224,9 +279,12 @@ enum MarkdownMathRenderer {
                                 as? NSNumber).map({ CGFloat($0.doubleValue) }), offset < 0,
                   let image = (attachment.attachmentCell as? NSTextAttachmentCell)?.image ?? attachment.image
             else { return }
+            // 大きさは読み込みが決めた枠（HTMLの `width`・`height`）を使う。PNGは `htmlPixelDensity` 倍の画素で
+            // 描いてあり、読み込み方によっては画像の大きさが画素数になるため、画像の大きさは使わない。
+            let size = (attachment.attachmentCell as? NSTextAttachmentCell)?.cellSize() ?? image.size
             let replacement = NSTextAttachment()
             replacement.image = image
-            replacement.bounds = NSRect(x: 0, y: offset, width: image.size.width, height: image.size.height)
+            replacement.bounds = NSRect(x: 0, y: offset, width: size.width, height: size.height)
             replacements.append((range, replacement))
         }
         guard !replacements.isEmpty else { return }
