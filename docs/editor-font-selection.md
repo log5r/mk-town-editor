@@ -21,7 +21,7 @@ macOS版はエディタのフォントを標準装備の3種類（システム�
 - `.family` を書くと `fontFamily` だけを変え、`fontChoice` は直前の標準装備の選択のまま残す。以前の版に戻すと、その標準装備のフォントで表示する。
 - `.builtIn` を書くと `fontChoice` を変え、`fontFamily` を消す。
 
-`EditorFontChoice` のケースと raw value は、以前の版が読むため変えない。`EditorFont` はメモリ上の型で、`Codable` にしていない。
+`EditorFontChoice` のケースと raw value は、以前の版が読むため変えない。設定全体の互換の決まりは[設定の保存値と以前の版との互換](settings-backward-compatibility.md)にまとめている。`EditorFont` はメモリ上の型で、`Codable` にしていない。
 
 ### フォントの解決とフォールバック
 

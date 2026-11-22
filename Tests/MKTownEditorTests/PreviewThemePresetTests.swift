@@ -60,7 +60,8 @@ final class PreviewThemePresetTests: XCTestCase {
         let data = try JSONEncoder().encode([PreviewTheme.preset(.tomorrowNight)])
         XCTAssertEqual(String(decoding: data, as: UTF8.self), "[\"tomorrow-night\"]")
         XCTAssertEqual(try JSONDecoder().decode([PreviewTheme].self, from: data), [.preset(.tomorrowNight)])
-        XCTAssertThrowsError(try JSONDecoder().decode([PreviewTheme].self, from: Data("[\"unknown\"]".utf8)))
+        // 知らない名前は投げずに「システム」として読む（Issue #107。設定全体を失わないため）。
+        XCTAssertEqual(try JSONDecoder().decode([PreviewTheme].self, from: Data("[\"unknown\"]".utf8)), [.system])
 
         let suite = "PreviewThemePresetTests." + UUID().uuidString
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))

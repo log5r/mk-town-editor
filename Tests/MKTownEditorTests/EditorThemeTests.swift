@@ -61,17 +61,23 @@ final class EditorThemeTests: XCTestCase {
         defaults.set(Data("{\"app\":{\"defaultMode\":\"split\",\"fontSize\":13,\"lineSpacing\":3,\"wrapsLines\":true,\"editorTheme\":\"system\"},\"folders\":{},\"documents\":{}}".utf8),
                      forKey: "MKTownEditor.editorSettings.v1")
         let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .dark)
-        XCTAssertEqual(store.app.editorTheme, .system)
+        // 編集画面の `"system"` は「紺色」の保存値でもある（Issue #107）。読み込むと「紺色」になり、
+        // 書き出すと同じ `"system"` に戻るため、保存データは変わらない。
+        XCTAssertEqual(store.app.editorTheme, .navy)
         XCTAssertEqual(store.editorTheme, .navy)
         XCTAssertEqual(EditorThemePalette(theme: store.editorTheme), .navy)
     }
 
-    func testNavyIsStoredByNameAndOfferedOnlyForEditor() throws {
+    /// 「紺色」は以前の版が読める `"system"` で保存し、読み込むと「紺色」に戻る（Issue #107）。
+    func testNavyIsStoredAsSystemAndOfferedOnlyForEditor() throws {
         var settings = AppEditorSettings()
         settings.editorTheme = .navy
         let json = try XCTUnwrap(String(data: JSONEncoder().encode(settings), encoding: .utf8))
-        XCTAssertTrue(json.contains("\"editorTheme\":\"navy\""), json)
-        XCTAssertEqual(try JSONDecoder().decode(AppEditorSettings.self, from: Data(json.utf8)).editorTheme, .navy)
+        XCTAssertTrue(json.contains("\"editorTheme\":\"system\""), json)
+        var decoded = try JSONDecoder().decode(AppEditorSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.theme(for: .editor, slot: .fixed), .navy)
+        decoded.restoreNavyEditorThemes()
+        XCTAssertEqual(decoded.editorTheme, .navy)
         XCTAssertEqual(PreviewTheme.navy.title, "紺色")
 
         // 編集画面の選択肢は紺色が先頭で「システム」がない。プレビューは「システム」が先頭で「紺色」がない。

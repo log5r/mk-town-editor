@@ -234,6 +234,10 @@ enum PreviewTheme: Codable, Hashable, Sendable {
         return colors
     }()
 
+    /// 知らないテーマ名や読めない色の定義は、投げずに「システム」として読む。設定はJSON1つを丸ごと
+    /// デコードするため、1項目の失敗で全設定が既定に戻ってしまう（Issue #107）。「システム」は
+    /// プレビューの既定で、編集画面では既定の「紺色」として扱う（`editorColors`）。
+    /// 以前の版が書いた `"navy"` も読む。
     init(from decoder: Decoder) throws {
         let value = try decoder.singleValueContainer()
         if let name = try? value.decode(String.self) {
@@ -241,22 +245,23 @@ enum PreviewTheme: Codable, Hashable, Sendable {
             case "system": self = .system
             case "navy": self = .navy
             case "paper": self = .paper
-            default:
-                guard let preset = PreviewThemePreset(rawValue: name) else {
-                    throw DecodingError.dataCorruptedError(in: value, debugDescription: "Unknown theme")
-                }
-                self = .preset(preset)
+            default: self = PreviewThemePreset(rawValue: name).map(Self.preset) ?? .system
             }
+        } else if let theme = try? value.decode(DeclarativeExtension.Theme.self) {
+            self = .extensionTheme(theme)
         } else {
-            self = .extensionTheme(try value.decode(DeclarativeExtension.Theme.self))
+            self = .system
         }
     }
 
+    /// 「紺色」は `"system"` として書く。PR #98 より前の版は `"navy"` を知らず、設定全体の
+    /// デコードに失敗するため。それらの版の編集画面の「システム」は紺の背景の配色で、この版も
+    /// 編集画面の `"system"` を「紺色」として読む（`AppEditorSettings.restoreNavyEditorThemes`）ため、
+    /// 編集画面では失うものがない。「紺色」はプレビューでは選べない（docs/settings-backward-compatibility.md）。
     func encode(to encoder: Encoder) throws {
         var value = encoder.singleValueContainer()
         switch self {
-        case .system: try value.encode("system")
-        case .navy: try value.encode("navy")
+        case .system, .navy: try value.encode("system")
         case .paper: try value.encode("paper")
         case .preset(let preset): try value.encode(preset.rawValue)
         case .extensionTheme(let theme): try value.encode(theme)
@@ -574,6 +579,16 @@ enum ThemeTarget: CaseIterable, Sendable {
 }
 
 extension AppEditorSettings {
+    /// 編集画面の項目に読んだ `"system"` を「紺色」に戻す。「紺色」は以前の版が読めるよう `"system"` で
+    /// 書くため（`PreviewTheme.encode(to:)`）、読み込んだ後にこれを通すと、選んだ値がそのまま戻る。
+    /// 書き出すと同じバイト列になるので、保存データは変わらない。
+    mutating func restoreNavyEditorThemes() {
+        for slot in ThemeSlot.allCases {
+            let keyPath = ThemeTarget.editor.keyPath(for: slot)
+            if self[keyPath: keyPath] == .system { self[keyPath: keyPath] = .navy }
+        }
+    }
+
     func followsAppearance(for target: ThemeTarget) -> Bool {
         self[keyPath: target.followsAppearanceKeyPath] ?? false
     }
@@ -745,6 +760,7 @@ final class EditorSettingsStore: ObservableObject {
         let storedData = defaults.data(forKey: Self.storageKey)
         var stored = storedData.flatMap { try? JSONDecoder().decode(StoredEditorSettings.self, from: $0) }
             ?? StoredEditorSettings()
+        stored.app.restoreNavyEditorThemes()
         let documentData = defaults.data(forKey: Self.documentStorageKey)
         if let documentData,
            let decoded = try? JSONDecoder().decode([String: DocumentDisplayState].self, from: documentData) {
