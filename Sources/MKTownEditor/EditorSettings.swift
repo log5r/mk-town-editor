@@ -38,6 +38,12 @@ enum EditorFont: Hashable, Sendable {
 
     static let `default` = EditorFont.builtIn(.monospacedSystem)
 
+    /// インストール済みのフォントファミリーを使うか。フォントの追加・削除で表示が変わるのはこの場合だけ。
+    var isFamily: Bool {
+        if case .family = self { return true }
+        return false
+    }
+
     /// フォントファミリーがこのMacにあるか。標準装備の選択肢は常にある。
     @MainActor
     var isAvailable: Bool {
@@ -56,30 +62,44 @@ enum EditorFont: Hashable, Sendable {
         }
     }
 
-    /// 本文のフォント。フォントファミリーが見つからないとき（削除した、外付けの書体を外したなど）は
+    /// 本文のフォント。フォントファミリーが見つからないとき（削除した、フォント管理アプリで無効にしたなど）は
     /// 既定のフォント（システム等幅）にする。設定の値は消さないので、フォントを戻すとまた使われる。
+    /// `resolver` はテストでフォントの追加・削除を再現するときだけ差し替える。
     @MainActor
-    func font(size: CGFloat) -> NSFont {
+    func font(size: CGFloat, resolver: EditorFontResolver = .system) -> NSFont {
         switch self {
         case .builtIn(let choice):
-            return choice.font(size: size)
+            choice.font(size: size)
         case .family(let name):
-            // weight 5 は標準の太さ。ファミリーにない場合は近い太さの書体を返す。
-            if let font = NSFontManager.shared.font(withFamily: name, traits: [], weight: 5, size: size) {
-                return font
-            }
-            // 斜体だけのファミリーなどで標準の書体が見つからないときは、ファミリーの最初の書体を使う。
-            if let first = NSFontManager.shared.availableMembers(ofFontFamily: name)?.first?.first as? String,
-               let font = NSFont(name: first, size: size) {
-                return font
-            }
-            return Self.default.font(size: size)
+            resolver.familyFont(name, size) ?? Self.default.font(size: size)
         }
     }
 
     @MainActor
     private static func familyIsInstalled(_ name: String) -> Bool {
         !name.isEmpty && !(NSFontManager.shared.availableMembers(ofFontFamily: name) ?? []).isEmpty
+    }
+}
+
+/// フォントファミリー名から本文の書体を取り出す処理。見つからなければ `nil`。
+/// フォントのインストールと削除はテストで行えないため、テストではこれを差し替えて再現する。
+struct EditorFontResolver {
+    var familyFont: @MainActor (_ family: String, _ size: CGFloat) -> NSFont?
+
+    /// このMacにインストールされているフォントから取り出す。
+    static var system: EditorFontResolver {
+        EditorFontResolver { name, size in
+            guard !name.isEmpty else { return nil }
+            // weight 5 は標準の太さ。ファミリーにない場合は近い太さの書体を返す。
+            if let font = NSFontManager.shared.font(withFamily: name, traits: [], weight: 5, size: size) {
+                return font
+            }
+            // 斜体だけのファミリーなどで標準の書体が見つからないときは、ファミリーの最初の書体を使う。
+            if let first = NSFontManager.shared.availableMembers(ofFontFamily: name)?.first?.first as? String {
+                return NSFont(name: first, size: size)
+            }
+            return nil
+        }
     }
 }
 
@@ -342,7 +362,8 @@ struct EditorTextStyle: Equatable {
 
     @MainActor
     func apply(to textView: NSTextView) {
-        let font = self.font.font(size: CGFloat(fontSize))
+        let editor = textView as? EditorTextView
+        let font = self.font.font(size: CGFloat(fontSize), resolver: editor?.fontResolver ?? .system)
         textView.font = font
         textView.textContainerInset = NSSize(width: horizontalMargin, height: verticalMargin)
         let paragraph = NSMutableParagraphStyle()
@@ -353,6 +374,7 @@ struct EditorTextStyle: Equatable {
         var typing = textView.typingAttributes
         typing[.paragraphStyle] = paragraph
         textView.typingAttributes = typing
+        editor?.didApplyTextStyle(self, font: font)
     }
 }
 

@@ -1,11 +1,12 @@
 import AppKit
+import SwiftUI
 import XCTest
 @testable import MKTownEditor
 
 /// エディタのフォントの選択（Issue #103）。docs/editor-font-selection.md
 @MainActor
 final class EditorFontSelectionTests: XCTestCase {
-    private static let missingFamily = "MKTown Missing Font 7c1e9a"
+    fileprivate static let missingFamily = "MKTown Missing Font 7c1e9a"
 
     // MARK: - 保存値の互換
 
@@ -136,6 +137,135 @@ final class EditorFontSelectionTests: XCTestCase {
         XCTAssertEqual(typing.pointSize, 14)
         let space = (" " as NSString).size(withAttributes: [.font: typing]).width
         XCTAssertEqual(view.defaultParagraphStyle?.defaultTabInterval ?? 0, space * 4, accuracy: 0.01)
+    }
+
+    // MARK: - フォントの追加・削除への追従（#103 のレビュー指摘）
+
+    /// 「フォントが無い → 使えるようになる」「使える → 無くなる」のどちらでも、同じエディタが
+    /// スタイルを適用し直し、行番号も新しい本文フォントの行の高さに従う。スタイルの値は変わらないため、
+    /// 以前は `MarkdownTextEditor.updateNSView` の比較で適用が省かれ、代替フォントのまま残っていた。
+    func testOpenEditorFollowsTheChosenFamilyBeingInstalledAndRemoved() throws {
+        var installed: NSFont?
+        let (scrollView, view) = makeEditorWithRuler()
+        view.fontResolver = EditorFontResolver { name, size in
+            name == Self.missingFamily ? installed.map { NSFontManager.shared.convert($0, toSize: size) } : nil
+        }
+        view.string = "1行目\n- 2\n"
+        EditorTextStyle(font: .family(Self.missingFamily), fontSize: 15).apply(to: view)
+        let fallback = EditorFont.default.font(size: 15)
+        XCTAssertEqual(view.font?.fontName, fallback.fontName, "a missing family uses the default font")
+
+        installed = try XCTUnwrap(NSFont(name: "Menlo-Regular", size: 15))
+        NotificationCenter.default.post(name: NSFont.fontSetChangedNotification, object: nil)
+        try assertBodyFont(of: view, in: scrollView, is: "Menlo-Regular", size: 15)
+
+        installed = nil
+        NotificationCenter.default.post(name: NSFont.fontSetChangedNotification, object: nil)
+        try assertBodyFont(of: view, in: scrollView, is: fallback.fontName, size: 15)
+        XCTAssertEqual(view.string, "1行目\n- 2\n")
+    }
+
+    /// 解決する書体が変わらない通知では適用し直さない。標準装備のフォントは通知を受けても変わらない。
+    func testFontSetChangesWithoutANewResolutionLeaveTheEditorAlone() throws {
+        let (_, view) = makeEditorWithRuler()
+        var resolved: NSFont? = NSFont(name: "Menlo-Regular", size: 13)
+        view.fontResolver = EditorFontResolver { _, _ in resolved }
+        EditorTextStyle(font: .family("Menlo")).apply(to: view)
+        let applied = try XCTUnwrap(view.appliedBodyFont)
+        XCTAssertFalse(view.reapplyTextStyleIfFontResolutionChanged(), "same face, no relayout")
+        XCTAssertTrue(view.appliedBodyFont === applied)
+
+        EditorTextStyle(font: .builtIn(.system)).apply(to: view)
+        resolved = nil
+        XCTAssertFalse(view.reapplyTextStyleIfFontResolutionChanged())
+        NotificationCenter.default.post(name: NSFont.fontSetChangedNotification, object: nil)
+        XCTAssertEqual(view.font?.fontName, NSFont.systemFont(ofSize: 13).fontName)
+    }
+
+    /// 実際の編集画面（`MarkdownTextEditor`）でも、通知を受けたら本文と行番号が追従し、
+    /// その後のSwiftUIの更新で元に戻らない。`textView.font` は先頭の文字のフォントを返すので、
+    /// 本文は英字で始めて英字で終える（日本語には代替フォントが付く）。
+    func testHostedEditorFollowsFontSetChanges() async throws {
+        final class Box: ObservableObject { @Published var text = "Body 本文\nline 2" }
+        struct Host: View {
+            @ObservedObject var box: Box
+            let model: MarkdownEditorModel
+            var body: some View {
+                MarkdownTextEditor(text: $box.text, model: model,
+                                   textStyle: EditorTextStyle(font: .family(EditorFontSelectionTests.missingFamily),
+                                                              fontSize: 14))
+            }
+        }
+        let box = Box()
+        let host = NSHostingView(rootView: Host(box: box, model: MarkdownEditorModel()))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = host
+        defer { window.contentView = nil }
+        host.layoutSubtreeIfNeeded()
+        let view = try XCTUnwrap(findEditor(in: host))
+        let scrollView = try XCTUnwrap(view.enclosingScrollView)
+        XCTAssertEqual(view.font?.fontName, EditorFont.default.font(size: 14).fontName)
+
+        var installed: NSFont? = NSFont(name: "Menlo-Regular", size: 14)
+        view.fontResolver = EditorFontResolver { name, size in
+            name == Self.missingFamily ? installed.map { NSFontManager.shared.convert($0, toSize: size) } : nil
+        }
+        NotificationCenter.default.post(name: NSFont.fontSetChangedNotification, object: nil)
+        try assertBodyFont(of: view, in: scrollView, is: "Menlo-Regular", size: 14)
+
+        box.text = "Body 本文\nline 2\nline 3"
+        for _ in 0..<5 where view.string != box.text {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(view.string, box.text)
+        XCTAssertEqual(view.font?.fontName, "Menlo-Regular", "a SwiftUI update must not restore the fallback")
+
+        installed = nil
+        NotificationCenter.default.post(name: NSFont.fontSetChangedNotification, object: nil)
+        try assertBodyFont(of: view, in: scrollView, is: EditorFont.default.font(size: 14).fontName, size: 14)
+    }
+
+    private func makeEditorWithRuler() -> (NSScrollView, EditorTextView) {
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
+        let view = EditorTextView(frame: scrollView.bounds)
+        view.isRichText = false
+        scrollView.documentView = view
+        scrollView.verticalRulerView = MarkdownLineNumberRulerView(scrollView: scrollView, editor: view)
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = true
+        return (scrollView, view)
+    }
+
+    private func assertBodyFont(of view: EditorTextView, in scrollView: NSScrollView, is name: String,
+                                size: CGFloat, file: StaticString = #filePath, line: UInt = #line) throws {
+        XCTAssertEqual(view.font?.fontName, name, file: file, line: line)
+        XCTAssertEqual(view.font?.pointSize, size, file: file, line: line)
+        XCTAssertEqual(view.appliedBodyFont?.fontName, name, file: file, line: line)
+        let typing = try XCTUnwrap(view.typingAttributes[.font] as? NSFont, file: file, line: line)
+        XCTAssertEqual(typing.fontName, name, "inserted symbols use the typing font", file: file, line: line)
+        let manager = try XCTUnwrap(view.layoutManager)
+        let container = try XCTUnwrap(view.textContainer)
+        manager.ensureLayout(for: container)
+        if !view.string.isEmpty {
+            let stored = try XCTUnwrap(view.textStorage?.attribute(.font, at: view.string.utf16.count - 1,
+                                                                   effectiveRange: nil) as? NSFont)
+            XCTAssertEqual(stored.fontName, name, "existing text is restyled", file: file, line: line)
+        }
+        let expected = manager.defaultLineHeight(for: try XCTUnwrap(view.font))
+        let labels = MarkdownLineNumberLayout.labels(in: view, visibleRect: view.bounds)
+        XCTAssertFalse(labels.isEmpty, file: file, line: line)
+        for label in labels {
+            XCTAssertEqual(label.height, expected, accuracy: 0.01, "line numbers follow the body font",
+                           file: file, line: line)
+        }
+        XCTAssertTrue(scrollView.verticalRulerView is MarkdownLineNumberRulerView, file: file, line: line)
+    }
+
+    private func findEditor(in view: NSView) -> EditorTextView? {
+        if let editor = view as? EditorTextView { return editor }
+        return view.subviews.lazy.compactMap { self.findEditor(in: $0) }.first
     }
 
     // MARK: - 設定画面の選択肢
