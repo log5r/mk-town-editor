@@ -35,7 +35,7 @@ macOS版はエディタのフォントを標準装備の3種類（システム�
 
 現在は、エディタの `EditorTextView` が通知を受ける。
 
-- `EditorTextStyle.apply(to:)` は、適用したスタイルと解決した本文フォントを `EditorTextView.didApplyTextStyle(_:font:)` に記録する。フォントファミリーを使っている間だけ通知を購読し、標準装備のフォントに切り替えると購読をやめる。
+- `EditorTextStyle.apply(to:)` は、スタイルの変更前に、適用するスタイルと解決した本文フォントを `EditorTextView.prepareToApplyTextStyle(_:font:)` に記録する。フォントファミリーを使っている間だけ通知を購読し、標準装備のフォントに切り替えると購読をやめる。本文フォントは、[全角・半角の混在でベースラインが動かないための行レイアウト](editor-mixed-script-baseline.md)にも使う。
 - 通知を受けると `reapplyTextStyleIfFontResolutionChanged()` でファミリーを解決し直し、記録した書体と違うときだけスタイルを適用し直す。書体が同じなら何もしないので、通知のたびに全文をレイアウトし直すことはない。
 - 適用し直した後、行番号ルーラーの `refresh()` を呼び、スクロールビューのレイアウト（折り返さない表示での本文の幅の計算）をやり直させる。行番号の高さは `textView.font` から計算するので、新しい本文フォントに従う。
 - エディタごとに購読するので、設定ウインドウを開いているか、分割表示か、ウインドウがいくつあるかに関係なく、開いているすべてのエディタが追従する。`EditorTextView` を作るのは `MarkdownTextEditor.makeNSView` だけで、`EditorTextStyle` を保持しているのも `MarkdownTextEditor.Coordinator` の比較用の値だけであることを検索して確認した。
