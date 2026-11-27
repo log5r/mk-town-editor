@@ -4,6 +4,122 @@ import XCTest
 
 @MainActor
 final class EditorTextStyleTests: XCTestCase {
+    func testJapaneseBaselineStaysStableWhenTypingAndDeletingASCII() throws {
+        let families = ["Hiragino Sans", "Times New Roman", "Courier New", "Georgia", "Monaco"]
+            .map(EditorFont.family).filter(\.isAvailable)
+        for font in EditorFontChoice.allCases.map(EditorFont.builtIn) + families {
+            for size in [13.0, 17.5, 26.0] {
+                for spacing in [0.0, 3.0, 12.0] {
+                    let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
+                    view.layoutManager?.delegate = view
+                    view.isRichText = false
+                    EditorTextStyle(font: font, fontSize: size, lineSpacing: spacing).apply(to: view)
+                    let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+                    window.contentView = view
+                    window.makeFirstResponder(view)
+                    defer { window.orderOut(nil); window.contentView = nil }
+                    view.setMarkedText("日本語", selectedRange: NSRange(location: 3, length: 0),
+                                       replacementRange: NSRange(location: NSNotFound, length: 0))
+                    view.insertText("日本語", replacementRange: NSRange(location: NSNotFound, length: 0))
+                    let before = try lineGeometry(in: view)
+                    let japaneseFont = view.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                    let message = "\(font) \(size)pt spacing=\(spacing)"
+
+                    view.insertText("a", replacementRange: NSRange(location: NSNotFound, length: 0))
+                    let mixed = try lineGeometry(in: view)
+                    XCTAssertEqual(mixed.baseline, before.baseline, accuracy: 0.01, message)
+                    XCTAssertEqual(mixed.height, before.height, accuracy: 0.01, message)
+                    XCTAssertEqual(view.textStorage?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, japaneseFont)
+
+                    view.deleteBackward(nil)
+                    let after = try lineGeometry(in: view)
+                    XCTAssertEqual(view.string, "日本語")
+                    XCTAssertEqual(after.baseline, mixed.baseline, accuracy: 0.01, message)
+                    XCTAssertEqual(after.height, mixed.height, accuracy: 0.01, message)
+                }
+            }
+        }
+    }
+
+    func testWrappedJapaneseAndFollowingLinesKeepTheirPositionsAfterASCIIEdit() throws {
+        for spacing in [0.0, 3.0, 12.0] {
+            let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 120, height: 600))
+            view.layoutManager?.delegate = view
+            view.isRichText = false
+            EditorTextStyle(font: .builtIn(.menlo), lineSpacing: spacing).apply(to: view)
+            let container = try XCTUnwrap(view.textContainer)
+            container.widthTracksTextView = false
+            container.containerSize = NSSize(width: 120, height: 1000)
+            view.replaceEditorText(with: "日本語日本語日本語\n次の行")
+            let locations = [0, 8, 10]
+            let before = try locations.map { try lineGeometry(in: view, at: $0) }
+            XCTAssertGreaterThan(before[1].baseline, before[0].baseline, "the Japanese paragraph must wrap")
+
+            // The final visual fragment has room for ASCII without changing the wrap point.
+            view.setSelectedRange(NSRange(location: 9, length: 0))
+            view.insertText("a", replacementRange: NSRange(location: NSNotFound, length: 0))
+            let mixed = try [0, 8, 11].map { try lineGeometry(in: view, at: $0) }
+            view.deleteBackward(nil)
+            let after = try locations.map { try lineGeometry(in: view, at: $0) }
+
+            XCTAssertEqual(view.string, "日本語日本語日本語\n次の行")
+            for index in locations.indices {
+                XCTAssertEqual(mixed[index].baseline, before[index].baseline, accuracy: 0.01)
+                XCTAssertEqual(mixed[index].height, before[index].height, accuracy: 0.01)
+                XCTAssertEqual(after[index].baseline, mixed[index].baseline, accuracy: 0.01)
+                XCTAssertEqual(after[index].height, mixed[index].height, accuracy: 0.01)
+            }
+        }
+    }
+
+    func testChangingFontAndZoomOnLaidOutJapaneseKeepsBaselineStable() throws {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
+        view.layoutManager?.delegate = view
+        view.isRichText = false
+        view.string = "日本語"
+        for font in [EditorFont.builtIn(.monospacedSystem), .builtIn(.menlo), .family("Hiragino Sans"), .builtIn(.menlo)] {
+            for size in [13.0, 26.0, 17.5] {
+                EditorTextStyle(font: font, fontSize: size).apply(to: view)
+                let before = try lineGeometry(in: view)
+                view.setSelectedRange(NSRange(location: 3, length: 0))
+                view.insertText("a", replacementRange: NSRange(location: NSNotFound, length: 0))
+                let mixed = try lineGeometry(in: view)
+                XCTAssertEqual(mixed.baseline, before.baseline, accuracy: 0.01, "\(font) \(size)pt")
+                XCTAssertEqual(mixed.height, before.height, accuracy: 0.01, "\(font) \(size)pt")
+                view.deleteBackward(nil)
+                _ = try lineGeometry(in: view)
+            }
+        }
+    }
+
+    func testTallFallbackGlyphsKeepTheirOriginalLineGeometry() throws {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 300))
+        view.isRichText = false
+        EditorTextStyle(font: .builtIn(.menlo)).apply(to: view)
+        view.replaceEditorText(with: "日本語🙂")
+        let manager = try XCTUnwrap(view.layoutManager)
+        // Compare with TextKit's unmodified layout to ensure larger fallback metrics survive.
+        let original = try lineGeometry(in: view)
+        let storage = try XCTUnwrap(view.textStorage)
+        let fonts = (0..<storage.length).compactMap { storage.attribute(.font, at: $0, effectiveRange: nil) as? NSFont }
+        let bodyFont = try XCTUnwrap(view.appliedBodyFont)
+        XCTAssertTrue(fonts.contains { manager.defaultBaselineOffset(for: $0) > manager.defaultBaselineOffset(for: bodyFont) })
+
+        manager.delegate = view
+        manager.invalidateLayout(forCharacterRange: NSRange(location: 0, length: storage.length), actualCharacterRange: nil)
+        let adjusted = try lineGeometry(in: view)
+        XCTAssertEqual(adjusted.baseline, original.baseline, accuracy: 0.01)
+        XCTAssertEqual(adjusted.height, original.height, accuracy: 0.01)
+    }
+
+    private func lineGeometry(in view: NSTextView, at location: Int = 0) throws -> (baseline: CGFloat, height: CGFloat) {
+        let manager = try XCTUnwrap(view.layoutManager)
+        manager.ensureLayout(for: try XCTUnwrap(view.textContainer))
+        let glyph = manager.glyphIndexForCharacter(at: location)
+        let rect = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        return (rect.minY + manager.location(forGlyphAt: glyph).y, rect.height)
+    }
+
     func testInitiallyEmptyEditorCoversViewportForMouseInput() {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 400, height: 300))
         let textView = EditorTextView()

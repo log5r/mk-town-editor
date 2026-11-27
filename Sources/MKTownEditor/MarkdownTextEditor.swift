@@ -773,7 +773,7 @@ final class EditorTextView: NSTextView {
 
     /// `EditorTextStyle.apply(to:)` から呼ばれる。フォントファミリーを使っている間だけ、フォントの
     /// 追加・削除の通知を受ける。スタイルの値は同じでも、解決するフォントが変わることがあるため（#103）。
-    func didApplyTextStyle(_ style: EditorTextStyle, font: NSFont) {
+    func prepareToApplyTextStyle(_ style: EditorTextStyle, font: NSFont) {
         appliedTextStyle = style
         appliedBodyFont = font
         let usesFamily = style.font.isFamily
@@ -1336,6 +1336,24 @@ final class EditorTextView: NSTextView {
 }
 
 extension EditorTextView: @preconcurrency NSLayoutManagerDelegate {
+    func layoutManager(_ layoutManager: NSLayoutManager,
+                       shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+                       lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+                       baselineOffset: UnsafeMutablePointer<CGFloat>,
+                       in textContainer: NSTextContainer, forGlyphRange glyphRange: NSRange) -> Bool {
+        guard let font = appliedBodyFont else { return false }
+        // 日本語だけの行にも本文フォントの ascent を確保する。代替フォントだけで
+        // baseline を決めると、後から Menlo の英数字を入力したときに既存の文字が下がる。
+        // 大きい代替フォントの領域は縮めず、baseline の移動分だけ下側の領域も広げる。
+        let minimumBaseline = layoutManager.defaultBaselineOffset(for: font)
+        let adjustment = max(0, minimumBaseline - baselineOffset.pointee)
+        guard adjustment > 0 else { return false }
+        baselineOffset.pointee += adjustment
+        lineFragmentRect.pointee.size.height += adjustment
+        lineFragmentUsedRect.pointee.size.height += adjustment
+        return true
+    }
+
     func layoutManager(_ layoutManager: NSLayoutManager,
                        shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
                        properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,

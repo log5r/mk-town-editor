@@ -369,6 +369,8 @@ struct EditorTextStyle: Equatable {
     func apply(to textView: NSTextView) {
         let editor = textView as? EditorTextView
         let font = self.font.font(size: CGFloat(fontSize), resolver: editor?.fontResolver ?? .system)
+        // font や余白の設定中に同期レイアウトが起きても、新しい本文フォントを基準にする。
+        editor?.prepareToApplyTextStyle(self, font: font)
         textView.font = font
         textView.textContainerInset = NSSize(width: horizontalMargin, height: verticalMargin)
         let paragraph = NSMutableParagraphStyle()
@@ -379,7 +381,6 @@ struct EditorTextStyle: Equatable {
         var typing = textView.typingAttributes
         typing[.paragraphStyle] = paragraph
         textView.typingAttributes = typing
-        editor?.didApplyTextStyle(self, font: font)
     }
 }
 
