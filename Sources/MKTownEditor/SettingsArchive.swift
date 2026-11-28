@@ -267,7 +267,7 @@ private extension SettingsArchive.Category {
                       validate: within(0.5...2), summarize: optional { $0.formatted(.percent) }),
                 Field("wrapsLines", \.app.wrapsLines, "行の折り返し", summarize: onOff),
                 Field("showsLineNumbers", \.app.showsLineNumbers, "行番号", summarize: optional(onOff)),
-                Field("showsInvisibleCharacters", \.app.showsInvisibleCharacters, "空白・タブ・改行",
+                Field("showsInvisibleCharacters", \.app.showsInvisibleCharacters, "不可視文字",
                       summarize: optional(onOff)),
                 Field("showsIndentGuides", \.app.showsIndentGuides, "インデントガイド", summarize: optional(onOff)),
                 Field("showsMinimap", \.app.showsMinimap, "ミニマップ", summarize: optional(onOff)),

@@ -182,6 +182,7 @@ struct EditorWorkspace: View {
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
     @StateObject private var editorModel = MarkdownEditorModel()
+    @State private var unicodeCommandFromPalette: EditorCommand?
     /// スクロール・選択のたびに書き換わる補助状態。変更でビュー全体を再評価しないよう参照型で保持する。
     @State private var transientState = EditorWorkspaceTransientState()
     @State private var cloudMonitor: WorkspaceDirectoryMonitor?
@@ -1349,8 +1350,17 @@ struct EditorWorkspace: View {
                 editorModel.insertSnippet(snippet)
             }
         }
-        .sheet(isPresented: $editorModel.showingCommandPalette) {
-            CommandPaletteView(model: editorModel)
+        .sheet(item: $editorModel.unicodeInsertionDraft) { draft in
+            EditorUnicodeInsertionSheet { scalar in
+                canEditDocument && editorModel.commitUnicodeInsertion(scalar, draft: draft)
+            }
+        }
+        .sheet(isPresented: $editorModel.showingCommandPalette, onDismiss: {
+            let command = unicodeCommandFromPalette
+            unicodeCommandFromPalette = nil
+            command?.perform(on: editorModel)
+        }) {
+            CommandPaletteView(model: editorModel) { unicodeCommandFromPalette = $0 }
         }
         .alert("先に書類を保存", isPresented: $pasteNeedsSave) {
             Button("キャンセル", role: .cancel) { pasteNeedsSave = false }

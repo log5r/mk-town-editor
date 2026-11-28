@@ -18,12 +18,45 @@ final class EditorInvisibleCharactersTests: XCTestCase {
 
     func testEditorDisplayPlanDoesNotModifyTextStorageOrUndo() {
         let view = EditorTextView()
-        view.string = "a b\n"
+        let source = "a b\u{200B}\u{00}\n"
+        view.string = source
         view.whitespaceOptions = EditorWhitespaceOptions(showsCharacters: true,
                                                          showsIndentGuides: true)
         view.refreshInvisibles()
-        XCTAssertEqual(view.string, "a b\n")
+        XCTAssertEqual(view.string, source)
         XCTAssertFalse(view.undoManager?.canUndo ?? false)
+    }
+
+    func testControlsAndZeroWidthMarksUseUTF16Offsets() {
+        let source = "🙂a\u{0000}\u{001F}\u{007F}\u{0085}\u{200B}\u{200C}\u{200D}\u{2060}\u{FEFF}\u{E0001}b"
+        XCTAssertEqual(InvisibleCharacterPlan(source: source, tabWidth: 4).marks, [
+            .init(location: 3, kind: .control(0x00)),
+            .init(location: 4, kind: .control(0x1F)),
+            .init(location: 5, kind: .control(0x7F)),
+            .init(location: 6, kind: .control(0x85)),
+            .init(location: 7, kind: .zeroWidth),
+            .init(location: 8, kind: .zeroWidth),
+            .init(location: 9, kind: .zeroWidth),
+            .init(location: 10, kind: .zeroWidth),
+            .init(location: 11, kind: .zeroWidth),
+            .init(location: 12, kind: .zeroWidth),
+        ])
+    }
+
+    func testEmojiAndIdeographicGraphemesKeepTheirAppearance() {
+        let source = "\u{FE0F}👩🏽‍💻 ❤️‍🔥 葛\u{E0100} 🏴\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F} a\u{200D}"
+        let plan = InvisibleCharacterPlan(source: source, tabWidth: 4)
+        XCTAssertEqual(plan.marks.filter { $0.kind != .space }, [
+            .init(location: 0, kind: .zeroWidth),
+            .init(location: source.utf16.count - 1, kind: .zeroWidth),
+        ])
+    }
+
+    func testIndentGuidesAloneDoNotCreateCharacterMarks() {
+        let source = "    a\u{200B}\n\t\u{00}b"
+        let plan = InvisibleCharacterPlan(source: source, tabWidth: 4, showsCharacters: false)
+        XCTAssertEqual(plan.guides, [3, 7])
+        XCTAssertTrue(plan.marks.isEmpty)
     }
 
     func testDifferentSerializedEndingHasItsOwnMarkAtTheNormalizedOffset() throws {

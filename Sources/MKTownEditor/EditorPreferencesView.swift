@@ -154,7 +154,7 @@ struct EditorPreferencesView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("行番号を表示", isOn: binding(\.showsLineNumbers, default: true))
                 Toggle("行を折り返す", isOn: binding(\.wrapsLines))
-                Toggle("空白・タブ・改行を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
+                Toggle("不可視文字を表示", isOn: binding(\.showsInvisibleCharacters, default: false))
                 Toggle("インデントガイドを表示", isOn: binding(\.showsIndentGuides, default: false))
                 Toggle("ミニマップを表示", isOn: binding(\.showsMinimap, default: false))
                 Toggle("編集中以外のMarkdown記号を控えめに表示", isOn: binding(\.usesInlineLivePresentation, default: false))
@@ -715,6 +715,7 @@ struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
+    var deferUnicodeCommand: ((EditorCommand) -> Void)? = nil
     @State private var query = ""
     @State private var selectedCommand: EditorCommand?
     @State private var didSubmit = false
@@ -764,8 +765,10 @@ struct CommandPaletteView: View {
     private func execute(_ command: EditorCommand) {
         guard !didSubmit else { return }
         didSubmit = true
+        let opensUnicodeView = command == .inspectUnicode || command == .insertUnicode
+        if opensUnicodeView { deferUnicodeCommand?(command) }
         dismiss()
         model.showingCommandPalette = false
-        command.perform(on: model)
+        if !opensUnicodeView || deferUnicodeCommand == nil { command.perform(on: model) }
     }
 }

@@ -39,6 +39,8 @@
 		A10000000000000000000010 /* DocumentContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DocumentContext.swift */; };
 		A10000000000000000000011 /* EditorSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* EditorSettings.swift */; };
 		A10000000000000000000012 /* EditorCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* EditorCommand.swift */; };
+		D18AE9E11574428893C46FD0 /* EditorUnicodeViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E53737A12FA4FA5AA4B2A28 /* EditorUnicodeViews.swift */; };
+		F6A97B57810C4E40A8CAFA3F /* EditorUnicode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6736D988C64C4915854F839A /* EditorUnicode.swift */; };
 		A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* MarkdownLinkSyntax.swift */; };
 		A10000000000000000000014 /* ImageResourceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* ImageResourceManager.swift */; };
 		A10000000000000000000015 /* ImageEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* ImageEditorSheet.swift */; };
@@ -239,6 +241,8 @@
 		A20000000000000000000010 /* DocumentContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentContext.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* EditorSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSettings.swift; sourceTree = "<group>"; };
 		A20000000000000000000012 /* EditorCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorCommand.swift; sourceTree = "<group>"; };
+		6E53737A12FA4FA5AA4B2A28 /* EditorUnicodeViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorUnicodeViews.swift; sourceTree = "<group>"; };
+		6736D988C64C4915854F839A /* EditorUnicode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorUnicode.swift; sourceTree = "<group>"; };
 		A20000000000000000000013 /* MarkdownLinkSyntax.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLinkSyntax.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* ImageResourceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageResourceManager.swift; sourceTree = "<group>"; };
 		A20000000000000000000015 /* ImageEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditorSheet.swift; sourceTree = "<group>"; };
@@ -472,6 +476,8 @@
 				A20000000000000000000010 /* DocumentContext.swift */,
 				A20000000000000000000011 /* EditorSettings.swift */,
 				A20000000000000000000012 /* EditorCommand.swift */,
+				6E53737A12FA4FA5AA4B2A28 /* EditorUnicodeViews.swift */,
+				6736D988C64C4915854F839A /* EditorUnicode.swift */,
 				A20000000000000000000013 /* MarkdownLinkSyntax.swift */,
 				A20000000000000000000014 /* ImageResourceManager.swift */,
 				A20000000000000000000015 /* ImageEditorSheet.swift */,
@@ -908,6 +914,8 @@
 				A10000000000000000000010 /* DocumentContext.swift in Sources */,
 				A10000000000000000000011 /* EditorSettings.swift in Sources */,
 				A10000000000000000000012 /* EditorCommand.swift in Sources */,
+				D18AE9E11574428893C46FD0 /* EditorUnicodeViews.swift in Sources */,
+				F6A97B57810C4E40A8CAFA3F /* EditorUnicode.swift in Sources */,
 				A10000000000000000000013 /* MarkdownLinkSyntax.swift in Sources */,
 				A10000000000000000000014 /* ImageResourceManager.swift in Sources */,
 				A10000000000000000000015 /* ImageEditorSheet.swift in Sources */,

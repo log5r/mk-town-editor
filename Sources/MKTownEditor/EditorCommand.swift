@@ -43,6 +43,8 @@ enum EditorCommand: Hashable {
     case image
     case table
     case find
+    case inspectUnicode
+    case insertUnicode
 
     static let toolbar: [Self] = [
         .bold, .italic, .link, .strikethrough, .inlineCode,
@@ -72,6 +74,8 @@ enum EditorCommand: Hashable {
         case .trimTrailingWhitespace: "trim-trailing-whitespace"
         case .convertIndentationToSpaces: "convert-indentation-to-spaces"
         case .convertIndentationToTabs: "convert-indentation-to-tabs"
+        case .inspectUnicode: "inspect-unicode"
+        case .insertUnicode: "insert-unicode"
         default: "other-\(String(describing: self))"
         }
     }
@@ -87,7 +91,7 @@ enum EditorCommand: Hashable {
         .tableOfContents, .duplicateLines, .moveLinesUp, .moveLinesDown,
         .deleteLines, .trimTrailingWhitespace, .convertIndentationToSpaces, .convertIndentationToTabs,
         .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
-        .unfoldAll, .find
+        .unfoldAll, .find, .inspectUnicode, .insertUnicode
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
     /// The editor's context menu stays short: inline formatting, links and images, and list
     /// toggles. Everything else is in its "Markdown" submenu.
@@ -143,6 +147,8 @@ enum EditorCommand: Hashable {
         case .image: String(localized: "画像…")
         case .table: String(localized: "表…")
         case .find: String(localized: "検索…")
+        case .inspectUnicode: String(localized: "選択した文字のUnicode情報を表示")
+        case .insertUnicode: String(localized: "コードポイントから文字を挿入…")
         }
     }
 
@@ -190,6 +196,8 @@ enum EditorCommand: Hashable {
         case .image: "photo"
         case .table: "tablecells"
         case .find: "magnifyingglass"
+        case .inspectUnicode: "info.circle"
+        case .insertUnicode: "text.insert"
         }
     }
 
@@ -230,6 +238,7 @@ enum EditorCommand: Hashable {
         case .image: nil
         case .table: nil
         case .find: ("f", .command)
+        case .inspectUnicode, .insertUnicode: nil
         }
     }
 
@@ -256,6 +265,7 @@ enum EditorCommand: Hashable {
     @MainActor
     func canExecute(in model: MarkdownEditorModel?) -> Bool {
         if self == .find { return model?.hasActiveEditor == true }
+        if self == .inspectUnicode { return model?.canInspectUnicode == true }
         if model?.canExecuteMultiSelectionCommand == true {
             switch self {
             case .bold, .italic, .strikethrough, .inlineCode,
@@ -329,6 +339,8 @@ enum EditorCommand: Hashable {
         case .image: model.presentImageEditor()
         case .table: model.presentTableEditor()
         case .find: model.showFindBar()
+        case .inspectUnicode: model.presentUnicodeInspector()
+        case .insertUnicode: model.presentUnicodeInsertion()
         }
     }
 }
