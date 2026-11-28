@@ -2,6 +2,50 @@ import XCTest
 @testable import MKTownEditor
 
 final class DocumentStatisticsTests: XCTestCase {
+    @MainActor
+    func testConfiguredCountsFollowSelectionAndUseMarkdownContext() async throws {
+        let source = "前🙂\n[名前](https://example.com)"
+        let snapshot = DocumentSnapshot(source: source)
+        let store = DocumentStatusStore()
+        let url = (source as NSString).range(of: "https://example.com")
+        let options = DocumentCountOptions(unit: .utf16, excludeLinkDestinations: true)
+        store.updateCharacterCounts(snapshot: snapshot, selections: [url], options: options, showsPosition: true)
+        XCTAssertTrue(store.characterCounts.hasSelection)
+
+        for _ in 0..<200 where store.characterCounts.column == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.characterCounts.document, 10)
+        XCTAssertEqual(store.characterCounts.selection, 0)
+        XCTAssertEqual(store.characterCounts.line, 2)
+        XCTAssertEqual(store.characterCounts.column, 6)
+
+        store.updateCharacterCounts(snapshot: snapshot, selections: [NSRange(location: 3, length: 0)],
+                                    options: options, showsPosition: true)
+        XCTAssertFalse(store.characterCounts.hasSelection)
+        XCTAssertNil(store.characterCounts.selection)
+        XCTAssertEqual(store.characterCounts.document, 10)
+        for _ in 0..<100 where store.characterCounts.line == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.characterCounts.line, 1)
+        XCTAssertEqual(store.characterCounts.column, 3)
+    }
+
+    @MainActor
+    func testConfiguredCountPublishesOnlyTheLatestSourceAndOptions() async throws {
+        let store = DocumentStatusStore()
+        let scalarCount = DocumentCountOptions(unit: .unicodeScalar)
+        let byteCount = DocumentCountOptions(unit: .bytes, encoding: .utf16LE)
+        for length in 1...4 {
+            let snapshot = DocumentSnapshot(source: String(repeating: "e\u{301}🙂", count: length))
+            store.updateCharacterCounts(snapshot: snapshot, selections: [], options: scalarCount, showsPosition: false)
+        }
+        let last = DocumentSnapshot(source: "é🙂")
+        store.updateCharacterCounts(snapshot: last, selections: [], options: byteCount, showsPosition: false)
+        XCTAssertNil(store.characterCounts.document)
+        for _ in 0..<200 where store.characterCounts.document == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.characterCounts.document, 6)
+        store.updateCharacterCounts(snapshot: last, selections: [], options: .init(), showsPosition: false)
+        XCTAssertEqual(store.characterCounts.document, 2)
+    }
+
     func testSinglePassMatchesOriginalDefinitionsForUnicodeAndNewlines() {
         for text in ["", "a\r\nb\rc\nd\u{85}e\u{2028}f\u{2029}", "🙂e\u{301} 家族👨‍👩‍👧‍👦 \tword", " \n\n"] {
             let value = DocumentStatistics(text: text)

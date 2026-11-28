@@ -19,6 +19,8 @@ final class SettingsArchiveTests: XCTestCase {
         settings.highlightOptions = EditorHighlightSettings(currentLine: true, selectedWord: true, wordDelay: 0.75)
         settings.textTransformationOptions.convertsSymbols = false
         settings.textTransformationOptions.preservesCodeAndURLs = false
+        settings.statisticsPreferences.count.unit = .unicodeScalar
+        settings.statisticsPreferences.statusFields = [.characters, .lineEnding]
         settings.disabledLintRules = [.headingHierarchy, .listMarker]
         settings.previewBodyWidth = 1040
         settings.preservesSoftLineBreaksInPreview = true
@@ -84,6 +86,7 @@ final class SettingsArchiveTests: XCTestCase {
         local.tabWidth = 8
         local.highlightOptions.selectedWord = true
         local.textTransformationOptions.convertsKana = false
+        local.statisticsPreferences.count.unit = .utf16
         local.previewBodyWidth = 720
         destination.setAppSettings(local)
 
@@ -101,6 +104,7 @@ final class SettingsArchiveTests: XCTestCase {
         XCTAssertNil(destination.app.tabWidth)
         XCTAssertEqual(destination.app.highlightOptions, EditorHighlightSettings())
         XCTAssertTrue(destination.app.textTransformationOptions.convertsKana)
+        XCTAssertEqual(destination.app.statisticsPreferences, DocumentStatisticsPreferences())
         XCTAssertEqual(destination.app.previewBodyWidth, 720)
         XCTAssertNil(destination.app.loadsRemoteImages)
         XCTAssertEqual(destination.displayState(for: localURL)?.mode, .editor)

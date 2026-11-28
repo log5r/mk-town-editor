@@ -25,6 +25,47 @@ final class EditorSettingsTests: XCTestCase {
         XCTAssertEqual(reopened.app.fontSize, 17)
     }
 
+    func testStatisticsPreferencesUseDefaultsForOlderSettingsAndPersistChanges() throws {
+        var settings = try JSONDecoder().decode(AppEditorSettings.self, from: Data(
+            #"{"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true}"#.utf8))
+        XCTAssertNil(settings.statistics)
+        XCTAssertEqual(settings.statisticsPreferences.count, DocumentCountOptions())
+        XCTAssertEqual(settings.statisticsPreferences.statusFields, [.characters, .words, .lines, .encoding])
+
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        settings.statisticsPreferences = DocumentStatisticsPreferences(
+            count: DocumentCountOptions(unit: .bytes, encoding: .shiftJIS, normalization: .nfkc,
+                                        excludeNewlines: true, collapseWhitespace: true, excludeCodeBlocks: true),
+            statusFields: [.characters, .position, .fileSize])
+        store.setAppSettings(settings)
+
+        let reopened = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(reopened.app.statisticsPreferences, settings.statisticsPreferences)
+        XCTAssertEqual(reopened.app.fontSize, 17)
+        reopened.setAppSettings(reopened.app)
+        XCTAssertEqual(reopened.settingsWriteCount, 0)
+
+        settings.statisticsPreferences.statusFields = []
+        reopened.setAppSettings(settings)
+        XCTAssertTrue(EditorSettingsStore(defaults: defaults).app.statisticsPreferences.statusFields.isEmpty)
+    }
+
+    func testUnknownStatisticsOptionsKeepKnownSettings() throws {
+        let data = Data("""
+            {"defaultMode":"split","fontSize":18,"lineSpacing":3,"wrapsLines":true,"statistics":{
+                "count":{"unit":"future-unit","encoding":"future-encoding","normalization":"nfc",
+                         "excludeFrontMatter":true},
+                "statusFields":["characters","future-field","fileSize"]
+            }}
+            """.utf8)
+        let options = try JSONDecoder().decode(AppEditorSettings.self, from: data)
+        XCTAssertEqual(options.fontSize, 18)
+        XCTAssertEqual(options.statisticsPreferences.count,
+                       DocumentCountOptions(normalization: .nfc, excludeFrontMatter: true))
+        XCTAssertEqual(options.statisticsPreferences.statusFields, [.characters, .fileSize])
+    }
+
     func testInvalidHighlightDelayKeepsOtherSettingsReadable() throws {
         let options = try JSONDecoder().decode(EditorHighlightSettings.self, from: Data(
             #"{"currentLine":true,"selectedWord":true,"wordDelay":"invalid"}"#.utf8))
@@ -581,6 +622,25 @@ final class EditorSettingsTests: XCTestCase {
         for text in ["", "既存の本文👨‍👩‍👧‍👦é", "line\r\nline\n", "e\u{301}🙂 \t"] {
             XCTAssertEqual(WritingSessionBaseline(text: text).characters, DocumentStatistics(text: text).characters, text)
         }
+    }
+
+    func testConfiguredSessionCountPersistsWithItsOptionsAndClearsOnReset() {
+        let defaults = isolatedDefaults()
+        let url = URL(fileURLWithPath: "/tmp/work/count-baseline.md")
+        let store = EditorSettingsStore(defaults: defaults)
+        let baseline = WritingSessionBaseline(text: "🙂")
+        store.ensureWritingSession(for: url, baseline: baseline)
+        let options = DocumentCountOptions(unit: .utf16)
+        let count = WritingSessionCount(options: options, dialect: .extended, value: options.count(in: baseline.text))
+        store.setWritingSessionCount(count, for: url)
+
+        let reopened = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCharacters, 1)
+        XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCount, count)
+        XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCount?.value, 2)
+        reopened.resetWritingSession(for: url, baseline: WritingSessionBaseline(text: "前🙂"))
+        XCTAssertEqual(reopened.displayState(for: url)?.sessionBaselineCharacters, 2)
+        XCTAssertNil(reopened.displayState(for: url)?.sessionBaselineCount)
     }
 
     func testWritingGoalAndSessionBaselinePersistAndFollowRename() {

@@ -23,6 +23,7 @@
 		9097F832C0114DA739643091 /* MobilePreviewStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92E9E60DAF956E3C36415243 /* MobilePreviewStoreTests.swift */; };
 		9C444A90A010B32F849D84D8 /* MobileWorkspaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1DCA3C4FD0ACFF781B5450 /* MobileWorkspaceTests.swift */; };
 		A10000000000000000000001 /* DocumentStatistics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* DocumentStatistics.swift */; };
+		4ED750F3C71B4166BE677BB1 /* DocumentCharacterCount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ED750F3C71B4166BE677BB2 /* DocumentCharacterCount.swift */; };
 		A10000000000000000000002 /* EditorMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* EditorMode.swift */; };
 		A10000000000000000000003 /* EditorWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* EditorWorkspace.swift */; };
 		A10000000000000000000004 /* MKTownEditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* MKTownEditorApp.swift */; };
@@ -228,6 +229,7 @@
 		96FC794F210D3D1903908AC7 /* Mobile-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Mobile-Info.plist"; sourceTree = "<group>"; };
 		9D61650C61C3274006430FE0 /* MobileMarkdownPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileMarkdownPreviewTests.swift; sourceTree = "<group>"; };
 		A20000000000000000000001 /* DocumentStatistics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStatistics.swift; sourceTree = "<group>"; };
+		4ED750F3C71B4166BE677BB2 /* DocumentCharacterCount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentCharacterCount.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* EditorMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorMode.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* EditorWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorWorkspace.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* MKTownEditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MKTownEditorApp.swift; sourceTree = "<group>"; };
@@ -469,6 +471,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000001 /* DocumentStatistics.swift */,
+				4ED750F3C71B4166BE677BB2 /* DocumentCharacterCount.swift */,
 				A20000000000000000000002 /* EditorMode.swift */,
 				A20000000000000000000003 /* EditorWorkspace.swift */,
 				A20000000000000000000004 /* MKTownEditorApp.swift */,
@@ -912,6 +915,7 @@
 			files = (
 				728AAB9867BA4058B2ED865A /* MarkdownFrontMatter.swift in Sources */,
 				A10000000000000000000001 /* DocumentStatistics.swift in Sources */,
+				4ED750F3C71B4166BE677BB1 /* DocumentCharacterCount.swift in Sources */,
 				A10000000000000000000002 /* EditorMode.swift in Sources */,
 				A10000000000000000000003 /* EditorWorkspace.swift in Sources */,
 				A10000000000000000000004 /* MKTownEditorApp.swift in Sources */,

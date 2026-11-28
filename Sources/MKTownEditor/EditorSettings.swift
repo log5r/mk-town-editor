@@ -490,6 +490,60 @@ struct EditorLayoutOptions: Equatable {
     }
 }
 
+enum DocumentStatusField: String, CaseIterable, Sendable {
+    case characters, words, lines, position, selectionLength, encoding, lineEnding, fileSize
+
+    var title: String {
+        switch self {
+        case .characters: String(localized: "文字数")
+        case .words: String(localized: "語数")
+        case .lines: String(localized: "行数")
+        case .position: String(localized: "現在の行と桁")
+        case .selectionLength: String(localized: "選択範囲の長さ")
+        case .encoding: String(localized: "文字コード")
+        case .lineEnding: String(localized: "改行コード")
+        case .fileSize: String(localized: "ファイルサイズ")
+        }
+    }
+}
+
+extension DocumentCountUnit {
+    var title: String {
+        switch self {
+        case .grapheme: String(localized: "書記素クラスタ（見た目の1文字）")
+        case .unicodeScalar: String(localized: "Unicodeスカラー")
+        case .utf16: String(localized: "UTF-16コード単位")
+        case .bytes: String(localized: "バイト数")
+        }
+    }
+}
+
+struct DocumentStatisticsPreferences: Codable, Equatable, Sendable {
+    var count = DocumentCountOptions()
+    var statusFields: Set<DocumentStatusField> = [.characters, .words, .lines, .encoding]
+}
+
+extension DocumentStatisticsPreferences {
+    private enum CodingKeys: String, CodingKey { case count, statusFields }
+
+    init(from decoder: Decoder) throws {
+        self.init()
+        guard let values = try? decoder.container(keyedBy: CodingKeys.self) else { return }
+        count = (try? values.decode(DocumentCountOptions.self, forKey: .count)) ?? count
+        if let names = try? values.decode([String].self, forKey: .statusFields) {
+            statusFields = Set(names.compactMap(DocumentStatusField.init(rawValue:)))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(count, forKey: .count)
+        // Stable ordering lets the settings store skip identical writes.
+        try values.encode(DocumentStatusField.allCases.filter(statusFields.contains).map(\.rawValue),
+                          forKey: .statusFields)
+    }
+}
+
 struct AppEditorSettings: Codable, Equatable {
     var defaultMode: EditorMode = .split
     var fontSize: Double = 13
@@ -515,6 +569,7 @@ struct AppEditorSettings: Codable, Equatable {
     var editorZoom: Double?
     var previewZoom: Double?
     var wordCountMode: WordCountMode?
+    var statistics: DocumentStatisticsPreferences?
     var readingEstimate: ReadingEstimateSettings?
     var disabledLintRules: Set<MarkdownLintRule>?
     var proofing: EditorProofingSettings?
@@ -569,6 +624,11 @@ struct AppEditorSettings: Codable, Equatable {
     var highlightOptions: EditorHighlightSettings {
         get { highlights ?? EditorHighlightSettings() }
         set { highlights = newValue == EditorHighlightSettings() ? nil : newValue }
+    }
+
+    var statisticsPreferences: DocumentStatisticsPreferences {
+        get { statistics ?? DocumentStatisticsPreferences() }
+        set { statistics = newValue == DocumentStatisticsPreferences() ? nil : newValue }
     }
 
     /// エディタのフォント。フォントファミリーを選ぶと `fontFamily` だけを書き、`fontChoice` は
@@ -798,6 +858,7 @@ struct DocumentDisplayState: Codable, Equatable {
     var sidebarVisible: Bool? = nil
     var writingGoal: Int? = nil
     var sessionBaselineCharacters: Int? = nil
+    var sessionBaselineCount: WritingSessionCount? = nil
     var suppressesMixedNewlinePrompt: Bool? = nil
     /// 最後に書き込んだ日時。保持件数の上限を超えたとき、古いものから削除する。
     var lastUsed: Date? = nil
@@ -1208,6 +1269,15 @@ final class EditorSettingsStore: ObservableObject {
         let key = Self.key(for: documentURL)
         var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
         state.sessionBaselineCharacters = baseline.characters
+        state.sessionBaselineCount = nil
+        storeDocumentState(state, for: key)
+    }
+
+    func setWritingSessionCount(_ count: WritingSessionCount, for documentURL: URL) {
+        let key = Self.key(for: documentURL)
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: documentURL))
+        guard state.sessionBaselineCount != count else { return }
+        state.sessionBaselineCount = count
         storeDocumentState(state, for: key)
     }
 
@@ -1382,8 +1452,19 @@ final class EditorSettingsStore: ObservableObject {
 /// The character count a writing session starts from. It can only be made from the document
 /// text itself: the background analysis snapshot is empty until it finishes, and recording
 /// that as the start would count the whole existing document as newly written.
-struct WritingSessionBaseline: Equatable, Sendable {
+struct WritingSessionBaseline: Sendable {
+    let id = UUID()
+    let text: String
     let characters: Int
 
-    init(text: String) { characters = text.count }
+    init(text: String) {
+        self.text = text
+        characters = text.count
+    }
+}
+
+struct WritingSessionCount: Codable, Equatable, Sendable {
+    let options: DocumentCountOptions
+    let dialect: MarkdownDialect
+    let value: Int?
 }

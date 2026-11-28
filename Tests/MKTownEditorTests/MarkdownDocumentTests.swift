@@ -63,6 +63,25 @@ final class MarkdownDocumentTests: XCTestCase {
         XCTAssertEqual(restored, original.text)
     }
 
+    func testStatusFileSizeIncludesBOMAndStoredNewlines() throws {
+        let original = Data([0xEF, 0xBB, 0xBF]) + Data("A\r\n🙂".utf8)
+        var document = try MarkdownDocument(data: original)
+        let input = MarkdownDocument.FileSizeInput(document: document)
+        XCTAssertEqual(input.byteCount, 10)
+
+        document.format.newline = .lf
+        let changedNewline = MarkdownDocument.FileSizeInput(document: document)
+        XCTAssertNotEqual(input, changedNewline)
+        XCTAssertEqual(changedNewline.byteCount, 9)
+
+        document.text = "é"
+        let composed = MarkdownDocument.FileSizeInput(document: document)
+        document.text = "e\u{301}"
+        let decomposed = MarkdownDocument.FileSizeInput(document: document)
+        XCTAssertNotEqual(composed, decomposed)
+        XCTAssertEqual(decomposed.byteCount, composed.byteCount.map { $0 + 1 })
+    }
+
     func testSaveWhitespacePolicyPreservesEncodingAndLineEndingsWithoutChangingTheBuffer() throws {
         let original = "行末 \t\r\n強制  \n次の行\n\n```\r空白 \t\r```\r末尾 \t"
         let encoding = MarkdownTextEncoding.shiftJIS

@@ -54,6 +54,20 @@ struct MarkdownDocument: FileDocument {
     private(set) var pendingEncodingData: Data?
     private var hasUTF16BOM = false
 
+    struct FileSizeInput: Equatable {
+        let document: MarkdownDocument
+        var byteCount: Int? { try? document.encodedData().count }
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.document.encoding == rhs.document.encoding &&
+                lhs.document.hasUTF16BOM == rhs.document.hasUTF16BOM &&
+                lhs.document.pendingEncodingData == rhs.document.pendingEncodingData &&
+                lhs.document.originalFile?.data == rhs.document.originalFile?.data &&
+                lhs.document.format == rhs.document.format &&
+                MarkdownTextFormat.identicalText(lhs.document.text, rhs.document.text)
+        }
+    }
+
     // CP932 has multiple byte sequences for some characters. Opening and saving an
     // unchanged file must preserve even the spelling that the system encoder doesn't emit.
     private struct OriginalFile {

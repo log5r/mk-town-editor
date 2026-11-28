@@ -201,6 +201,15 @@ struct DocumentStatistics: Equatable, Sendable {
     }
 }
 
+struct DocumentCharacterCounts: Equatable {
+    var document: Int?
+    var selection: Int?
+    var hasSelection = false
+    var line: Int?
+    var column: Int?
+    var fileSize: Int?
+}
+
 /// Selection and section scans run only when the source snapshot or selection changes.
 /// Section statistics are cached per section range, so moving the caret inside a section publishes
 /// synchronously, and superseded background scans stop at their next cancellation check.
@@ -218,12 +227,130 @@ final class DocumentStatusStore: ObservableObject {
 
     @Published private(set) var selection: DocumentStatistics?
     @Published private(set) var section: (title: String, value: DocumentStatistics)?
+    @Published private(set) var characterCounts = DocumentCharacterCounts()
     private var generation = 0
     private var task: Task<Void, Never>?
     private var source: String?
     private var dialect: MarkdownDialect?
     private var ranges: [NSRange] = []
     private var sectionCache: [NSRange: DocumentStatistics] = [:]
+    private var countOptions = DocumentCountOptions()
+    private var countSnapshot: MarkdownAnalysis.Identity?
+    private var countTask: Task<Void, Never>?
+    private var selectionCountTask: Task<Void, Never>?
+    private var countSelections: [NSRange] = []
+    private var showsPosition = false
+    private var lineIndex: MarkdownLineIndex?
+
+    /// Provide selection updates independently of the document task, so moving the
+    /// insertion point cannot restart a pending document-wide count.
+    func updateCharacterCounts(snapshot: DocumentSnapshot?, selections: [NSRange],
+                               options: DocumentCountOptions, showsPosition: Bool) {
+        let optionsChanged = countOptions != options
+        let snapshotChanged = countSnapshot != snapshot?.analysis.identity
+        let positionChanged = self.showsPosition != showsPosition
+        let selectionChanged = countSelections != selections
+        guard optionsChanged || snapshotChanged || positionChanged || selectionChanged else { return }
+        countOptions = options
+        countSnapshot = snapshot?.analysis.identity
+        countSelections = selections
+        self.showsPosition = showsPosition
+        selectionCountTask?.cancel()
+
+        var next = characterCounts
+        next.hasSelection = selections.contains { $0.length > 0 }
+        if optionsChanged || snapshotChanged || selectionChanged { next.selection = nil }
+        if snapshotChanged || positionChanged { lineIndex = nil }
+        if !showsPosition || snapshotChanged || selectionChanged {
+            next.line = nil
+            next.column = nil
+        }
+        if optionsChanged { next.document = nil }
+        if let snapshot, options == DocumentCountOptions() {
+            next.document = snapshot.statistics.characters
+        }
+        publishCharacterCounts(next)
+
+        if optionsChanged || snapshotChanged || positionChanged {
+            countTask?.cancel()
+            countTask = nil
+            if let snapshot, options != DocumentCountOptions() || showsPosition {
+                countTask = Task.detached(priority: .utility) { [weak self] in
+                    do {
+                        try await Task.sleep(for: .milliseconds(180))
+                        let value = options == DocumentCountOptions() ? snapshot.statistics.characters :
+                            try options.countObservingCancellation(in: snapshot.source, analysis: snapshot.analysis,
+                                                                   syntaxSpans: snapshot.syntaxSpans)
+                        let index = showsPosition ? MarkdownLineIndex(snapshot.source) : nil
+                        try Task.checkCancellation()
+                        await self?.receiveCharacterCount(value, index: index, snapshot: snapshot,
+                                                          options: options, showsPosition: showsPosition)
+                    } catch { /* A newer source or setting superseded this count. */ }
+                }
+            }
+        }
+        if let snapshot { countSelection(in: snapshot) }
+    }
+
+    func publishFileSize(_ value: Int?) {
+        var next = characterCounts
+        next.fileSize = value
+        publishCharacterCounts(next)
+    }
+
+    private func receiveCharacterCount(_ value: Int?, index: MarkdownLineIndex?, snapshot: DocumentSnapshot,
+                                       options: DocumentCountOptions, showsPosition: Bool) {
+        guard !Task.isCancelled, countSnapshot == snapshot.analysis.identity, countOptions == options,
+              self.showsPosition == showsPosition else { return }
+        lineIndex = index
+        var next = characterCounts
+        next.document = value
+        publishCharacterCounts(next)
+        if index != nil { countSelection(in: snapshot) }
+    }
+
+    private func countSelection(in snapshot: DocumentSnapshot) {
+        let selections = countSelections
+        let options = countOptions
+        let index = lineIndex
+        let hasSelection = characterCounts.hasSelection
+        guard index != nil || hasSelection else { return }
+        selectionCountTask?.cancel()
+        selectionCountTask = Task.detached(priority: .userInitiated) { [weak self] in
+            do {
+                let source = snapshot.source as NSString
+                let location = min(max(0, selections.first?.location ?? 0), source.length)
+                let line = index?.line(containingUTF16Offset: location)
+                let column = line.flatMap { line in index.map { index in
+                    let start = index.starts[line - 1]
+                    return 1 + source.substring(with: NSRange(location: start, length: location - start)).count
+                } }
+                let count = hasSelection ? try options.countObservingCancellation(
+                    in: snapshot.source, ranges: selections, analysis: snapshot.analysis,
+                    syntaxSpans: snapshot.syntaxSpans) : nil
+                try Task.checkCancellation()
+                await self?.receiveSelectionCount(count, line: line, column: column, snapshot: snapshot,
+                                                  options: options, selections: selections)
+            } catch { /* The selection moved or the source changed. */ }
+        }
+    }
+
+    private func receiveSelectionCount(_ value: Int?, line: Int?, column: Int?, snapshot: DocumentSnapshot,
+                                       options: DocumentCountOptions, selections: [NSRange]) {
+        guard !Task.isCancelled, countSnapshot == snapshot.analysis.identity, countOptions == options,
+              countSelections == selections else { return }
+        var next = characterCounts
+        next.selection = value
+        if showsPosition {
+            next.line = line
+            next.column = column
+        }
+        publishCharacterCounts(next)
+    }
+
+    private func publishCharacterCounts(_ value: DocumentCharacterCounts) {
+        if characterCounts != value { characterCounts = value }
+    }
 
     func update(snapshot: DocumentSnapshot?, selections: [NSRange]) {
         guard let snapshot else { return }
