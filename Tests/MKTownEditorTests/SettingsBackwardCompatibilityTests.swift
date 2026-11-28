@@ -69,6 +69,28 @@ final class SettingsBackwardCompatibilityTests: XCTestCase {
 
     // MARK: - この版での往復
 
+    func testSettingsWithoutWhitespaceOptionsKeepExistingSettingsAndUseDefaults() throws {
+        let defaults = try isolatedDefaults()
+        let json = #"{"app":{"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true},"folders":{"/tmp/work":{"tabWidth":6}},"documents":{}}"#
+        defaults.set(Data(json.utf8), forKey: Self.storageKey)
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .dark)
+        let file = URL(fileURLWithPath: "/tmp/work/note.md")
+        XCTAssertEqual(store.whitespaceEditingOptions(for: file), EditorWhitespaceEditingOptions())
+        XCTAssertEqual(store.app.fontSize, 17)
+        XCTAssertEqual(store.textStyle(for: file).tabWidth, 6)
+    }
+
+    func testUnknownIndentationStyleDoesNotDiscardOtherSettings() throws {
+        let defaults = try isolatedDefaults()
+        let json = #"{"app":{"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true,"indentationStyle":"future-style","detectsIndentation":true},"folders":{"/tmp/work":{"tabWidth":6}},"documents":{}}"#
+        defaults.set(Data(json.utf8), forKey: Self.storageKey)
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false, appearance: .dark)
+        let file = URL(fileURLWithPath: "/tmp/work/note.md")
+        XCTAssertEqual(store.whitespaceEditingOptions(for: file), EditorWhitespaceEditingOptions(detectsIndentation: true))
+        XCTAssertEqual(store.app.fontSize, 17)
+        XCTAssertEqual(store.textStyle(for: file).tabWidth, 6)
+    }
+
     /// 「紺色」は保存して読み直しても「紺色」のまま。外観ごとの項目も同じ。
     func testNavyRoundTripsThroughTheStore() throws {
         let defaults = try isolatedDefaults()

@@ -159,6 +159,7 @@ final class MarkdownEditorModel: ObservableObject {
     private var availabilitySelections: [NSRange]?
     private var availabilityDialect: MarkdownDialect?
     private var availabilityIndentWidths: [Int] = []
+    private var availabilityIndentationStyle: EditorIndentationStyle?
     private var tableAvailability: [MarkdownTableOperation: Bool] = [:]
     private var gridAvailability: Bool?
     private var alignmentComputed = false
@@ -168,11 +169,13 @@ final class MarkdownEditorModel: ObservableObject {
     private func refreshAvailabilityCache() {
         let source = textView?.editorSource
         let selections = textView?.selectedRanges.map(\.rangeValue)
-        let widths = [listIndentWidth, codeIndentWidth]
+        let widths = [effectiveListIndentWidth, effectiveCodeIndentWidth]
         if source != availabilitySource || selections != availabilitySelections ||
-            availabilityDialect != markdownDialect || availabilityIndentWidths != widths {
+            availabilityDialect != markdownDialect || availabilityIndentWidths != widths ||
+            availabilityIndentationStyle != indentationStyle {
             availabilitySource = source; availabilitySelections = selections; availabilityDialect = markdownDialect
             availabilityIndentWidths = widths
+            availabilityIndentationStyle = indentationStyle
             tableAvailability.removeAll(); commandAvailability.removeAll()
             gridAvailability = nil; alignmentComputed = false; cachedAlignment = nil
         }
@@ -190,7 +193,8 @@ final class MarkdownEditorModel: ObservableObject {
         case .indentList, .outdentList:
             result = MarkdownIndentation.edit(in: source, selection: selection,
                 direction: command == .indentList ? .indent : .outdent,
-                listIndentWidth: listIndentWidth, codeIndentWidth: codeIndentWidth, analysis: analysis) != nil
+                listIndentWidth: effectiveListIndentWidth, codeIndentWidth: effectiveCodeIndentWidth,
+                style: indentationStyle, analysis: analysis, dialect: markdownDialect) != nil
         case .convertLinkForm:
             result = MarkdownReferenceConversion.edit(in: source, selection: selection, analysis: analysis) != nil
         default: result = false
@@ -208,6 +212,15 @@ final class MarkdownEditorModel: ObservableObject {
     private var expectedSelection: NSRange?
     var listIndentWidth = 2
     var codeIndentWidth = 4
+    private var tabWidth = 4
+    private var indentationFileURL: URL?
+    private var detectedIndentation: MarkdownIndentation.Detection?
+    private var whitespaceEditingOptions = EditorWhitespaceEditingOptions()
+    private var indentationStyle: EditorIndentationStyle {
+        detectedIndentation?.style ?? whitespaceEditingOptions.indentationStyle
+    }
+    private var effectiveListIndentWidth: Int { detectedIndentation?.width ?? listIndentWidth }
+    private var effectiveCodeIndentWidth: Int { detectedIndentation?.width ?? codeIndentWidth }
     var tableAddsRowOnTab = true
     var tablePasteboard: NSPasteboard = .general
     var snippets: [EditorSnippet] = []
@@ -221,6 +234,18 @@ final class MarkdownEditorModel: ObservableObject {
     private var automaticClosers = MarkdownAutomaticClosers()
     private var documentSearchHighlightSource: String?
     private var documentSearchHighlightRanges: [NSRange] = []
+
+    func configureWhitespaceEditing(_ options: EditorWhitespaceEditingOptions, source: String,
+                                    fileURL: URL?, tabWidth: Int) {
+        if !options.detectsIndentation {
+            detectedIndentation = nil
+        } else if !whitespaceEditingOptions.detectsIndentation || indentationFileURL != fileURL {
+            detectedIndentation = MarkdownIndentation.detect(in: source)
+        }
+        indentationFileURL = fileURL
+        whitespaceEditingOptions = options
+        self.tabWidth = tabWidth
+    }
 
     func sourceStorageDidChange(range: NSRange, delta: Int, undoing: Bool) {
         clearDocumentSearchHighlights()
@@ -579,17 +604,52 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     @discardableResult
-    func changeIndentation(_ direction: MarkdownIndentation.Direction) -> Bool {
-        guard structuralAnalysisAvailable else { return false }
+    func changeIndentation(_ direction: MarkdownIndentation.Direction, includesPlainText: Bool = false) -> Bool {
+        guard includesPlainText || structuralAnalysisAvailable else { return false }
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1,
-              let edit = MarkdownIndentation.edit(in: textView.editorSource,
+              textView.isEditable, !textView.hasMarkedText(), textView.selectedRanges.count == 1 else { return false }
+        let source = textView.editorSource
+        // For a short document, Tab can keep structural behavior while the background snapshot catches up.
+        let allowsAnalysis = !usesSharedAnalysis || source.utf8.count <= 8_192
+        guard let edit = MarkdownIndentation.edit(in: source,
                                                   selection: textView.selectedRange(),
                                                   direction: direction,
-                                                  listIndentWidth: listIndentWidth,
-                                                  codeIndentWidth: codeIndentWidth, analysis: matchingSnapshot?.analysis) else { return false }
+                                                  listIndentWidth: effectiveListIndentWidth,
+                                                  codeIndentWidth: effectiveCodeIndentWidth,
+                                                  tabWidth: detectedIndentation?.width ?? tabWidth,
+                                                  style: indentationStyle, includesPlainText: includesPlainText,
+                                                  analysis: matchingSnapshot?.analysis, allowsAnalysis: allowsAnalysis,
+                                                  dialect: markdownDialect) else { return false }
         perform(edit, in: textView, storage: storage, focusEditor: true)
         return true
+    }
+
+    func canConvertIndentation(to style: EditorIndentationStyle) -> Bool {
+        guard canExecuteCommand, let textView, textView.selectedRange().length > 0 else { return false }
+        refreshAvailabilityCache()
+        let command: EditorCommand = style == .spaces ? .convertIndentationToSpaces : .convertIndentationToTabs
+        if let available = commandAvailability[command] { return available }
+        let available = MarkdownIndentation.conversionEdit(in: textView.editorSource,
+                                                           selection: textView.selectedRange(), to: style) != nil
+        commandAvailability[command] = available
+        return available
+    }
+
+    func convertIndentation(to style: EditorIndentationStyle) {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              let edit = MarkdownIndentation.conversionEdit(in: textView.editorSource,
+                                                            selection: textView.selectedRange(), to: style) else { return }
+        perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
+    var canTrimTrailingWhitespace: Bool { canExecuteCommand }
+
+    func trimTrailingWhitespace() {
+        guard canTrimTrailingWhitespace, let textView, let storage = textView.textStorage,
+              let edit = MarkdownWhitespaceTrim.edit(in: textView.editorSource, selection: textView.selectedRange(),
+                  includingWhitespaceOnlyLines: whitespaceEditingOptions.trimsWhitespaceOnlyLines,
+                  dialect: markdownDialect, analysis: matchingSnapshot?.analysis) else { return }
+        perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
     func completeSymbol(_ typed: String, replacementRange: NSRange) -> Bool {

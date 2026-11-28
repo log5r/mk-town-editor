@@ -117,6 +117,32 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertFalse(EditorCommand.bold.canExecute(in: model))
     }
 
+    func testWhitespaceCommandsUseTheActiveSelectionAndRespectReadOnlyMode() {
+        let view = NSTextView()
+        view.string = "一行目 \n二行目 \n    字下げ\n"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: "一行目 \n".utf16.count))
+
+        EditorCommand.trimTrailingWhitespace.perform(on: model)
+        XCTAssertEqual(view.string, "一行目\n二行目 \n    字下げ\n")
+        view.setSelectedRange((view.string as NSString).range(of: "    字下げ"))
+        EditorCommand.convertIndentationToTabs.perform(on: model)
+        XCTAssertEqual(view.string, "一行目\n二行目 \n\t字下げ\n")
+        EditorCommand.convertIndentationToSpaces.perform(on: model)
+        XCTAssertEqual(view.string, "一行目\n二行目 \n    字下げ\n")
+
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        view.isEditable = false
+        XCTAssertFalse(EditorCommand.trimTrailingWhitespace.canExecute(in: model))
+        EditorCommand.trimTrailingWhitespace.perform(on: model)
+        XCTAssertEqual(view.string, "一行目\n二行目 \n    字下げ\n")
+
+        view.isEditable = true
+        EditorCommand.trimTrailingWhitespace.perform(on: model)
+        XCTAssertEqual(view.string, "一行目\n二行目\n    字下げ\n")
+    }
+
     func testContextMenuUsesSharedCommandDefinitions() {
         let view = EditorTextView()
         let pasteboard = NSPasteboard.withUniqueName()

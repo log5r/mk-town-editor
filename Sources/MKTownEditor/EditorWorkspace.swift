@@ -2790,6 +2790,7 @@ struct EditorWorkspace: View {
                                whitespaceOptions: EditorWhitespaceOptions(
                                    showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
                                    showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
+                               whitespaceEditingOptions: settingsStore.whitespaceEditingOptions(for: fileURL),
                                isEditable: canEditDocument,
                                onImageDrop: dropImage, onImagePaste: pasteImage,
                                onVisibleSourceChange: synchronizePreview(to:),

@@ -34,6 +34,9 @@ enum EditorCommand: Hashable {
     case taskList
     case indentList
     case outdentList
+    case trimTrailingWhitespace
+    case convertIndentationToSpaces
+    case convertIndentationToTabs
     case toggleTaskCompletion
     case codeBlock(language: MarkdownCodeLanguage?)
     case horizontalRule
@@ -66,6 +69,9 @@ enum EditorCommand: Hashable {
         case .table: "table"
         case .footnote: "footnote"
         case .selectNextOccurrence: "select-next-occurrence"
+        case .trimTrailingWhitespace: "trim-trailing-whitespace"
+        case .convertIndentationToSpaces: "convert-indentation-to-spaces"
+        case .convertIndentationToTabs: "convert-indentation-to-tabs"
         default: "other-\(String(describing: self))"
         }
     }
@@ -79,7 +85,8 @@ enum EditorCommand: Hashable {
         .renumberList, .indentList, .outdentList, .toggleTaskCompletion,
         .codeBlock(language: nil), .horizontalRule, .comment,
         .tableOfContents, .duplicateLines, .moveLinesUp, .moveLinesDown,
-        .deleteLines, .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
+        .deleteLines, .trimTrailingWhitespace, .convertIndentationToSpaces, .convertIndentationToTabs,
+        .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find
     ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
     /// The editor's context menu stays short: inline formatting, links and images, and list
@@ -127,6 +134,9 @@ enum EditorCommand: Hashable {
         case .taskList: String(localized: "タスクリスト")
         case .indentList: String(localized: "インデントを増やす")
         case .outdentList: String(localized: "インデントを減らす")
+        case .trimTrailingWhitespace: String(localized: "行末の空白を削除")
+        case .convertIndentationToSpaces: String(localized: "字下げをスペースに変換")
+        case .convertIndentationToTabs: String(localized: "字下げをタブに変換")
         case .toggleTaskCompletion: String(localized: "タスクの完了を切り替え")
         case let .codeBlock(language): language.map { String(localized: "\($0.title) コードブロック") } ?? String(localized: "言語なし")
         case .horizontalRule: String(localized: "区切り線")
@@ -171,6 +181,9 @@ enum EditorCommand: Hashable {
         case .taskList: "checklist"
         case .indentList: "increase.indent"
         case .outdentList: "decrease.indent"
+        case .trimTrailingWhitespace: "text.alignleft"
+        case .convertIndentationToSpaces: "space"
+        case .convertIndentationToTabs: "arrow.right.to.line"
         case .toggleTaskCompletion: "checkmark.square"
         case .codeBlock: "curlybraces.square"
         case .horizontalRule: "minus"
@@ -208,7 +221,8 @@ enum EditorCommand: Hashable {
         case .unorderedList: ("8", [.command, .shift])
         case .orderedList: ("7", [.command, .shift])
         case .taskList: ("9", [.command, .shift])
-        case .indentList, .outdentList: nil
+        case .indentList, .outdentList, .trimTrailingWhitespace,
+             .convertIndentationToSpaces, .convertIndentationToTabs: nil
         // ⌥⌘T shows or hides the toolbar; Notes uses ⇧⌘U to check an item.
         case .toggleTaskCompletion: ("u", [.command, .shift])
         case let .codeBlock(language): language == nil ? ("`", [.command, .option]) : nil
@@ -255,6 +269,12 @@ enum EditorCommand: Hashable {
         case .selectNextOccurrence: return model?.canAddNextOccurrence == true
         case .indentList, .outdentList, .convertLinkForm:
             return model?.canExecuteStructuralCommand(self) == true
+        case .trimTrailingWhitespace:
+            return model?.canTrimTrailingWhitespace == true
+        case .convertIndentationToSpaces:
+            return model?.canConvertIndentation(to: .spaces) == true
+        case .convertIndentationToTabs:
+            return model?.canConvertIndentation(to: .tabs) == true
         case .comment:
             return model?.canComment == true
         case .snippet:
@@ -300,6 +320,9 @@ enum EditorCommand: Hashable {
         case .taskList: model.apply(.taskList)
         case .indentList: model.changeIndentation(.indent)
         case .outdentList: model.changeIndentation(.outdent)
+        case .trimTrailingWhitespace: model.trimTrailingWhitespace()
+        case .convertIndentationToSpaces: model.convertIndentation(to: .spaces)
+        case .convertIndentationToTabs: model.convertIndentation(to: .tabs)
         case .toggleTaskCompletion: model.toggleTaskCompletion()
         case let .codeBlock(language): model.apply(.codeBlock(language: language))
         case .horizontalRule: model.apply(.horizontalRule)

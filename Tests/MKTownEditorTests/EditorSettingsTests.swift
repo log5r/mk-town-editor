@@ -4,6 +4,34 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testWhitespaceSettingsInheritEachFieldAndPersistExplicitOffValues() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let folder = URL(fileURLWithPath: "/tmp/work")
+        let chapter = folder.appendingPathComponent("chapter")
+        let file = chapter.appendingPathComponent("note.md")
+        XCTAssertEqual(store.whitespaceEditingOptions(for: file), EditorWhitespaceEditingOptions())
+
+        var settings = store.app
+        settings.detectsIndentation = true
+        settings.trimsTrailingWhitespaceOnSave = true
+        store.setAppSettings(settings)
+        store.setFolderSettings(FolderEditorSettings(indentationStyle: .tabs, trimsWhitespaceOnlyLines: true),
+                                for: folder)
+        store.setFolderSettings(FolderEditorSettings(detectsIndentation: false, trimsTrailingWhitespaceOnSave: false),
+                                for: chapter)
+
+        let restored = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(restored.whitespaceEditingOptions(for: file),
+                       EditorWhitespaceEditingOptions(indentationStyle: .tabs, trimsWhitespaceOnlyLines: true))
+        XCTAssertEqual(restored.whitespaceEditingOptions(for: nil),
+                       EditorWhitespaceEditingOptions(detectsIndentation: true, trimsTrailingWhitespaceOnSave: true))
+        restored.setFolderSettings(nil, for: chapter)
+        XCTAssertEqual(restored.whitespaceEditingOptions(for: file),
+                       EditorWhitespaceEditingOptions(indentationStyle: .tabs, detectsIndentation: true,
+                                                      trimsTrailingWhitespaceOnSave: true, trimsWhitespaceOnlyLines: true))
+    }
+
     func testMixedNewlinePromptIsLimitedToMixedFilesAndRemembersDocumentExceptions() throws {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)

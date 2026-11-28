@@ -19,14 +19,15 @@ final class EditorWorkspacePersistenceTests: XCTestCase {
                       opening: DocumentOpeningMode = .lastUsed,
                       navigation: DocumentLinkNavigation = DocumentLinkNavigation(),
                       activation: WorkspaceLayoutActivation = WorkspaceLayoutActivation(),
-                      savedMode: EditorMode? = nil) -> Host {
+                      savedMode: EditorMode? = nil,
+                      document: MarkdownDocument = MarkdownDocument(text: "# Title\n\nfirst line\nsecond line\n")) -> Host {
         let settings = EditorSettingsStore(defaults: defaults)
         var app = settings.app
         app.documentOpeningMode = opening
         settings.setAppSettings(app)
         if let savedMode, let fileURL { settings.setMode(savedMode, for: fileURL) }
         let workspaceStore = WorkspaceStore(defaults: defaults)
-        let document = Binding.constant(MarkdownDocument(text: "# Title\n\nfirst line\nsecond line\n"))
+        let document = Binding.constant(document)
         let make: (URL?) -> AnyView = { url in
             AnyView(MarkdownDocumentWindow(document: document, fileURL: url)
                 .environmentObject(settings)
@@ -213,6 +214,37 @@ final class EditorWorkspacePersistenceTests: XCTestCase {
         defer { reopened.window.orderOut(nil) }
         let reopenedEditor = try XCTUnwrap(descendants(of: reopened.controller.view, as: EditorTextView.self).first)
         XCTAssertTrue(reopenedEditor.isEditable)
+    }
+
+    func testSaveWhitespaceFollowsFolderAndApplicationSettingsAndSkipsReadOnly() async throws {
+        let defaults = try isolatedDefaults()
+        let (root, file, _) = try temporaryDocuments()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let text = "paragraph \n\t \n"
+        let document = MarkdownDocument(text: text)
+        let navigation = DocumentLinkNavigation()
+        let opened = host(fileURL: file, defaults: defaults, navigation: navigation, document: document)
+        defer { opened.window.orderOut(nil) }
+
+        try await settle(opened, for: .milliseconds(200))
+        XCTAssertEqual(try document.dataForSave(), Data(text.utf8))
+
+        opened.settings.setFolderSettings(.init(trimsTrailingWhitespaceOnSave: true,
+                                                trimsWhitespaceOnlyLines: true), for: root)
+        try await settle(opened, for: .milliseconds(200))
+        XCTAssertEqual(try document.dataForSave(), Data("paragraph\n\n".utf8))
+        XCTAssertEqual(try document.encodedData(), Data(text.utf8))
+
+        var app = opened.settings.app
+        app.trimsTrailingWhitespaceOnSave = true
+        opened.settings.setAppSettings(app)
+        opened.settings.setFolderSettings(nil, for: root)
+        try await settle(opened, for: .milliseconds(200))
+        XCTAssertEqual(try document.dataForSave(), Data("paragraph\n\t \n".utf8))
+
+        navigation.requestReadOnlyOpen(for: file)
+        try await settle(opened, for: .milliseconds(200))
+        XCTAssertEqual(try document.dataForSave(), Data(text.utf8))
     }
 
     func testNamedLayoutDocumentOpensInTheLayoutMode() async throws {

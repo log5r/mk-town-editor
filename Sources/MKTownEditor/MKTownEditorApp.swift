@@ -32,6 +32,7 @@ struct MarkdownDocumentWindow: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
     @EnvironmentObject private var navigation: DocumentLinkNavigation
+    @EnvironmentObject private var settingsStore: EditorSettingsStore
     @EnvironmentObject private var workspaceStore: WorkspaceStore
     @State private var isReadOnly = false
 
@@ -51,6 +52,20 @@ struct MarkdownDocumentWindow: View {
         .onChange(of: fileURL, initial: true) { receiveReadOnlyOpen() }
         .onChange(of: navigation.pendingReadOnlyOpens) { receiveReadOnlyOpen() }
         .onChange(of: workspaceStore.isDocumentLocked(fileURL)) { receiveReadOnlyOpen() }
+        .onChange(of: saveWhitespaceOptions, initial: true) { _, options in
+            document.saveWhitespaceConfiguration.update(options)
+        }
+        .onChange(of: ObjectIdentifier(document.saveWhitespaceConfiguration)) {
+            document.saveWhitespaceConfiguration.update(saveWhitespaceOptions)
+        }
+    }
+
+    private var saveWhitespaceOptions: MarkdownSaveWhitespaceConfiguration.Options? {
+        guard !readOnlyBinding.wrappedValue, !workspaceStore.isDocumentLocked(fileURL) else { return nil }
+        let settings = settingsStore.whitespaceEditingOptions(for: fileURL)
+        guard settings.trimsTrailingWhitespaceOnSave else { return nil }
+        return .init(includingWhitespaceOnlyLines: settings.trimsWhitespaceOnlyLines,
+                     dialect: settingsStore.markdownDialect(for: fileURL))
     }
 
     private var readOnlyBinding: Binding<Bool> {
