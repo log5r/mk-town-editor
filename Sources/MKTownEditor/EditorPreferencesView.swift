@@ -160,6 +160,16 @@ struct EditorPreferencesView: View {
                 Toggle("編集中以外のMarkdown記号を控えめに表示", isOn: binding(\.usesInlineLivePresentation, default: false))
                 Toggle("タイプライターモード", isOn: binding(\.usesTypewriterMode, default: false))
             }
+            Section("強調表示") {
+                Toggle("現在行を強調", isOn: binding(\.highlightOptions.currentLine))
+                Toggle("対応する括弧を強調", isOn: binding(\.highlightOptions.matchingBrackets))
+                Toggle("選択した単語の出現箇所を強調", isOn: binding(\.highlightOptions.selectedWord))
+                Stepper(value: binding(\.highlightOptions.wordDelay), in: EditorHighlightSettings.wordDelayRange, step: 0.05) {
+                    let milliseconds = Int((settingsStore.app.highlightOptions.wordDelay * 1_000).rounded())
+                    Text("単語を強調するまでの待ち時間: \(milliseconds) ミリ秒")
+                }
+                .disabled(!settingsStore.app.highlightOptions.selectedWord)
+            }
             Section("字下げと表") {
                 Picker("字下げに使う文字", selection: binding(\.indentationStyle, default: .spaces)) {
                     ForEach(EditorIndentationStyle.allCases, id: \.self) { style in

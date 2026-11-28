@@ -2799,6 +2799,7 @@ struct EditorWorkspace: View {
                                    showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
                                whitespaceEditingOptions: settingsStore.whitespaceEditingOptions(for: fileURL),
                                textTransformationOptions: settingsStore.app.textTransformationOptions,
+                               highlights: settingsStore.app.highlightOptions,
                                isEditable: canEditDocument,
                                onImageDrop: dropImage, onImagePaste: pasteImage,
                                onVisibleSourceChange: synchronizePreview(to:),

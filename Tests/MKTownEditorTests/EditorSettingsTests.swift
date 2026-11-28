@@ -4,6 +4,40 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testHighlightOptionsDefaultForOlderSettingsAndPersistChanges() throws {
+        var settings = try JSONDecoder().decode(AppEditorSettings.self, from: Data(
+            #"{"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true}"#.utf8))
+        XCTAssertNil(settings.highlights)
+        XCTAssertEqual(settings.highlightOptions, EditorHighlightSettings())
+
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        settings.highlightOptions.currentLine = true
+        settings.highlightOptions.matchingBrackets = true
+        settings.highlightOptions.selectedWord = true
+        settings.highlightOptions.wordDelay = 0.50
+        store.setAppSettings(settings)
+
+        let reopened = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(reopened.app.highlightOptions,
+                       EditorHighlightSettings(currentLine: true, matchingBrackets: true, selectedWord: true,
+                                               wordDelay: 0.50))
+        XCTAssertEqual(reopened.app.fontSize, 17)
+    }
+
+    func testInvalidHighlightDelayKeepsOtherSettingsReadable() throws {
+        let options = try JSONDecoder().decode(EditorHighlightSettings.self, from: Data(
+            #"{"currentLine":true,"selectedWord":true,"wordDelay":"invalid"}"#.utf8))
+        XCTAssertEqual(options, EditorHighlightSettings(currentLine: true, selectedWord: true))
+        var adjusted = options
+        adjusted.wordDelay = .infinity
+        XCTAssertEqual(adjusted.wordDelay, EditorHighlightSettings.defaultWordDelay)
+        adjusted.wordDelay = 1e100
+        XCTAssertEqual(adjusted.wordDelay, EditorHighlightSettings.wordDelayRange.upperBound)
+        adjusted.wordDelay = 0
+        XCTAssertEqual(adjusted.wordDelay, EditorHighlightSettings.wordDelayRange.lowerBound)
+    }
+
     func testWhitespaceSettingsInheritEachFieldAndPersistExplicitOffValues() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)

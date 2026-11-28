@@ -1,6 +1,56 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "強調表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlighting"
+          }
+        }
+      }
+    },
+    "現在行を強調" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight the current line"
+          }
+        }
+      }
+    },
+    "対応する括弧を強調" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight matching brackets"
+          }
+        }
+      }
+    },
+    "選択した単語の出現箇所を強調" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight occurrences of the selected word"
+          }
+        }
+      }
+    },
+    "単語を強調するまでの待ち時間: %lld ミリ秒" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Word highlighting delay: %lld ms"
+          }
+        }
+      }
+    },
     "字種とUnicodeの変換" : {
       "localizations" : {
         "en" : {

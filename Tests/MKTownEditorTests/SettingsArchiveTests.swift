@@ -16,6 +16,7 @@ final class SettingsArchiveTests: XCTestCase {
         settings.loadsExternalLinkPreviews = true
         settings.editorFont = .family("Hiragino Sans")
         settings.fontSize = 16
+        settings.highlightOptions = EditorHighlightSettings(currentLine: true, selectedWord: true, wordDelay: 0.75)
         settings.textTransformationOptions.convertsSymbols = false
         settings.textTransformationOptions.preservesCodeAndURLs = false
         settings.disabledLintRules = [.headingHierarchy, .listMarker]
@@ -81,6 +82,7 @@ final class SettingsArchiveTests: XCTestCase {
         var local = destination.app
         local.fontSize = 22
         local.tabWidth = 8
+        local.highlightOptions.selectedWord = true
         local.textTransformationOptions.convertsKana = false
         local.previewBodyWidth = 720
         destination.setAppSettings(local)
@@ -97,6 +99,7 @@ final class SettingsArchiveTests: XCTestCase {
 
         XCTAssertEqual(destination.app.fontSize, 27)
         XCTAssertNil(destination.app.tabWidth)
+        XCTAssertEqual(destination.app.highlightOptions, EditorHighlightSettings())
         XCTAssertTrue(destination.app.textTransformationOptions.convertsKana)
         XCTAssertEqual(destination.app.previewBodyWidth, 720)
         XCTAssertNil(destination.app.loadsRemoteImages)
@@ -150,6 +153,8 @@ final class SettingsArchiveTests: XCTestCase {
         let invalidSections = [
             #""editor":{"fontSize":"large"}"#,
             #""editor":{"fontSize":1e300}"#,
+            #""editor":{"highlights":{"selectedWord":"on"}}"#,
+            #""editor":{"highlights":{"wordDelay":10}}"#,
             #""editor":{"readingEstimate":{"language":"japanese","japaneseReadingRate":9223372036854775807,"japaneseSpeakingRate":300,"englishReadingRate":200,"englishSpeakingRate":130}}"#,
             #""themes":{"editorTheme":42}"#,
             #""themes":{"previewTheme":"navy"}"#,

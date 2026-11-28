@@ -274,6 +274,7 @@ private extension SettingsArchive.Category {
                 Field("usesInlineLivePresentation", \.app.usesInlineLivePresentation, "Markdown記号の強調の抑制",
                       summarize: optional(onOff)),
                 Field("usesTypewriterMode", \.app.usesTypewriterMode, "タイプライターモード", summarize: optional(onOff)),
+                Field("highlights", \.app.highlights, "強調表示", read: readHighlightOptions),
                 Field("indentationStyle", enumPath: \.app.indentationStyle, "字下げに使う文字", summarize: { $0.title }),
                 Field("detectsIndentation", \.app.detectsIndentation, "字下げの自動検出", summarize: optional(onOff)),
                 Field("tabWidth", \.app.tabWidth, "タブ幅", validate: within(2...8),
@@ -464,6 +465,21 @@ private func readTheme(
     }
     let theme = try values.decode(DeclarativeExtension.Theme.self, forKey: key)
     return .some(.extensionTheme(theme))
+}
+
+private func readHighlightOptions(
+    _ values: KeyedDecodingContainer<SettingsArchive.Key>, _ key: SettingsArchive.Key
+) throws -> EditorHighlightSettings?? {
+    guard !(try values.decodeNil(forKey: key)) else { return .some(nil) }
+    let details = try values.nestedContainer(keyedBy: EditorHighlightSettings.CodingKeys.self, forKey: key)
+    let delay = try details.decodeIfPresent(Double.self, forKey: .wordDelay) ?? EditorHighlightSettings.defaultWordDelay
+    guard EditorHighlightSettings.wordDelayRange.contains(delay) else { throw SettingsArchive.ArchiveError.invalidFile }
+    return .some(try EditorHighlightSettings(
+        currentLine: details.decodeIfPresent(Bool.self, forKey: .currentLine) ?? false,
+        matchingBrackets: details.decodeIfPresent(Bool.self, forKey: .matchingBrackets) ?? false,
+        selectedWord: details.decodeIfPresent(Bool.self, forKey: .selectedWord) ?? false,
+        wordDelay: delay
+    ))
 }
 
 private func readingEstimateSummary(_ settings: ReadingEstimateSettings) -> String {

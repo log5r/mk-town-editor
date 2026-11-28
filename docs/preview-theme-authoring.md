@@ -144,6 +144,12 @@ print(f"{contrast(sys.argv[1], sys.argv[2]):.2f}")
 python3 contrast.py '#75715E' '#272822'
 ```
 
+## エディタの強調表示の色
+
+`theme.editorHighlights` で、現在行の背景（`currentLine`）、対応する括弧の背景と枠（`matchingBracketBackground`、`matchingBracketOutline`）、一致する単語の背景（`selectedWord`）を指定できる。各色は `#RRGGBB` で書く。省略した色はテーマの背景色、本文色、リンク色などから決まる。
+
+背景色を選ぶときは、本文や字句を重ねた状態でも読み取れるかを確認する。括弧の枠は、括弧の背景色に対するコントラスト比が4.5:1に届かない場合にアプリが補正する。強調表示を有効にする手順は[エディタの強調表示](editor-highlights.md)を参照。
+
 ## 他のエディタの配色を移す
 
 VS CodeやTextMateのテーマを移すときは、色の役割を次のように対応させる。左の列は元のテーマでの設定名である。

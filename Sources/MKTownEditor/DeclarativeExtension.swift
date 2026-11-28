@@ -4,6 +4,24 @@ import Foundation
 /// A JSON-only extension. Its data is copied into app settings; no code is loaded.
 struct DeclarativeExtension: Codable, Equatable, Identifiable {
     struct Theme: Codable, Equatable, Hashable, Sendable {
+        struct EditorHighlights: Codable, Hashable, Sendable {
+            var currentLine: String?
+            var matchingBracketBackground: String?
+            var matchingBracketOutline: String?
+            var selectedWord: String?
+
+            func color(_ keyPath: KeyPath<Self, String?>) -> NSColor? {
+                self[keyPath: keyPath].flatMap(Theme.parse)
+            }
+
+            func validate() throws {
+                let values = [currentLine, matchingBracketBackground, matchingBracketOutline, selectedWord]
+                guard values.compactMap({ $0 }).allSatisfy({ Theme.parse($0) != nil }) else {
+                    throw ExtensionError.invalidTheme
+                }
+            }
+        }
+
         var name: String
         var background: String
         var body: String
@@ -13,6 +31,8 @@ struct DeclarativeExtension: Codable, Equatable, Identifiable {
         var codeBackground: String
         /// コードブロックの字句ごとの色（`CodeSyntaxToken` の名前 → 16進数）。省略した字句は `code` の色で表示する。
         var syntax: [String: String]? = nil
+        /// 省略した色はエディタの背景色・文字色・リンク色などから決める。
+        var editorHighlights: EditorHighlights? = nil
 
         /// 本文とコードの文字に求めるコントラスト比（WCAG AA）。
         static let minimumContrast = 4.5
@@ -57,6 +77,7 @@ struct DeclarativeExtension: Codable, Equatable, Identifiable {
                     throw ExtensionError.lowContrast
                 }
             }
+            try editorHighlights?.validate()
         }
     }
 

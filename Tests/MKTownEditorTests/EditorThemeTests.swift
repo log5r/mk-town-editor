@@ -164,6 +164,15 @@ final class EditorThemeTests: XCTestCase {
             for color in [palette.text, palette.lineNumber] + roles.map(palette.color(for:)) {
                 XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, background), 4.5, theme.title)
             }
+            for fill in [palette.currentLineHighlight, palette.matchingBracketBackground, palette.selectedWordHighlight] {
+                XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(fill, background), 1.08, theme.title)
+                for color in [palette.text] + roles.map(palette.color(for:)) {
+                    XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(color, fill), 4.5, theme.title)
+                }
+            }
+            XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.matchingBracketOutline,
+                                                                       palette.matchingBracketBackground), 4.5,
+                                        theme.title)
             let selection = palette.selection
             XCTAssertGreaterThanOrEqual(PreviewTypography.contrastRatio(palette.text, selection), 4.5, theme.title)
             // 標準のテーマでは本文の色が選択色に対しても読めるため、補正されない。
@@ -191,6 +200,25 @@ final class EditorThemeTests: XCTestCase {
         // 見出しの色を持つテーマはそれを使う。
         XCTAssertEqual(EditorThemePalette(theme: .preset(.dracula)).heading,
                        PreviewThemePreset.dracula.theme.color(\.heading))
+    }
+
+    func testCustomHighlightColorsRoundTripAndMissingColorsUseThemeDefaults() throws {
+        var theme = PreviewThemePreset.githubDark.theme
+        theme.editorHighlights = .init(currentLine: "#1B2736", matchingBracketOutline: "#FFE083",
+                                       selectedWord: "#253943")
+        let decoded = try JSONDecoder().decode(DeclarativeExtension.Theme.self, from: JSONEncoder().encode(theme))
+        XCTAssertEqual(decoded, theme)
+        XCTAssertNoThrow(try decoded.validate())
+
+        let palette = EditorThemePalette(theme: .extensionTheme(decoded))
+        XCTAssertEqual(palette.currentLineHighlight, DeclarativeExtension.Theme.parse("#1B2736"))
+        XCTAssertEqual(palette.matchingBracketOutline, DeclarativeExtension.Theme.parse("#FFE083"))
+        XCTAssertEqual(palette.selectedWordHighlight, DeclarativeExtension.Theme.parse("#253943"))
+        XCTAssertEqual(palette.matchingBracketBackground,
+                       EditorThemePalette(theme: .preset(.githubDark)).matchingBracketBackground)
+
+        theme.editorHighlights?.selectedWord = "#fff"
+        XCTAssertThrowsError(try theme.validate())
     }
 
     func testLowContrastThemeColorsAreAdjustedForEditorBackground() throws {
