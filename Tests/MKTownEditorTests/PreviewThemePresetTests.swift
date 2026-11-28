@@ -138,6 +138,18 @@ final class PreviewThemePresetTests: XCTestCase {
         XCTAssertEqual(settings.customPreviewThemes, [.extensionTheme(try XCTUnwrap(first.theme))])
     }
 
+    func testCustomThemeListRetainsSelectionsWithoutTheirExtension() throws {
+        let loaded = try load(package())
+        let theme = PreviewTheme.extensionTheme(try XCTUnwrap(loaded.theme))
+        var settings = AppEditorSettings()
+        settings.editorDarkTheme = theme
+        settings.previewLightTheme = theme
+
+        XCTAssertEqual(settings.customPreviewThemes, [theme])
+        settings.extensionPackages = [loaded]
+        XCTAssertEqual(settings.customPreviewThemes, [theme])
+    }
+
     /// docs/preview-themes.md に載せたサンプルが、そのまま読み込めること。
     func testDocumentedExampleThemeLoads() throws {
         let root = URL(fileURLWithPath: #filePath)

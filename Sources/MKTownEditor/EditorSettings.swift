@@ -914,21 +914,53 @@ final class EditorSettingsStore: ObservableObject {
         save()
     }
 
+    var settingsArchiveSnapshot: SettingsArchive.Snapshot {
+        SettingsArchive.Snapshot(
+            app: app,
+            encodingCandidates: encodingCandidates,
+            exportPresets: MarkdownExportPresetStore(defaults: defaults).customPresets()
+        )
+    }
+
+    func exportSettings(categories: Set<SettingsArchive.Category>) throws -> Data {
+        try SettingsArchive(snapshot: settingsArchiveSnapshot, categories: categories).encoded()
+    }
+
+    func importSettings(_ archive: SettingsArchive, categories: Set<SettingsArchive.Category>) throws {
+        let current = settingsArchiveSnapshot
+        let imported = archive.merging(into: current, categories: categories)
+        if imported.exportPresets != current.exportPresets {
+            // Encode and validate the separate preset store before changing any other settings.
+            try MarkdownExportPresetStore(defaults: defaults).replaceCustomPresets(imported.exportPresets)
+        }
+        if imported.encodingCandidates != current.encodingCandidates {
+            storeEncodingCandidates(imported.encodingCandidates)
+        }
+        if imported.app != current.app { setAppSettings(imported.app) }
+    }
+
     func setDetectionEnabled(_ enabled: Bool, for encoding: MarkdownTextEncoding) {
         guard enabled != encodingCandidates.contains(encoding) else { return }
+        var candidates = encodingCandidates
         if enabled {
-            encodingCandidates.append(encoding)
+            candidates.append(encoding)
         } else {
-            encodingCandidates.removeAll { $0 == encoding }
+            candidates.removeAll { $0 == encoding }
         }
-        defaults.set(encodingCandidates.map(\.rawValue), forKey: MarkdownEncodingPreferences.key)
+        storeEncodingCandidates(candidates)
     }
 
     func moveEncodingCandidate(_ encoding: MarkdownTextEncoding, by offset: Int) {
         guard let index = encodingCandidates.firstIndex(of: encoding),
               encodingCandidates.indices.contains(index + offset) else { return }
-        encodingCandidates.swapAt(index, index + offset)
-        defaults.set(encodingCandidates.map(\.rawValue), forKey: MarkdownEncodingPreferences.key)
+        var candidates = encodingCandidates
+        candidates.swapAt(index, index + offset)
+        storeEncodingCandidates(candidates)
+    }
+
+    private func storeEncodingCandidates(_ candidates: [MarkdownTextEncoding]) {
+        encodingCandidates = candidates
+        defaults.set(candidates.map(\.rawValue), forKey: MarkdownEncodingPreferences.key)
     }
 
     func setFolderSettings(_ settings: FolderEditorSettings?, for folderURL: URL) {

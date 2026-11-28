@@ -12036,6 +12036,746 @@
           }
         }
       }
+    },
+    "設定の移行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer Settings"
+          }
+        }
+      }
+    },
+    "設定を書き出す…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Settings…"
+          }
+        }
+      }
+    },
+    "設定を読み込む…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Settings…"
+          }
+        }
+      }
+    },
+    "書き出す項目を選ぶ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Settings to Export"
+          }
+        }
+      }
+    },
+    "次へ…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue…"
+          }
+        }
+      }
+    },
+    "読み込む項目を確認" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Settings to Import"
+          }
+        }
+      }
+    },
+    "設定を適用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply Settings"
+          }
+        }
+      }
+    },
+    "設定を書き出せません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t Export Settings"
+          }
+        }
+      }
+    },
+    "確認" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review"
+          }
+        }
+      }
+    },
+    "設定を読み込めません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t Import Settings"
+          }
+        }
+      }
+    },
+    "現在の設定と同じ内容です。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file matches your current settings."
+          }
+        }
+      }
+    },
+    "選んだ項目をファイルの内容で置き換えます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected settings will be replaced with the values from the file."
+          }
+        }
+      }
+    },
+    "すべて選択" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select All"
+          }
+        }
+      }
+    },
+    "選択を解除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deselect All"
+          }
+        }
+      }
+    },
+    "変更なし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Changes"
+          }
+        }
+      }
+    },
+    "書き出しプリセット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export Presets"
+          }
+        }
+      }
+    },
+    "設定ファイルを処理中…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processing Settings File…"
+          }
+        }
+      }
+    },
+    "現在の設定が変わりました。更新した差分を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your current settings have changed. Review the updated differences."
+          }
+        }
+      }
+    },
+    "設定ファイルの形式や値を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check the settings file’s format and values."
+          }
+        }
+      }
+    },
+    "読み書きできる設定項目がありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no supported settings to transfer."
+          }
+        }
+      }
+    },
+    "%@（%@ → %@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (%@ → %@)"
+          }
+        }
+      }
+    },
+    "%@（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (%@)"
+          }
+        }
+      }
+    },
+    "既定の表示モード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default View Mode"
+          }
+        }
+      }
+    },
+    "画像の取り込み方法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image Import Method"
+          }
+        }
+      }
+    },
+    "混在する改行コードの確認" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mixed Line Ending Prompt"
+          }
+        }
+      }
+    },
+    "リモート画像の読み込み" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Remote Images"
+          }
+        }
+      }
+    },
+    "外部リンクのページ情報の取得" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetch External Link Previews"
+          }
+        }
+      }
+    },
+    "標準装備のフォント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Built-in Font"
+          }
+        }
+      }
+    },
+    "インストール済みのフォント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed Font"
+          }
+        }
+      }
+    },
+    "文字サイズ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Font Size"
+          }
+        }
+      }
+    },
+    "行間" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Spacing"
+          }
+        }
+      }
+    },
+    "左右の余白" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Horizontal Margins"
+          }
+        }
+      }
+    },
+    "上下の余白" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertical Margins"
+          }
+        }
+      }
+    },
+    "エディタの拡大率" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor Zoom"
+          }
+        }
+      }
+    },
+    "行の折り返し" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Wrapping"
+          }
+        }
+      }
+    },
+    "空白・タブ・改行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spaces, Tabs, and Line Breaks"
+          }
+        }
+      }
+    },
+    "インデントガイド" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indentation Guides"
+          }
+        }
+      }
+    },
+    "ミニマップ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimap"
+          }
+        }
+      }
+    },
+    "Markdown記号の強調の抑制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dim Markdown Syntax"
+          }
+        }
+      }
+    },
+    "字下げの自動検出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detect Indentation"
+          }
+        }
+      }
+    },
+    "表の最後でTabを押したときの行追加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a Table Row on Tab"
+          }
+        }
+      }
+    },
+    "保存時の行末の空白削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trim Trailing Whitespace on Save"
+          }
+        }
+      }
+    },
+    "空白だけの行の空白削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trim Whitespace-only Lines"
+          }
+        }
+      }
+    },
+    "文字数の数え方" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Character Counting Method"
+          }
+        }
+      }
+    },
+    "読む時間と音読時間" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading and Speaking Time"
+          }
+        }
+      }
+    },
+    "無効にしたMarkdownの検査項目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disabled Markdown Checks"
+          }
+        }
+      }
+    },
+    "スペルチェックと自動訂正" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spelling and Autocorrection"
+          }
+        }
+      }
+    },
+    "本文の最大幅" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maximum Content Width"
+          }
+        }
+      }
+    },
+    "プレビューの拡大率" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Zoom"
+          }
+        }
+      }
+    },
+    "本文の改行の保持" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preserve Line Breaks"
+          }
+        }
+      }
+    },
+    "フロントマターの表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Front Matter"
+          }
+        }
+      }
+    },
+    "フロントマターの整形" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format Front Matter"
+          }
+        }
+      }
+    },
+    "エディタの固定配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Editor Theme"
+          }
+        }
+      }
+    },
+    "エディタの配色の自動切り替え" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match Editor Theme to Appearance"
+          }
+        }
+      }
+    },
+    "エディタのライト配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light Editor Theme"
+          }
+        }
+      }
+    },
+    "エディタのダーク配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Editor Theme"
+          }
+        }
+      }
+    },
+    "プレビューの固定配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Theme"
+          }
+        }
+      }
+    },
+    "プレビューの配色の自動切り替え" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match Preview Theme to Appearance"
+          }
+        }
+      }
+    },
+    "プレビューのライト配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light Preview Theme"
+          }
+        }
+      }
+    },
+    "プレビューのダーク配色" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark Preview Theme"
+          }
+        }
+      }
+    },
+    "登録した用語" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminology Entries"
+          }
+        }
+      }
+    },
+    "用語辞書の除外条件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminology Exclusions"
+          }
+        }
+      }
+    },
+    "変更したショートカット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Shortcuts"
+          }
+        }
+      }
+    },
+    "ユーザの書き出しプリセット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Export Presets"
+          }
+        }
+      }
+    },
+    "追加した拡張" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed Extensions"
+          }
+        }
+      }
+    },
+    "既定値" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default"
+          }
+        }
+      }
+    },
+    "「%@」を削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove “%@”"
+          }
+        }
+      }
+    },
+    "「%@」を追加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add “%@”"
+          }
+        }
+      }
+    },
+    "「%@」の内容を変更" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change “%@”"
+          }
+        }
+      }
+    },
+    "順序を変更" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change Order"
+          }
+        }
+      }
+    },
+    "割り当てなし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unassigned"
+          }
+        }
+      }
+    },
+    "%@・日本語 %lld/%lld・英語 %lld/%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Japanese %lld/%lld · English %lld/%lld"
+          }
+        }
+      }
+    },
+    "%@・スペルチェック %@・自動訂正 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · Spell Checking %@ · Auto-Correction %@"
+          }
+        }
+      }
+    },
+    "コード内を除外 %@・引用内を除外 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Code %@ · Exclude Block Quotes %@"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

@@ -50,6 +50,8 @@
 		A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001B /* MarkdownTableInsertion.swift */; };
 		A1000000000000000000001C /* TableInsertionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001C /* TableInsertionSheet.swift */; };
 		A1000000000000000000001D /* EditorPreferencesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001D /* EditorPreferencesView.swift */; };
+		4FD734D409534D90A932FCED /* SettingsArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1A63065A8F42CCB9832A6C /* SettingsArchive.swift */; };
+		BB8495E1B72642CD92D9295D /* SettingsArchiveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A63DEF62174C2D86B46880 /* SettingsArchiveView.swift */; };
 		A1000000000000000000001E /* DocumentAnalysisStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001E /* DocumentAnalysisStore.swift */; };
 		A1000000000000000000001F /* MarkdownOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* MarkdownOutline.swift */; };
 		A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* MarkdownLineIndex.swift */; };
@@ -248,6 +250,8 @@
 		A2000000000000000000001B /* MarkdownTableInsertion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTableInsertion.swift; sourceTree = "<group>"; };
 		A2000000000000000000001C /* TableInsertionSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableInsertionSheet.swift; sourceTree = "<group>"; };
 		A2000000000000000000001D /* EditorPreferencesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorPreferencesView.swift; sourceTree = "<group>"; };
+		EE1A63065A8F42CCB9832A6C /* SettingsArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsArchive.swift; sourceTree = "<group>"; };
+		B6A63DEF62174C2D86B46880 /* SettingsArchiveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsArchiveView.swift; sourceTree = "<group>"; };
 		A2000000000000000000001E /* DocumentAnalysisStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentAnalysisStore.swift; sourceTree = "<group>"; };
 		A2000000000000000000001F /* MarkdownOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownOutline.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* MarkdownLineIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineIndex.swift; sourceTree = "<group>"; };
@@ -479,6 +483,8 @@
 				A2000000000000000000001B /* MarkdownTableInsertion.swift */,
 				A2000000000000000000001C /* TableInsertionSheet.swift */,
 				A2000000000000000000001D /* EditorPreferencesView.swift */,
+				EE1A63065A8F42CCB9832A6C /* SettingsArchive.swift */,
+				B6A63DEF62174C2D86B46880 /* SettingsArchiveView.swift */,
 				A2000000000000000000001E /* DocumentAnalysisStore.swift */,
 				A2000000000000000000001F /* MarkdownOutline.swift */,
 				A20000000000000000000020 /* MarkdownLineIndex.swift */,
@@ -913,6 +919,8 @@
 				A1000000000000000000001B /* MarkdownTableInsertion.swift in Sources */,
 				A1000000000000000000001C /* TableInsertionSheet.swift in Sources */,
 				A1000000000000000000001D /* EditorPreferencesView.swift in Sources */,
+				4FD734D409534D90A932FCED /* SettingsArchive.swift in Sources */,
+				BB8495E1B72642CD92D9295D /* SettingsArchiveView.swift in Sources */,
 				A1000000000000000000001E /* DocumentAnalysisStore.swift in Sources */,
 				A1000000000000000000001F /* MarkdownOutline.swift in Sources */,
 				A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */,
