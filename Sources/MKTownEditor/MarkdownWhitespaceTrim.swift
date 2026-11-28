@@ -38,6 +38,7 @@ enum MarkdownWhitespaceTrim {
               selection.length <= source.length - selection.location else { return [] }
         let target = selection.length > 0 ? selection : NSRange(location: 0, length: source.length)
         var candidates: [NSRange] = []
+        var whitespaceOnlyCandidates = Set<NSRange>()
         var cursor = target.location
         while cursor < NSMaxRange(target) {
             var lineStart = 0, lineEnd = 0, contentEnd = 0
@@ -56,6 +57,7 @@ enum MarkdownWhitespaceTrim {
             guard removal.length > 0 else { continue }
             if whitespaceStart == lineStart {
                 guard includingWhitespaceOnlyLines else { continue }
+                whitespaceOnlyCandidates.insert(removal)
             } else if lineEnd > contentEnd &&
                         !preservesLineBreak(in: source, lineStart: lineStart, suffix: suffix, removing: removal) {
                 continue
@@ -66,12 +68,25 @@ enum MarkdownWhitespaceTrim {
 
         let parsed = analysis ?? MarkdownAnalysis(text, dialect: dialect)
         let protected = protectedRanges(in: source, analysis: parsed, candidates: candidates)
-        return candidates.filter { !MarkdownInlineSyntax.intersects($0, sortedRanges: protected) }
+        return candidates.filter { range in
+            // An indented blank line can connect subsequent lines to a footnote definition.
+            if whitespaceOnlyCandidates.contains(range),
+               MarkdownInlineSyntax.intersects(range, sortedRanges: parsed.footnotes.definitionRanges) {
+                return false
+            }
+            return !MarkdownInlineSyntax.intersects(range, sortedRanges: protected)
+        }
     }
 
     private static func protectedRanges(in source: NSString, analysis: MarkdownAnalysis,
                                         candidates: [NSRange]) -> [NSRange] {
         var protected: [NSRange] = []
+        func appendCodeSpans(in range: NSRange) {
+            guard source.range(of: "`", options: .literal, range: range).location != NSNotFound else { return }
+            let spans = MarkdownInlineSyntax.codeSpanRanges(in: source.substring(with: range))
+            protected += spans.map { NSRange(location: range.location + $0.location, length: $0.length) }
+        }
+
         for block in analysis.blocks where MarkdownInlineSyntax.intersects(block.sourceRange, sortedRanges: candidates) {
             switch block.kind {
             case .codeBlock:
@@ -87,13 +102,21 @@ enum MarkdownWhitespaceTrim {
             default:
                 continue
             }
-            if source.range(of: "`", options: .literal, range: block.sourceRange).location != NSNotFound {
-                let spans = MarkdownInlineSyntax.codeSpanRanges(in: source.substring(with: block.sourceRange))
-                protected += spans.map { NSRange(location: block.sourceRange.location + $0.location, length: $0.length) }
-            }
+            appendCodeSpans(in: block.sourceRange)
+        }
+        for definition in analysis.footnotes.definitionRanges
+            where MarkdownInlineSyntax.intersects(definition, sortedRanges: candidates) {
+            appendCodeSpans(in: definition)
         }
         if let frontMatter = analysis.frontMatter { protected.append(frontMatter.sourceRange) }
-        return protected.sorted { $0.location < $1.location }
+        // A block can span a region the parser masked. Merge overlaps before binary search.
+        return protected.sorted { $0.location < $1.location }.reduce(into: [NSRange]()) { ranges, range in
+            if let last = ranges.last, NSMaxRange(last) > range.location {
+                ranges[ranges.count - 1] = NSUnionRange(last, range)
+            } else {
+                ranges.append(range)
+            }
+        }
     }
 
     private static func preservesLineBreak(in source: NSString, lineStart: Int,

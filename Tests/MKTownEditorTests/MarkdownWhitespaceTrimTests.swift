@@ -63,4 +63,17 @@ final class MarkdownWhitespaceTrimTests: XCTestCase {
             includingWhitespaceOnlyLines: true, dialect: .extended))
         XCTAssertEqual(edit.applying(to: text), preserved + "other\n")
     }
+
+    func testTrimKeepsFootnoteCodeAndBlankContinuationLines() throws {
+        let text = "本文[^note] \n\n[^note]: `one \n    two` \n    \n    continuation \n\n"
+            + "[^unused]: `unreferenced \n\tcode` \n\nother \n"
+        let edit = try XCTUnwrap(MarkdownWhitespaceTrim.edit(in: text,
+            includingWhitespaceOnlyLines: true, dialect: .extended))
+        let updated = edit.applying(to: text)
+
+        XCTAssertEqual(updated, "本文[^note]\n\n[^note]: `one \n    two`\n    \n    continuation\n\n"
+            + "[^unused]: `unreferenced \n\tcode`\n\nother\n")
+        XCTAssertEqual(MarkdownAnalysis(updated).footnotes.entry(for: "note")?.content,
+                       "`one \ntwo`\n\ncontinuation")
+    }
 }
