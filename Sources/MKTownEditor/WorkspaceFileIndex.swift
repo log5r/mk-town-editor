@@ -91,6 +91,7 @@ struct WorkspaceRootUnavailableError: LocalizedError, Equatable, Sendable {
 
 private struct WorkspaceOpenBuffer {
     let document: () -> MarkdownDocument
+    let isReadOnly: () -> Bool
     let updateText: (String) -> Void
 }
 
@@ -105,11 +106,14 @@ extension MarkdownDocument {
 
 enum WorkspaceOpenBufferError: LocalizedError {
     case conflictingWindows(URL)
+    case readOnly(URL)
 
     var errorDescription: String? {
         switch self {
         case let .conflictingWindows(url):
             String(localized: "複数ウインドウの書類内容が一致しません: \(url.lastPathComponent)")
+        case let .readOnly(url):
+            String(localized: "読み取り専用の書類にあるリンクを更新できません: \(url.lastPathComponent)")
         }
     }
 }
@@ -310,10 +314,12 @@ final class WorkspaceStore: ObservableObject {
     var openDocumentURLs: [URL] { Array(openDocuments.keys) }
 
     func registerOpenBuffer(id: UUID, url: URL, document: @escaping () -> MarkdownDocument,
+                            isReadOnly: @escaping () -> Bool = { false },
                             updateText: @escaping (String) -> Void) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
         openBufferKeys[url.standardizedFileURL] = key
-        openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(document: document, updateText: updateText)
+        openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(
+            document: document, isReadOnly: isReadOnly, updateText: updateText)
         openBufferDidChange(for: url)
     }
 
@@ -375,6 +381,9 @@ final class WorkspaceStore: ObservableObject {
             guard let buffers = openBuffers[url], !buffers.isEmpty else {
                 throw WorkspaceFileOperationError.openDocumentChanged(url)
             }
+            if updated != nil, buffers.values.contains(where: { $0.isReadOnly() }) {
+                throw WorkspaceOpenBufferError.readOnly(url)
+            }
             for buffer in buffers.values {
                 let document = buffer.document()
                 if expected.matchesWorkspaceSnapshot(document) { continue }
@@ -410,8 +419,15 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func isDocumentLocked(_ url: URL?) -> Bool {
-        guard let url else { return false }
-        return lockedDocumentPaths.contains(url.resolvingSymlinksInPath().standardizedFileURL.path)
+        guard !lockedDocumentPaths.isEmpty, let url else { return false }
+        let key = openBufferKeys[url.standardizedFileURL] ?? url.resolvingSymlinksInPath().standardizedFileURL
+        return lockedDocumentPaths.contains(key.path)
+    }
+
+    func isDocumentReadOnly(_ url: URL) -> Bool {
+        let key = openBufferKeys[url.standardizedFileURL] ?? url.resolvingSymlinksInPath().standardizedFileURL
+        guard let buffers = openBuffers[key] else { return false }
+        return buffers.values.contains { $0.isReadOnly() }
     }
 
     func registerOpenDocument(_ url: URL) {

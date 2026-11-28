@@ -437,6 +437,7 @@ struct WorkspaceSnapshotHistorySheet: View {
 
     let documentURL: URL
     @Binding var currentText: String
+    let canRestore: Bool
     let onApply: (String, String) -> Bool
     private let store = WorkspaceSnapshotStore.appSupport
 
@@ -483,7 +484,7 @@ struct WorkspaceSnapshotHistorySheet: View {
                             Text(selected.title).font(.subheadline.weight(.semibold))
                             Spacer()
                             Button("本文全体を復元") { apply(selectedText) }
-                                .disabled(selectedText == currentText || isWorking)
+                                .disabled(!canRestore || selectedText == currentText || isWorking)
                         }
                         if isComparing {
                             ProgressView("差分を比較中")
@@ -503,7 +504,7 @@ struct WorkspaceSnapshotHistorySheet: View {
                                         apply(WorkspaceSnapshotDiff.restoring(row.hunk,
                                             snapshot: selectedText, current: currentText))
                                     }
-                                    .disabled(isWorking)
+                                    .disabled(!canRestore || isWorking)
                                 }
                                 .font(.caption.monospaced())
                                 .textSelection(.enabled)
@@ -642,6 +643,7 @@ struct WorkspaceSnapshotHistorySheet: View {
     }
 
     private func apply(_ restored: String) {
+        guard canRestore else { return }
         errorMessage = onApply(restored, currentText)
             ? nil : String(localized: "本文が変更されたか編集中のため、復元できませんでした。")
     }

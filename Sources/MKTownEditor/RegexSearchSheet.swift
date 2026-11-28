@@ -3,6 +3,7 @@ import SwiftUI
 struct RegexSearchSheet: View {
     let source: String
     let selectedRange: NSRange
+    let canReplace: Bool
     let onSelect: (NSRange) -> Void
     let onReplace: (MarkdownEdit, String) -> Bool
 
@@ -33,11 +34,12 @@ struct RegexSearchSheet: View {
         let message: String?
     }
 
-    init(source: String, selectedRange: NSRange, initialScope: NSRange,
+    init(source: String, selectedRange: NSRange, initialScope: NSRange, canReplace: Bool,
          onSelect: @escaping (NSRange) -> Void,
          onReplace: @escaping (MarkdownEdit, String) -> Bool) {
         self.source = source
         self.selectedRange = selectedRange
+        self.canReplace = canReplace
         self.onSelect = onSelect
         self.onReplace = onReplace
         _scope = State(initialValue: RegexSelectionScope(initialScope))
@@ -51,6 +53,7 @@ struct RegexSearchSheet: View {
                 TextField("検索パターン", text: $pattern)
                     .movesListSelection(listSelection, in: Array(matches.indices), startsUnselected: true)
                 TextField("置換文字列（$1 などで参照）", text: $replacement)
+                    .disabled(!canReplace)
                 Toggle("大文字小文字を区別", isOn: $caseSensitive)
                 Toggle("選択範囲内", isOn: $limitsToSelection)
                     .disabled(scope == nil)
@@ -81,9 +84,9 @@ struct RegexSearchSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(matches.isEmpty || isSearching)
                 Button("1件置換") { replace(only: replacementTarget) }
-                    .disabled(matches.isEmpty || isSearching)
+                    .disabled(!canReplace || matches.isEmpty || isSearching)
                 Button("すべて置換") { replace(only: nil) }
-                    .disabled(matches.isEmpty || isSearching)
+                    .disabled(!canReplace || matches.isEmpty || isSearching)
                 Spacer()
                 Button("閉じる") { dismiss() }
                     .keyboardShortcut(.cancelAction)
@@ -166,6 +169,7 @@ struct RegexSearchSheet: View {
     }
 
     private func replace(only match: NSRange?) {
+        guard canReplace else { return }
         do {
             guard let edit = try RegexSearch.replacementEdit(in: source, pattern: pattern,
                 template: replacement, caseSensitive: caseSensitive,

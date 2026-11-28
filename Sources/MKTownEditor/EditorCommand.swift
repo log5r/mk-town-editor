@@ -241,10 +241,11 @@ enum EditorCommand: Hashable {
 
     @MainActor
     func canExecute(in model: MarkdownEditorModel?) -> Bool {
+        if self == .find { return model?.hasActiveEditor == true }
         if model?.canExecuteMultiSelectionCommand == true {
             switch self {
             case .bold, .italic, .strikethrough, .inlineCode,
-                 .commandPalette, .find, .unfoldAll: return true
+                 .commandPalette, .unfoldAll: return true
             case .selectNextOccurrence: return model?.canAddNextOccurrence == true
             default: return false
             }

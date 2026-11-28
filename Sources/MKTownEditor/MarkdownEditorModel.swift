@@ -900,6 +900,7 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     func showReplaceBar() {
+        guard textView?.isEditable == true else { return }
         performFinderAction(.showReplaceInterface)
     }
 

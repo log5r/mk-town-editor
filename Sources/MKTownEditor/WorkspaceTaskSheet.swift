@@ -5,6 +5,7 @@ struct WorkspaceTaskSheet: View {
     let nodes: [WorkspaceNode]
     let isTruncated: Bool
     let loadOpenBuffers: () throws -> [URL: Data]
+    let canToggle: (WorkspaceTaskItem) -> Bool
     let onToggle: (WorkspaceTaskItem) -> Void
     let onOpen: (WorkspaceTaskItem) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -35,8 +36,10 @@ struct WorkspaceTaskSheet: View {
                 List(index.tasks, selection: $selectedID) { task in
                     HStack(spacing: 12) {
                         Button("完了にする", systemImage: "circle") {
+                            guard canToggle(task) else { return }
                             submit { onToggle(task) }
                         }
+                        .disabled(!canToggle(task))
                         .labelStyle(.iconOnly)
                         .help("完了にする")
                         VStack(alignment: .leading, spacing: 3) {

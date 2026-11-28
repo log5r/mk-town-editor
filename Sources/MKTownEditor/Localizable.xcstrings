@@ -1,6 +1,126 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "複製" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duplicate"
+          }
+        }
+      }
+    },
+    "別名で保存…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save As…"
+          }
+        }
+      }
+    },
+    "バージョンを戻す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revert To"
+          }
+        }
+      }
+    },
+    "読み取り専用で開いている書類には書き出せません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can’t export to a document that’s open read-only."
+          }
+        }
+      }
+    },
+    "編集を禁止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prevent Editing"
+          }
+        }
+      }
+    },
+    "編集を許可" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Editing"
+          }
+        }
+      }
+    },
+    "読み取り専用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read-Only"
+          }
+        }
+      }
+    },
+    "読み取り専用で開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Read-Only"
+          }
+        }
+      }
+    },
+    "読み取り専用で開く…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Read-Only…"
+          }
+        }
+      }
+    },
+    "読み取り専用の書類にあるリンクを更新できません: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't update links in a read-only document: %@"
+          }
+        }
+      }
+    },
+    "取り消す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo"
+          }
+        }
+      }
+    },
+    "やり直す" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redo"
+          }
+        }
+      }
+    },
     "警告 %lld 件" : {
       "localizations" : {
         "en" : {

@@ -10,6 +10,7 @@ import XCTest
 final class EditorCompositionTests: XCTestCase {
     private final class Document: ObservableObject {
         @Published var text: String
+        @Published var isEditable = true
         init(text: String) { self.text = text }
     }
 
@@ -17,7 +18,7 @@ final class EditorCompositionTests: XCTestCase {
         @ObservedObject var document: Document
         let model: MarkdownEditorModel
         var body: some View {
-            MarkdownTextEditor(text: $document.text, model: model)
+            MarkdownTextEditor(text: $document.text, model: model, isEditable: document.isEditable)
         }
     }
 
@@ -58,5 +59,30 @@ final class EditorCompositionTests: XCTestCase {
         XCTAssertFalse(textView.hasMarkedText())
         XCTAssertEqual(textView.string, "日本語")
         XCTAssertEqual(document.text, "日本語", "the committed text must reach the binding")
+    }
+
+    func testSwitchingToReadOnlyKeepsOnlyCommittedText() async throws {
+        let document = Document(text: "本文")
+        let host = NSHostingView(rootView: Host(document: document, model: MarkdownEditorModel()))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.contentView = host
+        defer { window.orderOut(nil); window.contentView = nil }
+        host.layoutSubtreeIfNeeded()
+        let textView = try XCTUnwrap(findTextView(in: host))
+        window.makeFirstResponder(textView)
+        textView.setSelectedRange(NSRange(location: 2, length: 0))
+        textView.setMarkedText("にほんご", selectedRange: NSRange(location: 4, length: 0),
+                               replacementRange: NSRange(location: NSNotFound, length: 0))
+        XCTAssertTrue(textView.hasMarkedText())
+
+        document.isEditable = false
+        try await Task.sleep(for: .milliseconds(100))
+        host.layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(textView.isEditable)
+        XCTAssertFalse(textView.hasMarkedText())
+        XCTAssertEqual(textView.string, "本文")
+        XCTAssertEqual(document.text, "本文")
     }
 }

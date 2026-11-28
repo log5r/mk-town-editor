@@ -4,6 +4,16 @@ private struct MarkdownEditorModelKey: FocusedValueKey {
     typealias Value = MarkdownEditorModel
 }
 
+struct DocumentEditingActions {
+    let isReadOnly: Bool
+    let canToggle: Bool
+    let toggle: () -> Void
+}
+
+private struct DocumentEditingActionsKey: FocusedValueKey {
+    typealias Value = DocumentEditingActions
+}
+
 private struct EditorSelectedRangesKey: FocusedValueKey {
     typealias Value = [NSRange]
 }
@@ -108,6 +118,7 @@ private struct OpenEncodingImportActionKey: FocusedValueKey {
 struct TextFormatActions {
     let format: MarkdownTextFormat
     let encoding: MarkdownTextEncoding
+    let canEdit: Bool
     let reopen: (() -> Void)?
     let reviewLoss: (() -> Void)?
     let setNewline: (MarkdownTextFormat.Newline) -> Void
@@ -140,6 +151,10 @@ private struct PreviewUpdateActionsKey: FocusedValueKey {
 }
 
 extension FocusedValues {
+    var documentEditingActions: DocumentEditingActions? {
+        get { self[DocumentEditingActionsKey.self] }
+        set { self[DocumentEditingActionsKey.self] = newValue }
+    }
     var focusModeActions: FocusModeActions? {
         get { self[FocusModeActionsKey.self] }
         set { self[FocusModeActionsKey.self] = newValue }
@@ -246,6 +261,7 @@ extension FocusedValues {
 }
 
 struct MarkdownCommands: Commands {
+    @FocusedValue(\.documentEditingActions) private var documentEditingActions
     @FocusedValue(\.focusModeActions) private var focusModeActions
     @FocusedValue(\.markdownEditorModel) private var editorModel
     @FocusedValue(\.editorSelectedRanges) private var editorSelectedRanges
@@ -278,8 +294,28 @@ struct MarkdownCommands: Commands {
 
     // CommandsBuilder accepts at most ten direct children per block.
     var body: some Commands {
+        readOnlySaveCommands
         documentCommands
         editingCommands
+    }
+
+    @CommandsBuilder
+    private var readOnlySaveCommands: some Commands {
+        if documentEditingActions?.isReadOnly == true {
+            // SwiftUI groups Revert to Saved with Close and Save.
+            CommandGroup(replacing: .saveItem) {
+                Button("閉じる") { NSApp.keyWindow?.performClose(nil) }
+                    .keyboardShortcut("w", modifiers: .command)
+                Button("保存") { NSApp.sendAction(#selector(NSDocument.save(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("s", modifiers: .command)
+                Button("複製") { NSApp.sendAction(#selector(NSDocument.duplicate(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                Button("別名で保存…") { NSApp.sendAction(#selector(NSDocument.saveAs(_:)), to: nil, from: nil) }
+                    .keyboardShortcut("s", modifiers: [.command, .shift, .option])
+                Button("バージョンを戻す") {}
+                    .disabled(true)
+            }
+        }
     }
 
     @CommandsBuilder
@@ -355,7 +391,7 @@ struct MarkdownCommands: Commands {
                         Text(newline.title)
                     }
                 }
-                .disabled(textFormatActions == nil)
+                .disabled(textFormatActions?.canEdit != true)
             }
             Divider()
             Button {
@@ -369,7 +405,7 @@ struct MarkdownCommands: Commands {
                     Text("UTF-8 BOM")
                 }
             }
-            .disabled(textFormatActions?.encoding != .utf8)
+            .disabled(textFormatActions?.canEdit != true || textFormatActions?.encoding != .utf8)
         }
         CommandMenu("取り込み") {
             Button("HTML・RTFからMarkdownへ…") { importRichTextAction?() }
@@ -438,6 +474,22 @@ struct MarkdownCommands: Commands {
 
     @CommandsBuilder
     private var editingCommands: some Commands {
+        if documentEditingActions?.isReadOnly == true {
+            CommandGroup(replacing: .undoRedo) {
+                Button("取り消す") {}
+                    .keyboardShortcut("z", modifiers: .command)
+                    .disabled(true)
+                Button("やり直す") {}
+                    .keyboardShortcut("z", modifiers: [.command, .shift])
+                    .disabled(true)
+            }
+        }
+        CommandGroup(after: .pasteboard) {
+            Button(documentEditingActions?.isReadOnly == true ? "編集を許可" : "編集を禁止") {
+                documentEditingActions?.toggle()
+            }
+            .disabled(documentEditingActions?.canToggle != true)
+        }
         CommandGroup(after: .textEditing) {
             Divider()
             if let previewSearchActions {
@@ -460,7 +512,7 @@ struct MarkdownCommands: Commands {
                 .disabled(previewSearchActions == nil && editorModel == nil)
             Button("置換…") { editorModel?.showReplaceBar() }
                 .keyboardShortcut("f", modifiers: [.command, .option])
-                .disabled(editorModel == nil)
+                .disabled(editorModel?.textView?.isEditable != true || documentEditingActions?.isReadOnly == true)
             Button("すべて置換") { editorModel?.replaceAllMatches() }
                 .keyboardShortcut("r", modifiers: [.command, .option, .shift])
                 .disabled(editorModel?.canExecuteCommand != true)

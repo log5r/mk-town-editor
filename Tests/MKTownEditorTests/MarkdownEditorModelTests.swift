@@ -305,6 +305,92 @@ final class MarkdownEditorModelTests: XCTestCase {
         }
     }
 
+    func testReadOnlyEditorAllowsSelectionCopyAndFindWhileRejectingEditingCommands() {
+        let source = "alpha beta alpha"
+        let view = EditorTextView()
+        let model = MarkdownEditorModel()
+        view.string = source
+        view.isRichText = false
+        view.updateEditorEditability(false)
+        view.isSelectable = true
+        model.connect(view)
+        view.commandModel = model
+        let selection = NSRange(location: 0, length: 5)
+        view.setSelectedRange(selection)
+
+        let copyBoard = NSPasteboard.withUniqueName()
+        defer { copyBoard.releaseGlobally() }
+        XCTAssertTrue(view.writeSelection(to: copyBoard, types: view.writablePasteboardTypes))
+        XCTAssertEqual(copyBoard.string(forType: .string), "alpha")
+        XCTAssertTrue(EditorCommand.find.canExecute(in: model))
+        XCTAssertFalse(EditorCommand.bold.canExecute(in: model))
+        EditorCommand.bold.perform(on: model)
+        model.apply(.bold)
+        XCTAssertFalse(model.applyRegexEdit(MarkdownEdit(range: selection, replacement: "replacement",
+                                                        selection: selection), expectedSource: source))
+        XCTAssertFalse(model.applyCollaborativeText("peer edit", expectedSource: source))
+        XCTAssertEqual(view.string, source)
+
+        model.navigate(to: 6)
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 6, length: 0))
+    }
+
+    func testReadOnlyEditorRejectsTypingCompositionAndPasteUntilEditingIsAllowed() {
+        let source = "参照用"
+        let view = EditorTextView()
+        view.string = source
+        view.setSelectedRange(NSRange(location: source.utf16.count, length: 0))
+        let inputRange = NSRange(location: NSNotFound, length: 0)
+        let pasteBoard = NSPasteboard.withUniqueName()
+        defer { pasteBoard.releaseGlobally() }
+        pasteBoard.clearContents()
+        pasteBoard.setData(Data([0x89]), forType: .png)
+        pasteBoard.setString("a\r\nb", forType: .string)
+        view.imagePasteboard = pasteBoard
+        var pastedImage = false
+        view.onImagePaste = { _ in pastedImage = true }
+
+        view.updateEditorEditability(false)
+        view.insertText("入力", replacementRange: inputRange)
+        view.setMarkedText("にほんご", selectedRange: NSRange(location: 4, length: 0),
+                           replacementRange: inputRange)
+        XCTAssertFalse(view.hasMarkedText())
+        view.insertNewline(nil)
+        view.insertTab(nil)
+        view.deleteBackward(nil)
+        view.paste(nil)
+        view.pastePreservingNewlines()
+        XCTAssertFalse(view.readSelection(from: pasteBoard, type: .string))
+        XCTAssertFalse(pastedImage)
+        XCTAssertEqual(view.string, source)
+
+        view.updateEditorEditability(true)
+        view.insertText("再開", replacementRange: inputRange)
+        XCTAssertEqual(view.string, "参照用再開")
+        view.paste(nil)
+        XCTAssertTrue(pastedImage)
+    }
+
+    func testImageDropCannotCompleteAfterEditorBecomesReadOnly() {
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = "参照用"
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        let image = URL(fileURLWithPath: "/tmp/dragged-image.png")
+        XCTAssertTrue(board.writeObjects([image as NSURL]))
+        let drag = EditorImageDrag(pasteboard: board)
+        var droppedImages: [URL] = []
+        view.onImageDrop = { url, _ in droppedImages.append(url) }
+
+        XCTAssertEqual(view.draggingEntered(drag), .copy)
+        view.updateEditorEditability(false)
+        XCTAssertEqual(view.draggingUpdated(drag), [])
+        XCTAssertFalse(view.performDragOperation(drag))
+        XCTAssertTrue(droppedImages.isEmpty)
+        XCTAssertEqual(view.draggingEntered(drag), [])
+        XCTAssertEqual(view.string, "参照用")
+    }
+
     func testSelectionExpandsThroughLinkParagraphAndSectionThenShrinks() {
         let source = "# Guide\n\nSee [site](https://example.com).\n\n# Next"
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
@@ -753,6 +839,30 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "本文")
         XCTAssertEqual(view.changeRequests, 0)
     }
+}
+
+@MainActor
+private final class EditorImageDrag: NSObject, NSDraggingInfo {
+    let draggingPasteboard: NSPasteboard
+    let draggingDestinationWindow: NSWindow? = nil
+    let draggingSourceOperationMask: NSDragOperation = .copy
+    let draggingLocation: NSPoint = .zero
+    let draggedImageLocation: NSPoint = .zero
+    let draggedImage: NSImage? = nil
+    let draggingSource: Any? = nil
+    let draggingSequenceNumber = 1
+    var draggingFormation: NSDraggingFormation = .default
+    var animatesToDestination = false
+    var numberOfValidItemsForDrop = 1
+    let springLoadingHighlight: NSSpringLoadingHighlight = .none
+
+    init(pasteboard: NSPasteboard) { draggingPasteboard = pasteboard }
+
+    func slideDraggedImage(to screenPoint: NSPoint) {}
+    func enumerateDraggingItems(options enumOpts: NSDraggingItemEnumerationOptions, for view: NSView?,
+                                classes classArray: [AnyClass], searchOptions: [NSPasteboard.ReadingOptionKey: Any],
+                                using block: @escaping (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
+    func resetSpringLoading() {}
 }
 
 /// Supplies an undo manager whose groups close at explicit event boundaries.

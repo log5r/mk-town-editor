@@ -76,6 +76,7 @@ struct MarkdownEncodingPicker: View {
 
 struct MarkdownEncodingImportSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var workspace: WorkspaceStore
     @State private var sourceEncoding: MarkdownTextEncoding = .utf8
     @State private var destinationEncoding: MarkdownTextEncoding = .utf8
     @State private var errorMessage: String?
@@ -129,6 +130,10 @@ struct MarkdownEncodingImportSheet: View {
         let encoding = destinationEncoding
         panel.beginAttached { response in
             guard response == .OK, let destination = panel.url else { return }
+            guard !workspace.isDocumentReadOnly(destination) else {
+                errorMessage = String(localized: "読み取り専用で開いている書類には書き出せません。")
+                return
+            }
             do {
                 try converted.write(to: destination, options: .atomic)
                 dismiss()
@@ -219,6 +224,7 @@ struct MixedNewlineOpeningPrompt: View {
     @Binding var document: MarkdownDocument
     let fileURL: URL?
     @Binding var showingPrompt: Bool
+    let isReadOnly: Bool
     @EnvironmentObject private var settings: EditorSettingsStore
     @EnvironmentObject private var workspace: WorkspaceStore
     @State private var checked = false
@@ -230,7 +236,10 @@ struct MixedNewlineOpeningPrompt: View {
             .onAppear {
                 guard !checked else { return }
                 checked = true
-                showingPrompt = settings.shouldAskAboutMixedNewlines(in: document.format, at: fileURL)
+                showingPrompt = !isReadOnly && settings.shouldAskAboutMixedNewlines(in: document.format, at: fileURL)
+            }
+            .onChange(of: isReadOnly) { _, readOnly in
+                if readOnly { showingPrompt = false }
             }
             .onChange(of: showingPrompt) { _, presented in
                 if !presented { suppressNextTime = false }
@@ -238,11 +247,11 @@ struct MixedNewlineOpeningPrompt: View {
             .alert("改行コードが混在しています", isPresented: $showingPrompt) {
                 Button("改行をそろえる") {
                     rememberSuppression()
-                    if !workspace.isDocumentLocked(fileURL), document.format.hasMixedNewlines {
+                    if !isReadOnly, !workspace.isDocumentLocked(fileURL), document.format.hasMixedNewlines {
                         document.format.normalizeNewlines()
                     }
                 }
-                .disabled(workspace.isDocumentLocked(fileURL))
+                .disabled(isReadOnly || workspace.isDocumentLocked(fileURL))
                 Button("そのまま開く", role: .cancel) { rememberSuppression() }
                     .keyboardShortcut(.defaultAction)
             } message: {

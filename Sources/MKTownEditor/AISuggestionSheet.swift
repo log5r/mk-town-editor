@@ -4,6 +4,7 @@ struct AISuggestionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var editorModel: MarkdownEditorModel
     @Binding var source: String
+    let canApply: () -> Bool
     @State private var operation: AISuggestion.Operation = .proofread
     @State private var targetLanguage = "日本語"
     @State private var apiKey = ""
@@ -74,7 +75,7 @@ struct AISuggestionSheet: View {
                     }
                     Spacer()
                     Button("提案を採用") { applyProposal() }
-                        .disabled(source != sourceAtCapture || proposal == selectedText)
+                        .disabled(!canApply() || source != sourceAtCapture || proposal == selectedText)
                         .buttonStyle(.borderedProminent)
                 }
             }
@@ -160,6 +161,7 @@ struct AISuggestionSheet: View {
     }
 
     private func applyProposal() {
+        guard canApply() else { return }
         guard let proposal,
               let revision = AISuggestionRevision(source: sourceAtCapture, range: selectedRange),
               let edit = revision.edit(suggested: proposal, currentSource: source),
