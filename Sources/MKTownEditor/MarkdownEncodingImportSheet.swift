@@ -141,35 +141,16 @@ struct MarkdownEncodingImportSheet: View {
 }
 
 struct MarkdownEncodingLoss: Sendable {
-    struct Input: Equatable {
-        let source: String
-        let encoding: MarkdownTextEncoding
-
-        init?(document: MarkdownDocument) {
-            switch document.encoding {
-            case .utf8, .utf16BE, .utf16LE: return nil
-            default:
-                source = document.text
-                encoding = document.encoding
-            }
-        }
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            guard lhs.encoding == rhs.encoding else { return false }
-            // Swift String equality treats NFC and NFD as equal, even when only one can be saved.
-            var left = lhs.source, right = rhs.source
-            return left.withUTF8 { a in right.withUTF8 { b in
-                a.count == b.count && (a.baseAddress == b.baseAddress || a.elementsEqual(b))
-            } }
-        }
-    }
-
     struct Occurrence: Identifiable, Sendable {
         let range: NSRange
         let line: Int
         let utf16Column: Int
         let character: String
         var id: Int { range.location }
+        var codePoints: String {
+            character.unicodeScalars.map { String(format: "U+%04X", $0.value) }.joined(separator: " ")
+        }
+        var replacement: String { MarkdownEncodingConverter.lossReplacement }
     }
 
     let source: String
@@ -230,5 +211,47 @@ struct MarkdownEncodingLossSheet: View {
         }
         .padding(20)
         .frame(width: 550, height: loss == nil ? 160 : 360)
+    }
+}
+
+/// The workspace also presents this prompt after an explicit reload finishes.
+struct MixedNewlineOpeningPrompt: View {
+    @Binding var document: MarkdownDocument
+    let fileURL: URL?
+    @Binding var showingPrompt: Bool
+    @EnvironmentObject private var settings: EditorSettingsStore
+    @EnvironmentObject private var workspace: WorkspaceStore
+    @State private var checked = false
+    @State private var suppressNextTime = false
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .onAppear {
+                guard !checked else { return }
+                checked = true
+                showingPrompt = settings.shouldAskAboutMixedNewlines(in: document.format, at: fileURL)
+            }
+            .onChange(of: showingPrompt) { _, presented in
+                if !presented { suppressNextTime = false }
+            }
+            .alert("改行コードが混在しています", isPresented: $showingPrompt) {
+                Button("改行をそろえる") {
+                    rememberSuppression()
+                    if !workspace.isDocumentLocked(fileURL), document.format.hasMixedNewlines {
+                        document.format.normalizeNewlines()
+                    }
+                }
+                .disabled(workspace.isDocumentLocked(fileURL))
+                Button("そのまま開く", role: .cancel) { rememberSuppression() }
+                    .keyboardShortcut(.defaultAction)
+            } message: {
+                Text("すべての改行を、最も多い形式（\(document.format.newline.title)）にそろえますか？")
+            }
+            .dialogSuppressionToggle(Text("次回からこの書類の改行をそのまま保持する"), isSuppressed: $suppressNextTime)
+    }
+
+    private func rememberSuppression() {
+        if suppressNextTime, let fileURL { settings.suppressMixedNewlinePrompt(for: fileURL) }
     }
 }

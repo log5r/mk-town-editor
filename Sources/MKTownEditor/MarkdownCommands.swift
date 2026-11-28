@@ -292,6 +292,10 @@ struct MarkdownCommands: Commands {
                 .disabled(printDocumentAction == nil)
         }
         CommandGroup(after: .pasteboard) {
+            Button("改行コードを保持してペースト") {
+                (NSApp.keyWindow?.firstResponder as? EditorTextView)?.pastePreservingNewlines()
+            }
+            .disabled(editorModel?.canExecuteCommand != true || !(NSApp.keyWindow?.firstResponder is EditorTextView))
             Button("HTML・RTFとしてコピー") { copyRichAction?() }
                 .disabled(copyRichAction == nil || editorModel?.hasActiveEditor != true ||
                           !editorHasTextSelection)

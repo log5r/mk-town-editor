@@ -1,6 +1,146 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "警告 %lld 件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warnings (%lld)"
+          }
+        }
+      }
+    },
+    "インスペクタで警告を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show warnings in the inspector"
+          }
+        }
+      }
+    },
+    "%lld行目の改行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %lld ending"
+          }
+        }
+      }
+    },
+    "%@（書類は%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (document uses %2$@)"
+          }
+        }
+      }
+    },
+    "%lld行目の「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %1$lld: “%2$@”"
+          }
+        }
+      }
+    },
+    "%@（置換後は「%@」）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (replacement: “%2$@”)"
+          }
+        }
+      }
+    },
+    "改行コードを保持してペースト" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste Preserving Line Endings"
+          }
+        }
+      }
+    },
+    "改行コードが混在しています" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This document contains mixed line endings"
+          }
+        }
+      }
+    },
+    "改行をそろえる" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalize Line Endings"
+          }
+        }
+      }
+    },
+    "そのまま開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Original Line Endings"
+          }
+        }
+      }
+    },
+    "すべての改行を、最も多い形式（%@）にそろえますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change all line endings to the most common format (%@)?"
+          }
+        }
+      }
+    },
+    "次回からこの書類の改行をそのまま保持する" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this document’s original line endings on future opens"
+          }
+        }
+      }
+    },
+    "改行コードが混在する書類を開くときに確認" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask when opening documents with mixed line endings"
+          }
+        }
+      }
+    },
+    "確認を省略した書類でも再び確認する" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask Again for Previously Excluded Documents"
+          }
+        }
+      }
+    },
     "%@ の %lld 行目に %@ で保存できない文字があります。" : {
       "localizations" : {
         "en" : {

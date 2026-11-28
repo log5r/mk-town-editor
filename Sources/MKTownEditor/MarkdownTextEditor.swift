@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct MarkdownTextEditor: NSViewRepresentable {
     @Binding var text: String
     let model: MarkdownEditorModel
+    var document: Binding<MarkdownDocument>?
     var textStyle: EditorTextStyle = EditorTextStyle()
     var layoutOptions: EditorLayoutOptions = EditorLayoutOptions()
     var sharedSnapshot: DocumentSnapshot?
@@ -26,7 +27,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var theme: PreviewTheme = .navy
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, model: model)
+        Coordinator(text: $text, model: model, document: document)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -56,6 +57,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textStyle.apply(to: textView)
         textView.whitespaceOptions = whitespaceOptions
         textView.whitespaceTabWidth = textStyle.tabWidth
+        textView.documentFormat = document?.wrappedValue.format ?? MarkdownTextFormat()
         textView.refreshInvisibles()
         context.coordinator.appliedTextStyle = textStyle
         textView.isAutomaticQuoteSubstitutionEnabled = false
@@ -111,12 +113,6 @@ struct MarkdownTextEditor: NSViewRepresentable {
         model.markdownDialect = documentContext.markdownDialect
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
-        if textView.whitespaceOptions != whitespaceOptions ||
-           textView.whitespaceTabWidth != textStyle.tabWidth {
-            textView.whitespaceOptions = whitespaceOptions
-            textView.whitespaceTabWidth = textStyle.tabWidth
-            textView.refreshInvisibles()
-        }
         textView.registerForDraggedTypes([.fileURL])
         context.coordinator.sharedSnapshot = sharedSnapshot
         context.coordinator.usesSharedAnalysis = usesSharedAnalysis
@@ -168,6 +164,20 @@ struct MarkdownTextEditor: NSViewRepresentable {
         model.beginViewUpdate()
         defer { model.endViewUpdate() }
         guard let textView = scrollView.documentView as? EditorTextView else { return }
+        context.coordinator.document = document
+        let format = document?.wrappedValue.format ?? MarkdownTextFormat()
+        let sourceChanged = !MarkdownTextFormat.identicalText(textView.editorSource, text)
+        if textView.documentFormat != format || textView.hoverDocumentContext.fileURL != documentContext.fileURL ||
+            (sourceChanged && !textView.hasMarkedText()) {
+            context.coordinator.invalidateNewlineUndo()
+        }
+        if textView.whitespaceOptions != whitespaceOptions || textView.whitespaceTabWidth != textStyle.tabWidth ||
+            textView.documentFormat != format {
+            textView.whitespaceOptions = whitespaceOptions
+            textView.whitespaceTabWidth = textStyle.tabWidth
+            textView.documentFormat = format
+            textView.refreshInvisibles()
+        }
         textView.updateEditorEditability(isEditable)
         textView.imageImportMode = imageImportMode
         textView.onImageDrop = onImageDrop
@@ -212,12 +222,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
         // not reported to the binding. Replacing the contents here would destroy the composition
         // (AppKit then asks the input method to commit) and drop the text being typed. The
         // committed text reaches the binding through textDidChange once the composition ends.
-        guard textView.editorSource != text, !textView.hasMarkedText() else {
+        guard sourceChanged, !textView.hasMarkedText() else {
             context.coordinator.refreshSyntax()
             return
         }
         let selections = textView.selectedRanges.map(\.rangeValue)
         textView.clearFolds()
+        textView.approvedEdit = nil
         textView.replaceEditorText(with: text)
         textView.refreshInvisibles()
         context.coordinator.applyProofing()
@@ -245,6 +256,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         let model: MarkdownEditorModel
+        var document: Binding<MarkdownDocument>?
+        private weak var newlineUndoManager: UndoManager?
+        private var restoredFormat: MarkdownTextFormat?
         weak var textView: NSTextView? {
             didSet { observeProofingEdits() }
         }
@@ -287,9 +301,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var inlineLiveDisplay: MarkdownInlineLiveDisplay?
         var isRestoringSession = false
 
-        init(text: Binding<String>, model: MarkdownEditorModel) {
+        init(text: Binding<String>, model: MarkdownEditorModel, document: Binding<MarkdownDocument>? = nil) {
             _text = text
             self.model = model
+            self.document = document
         }
 
         func textDidChange(_ notification: Notification) {
@@ -297,7 +312,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             (textView as? EditorTextView)?.clearFolds()
             var source = textView.editorSource
             source.makeContiguousUTF8()
-            text = source
+            publish(source, from: textView)
             (textView as? EditorTextView)?.refreshInvisibles()
             applyProofing()
             refreshSyntax()
@@ -306,6 +321,75 @@ struct MarkdownTextEditor: NSViewRepresentable {
             }
             lineNumberRuler?.refresh()
             scheduleTypewriterFollow()
+        }
+
+        private func publish(_ source: String, from textView: NSTextView) {
+            guard let document, let editor = textView as? EditorTextView else {
+                text = source
+                return
+            }
+            var updated = document.wrappedValue
+            let previousFormat = updated.format
+            let undoManager = editor.undoManager
+            let undoing = undoManager?.isUndoing == true || undoManager?.isRedoing == true
+            let paste = editor.pendingPaste
+            if !undoing, let edit = editor.approvedEdit,
+               previousFormat.hasMixedNewlines || paste?.preserve == true,
+               paste != nil || edit.range.length == 0 || !edit.replacement.utf8.contains(10) {
+                // In adjacent blank lines a diff of the two strings cannot locate the edit.
+                // Use the range approved by AppKit, including when only the stored endings change.
+                if !updated.acceptEditorText(source, replacing: edit.range,
+                                             with: paste?.raw ?? edit.replacement,
+                                             preservingNewlines: paste?.preserve == true) {
+                    updated.text = source
+                }
+            } else {
+                updated.text = source
+            }
+            editor.approvedEdit = nil
+            if let undoManager, !undoing, previousFormat != updated.format {
+                registerFormatUndo(from: updated.format, to: previousFormat, in: undoManager)
+            }
+            document.wrappedValue = updated
+            editor.documentFormat = updated.format
+        }
+
+        // NSTextView's undo actions contain the normalized editor text. Restore its saved
+        // line endings once AppKit has finished every text replacement in the same group.
+        private func registerFormatUndo(from current: MarkdownTextFormat, to previous: MarkdownTextFormat,
+                                        in manager: UndoManager) {
+            if newlineUndoManager !== manager {
+                for name in [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
+                    NotificationCenter.default.removeObserver(self, name: name, object: newlineUndoManager)
+                    NotificationCenter.default.addObserver(self, selector: #selector(restoreNewlineFormat),
+                                                           name: name, object: manager)
+                }
+                newlineUndoManager = manager
+            }
+            manager.registerUndo(withTarget: self) { [weak manager] coordinator in
+                guard let manager else { return }
+                coordinator.restoredFormat = previous
+                coordinator.registerFormatUndo(from: previous, to: current, in: manager)
+            }
+        }
+
+        func invalidateNewlineUndo() {
+            newlineUndoManager?.removeAllActions(withTarget: self)
+            restoredFormat = nil
+        }
+
+        @objc private func restoreNewlineFormat() {
+            guard var format = restoredFormat, let document else { return }
+            restoredFormat = nil
+            guard format.matchesNewlineCount(in: document.wrappedValue.text) else { return }
+            format.hasUTF8BOM = document.wrappedValue.format.hasUTF8BOM
+            newlineUndoManager?.disableUndoRegistration()
+            defer { newlineUndoManager?.enableUndoRegistration() }
+            document.wrappedValue.format = format
+            if let editor = textView as? EditorTextView {
+                editor.documentFormat = format
+                editor.refreshInvisibles()
+            }
         }
 
         @MainActor func manualScrollDidStart() {
@@ -729,6 +813,8 @@ final class EditorTextView: NSTextView {
     private var cachedSource: String?
     private var observesSourceEdits = false
     private var pendingCharacterEdit: (range: NSRange, delta: Int)?
+    fileprivate var approvedEdit: (range: NSRange, replacement: String)?
+    fileprivate var pendingPaste: (raw: String, preserve: Bool)?
     private(set) var sourceRevision = 0
     private(set) var sourceReadCount = 0
     /// フォントファミリーから書体を取り出す処理。テストでフォントの追加・削除を再現するときだけ差し替える。
@@ -814,6 +900,7 @@ final class EditorTextView: NSTextView {
         let allowed = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
         if allowed, let replacementString {
             pendingCharacterEdit = (affectedCharRange, replacementString.utf16.count - affectedCharRange.length)
+            approvedEdit = (affectedCharRange, replacementString)
         }
         return allowed
     }
@@ -886,6 +973,7 @@ final class EditorTextView: NSTextView {
     func cancelLinkHover() { linkHover.cancel() }
     var whitespaceOptions = EditorWhitespaceOptions()
     var whitespaceTabWidth = 4
+    var documentFormat = MarkdownTextFormat()
     private var invisiblePlan: InvisibleCharacterPlan?
 
     override func updateTrackingAreas() {
@@ -980,7 +1068,8 @@ final class EditorTextView: NSTextView {
 
     func refreshInvisibles() {
         invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
-            ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth)) : nil
+            ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth),
+                                    format: documentFormat) : nil
         needsDisplay = true
     }
     private(set) var foldedPlans: [MarkdownFoldPlan] = [] {
@@ -1113,9 +1202,51 @@ final class EditorTextView: NSTextView {
             onImagePaste(data)
             return
         }
-        if let value = imagePasteboard.string(forType: .string),
-           commandModel?.pasteURLAsLink(value) == true { return }
+        if let value = imagePasteboard.string(forType: .string) {
+            if commandModel?.pasteURLAsLink(value) == true { return }
+            if value.utf8.contains(13) || value.utf8.contains(10) {
+                replaceSelection(withPastedText: value, preservingNewlines: false)
+                return
+            }
+        }
         super.paste(sender)
+    }
+
+    // Paste and Match Style, plain-text drag and drop, and the standard paste
+    // fallback use the same LF buffer as keyboard paste.
+    override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard type == .string, let raw = pboard.string(forType: type) else {
+            return super.readSelection(from: pboard, type: type)
+        }
+        if isEditable, !hasMarkedText(), selectedRanges.count == 1, raw.utf8.contains(13) || raw.utf8.contains(10) {
+            return replaceSelection(withPastedText: raw, preservingNewlines: false)
+        }
+        guard raw.utf8.contains(13) else { return super.readSelection(from: pboard, type: type) }
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        board.setString(MarkdownTextFormat.normalizedText(raw), forType: type)
+        return super.readSelection(from: board, type: type)
+    }
+
+    func pastePreservingNewlines() {
+        guard isEditable, !hasMarkedText(), selectedRanges.count == 1,
+              let raw = imagePasteboard.string(forType: .string) else { return }
+        replaceSelection(withPastedText: raw, preservingNewlines: true)
+    }
+
+    @discardableResult
+    private func replaceSelection(withPastedText raw: String, preservingNewlines: Bool) -> Bool {
+        let normalized = MarkdownTextFormat.normalizedText(raw)
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: normalized) else { return false }
+        breakUndoCoalescing()
+        pendingPaste = (raw, preservingNewlines)
+        defer { pendingPaste = nil }
+        replaceEditorCharacters(in: range, with: normalized)
+        setSelectedRange(NSRange(location: range.location + normalized.utf16.count, length: 0))
+        didChangeText()
+        breakUndoCoalescing()
+        return true
     }
 
     @objc private func pasteURLAsPlainText(_ sender: Any?) {
@@ -1227,11 +1358,13 @@ final class EditorTextView: NSTextView {
                 case .trailingSpace: symbol = "·"; color = .systemOrange
                 case .tab: symbol = "→"; color = .tertiaryLabelColor
                 case .newline: symbol = "¶"; color = .tertiaryLabelColor
+                case .differentNewline: symbol = "↵"; color = .systemOrange
                 }
                 let attributes: [NSAttributedString.Key: Any] = [.font: font,
                     .foregroundColor: color.withAlphaComponent(0.75)]
                 let size = (symbol as NSString).size(withAttributes: attributes)
-                let x = mark.kind == .newline ? rect.maxX : rect.midX - size.width / 2
+                let isNewline = mark.kind == .newline || mark.kind == .differentNewline
+                let x = isNewline ? rect.maxX : rect.midX - size.width / 2
                 (symbol as NSString).draw(at: NSPoint(x: x, y: rect.minY), withAttributes: attributes)
             }
         }

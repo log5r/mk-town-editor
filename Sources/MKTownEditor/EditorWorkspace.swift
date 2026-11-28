@@ -243,7 +243,11 @@ struct EditorWorkspace: View {
     @State private var pendingExport: (MarkdownExportFormat, MarkdownExportPreset)?
     @State private var sidebarTab: SidebarTab = .outline
     @State private var selectedBookmarkID: DocumentBookmark.ID?
-    @State private var selectedInspectorItemID: MarkdownContentItem.ID?
+    private enum InspectorSelection: Hashable {
+        case content(MarkdownContentItem.ID)
+        case warning(DocumentSaveWarnings.Item.ID)
+    }
+    @State private var selectedInspectorItemID: InspectorSelection?
     @State private var selectedFileURL: URL?
     @State private var showingQuickOpen = false
     @State private var showingDailyNote = false
@@ -276,7 +280,14 @@ struct EditorWorkspace: View {
     @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
-    @State private var encodingLoss: MarkdownEncodingLoss?
+    @State private var reloadedFileURL: URL?
+    @State private var showingMixedNewlinePrompt = false
+    @State private var saveWarnings: DocumentSaveWarnings?
+    private var currentSaveWarnings: DocumentSaveWarnings? {
+        guard let saveWarnings, saveWarnings.input == DocumentSaveWarnings.Input(document: document) else { return nil }
+        return saveWarnings
+    }
+    private var encodingLoss: MarkdownEncodingLoss? { currentSaveWarnings?.encodingLoss }
     @State private var showingEncodingLoss = false
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
@@ -877,12 +888,18 @@ struct EditorWorkspace: View {
                 }
             }
         }
-        .sheet(item: $encodingImport) { input in
+        .sheet(item: $encodingImport, onDismiss: {
+            if let reloadedFileURL, reloadedFileURL == fileURL {
+                showingMixedNewlinePrompt = settingsStore.shouldAskAboutMixedNewlines(in: document.format, at: reloadedFileURL)
+            }
+            reloadedFileURL = nil
+        }) { input in
             if input.isReload {
                 MarkdownEncodingPicker(sourceData: input.data, initialEncoding: document.encoding, isReload: true,
                     onOpen: { reloaded in
                         if fileURL == input.url, !workspaceStore.isDocumentLocked(fileURL) {
                             document = reloaded
+                            reloadedFileURL = input.url
                         }
                         encodingImport = nil
                     }, onCancel: { encodingImport = nil })
@@ -1394,7 +1411,7 @@ struct EditorWorkspace: View {
             if showingMarkdownLint { checkMarkdownLint() }
             if showingTerminology { checkTerminology() }
         }
-        .task(id: MarkdownEncodingLoss.Input(document: document)) { await checkEncodingLoss() }
+        .task(id: DocumentSaveWarnings.Input(document: document)) { await checkSaveWarnings() }
         .onChange(of: collaboration.currentText) { _, sharedText in
             applyCollaborativeText(sharedText)
         }
@@ -1412,6 +1429,7 @@ struct EditorWorkspace: View {
 
     var body: some View {
         documentChangesView
+        .background { MixedNewlineOpeningPrompt(document: $document, fileURL: fileURL, showingPrompt: $showingMixedNewlinePrompt) }
         // Only `isEmpty` reaches the window, so typing does not compare the whole text.
         .background(WindowRestorationSetter(isRestorable: EditorWindowRestoration.isRestorable(
             fileURL: fileURL, isTextEmpty: document.text.isEmpty)))
@@ -1703,14 +1721,44 @@ struct EditorWorkspace: View {
                 MarkdownContentInspector.items(in: snapshot.source, analysis: snapshot.analysis)
             }
         } ?? []
-        // Like the outline, the arrow keys reveal each item while the list keeps the focus, and
-        // a click or Return moves into the editor. The action buttons stay buttons (#60).
+        let warnings = currentSaveWarnings?.items ?? []
+        func activate(_ id: InspectorSelection, focusesEditor: Bool = true) {
+            switch id {
+            case let .content(itemID):
+                if let item = items.first(where: { $0.id == itemID }) {
+                    navigate(to: item.sourceRange.location, focusesEditor: focusesEditor)
+                }
+            case let .warning(warningID):
+                guard let item = currentSaveWarnings?.items.first(where: { $0.id == warningID }) else { return }
+                if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+                navigate(to: item.range, focusesEditor: focusesEditor)
+            }
+        }
+
         return List(selection: Binding(get: { selectedInspectorItemID }, set: { id in
             selectedInspectorItemID = id
-            guard let item = items.first(where: { $0.id == id }),
-                  !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) else { return }
-            navigate(to: item.sourceRange.location, focusesEditor: false)
+            if let id, !ListKeyboardSelection.isPointerEvent(NSApp.currentEvent) { activate(id, focusesEditor: false) }
         })) {
+            if !warnings.isEmpty {
+                Section("警告") {
+                    ForEach(warnings) { item in
+                        let selection = InspectorSelection.warning(item.id)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(item.title)
+                            Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .tag(selection)
+                        .accessibilityElement(children: .combine)
+                        .activatesOnClick {
+                            selectedInspectorItemID = selection
+                            activate(selection)
+                        }
+                    }
+                    if encodingLoss != nil {
+                        Button("保存できない文字…") { showingEncodingLoss = true }
+                    }
+                }
+            }
             Section("文書プロパティ") {
                 Button("プロパティを編集…") { showingFrontMatterProperties = true }
             }
@@ -1760,23 +1808,21 @@ struct EditorWorkspace: View {
                                     .foregroundStyle(.secondary).lineLimit(1)
                             }
                         }
-                        .tag(item.id)
+                        .tag(InspectorSelection.content(item.id))
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("\(kind.title)、\(item.label)")
                         .activatesOnClick {
-                            selectedInspectorItemID = item.id
+                            selectedInspectorItemID = .content(item.id)
                             navigate(to: item.sourceRange.location)
                         }
                     }
                 }
             }
         }
-        .activatesSelectionOnReturn(MarkdownContentItem.ID.self) { id in
-            if let item = items.first(where: { $0.id == id }) { navigate(to: item.sourceRange.location) }
-        }
+        .activatesSelectionOnReturn(InspectorSelection.self) { activate($0) }
         .listStyle(.sidebar)
         .overlay {
-            if !isReady {
+            if !isReady && warnings.isEmpty {
                 ProgressView("項目を解析中…")
             }
         }
@@ -2336,16 +2382,19 @@ struct EditorWorkspace: View {
         }
     }
 
-    private func checkEncodingLoss() async {
-        if encodingLoss != nil { encodingLoss = nil }
-        guard let input = MarkdownEncodingLoss.Input(document: document) else { return }
-        do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-        let worker = Task.detached(priority: .utility) {
-            MarkdownEncodingLoss(source: input.source, encoding: input.encoding)
+    private func checkSaveWarnings() async {
+        guard let input = DocumentSaveWarnings.Input(document: document) else {
+            saveWarnings = nil
+            return
         }
-        let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
-        guard !Task.isCancelled else { return }
-        encodingLoss = result
+        do {
+            try await Task.sleep(for: .milliseconds(300))
+            let result = try await DocumentWork.perform { DocumentSaveWarnings(input: input) }
+            guard !Task.isCancelled else { return }
+            saveWarnings = result
+        } catch {
+            // Cancellation discards the ranges for the superseded revision.
+        }
     }
 
     private func resolveEncodingLoss(convertToUTF8: Bool) {
@@ -2543,13 +2592,18 @@ struct EditorWorkspace: View {
     }
 
     private func navigate(to location: Int, focusesEditor: Bool = true) {
+        navigate(to: NSRange(location: location, length: 0), focusesEditor: focusesEditor)
+    }
+
+    private func navigate(to range: NSRange, focusesEditor: Bool) {
+        let location = range.location
         let destination = NavigationPoint(documentURL: fileURL, utf16Location: location)
         if focusesEditor {
             navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
         } else {
             navigationHistory.recordPreview(from: currentNavigationPoint, to: destination)
         }
-        editorModel.navigate(to: location, focusesEditor: focusesEditor)
+        editorModel.selectAndReveal(range, focusesEditor: focusesEditor)
         scrollPreview(to: location)
     }
 
@@ -2625,7 +2679,7 @@ struct EditorWorkspace: View {
 
     private var sourceEditor: some View {
         HStack(spacing: 0) {
-            MarkdownTextEditor(text: $document.text, model: editorModel,
+            MarkdownTextEditor(text: $document.text, model: editorModel, document: $document,
                                textStyle: settingsStore.textStyle(for: fileURL),
                                layoutOptions: settingsStore.layoutOptions(for: fileURL),
                                sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
@@ -2721,11 +2775,15 @@ struct EditorWorkspace: View {
             Text("Markdown")
             Text(verbatim: document.encoding.title)
                 .accessibilityLabel("文字コード \(document.encoding.title)")
-            if encodingLoss != nil {
-                Button { showingEncodingLoss = true } label: {
-                    Label("保存できない文字", systemImage: "exclamationmark.triangle")
+            if let warnings = currentSaveWarnings, !warnings.items.isEmpty {
+                Button {
+                    sidebarTab = .inspector
+                    sidebarVisibility = .all
+                } label: {
+                    Label("警告 \(warnings.items.count) 件", systemImage: "exclamationmark.triangle")
                 }
                 .buttonStyle(.plain)
+                .help("インスペクタで警告を表示")
             }
             Spacer()
             Text("\(statistics.lines) 行")

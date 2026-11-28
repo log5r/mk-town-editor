@@ -485,6 +485,7 @@ struct AppEditorSettings: Codable, Equatable {
     var shortcutOverrides: [String: ShortcutChord]?
     /// Missing in settings saved before the option existed; those read as `.default`.
     var documentOpeningMode: DocumentOpeningMode?
+    var asksAboutMixedNewlines: Bool?
 
     var effectiveDocumentOpeningMode: DocumentOpeningMode { documentOpeningMode ?? .default }
 
@@ -711,6 +712,7 @@ struct DocumentDisplayState: Codable, Equatable {
     var sidebarVisible: Bool? = nil
     var writingGoal: Int? = nil
     var sessionBaselineCharacters: Int? = nil
+    var suppressesMixedNewlinePrompt: Bool? = nil
     /// 最後に書き込んだ日時。保持件数の上限を超えたとき、古いものから削除する。
     var lastUsed: Date? = nil
 }
@@ -1022,6 +1024,32 @@ final class EditorSettingsStore: ObservableObject {
 
     func displayState(for documentURL: URL) -> DocumentDisplayState? {
         documents[Self.key(for: documentURL)]
+    }
+
+    func shouldAskAboutMixedNewlines(in format: MarkdownTextFormat, at url: URL?) -> Bool {
+        guard format.hasMixedNewlines, let url, values.app.asksAboutMixedNewlines != false else { return false }
+        return displayState(for: url)?.suppressesMixedNewlinePrompt != true
+    }
+
+    func suppressMixedNewlinePrompt(for url: URL) {
+        let key = Self.key(for: url)
+        var state = documents[key] ?? DocumentDisplayState(mode: mode(for: url))
+        guard state.suppressesMixedNewlinePrompt != true else { return }
+        state.suppressesMixedNewlinePrompt = true
+        storeDocumentState(state, for: key)
+    }
+
+    var hasSuppressedMixedNewlinePrompts: Bool {
+        documents.values.contains { $0.suppressesMixedNewlinePrompt == true }
+    }
+
+    func resetMixedNewlinePrompts() {
+        guard hasSuppressedMixedNewlinePrompts else { return }
+        objectWillChange.send()
+        for key in documents.keys where documents[key]?.suppressesMixedNewlinePrompt == true {
+            documents[key]?.suppressesMixedNewlinePrompt = nil
+        }
+        saveDocuments()
     }
 
     func setWritingGoal(_ goal: Int?, for documentURL: URL) {
