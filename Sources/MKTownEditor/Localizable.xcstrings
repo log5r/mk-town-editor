@@ -1,6 +1,126 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "選択した文字のUnicode情報を表示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Unicode Information for Selection"
+          }
+        }
+      }
+    },
+    "コードポイントから文字を挿入…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Character by Code Point…"
+          }
+        }
+      }
+    },
+    "Unicode情報" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unicode Information"
+          }
+        }
+      }
+    },
+    "Unicode情報をコピー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Unicode Information"
+          }
+        }
+      }
+    },
+    "コードポイント" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code Point"
+          }
+        }
+      }
+    },
+    "Unicode名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unicode Name"
+          }
+        }
+      }
+    },
+    "Unicodeブロック" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unicode Block"
+          }
+        }
+      }
+    },
+    "一般カテゴリ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General Category"
+          }
+        }
+      }
+    },
+    "コードポイントで文字を挿入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Character by Code Point"
+          }
+        }
+      }
+    },
+    "有効なUnicodeコードポイントを入力してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid Unicode code point."
+          }
+        }
+      }
+    },
+    "挿入できませんでした。キャンセルして選択範囲と編集状態を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t insert the character. Cancel and check the selection and editing state."
+          }
+        }
+      }
+    },
+    "表示されない文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nonprinting Character"
+          }
+        }
+      }
+    },
     "字下げに使う文字" : {
       "localizations" : {
         "en" : {
@@ -9164,12 +9284,12 @@
         }
       }
     },
-    "空白・タブ・改行を表示" : {
+    "不可視文字を表示" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show spaces, tabs, and line breaks"
+            "value" : "Show invisible characters"
           }
         }
       }
@@ -12387,12 +12507,12 @@
         }
       }
     },
-    "空白・タブ・改行" : {
+    "不可視文字" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Spaces, Tabs, and Line Breaks"
+            "value" : "Invisible Characters"
           }
         }
       }

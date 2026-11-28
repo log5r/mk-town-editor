@@ -117,6 +117,82 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertFalse(EditorCommand.bold.canExecute(in: model))
     }
 
+    func testUnicodeInspectionIsAvailableForASelectionInAReadOnlyDocument() {
+        let view = NSTextView()
+        view.string = "👩‍💻"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        XCTAssertFalse(EditorCommand.inspectUnicode.canExecute(in: model))
+        view.setSelectedRange(NSRange(location: 0, length: view.string.utf16.count))
+        view.isEditable = false
+        XCTAssertTrue(EditorCommand.inspectUnicode.canExecute(in: model))
+        XCTAssertFalse(EditorCommand.insertUnicode.canExecute(in: model))
+        XCTAssertTrue(EditorCommand.paletteMatches("", in: model).contains(.inspectUnicode))
+        model.disconnect(view)
+        XCTAssertFalse(EditorCommand.inspectUnicode.canExecute(in: model))
+    }
+
+    func testUnicodeInsertionReplacesSelectionAndSupportsUndo() throws {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = "前Å後"
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 1, length: 1))
+
+        EditorCommand.insertUnicode.perform(on: model)
+        let draft = try XCTUnwrap(model.unicodeInsertionDraft)
+        XCTAssertTrue(model.commitUnicodeInsertion("Å", draft: draft))
+        XCTAssertEqual(view.string.unicodeScalars.map(\.value), "前Å後".unicodeScalars.map(\.value))
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 2, length: 0))
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string.unicodeScalars.map(\.value), "前Å後".unicodeScalars.map(\.value))
+    }
+
+    func testUnicodeInsertionRejectsChangedTextSelectionAndEditability() throws {
+        let view = NSTextView()
+        view.string = "AÅ"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 1, length: 1))
+        EditorCommand.insertUnicode.perform(on: model)
+        let draft = try XCTUnwrap(model.unicodeInsertionDraft)
+
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        XCTAssertFalse(model.commitUnicodeInsertion("😀", draft: draft))
+        view.setSelectedRange(draft.selection)
+        view.isEditable = false
+        XCTAssertFalse(model.commitUnicodeInsertion("😀", draft: draft))
+        view.isEditable = true
+        view.string = "AÅ"
+        view.setSelectedRange(draft.selection)
+        XCTAssertFalse(model.commitUnicodeInsertion("😀", draft: draft))
+        XCTAssertEqual(view.string.unicodeScalars.map(\.value), "AÅ".unicodeScalars.map(\.value))
+    }
+
+    func testUnicodeInsertionPreservesExplicitCarriageReturnOnDisk() throws {
+        var document = MarkdownDocument(text: "一二\n三")
+        let binding = Binding(get: { document }, set: { document = $0 })
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = document.text
+        let model = MarkdownEditorModel()
+        let coordinator = MarkdownTextEditor.Coordinator(text: binding.text, model: model, document: binding)
+        coordinator.textView = view
+        view.delegate = coordinator
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+
+        EditorCommand.insertUnicode.perform(on: model)
+        let draft = try XCTUnwrap(model.unicodeInsertionDraft)
+        XCTAssertTrue(model.commitUnicodeInsertion("\r", draft: draft))
+        XCTAssertEqual(view.string, "一\n二\n三")
+        XCTAssertEqual(try document.encodedData(), Data("一\r二\n三".utf8))
+        withExtendedLifetime(coordinator) {}
+    }
+
     func testWhitespaceCommandsUseTheActiveSelectionAndRespectReadOnlyMode() {
         let view = NSTextView()
         view.string = "一行目 \n二行目 \n    字下げ\n"

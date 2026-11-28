@@ -1,5 +1,13 @@
 import AppKit
 import Combine
+import SwiftUI
+
+struct UnicodeInsertionDraft: Identifiable {
+    let id = UUID()
+    let editor: ObjectIdentifier
+    let source: String
+    let selection: NSRange
+}
 
 struct EditorViewport: Equatable {
     let topFraction: Double
@@ -119,11 +127,13 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var imageDraft: MarkdownImageDraft?
     @Published var tableDraft: MarkdownTableDraft?
     @Published var tableGridDraft: MarkdownTableGridDraft?
+    @Published var unicodeInsertionDraft: UnicodeInsertionDraft?
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     /// A recoverable problem shown briefly in the window instead of an alert (#29).
     @Published var notice: EditorNotice?
     weak var textView: NSTextView?
+    private var unicodeInspector: NSPopover?
     var sharedSnapshot: DocumentSnapshot? {
         didSet {
             if oldValue?.source != sharedSnapshot?.source || oldValue?.dialect != sharedSnapshot?.dialect {
@@ -277,6 +287,8 @@ final class MarkdownEditorModel: ObservableObject {
 
     func disconnect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         guard self.textView === textView else { return }
+        unicodeInspector?.close()
+        unicodeInspector = nil
         let selections = transitionSelections ?? textView.selectedRanges.map(\.rangeValue)
         if let first = selections.first {
             selectedRange = first
@@ -706,6 +718,63 @@ final class MarkdownEditorModel: ObservableObject {
         linkDraft = MarkdownLinkSyntax.draft(in: textView.editorSource, selection: textView.selectedRange())
     }
 
+    var canInspectUnicode: Bool {
+        guard hasActiveEditor, let textView, !textView.hasMarkedText(),
+              textView.selectedRanges.count == 1 else { return false }
+        return textView.selectedRange().length > 0
+    }
+
+    func presentUnicodeInspector() {
+        guard canInspectUnicode, let textView, let window = textView.window else { return }
+        let selection = textView.selectedRange()
+        let source = textView.editorSource
+        guard NSMaxRange(selection) <= source.utf16.count else { return }
+        let selectedText = (textView as? EditorTextView)?.documentFormat
+            .textForUnicodeInspection(in: source, selection: selection)
+            ?? (source as NSString).substring(with: selection)
+        let graphemes = EditorUnicode.inspect(selectedText)
+        textView.scrollRangeToVisible(NSRange(location: selection.location, length: 0))
+        let screenRect = textView.firstRect(forCharacterRange: selection, actualRange: nil)
+        var anchor = textView.convert(window.convertFromScreen(screenRect), from: nil)
+        anchor.size.width = max(1, anchor.width)
+        anchor = anchor.intersection(textView.visibleRect)
+        guard !anchor.isEmpty else { return }
+
+        unicodeInspector?.close()
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: EditorUnicodeInspector(graphemes: graphemes)
+            .onDisappear { [weak self, weak popover] in
+                if self?.unicodeInspector === popover { self?.unicodeInspector = nil }
+            })
+        unicodeInspector = popover
+        popover.show(relativeTo: anchor, of: textView, preferredEdge: .maxY)
+    }
+
+    func presentUnicodeInsertion() {
+        guard canExecuteCommand, let textView else { return }
+        unicodeInspector?.close()
+        unicodeInspector = nil
+        unicodeInsertionDraft = UnicodeInsertionDraft(editor: ObjectIdentifier(textView),
+            source: textView.editorSource, selection: textView.selectedRange())
+    }
+
+    func commitUnicodeInsertion(_ scalar: Unicode.Scalar, draft: UnicodeInsertionDraft) -> Bool {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              unicodeInsertionDraft?.id == draft.id, ObjectIdentifier(textView) == draft.editor,
+              MarkdownTextFormat.identicalText(textView.editorSource, draft.source),
+              textView.selectedRange() == draft.selection,
+              NSMaxRange(draft.selection) <= storage.length else { return false }
+        let replacement = String(scalar)
+        if let editor = textView as? EditorTextView, scalar.value == 0x0A || scalar.value == 0x0D {
+            return editor.replaceSelection(with: replacement, preservingNewlines: true)
+        }
+        let caret = draft.selection.location + replacement.utf16.count
+        let edit = MarkdownEdit(range: draft.selection, replacement: replacement,
+                                selection: NSRange(location: caret, length: 0))
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
     func convertLinkForm() {
         guard structuralAnalysisAvailable else { return }
         guard canExecuteCommand, let textView, let storage = textView.textStorage,
@@ -950,7 +1019,8 @@ final class MarkdownEditorModel: ObservableObject {
     @discardableResult
     private func perform(_ edit: MarkdownEdit, in textView: NSTextView,
                          storage: NSTextStorage, focusEditor: Bool) -> Bool {
-        guard (storage.string as NSString).substring(with: edit.range) != edit.replacement else { return true }
+        let previous = (storage.string as NSString).substring(with: edit.range)
+        guard !MarkdownTextFormat.identicalText(previous, edit.replacement) else { return true }
         guard textView.shouldChangeText(in: edit.range, replacementString: edit.replacement) else {
             return false
         }

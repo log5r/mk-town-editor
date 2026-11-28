@@ -1092,7 +1092,7 @@ final class EditorTextView: NSTextView {
     func refreshInvisibles() {
         invisiblePlan = whitespaceOptions.showsCharacters || whitespaceOptions.showsIndentGuides
             ? InvisibleCharacterPlan(source: sourceText, tabWidth: max(1, whitespaceTabWidth),
-                                    format: documentFormat) : nil
+                                     format: documentFormat, showsCharacters: whitespaceOptions.showsCharacters) : nil
         needsDisplay = true
     }
     private(set) var foldedPlans: [MarkdownFoldPlan] = [] {
@@ -1230,7 +1230,7 @@ final class EditorTextView: NSTextView {
         if let value = imagePasteboard.string(forType: .string) {
             if commandModel?.pasteURLAsLink(value) == true { return }
             if value.utf8.contains(13) || value.utf8.contains(10) {
-                replaceSelection(withPastedText: value, preservingNewlines: false)
+                replaceSelection(with: value, preservingNewlines: false)
                 return
             }
         }
@@ -1245,7 +1245,7 @@ final class EditorTextView: NSTextView {
             return super.readSelection(from: pboard, type: type)
         }
         if !hasMarkedText(), selectedRanges.count == 1, raw.utf8.contains(13) || raw.utf8.contains(10) {
-            return replaceSelection(withPastedText: raw, preservingNewlines: false)
+            return replaceSelection(with: raw, preservingNewlines: false)
         }
         guard raw.utf8.contains(13) else { return super.readSelection(from: pboard, type: type) }
         let board = NSPasteboard.withUniqueName()
@@ -1257,11 +1257,11 @@ final class EditorTextView: NSTextView {
     func pastePreservingNewlines() {
         guard isEditable, !hasMarkedText(), selectedRanges.count == 1,
               let raw = imagePasteboard.string(forType: .string) else { return }
-        replaceSelection(withPastedText: raw, preservingNewlines: true)
+        replaceSelection(with: raw, preservingNewlines: true)
     }
 
     @discardableResult
-    private func replaceSelection(withPastedText raw: String, preservingNewlines: Bool) -> Bool {
+    func replaceSelection(with raw: String, preservingNewlines: Bool) -> Bool {
         let normalized = MarkdownTextFormat.normalizedText(raw)
         let range = selectedRange()
         guard shouldChangeText(in: range, replacementString: normalized) else { return false }
@@ -1404,7 +1404,7 @@ final class EditorTextView: NSTextView {
             let font = NSFont.systemFont(ofSize: 9)
             let first = firstVisible(invisiblePlan.marks, location: { $0.location })
             for mark in invisiblePlan.marks[first...].prefix(while: { $0.location < end }) {
-                guard let (_, rect) = glyph(mark.location) else { continue }
+                guard let (range, rect) = glyph(mark.location) else { continue }
                 let symbol: String
                 let color: NSColor
                 switch mark.kind {
@@ -1413,13 +1413,32 @@ final class EditorTextView: NSTextView {
                 case .tab: symbol = "→"; color = .tertiaryLabelColor
                 case .newline: symbol = "¶"; color = .tertiaryLabelColor
                 case .differentNewline: symbol = "↵"; color = .systemOrange
+                case let .control(code):
+                    symbol = switch code {
+                    case 0...0x1F: String(UnicodeScalar(0x2400 + UInt32(code))!)
+                    case 0x7F: "␡"
+                    default: "◇"
+                    }
+                    color = .systemOrange
+                case .zeroWidth:
+                    symbol = "¦"
+                    color = .systemOrange
                 }
                 let attributes: [NSAttributedString.Key: Any] = [.font: font,
                     .foregroundColor: color.withAlphaComponent(0.75)]
                 let size = (symbol as NSString).size(withAttributes: attributes)
                 let isNewline = mark.kind == .newline || mark.kind == .differentNewline
-                let x = isNewline ? rect.maxX : rect.midX - size.width / 2
-                (symbol as NSString).draw(at: NSPoint(x: x, y: rect.minY), withAttributes: attributes)
+                var point = NSPoint(x: isNewline ? rect.maxX : rect.midX - size.width / 2, y: rect.minY)
+                switch mark.kind {
+                case .control where rect.isEmpty, .zeroWidth where rect.isEmpty:
+                    let line = layoutManager.lineFragmentRect(forGlyphAt: range.location, effectiveRange: nil)
+                    let position = layoutManager.location(forGlyphAt: range.location)
+                    point = NSPoint(x: line.minX + position.x + textContainerOrigin.x - size.width / 2,
+                                    y: line.minY + textContainerOrigin.y)
+                default:
+                    break
+                }
+                (symbol as NSString).draw(at: point, withAttributes: attributes)
             }
         }
     }

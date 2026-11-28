@@ -68,6 +68,26 @@ struct MarkdownTextFormat: Equatable {
         return result
     }
 
+    /// Inspect the stored line ending at each selected LF without changing editor offsets.
+    func textForUnicodeInspection(in source: String, selection: NSRange) -> String {
+        let selectedText = (source as NSString).substring(with: selection)
+        guard selectedText.utf8.contains(10) else { return selectedText }
+        let overrides = Dictionary(uniqueKeysWithValues: newlineWarnings(in: source).map {
+            ($0.range.location, $0.newline)
+        })
+        var result = String.UnicodeScalarView()
+        var location = selection.location
+        for scalar in selectedText.unicodeScalars {
+            if scalar == "\n" {
+                result.append(contentsOf: (overrides[location] ?? newline).sequence.unicodeScalars)
+            } else {
+                result.append(scalar)
+            }
+            location += scalar.value <= 0xFFFF ? 1 : 2
+        }
+        return String(result)
+    }
+
     private static func serializedNewline(at index: Int, in endings: [Newline], adjacentToPrevious: Bool) -> Newline {
         // Deleting all text between a CR and LF would serialize two breaks as one CRLF.
         // Use CR + CRLF here so the blank line survives the next open.

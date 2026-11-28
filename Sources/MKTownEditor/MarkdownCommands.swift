@@ -538,6 +538,9 @@ struct MarkdownCommands: Commands {
                 commandButton(.convertIndentationToSpaces)
                 commandButton(.convertIndentationToTabs)
             }
+            commandButton(.inspectUnicode)
+                .disabled(!editorHasTextSelection)
+            commandButton(.insertUnicode)
         }
 
         CommandMenu("Markdown") {
