@@ -532,6 +532,12 @@ struct MarkdownCommands: Commands {
                 .disabled(documentSearchActions == nil)
             Button("検索の強調表示を解除") { documentSearchActions?.clearHighlights?() }
                 .disabled(documentSearchActions?.clearHighlights == nil)
+            Divider()
+            Menu("空白と字下げ") {
+                commandButton(.trimTrailingWhitespace)
+                commandButton(.convertIndentationToSpaces)
+                commandButton(.convertIndentationToTabs)
+            }
         }
 
         CommandMenu("Markdown") {

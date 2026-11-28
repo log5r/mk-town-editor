@@ -345,6 +345,30 @@ enum AttachmentDirectory: String, Codable, CaseIterable, Sendable {
     var title: String { rawValue }
 }
 
+enum EditorIndentationStyle: String, Codable, CaseIterable, Sendable {
+    case spaces
+    case tabs
+
+    init(from decoder: Decoder) throws {
+        let storedValue = try? decoder.singleValueContainer().decode(String.self)
+        self = storedValue.flatMap(Self.init(rawValue:)) ?? .spaces
+    }
+
+    var title: String {
+        switch self {
+        case .spaces: String(localized: "スペース")
+        case .tabs: String(localized: "タブ")
+        }
+    }
+}
+
+struct EditorWhitespaceEditingOptions: Equatable, Sendable {
+    var indentationStyle: EditorIndentationStyle = .spaces
+    var detectsIndentation = false
+    var trimsTrailingWhitespaceOnSave = false
+    var trimsWhitespaceOnlyLines = false
+}
+
 struct EditorProofingSettings: Codable, Equatable {
     var language: ProofingLanguage = .automatic
     var checksSpelling = true
@@ -440,6 +464,10 @@ struct AppEditorSettings: Codable, Equatable {
     var tabWidth: Int?
     var listIndentWidth: Int?
     var codeIndentWidth: Int?
+    var indentationStyle: EditorIndentationStyle?
+    var detectsIndentation: Bool?
+    var trimsTrailingWhitespaceOnSave: Bool?
+    var trimsWhitespaceOnlyLines: Bool?
     var tableAddsRowOnTab: Bool?
     var editorZoom: Double?
     var previewZoom: Double?
@@ -695,6 +723,10 @@ struct FolderEditorSettings: Codable, Equatable {
     var tabWidth: Int?
     var listIndentWidth: Int?
     var codeIndentWidth: Int?
+    var indentationStyle: EditorIndentationStyle?
+    var detectsIndentation: Bool?
+    var trimsTrailingWhitespaceOnSave: Bool?
+    var trimsWhitespaceOnlyLines: Bool?
     var attachmentDirectory: AttachmentDirectory?
     var markdownDialect: MarkdownDialect?
 }
@@ -985,6 +1017,19 @@ final class EditorSettingsStore: ObservableObject {
             codeIndentWidth: min(8, max(2,
                 documentURL.flatMap { nearestFolderValue(for: $0, \.codeIndentWidth) }
                     ?? values.app.codeIndentWidth ?? 4))
+        )
+    }
+
+    func whitespaceEditingOptions(for documentURL: URL?) -> EditorWhitespaceEditingOptions {
+        EditorWhitespaceEditingOptions(
+            indentationStyle: documentURL.flatMap { nearestFolderValue(for: $0, \.indentationStyle) }
+                ?? values.app.indentationStyle ?? .spaces,
+            detectsIndentation: documentURL.flatMap { nearestFolderValue(for: $0, \.detectsIndentation) }
+                ?? values.app.detectsIndentation ?? false,
+            trimsTrailingWhitespaceOnSave: documentURL.flatMap { nearestFolderValue(for: $0, \.trimsTrailingWhitespaceOnSave) }
+                ?? values.app.trimsTrailingWhitespaceOnSave ?? false,
+            trimsWhitespaceOnlyLines: documentURL.flatMap { nearestFolderValue(for: $0, \.trimsWhitespaceOnlyLines) }
+                ?? values.app.trimsWhitespaceOnlyLines ?? false
         )
     }
 

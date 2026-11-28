@@ -1,5 +1,27 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import os
+
+/// FileDocument writes a value snapshot away from the main actor. The window can update
+/// save options without changing that document's contents or marking it as edited.
+final class MarkdownSaveWhitespaceConfiguration: Sendable {
+    struct Options: Equatable, Sendable {
+        let includingWhitespaceOnlyLines: Bool
+        let dialect: MarkdownDialect
+    }
+
+    private let options = OSAllocatedUnfairLock<Options?>(initialState: nil)
+
+    func update(_ value: Options?) {
+        options.withLock { $0 = value }
+    }
+
+    func snapshot() -> Options? {
+        options.withLock { $0 }
+    }
+}
+#endif
 
 struct MarkdownDocument: FileDocument {
     #if SWIFT_PACKAGE
@@ -27,6 +49,7 @@ struct MarkdownDocument: FileDocument {
     }
 
     #if os(macOS)
+    private(set) var saveWhitespaceConfiguration = MarkdownSaveWhitespaceConfiguration()
     private(set) var encoding: MarkdownTextEncoding = .utf8
     private(set) var pendingEncodingData: Data?
     private var hasUTF16BOM = false
@@ -189,8 +212,25 @@ struct MarkdownDocument: FileDocument {
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        #if os(macOS)
+        try FileWrapper(regularFileWithContents: dataForSave())
+        #else
         try FileWrapper(regularFileWithContents: encodedData())
+        #endif
     }
+
+    #if os(macOS)
+    func dataForSave() throws -> Data {
+        guard let options = saveWhitespaceConfiguration.snapshot(),
+              let edit = MarkdownWhitespaceTrim.edit(in: text,
+                  includingWhitespaceOnlyLines: options.includingWhitespaceOnlyLines,
+                  dialect: options.dialect) else { return try encodedData() }
+        var snapshot = self
+        // The edit deletes only spaces and tabs, so each newline keeps its original format.
+        snapshot.text = edit.applying(to: text)
+        return try snapshot.encodedData()
+    }
+    #endif
 
     func encodedData() throws -> Data {
         #if os(macOS)

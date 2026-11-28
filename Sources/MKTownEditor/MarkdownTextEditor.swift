@@ -15,6 +15,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var proofing = EditorProofingSettings()
     var snippets: [EditorSnippet] = []
     var whitespaceOptions = EditorWhitespaceOptions()
+    var whitespaceEditingOptions = EditorWhitespaceEditingOptions()
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -76,6 +77,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.appliedLayoutOptions = layoutOptions
         model.listIndentWidth = layoutOptions.listIndentWidth
         model.codeIndentWidth = layoutOptions.codeIndentWidth
+        model.configureWhitespaceEditing(whitespaceEditingOptions, source: text,
+                                         fileURL: documentContext.fileURL, tabWidth: textStyle.tabWidth)
         model.tableAddsRowOnTab = tableAddsRowOnTab
         model.snippets = snippets
         let lineNumberRuler = MarkdownLineNumberRulerView(scrollView: scrollView, editor: textView)
@@ -210,6 +213,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         context.coordinator.model.listIndentWidth = layoutOptions.listIndentWidth
         context.coordinator.model.codeIndentWidth = layoutOptions.codeIndentWidth
+        model.configureWhitespaceEditing(whitespaceEditingOptions, source: text,
+                                         fileURL: documentContext.fileURL, tabWidth: textStyle.tabWidth)
         context.coordinator.model.tableAddsRowOnTab = tableAddsRowOnTab
         context.coordinator.model.snippets = snippets
         if context.coordinator.appliedTextStyle != textStyle {
@@ -1167,14 +1172,14 @@ final class EditorTextView: NSTextView {
         if commandModel?.advanceSnippetPlaceholder(backwards: false) == true { return }
         if commandModel?.expandSnippetTrigger() == true { return }
         if commandModel?.moveTableCell(backwards: false) == true { return }
-        if commandModel?.changeIndentation(.indent) == true { return }
+        if commandModel?.changeIndentation(.indent, includesPlainText: true) == true { return }
         super.insertTab(sender)
     }
 
     override func insertBacktab(_ sender: Any?) {
         if commandModel?.advanceSnippetPlaceholder(backwards: true) == true { return }
         if commandModel?.moveTableCell(backwards: true) == true { return }
-        if commandModel?.changeIndentation(.outdent) == true { return }
+        if commandModel?.changeIndentation(.outdent, includesPlainText: true) == true { return }
         super.insertBacktab(sender)
     }
 

@@ -1,6 +1,146 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "字下げに使う文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indent using"
+          }
+        }
+      }
+    },
+    "スペース" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spaces"
+          }
+        }
+      }
+    },
+    "タブ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tabs"
+          }
+        }
+      }
+    },
+    "書類の字下げを自動検出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detect document indentation"
+          }
+        }
+      }
+    },
+    "保存時に行末の空白を削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trim trailing whitespace on save"
+          }
+        }
+      }
+    },
+    "空白だけの行も対象にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include whitespace-only lines"
+          }
+        }
+      }
+    },
+    "行末の空白" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trailing Whitespace"
+          }
+        }
+      }
+    },
+    "Markdownの改行とコードブロック内の空白は保持します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preserves Markdown hard line breaks and whitespace in code blocks."
+          }
+        }
+      }
+    },
+    "オン" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        }
+      }
+    },
+    "オフ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        }
+      }
+    },
+    "空白と字下げ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whitespace and Indentation"
+          }
+        }
+      }
+    },
+    "行末の空白を削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trim Trailing Whitespace"
+          }
+        }
+      }
+    },
+    "字下げをスペースに変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Indentation to Spaces"
+          }
+        }
+      }
+    },
+    "字下げをタブに変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Indentation to Tabs"
+          }
+        }
+      }
+    },
     "複製" : {
       "localizations" : {
         "en" : {

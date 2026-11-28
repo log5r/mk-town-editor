@@ -63,6 +63,24 @@ final class MarkdownDocumentTests: XCTestCase {
         XCTAssertEqual(restored, original.text)
     }
 
+    func testSaveWhitespacePolicyPreservesEncodingAndLineEndingsWithoutChangingTheBuffer() throws {
+        let original = "行末 \t\r\n強制  \n次の行\n\n```\r空白 \t\r```\r末尾 \t"
+        let encoding = MarkdownTextEncoding.shiftJIS
+        let bytes = try MarkdownEncodingConverter.encode(original, as: encoding)
+        let document = try MarkdownDocument(data: bytes, encoding: encoding)
+        let anotherDocument = try MarkdownDocument(data: bytes, encoding: encoding)
+        XCTAssertEqual(try document.dataForSave(), bytes)
+
+        document.saveWhitespaceConfiguration.update(.init(includingWhitespaceOnlyLines: false, dialect: .extended))
+        let expected = "行末\r\n強制  \n次の行\n\n```\r空白 \t\r```\r末尾"
+        XCTAssertEqual(try document.dataForSave(), try MarkdownEncodingConverter.encode(expected, as: encoding))
+        XCTAssertEqual(try document.encodedData(), bytes)
+        XCTAssertEqual(try anotherDocument.dataForSave(), bytes)
+
+        document.saveWhitespaceConfiguration.update(nil)
+        XCTAssertEqual(try document.dataForSave(), bytes)
+    }
+
     func testTruncatedUTF16IsRejected() {
         XCTAssertThrowsError(
             try MarkdownDocument.decode(Data([0xFF, 0xFE, 0x41]))

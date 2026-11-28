@@ -160,6 +160,12 @@ struct EditorPreferencesView: View {
                 Toggle("タイプライターモード", isOn: binding(\.usesTypewriterMode, default: false))
             }
             Section("字下げと表") {
+                Picker("字下げに使う文字", selection: binding(\.indentationStyle, default: .spaces)) {
+                    ForEach(EditorIndentationStyle.allCases, id: \.self) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+                Toggle("書類の字下げを自動検出", isOn: binding(\.detectsIndentation, default: false))
                 Stepper(value: binding(\.tabWidth, default: 4), in: 2...8) {
                     Text("タブ幅: \(settingsStore.app.tabWidth ?? 4) 文字")
                 }
@@ -170,6 +176,12 @@ struct EditorPreferencesView: View {
                     Text("コードの字下げ: \(settingsStore.app.codeIndentWidth ?? 4) 文字")
                 }
                 Toggle("表の最後でTabを押したら行を追加", isOn: binding(\.tableAddsRowOnTab, default: true))
+            }
+            Section("行末の空白") {
+                Toggle("保存時に行末の空白を削除", isOn: binding(\.trimsTrailingWhitespaceOnSave, default: false))
+                Toggle("空白だけの行も対象にする", isOn: binding(\.trimsWhitespaceOnlyLines, default: false))
+                Text("Markdownの改行とコードブロック内の空白は保持します。")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -576,6 +588,15 @@ struct FolderEditorSettingsView: View {
                      inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).listIndentWidth)
             widthRow(String(localized: "コードの字下げ"), keyPath: \.codeIndentWidth,
                      inherited: settingsStore.layoutOptions(for: folderURL.appendingPathComponent("sample.md")).codeIndentWidth)
+            Picker("字下げに使う文字", selection: optionalBinding(\.indentationStyle)) {
+                Text("継承").tag(nil as EditorIndentationStyle?)
+                ForEach(EditorIndentationStyle.allCases, id: \.self) { style in
+                    Text(style.title).tag(Optional(style))
+                }
+            }
+            booleanRow("書類の字下げを自動検出", keyPath: \.detectsIndentation)
+            booleanRow("保存時に行末の空白を削除", keyPath: \.trimsTrailingWhitespaceOnSave)
+            booleanRow("空白だけの行も対象にする", keyPath: \.trimsWhitespaceOnlyLines)
             Picker("添付ファイルの保存先", selection: optionalBinding(\.attachmentDirectory)) {
                 Text("継承").tag(nil as AttachmentDirectory?)
                 ForEach(AttachmentDirectory.allCases, id: \.self) { directory in
@@ -594,6 +615,15 @@ struct FolderEditorSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 500)
+    }
+
+    private func booleanRow(_ title: LocalizedStringKey,
+                            keyPath: WritableKeyPath<FolderEditorSettings, Bool?>) -> some View {
+        Picker(title, selection: optionalBinding(keyPath)) {
+            Text("継承").tag(nil as Bool?)
+            Text("オン").tag(Optional(true))
+            Text("オフ").tag(Optional(false))
+        }
     }
 
     private func widthRow(_ title: String,

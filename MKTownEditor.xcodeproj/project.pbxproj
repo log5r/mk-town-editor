@@ -28,6 +28,7 @@
 		A10000000000000000000004 /* MKTownEditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* MKTownEditorApp.swift */; };
 		A10000000000000000000005 /* MarkdownCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MarkdownCommands.swift */; };
 		A10000000000000000000006 /* MarkdownDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* MarkdownDocument.swift */; };
+		2C2E0EE6BC4F4670AD3CB717 /* MarkdownWhitespaceTrim.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */; };
 		A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* MarkdownEditorModel.swift */; };
 		A10000000000000000000008 /* MarkdownFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* MarkdownFormatter.swift */; };
 		A10000000000000000000009 /* MarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MarkdownPreview.swift */; };
@@ -223,6 +224,7 @@
 		A20000000000000000000004 /* MKTownEditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MKTownEditorApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000005 /* MarkdownCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownCommands.swift; sourceTree = "<group>"; };
 		A20000000000000000000006 /* MarkdownDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownDocument.swift; sourceTree = "<group>"; };
+		F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownWhitespaceTrim.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* MarkdownEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEditorModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000008 /* MarkdownFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFormatter.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* MarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreview.swift; sourceTree = "<group>"; };
@@ -454,6 +456,7 @@
 				A20000000000000000000004 /* MKTownEditorApp.swift */,
 				A20000000000000000000005 /* MarkdownCommands.swift */,
 				A20000000000000000000006 /* MarkdownDocument.swift */,
+				F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */,
 				A20000000000000000000007 /* MarkdownEditorModel.swift */,
 				A20000000000000000000008 /* MarkdownFormatter.swift */,
 				A20000000000000000000009 /* MarkdownPreview.swift */,
@@ -887,6 +890,7 @@
 				A10000000000000000000004 /* MKTownEditorApp.swift in Sources */,
 				A10000000000000000000005 /* MarkdownCommands.swift in Sources */,
 				A10000000000000000000006 /* MarkdownDocument.swift in Sources */,
+				2C2E0EE6BC4F4670AD3CB717 /* MarkdownWhitespaceTrim.swift in Sources */,
 				A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */,
 				A10000000000000000000008 /* MarkdownFormatter.swift in Sources */,
 				A10000000000000000000009 /* MarkdownPreview.swift in Sources */,
