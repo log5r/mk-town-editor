@@ -559,15 +559,38 @@ final class EditorSettingsTests: XCTestCase {
     func testProofingPreferencesPersistAndOldSettingsUseDefaults() throws {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
-        var settings = store.app
-        settings.proofing = EditorProofingSettings(language: .english,
-            checksSpelling: true, correctsSpelling: false)
-        store.setAppSettings(settings)
-        XCTAssertEqual(EditorSettingsStore(defaults: defaults).app.proofing, settings.proofing)
+        XCTAssertTrue(store.proofing.checksSpelling)
+        XCTAssertTrue(store.proofing.correctsSpelling)
+        store.proofing = EditorProofingSettings()
+        XCTAssertEqual(store.settingsWriteCount, 0)
+        let proofing = EditorProofingSettings(language: .english, checksSpelling: false, correctsSpelling: false,
+                                             usesSmartQuotes: true, usesSmartDashes: true, usesTextReplacement: true,
+                                             insertsPeriodOnDoubleSpace: true, checksGrammar: true,
+                                             usesSmartInsertDelete: true)
+        store.proofing = proofing
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).proofing, proofing)
         let old = try JSONDecoder().decode(AppEditorSettings.self,
             from: Data(#"{"defaultMode":"split","fontSize":13,"lineSpacing":3,"wrapsLines":true}"#.utf8))
         XCTAssertNil(old.proofing)
-        XCTAssertTrue(EditorProofingSettings().correctsSpelling)
+    }
+
+    func testExistingProofingSettingsKeepSpellingPreferencesAndDisableNewOptions() throws {
+        let data = Data("""
+        {"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true,
+         "proofing":{"language":"japanese","checksSpelling":true,"correctsSpelling":false}}
+        """.utf8)
+        let app = try JSONDecoder().decode(AppEditorSettings.self, from: data)
+        let proofing = try XCTUnwrap(app.proofing)
+        XCTAssertEqual(app.fontSize, 17)
+        XCTAssertEqual(proofing.language, .japanese)
+        XCTAssertTrue(proofing.checksSpelling)
+        XCTAssertFalse(proofing.correctsSpelling)
+        XCTAssertFalse(proofing.usesSmartQuotes)
+        XCTAssertFalse(proofing.usesSmartDashes)
+        XCTAssertFalse(proofing.usesTextReplacement)
+        XCTAssertFalse(proofing.insertsPeriodOnDoubleSpace)
+        XCTAssertFalse(proofing.checksGrammar)
+        XCTAssertFalse(proofing.usesSmartInsertDelete)
     }
 
     func testFrontMatterPreviewVisibilityPersists() {

@@ -3625,16 +3625,6 @@
         }
       }
     },
-    "コードとURLでは自動訂正を一時停止します。ユーザー辞書にはmacOSの標準機能を使います。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autocorrection pauses in code and URLs. The user dictionary is managed by macOS."
-          }
-        }
-      }
-    },
     "コードの字下げ" : {
       "localizations" : {
         "en" : {
@@ -13337,16 +13327,6 @@
         }
       }
     },
-    "スペルチェックと自動訂正" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spelling and Autocorrection"
-          }
-        }
-      }
-    },
     "本文の最大幅" : {
       "localizations" : {
         "en" : {
@@ -13857,16 +13837,6 @@
         }
       }
     },
-    "%@・スペルチェック %@・自動訂正 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ · Spell Checking %@ · Auto-Correction %@"
-          }
-        }
-      }
-    },
     "コード内を除外 %@・引用内を除外 %@" : {
       "localizations" : {
         "en" : {
@@ -14303,6 +14273,96 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "There are no replacement rules to import."
+          }
+        }
+      }
+    },
+    "スペルと文法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spelling and Grammar"
+          }
+        }
+      }
+    },
+    "スペルと一緒に文法をチェック" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check grammar with spelling"
+          }
+        }
+      }
+    },
+    "自動置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Substitutions"
+          }
+        }
+      }
+    },
+    "スマート引用符" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smart quotes"
+          }
+        }
+      }
+    },
+    "スマートダッシュ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smart dashes"
+          }
+        }
+      }
+    },
+    "テキスト置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text replacement"
+          }
+        }
+      }
+    },
+    "スペースを2回押してピリオドを入力" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a period with double-space"
+          }
+        }
+      }
+    },
+    "スマートコピー／ペースト" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smart copy and paste"
+          }
+        }
+      }
+    },
+    "テキスト置換にはmacOSのユーザ辞書を使います。コード・URL・フロントマター・数式では自動訂正と自動置換を一時停止します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text replacement uses the macOS user dictionary. Autocorrection and substitutions pause in code, URLs, front matter, and math."
           }
         }
       }

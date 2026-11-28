@@ -177,6 +177,7 @@ struct MarkdownBlock: Equatable, Sendable {
     let codeLanguage: String?
     let codeFenceMarker: Character?
     let codeFenceLength: Int?
+    var codeFenceIsUnclosed = false
     let table: MarkdownTable?
     let lineBreaks: [MarkdownLineBreak]
     let sourceIndent: String?
@@ -219,6 +220,7 @@ struct MarkdownAnalysis: Sendable {
     let references: [String: MarkdownReference]
     let footnotes: MarkdownFootnoteIndex
     let frontMatter: MarkdownFrontMatter?
+    let unfinishedDisplayMathRanges: [NSRange]
     let crossReferences: MarkdownCrossReferences
     /// コードブロック以外のブロックまたは脚注に引用記法 `[@` が含まれるか。
     let containsCitationSyntax: Bool
@@ -239,6 +241,7 @@ struct MarkdownAnalysis: Sendable {
             !excluded.contains { NSLocationInRange(block.sourceRange.location, $0) }
         }
         blocks = visibleBlocks
+        unfinishedDisplayMathRanges = parsed.unfinishedDisplayMathRanges
         references = parsed.references.filter { !$0.key.hasPrefix("^") }
         crossReferences = MarkdownCrossReferences(blocks: dialect == .extended ? visibleBlocks : [])
         containsCitationSyntax = dialect == .extended && (
@@ -283,12 +286,14 @@ struct MarkdownAnalysis: Sendable {
     )
 
     private static func parse(_ markdown: String, dialect: MarkdownDialect) ->
-        (blocks: [MarkdownBlock], references: [String: MarkdownReference]) {
+        (blocks: [MarkdownBlock], references: [String: MarkdownReference], unfinishedDisplayMathRanges: [NSRange]) {
         var nextID = 0
         var references: [String: MarkdownReference] = [:]
+        var unfinishedDisplayMathRanges: [NSRange] = []
         let blocks = parseLines(sourceLines(markdown), parentID: nil, dialect: dialect,
-                                nextID: &nextID, references: &references)
-        return (blocks, references)
+                                nextID: &nextID, references: &references,
+                                unfinishedDisplayMathRanges: &unfinishedDisplayMathRanges)
+        return (blocks, references, unfinishedDisplayMathRanges)
     }
 
     private static func parseLines(
@@ -296,10 +301,12 @@ struct MarkdownAnalysis: Sendable {
         parentID: Int?,
         dialect: MarkdownDialect,
         nextID: inout Int,
-        references: inout [String: MarkdownReference]
+        references: inout [String: MarkdownReference],
+        unfinishedDisplayMathRanges: inout [NSRange]
     ) -> [MarkdownBlock] {
         var result: [MarkdownBlock] = []
         var listAncestors: [(indent: Int, contentIndent: Int, id: Int, depth: Int)] = []
+        var lastClosedDisplayMathEnd: Int?
         var index = 0
 
         while index < lines.count {
@@ -350,7 +357,8 @@ struct MarkdownAnalysis: Sendable {
                     ? quoteLines : Array(quoteLines.dropFirst())
                 result.append(contentsOf: parseLines(contentLines, parentID: quoteID,
                                                      dialect: dialect,
-                                                     nextID: &nextID, references: &references))
+                                                     nextID: &nextID, references: &references,
+                                                     unfinishedDisplayMathRanges: &unfinishedDisplayMathRanges))
                 listAncestors.removeAll()
                 continue
             }
@@ -377,14 +385,15 @@ struct MarkdownAnalysis: Sendable {
                     codeLines.append(removingUpToSpaces(lines[index].text, count: fence.indentation))
                     index += 1
                 }
-                if index < lines.count { index += 1 }
+                let hasClosingFence = index < lines.count
+                if hasClosingFence { index += 1 }
                 let end = lines[index - 1].range
                 result.append(MarkdownBlock(
                     id: id, parentID: parentID, kind: .codeBlock,
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
                     codeLanguage: fence.language, codeFenceMarker: fence.marker,
-                    codeFenceLength: fence.length, table: nil,
+                    codeFenceLength: fence.length, codeFenceIsUnclosed: !hasClosingFence, table: nil,
                     lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 listAncestors.removeAll()
@@ -429,6 +438,7 @@ struct MarkdownAnalysis: Sendable {
             }
 
             if dialect == .extended, let end = displayMathEnd(in: lines, from: index) {
+                lastClosedDisplayMathEnd = end
                 let parent = listAncestors.last
                 let isContinuation = parent.map { indentationWidth(line.text) > $0.indent } ?? false
                 result.append(MarkdownBlock(
@@ -579,13 +589,30 @@ struct MarkdownAnalysis: Sendable {
             ))
             index += advance
         }
+        if dialect == .extended,
+           let start = lines.lastIndex(where: { $0.text.contains("$$") && MarkdownMath.containsDisplayDelimiter($0.text) }),
+           start > (lastClosedDisplayMathEnd ?? -1), let last = lines.last,
+           let opener = displayMathOpening(in: lines[start]),
+           !MarkdownMath.containsDisplayDelimiter(String(opener.dropFirst(2))),
+           !result.contains(where: { block in
+               (block.kind == .codeBlock || block.kind == .quote)
+                   && NSLocationInRange(lines[start].range.location, block.sourceRange)
+           }) {
+            let location = lines[start].range.location
+            unfinishedDisplayMathRanges.append(NSRange(location: location, length: NSMaxRange(last.range) - location))
+        }
         return result
+    }
+
+    private static func displayMathOpening(in line: SourceLine) -> String? {
+        guard indentationWidth(line.text) < 4 else { return nil }
+        let trimmed = line.text.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("$$") ? trimmed : nil
     }
 
     /// Keep TeX (including blank lines and Markdown-looking commands) in one block.
     private static func displayMathEnd(in lines: [SourceLine], from start: Int) -> Int? {
-        let first = lines[start].text.trimmingCharacters(in: .whitespaces)
-        guard indentationWidth(lines[start].text) < 4, first.hasPrefix("$$") else { return nil }
+        guard let first = displayMathOpening(in: lines[start]) else { return nil }
         if MarkdownMath.containsDisplayDelimiter(String(first.dropFirst(2))) {
             return MarkdownMath.displayFormula(first) == nil ? nil : start
         }

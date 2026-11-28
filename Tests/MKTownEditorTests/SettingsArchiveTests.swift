@@ -115,6 +115,19 @@ final class SettingsArchiveTests: XCTestCase {
         }
     }
 
+    func testProofingSubstitutionIsReviewedAndRoundTripsThroughTheArchive() throws {
+        let source = makeStore(try isolatedDefaults())
+        let destination = makeStore(try isolatedDefaults())
+        source.proofing.usesSmartDashes = true
+
+        let archive = try SettingsArchive(data: source.exportSettings(categories: [.editor]))
+        let difference = try XCTUnwrap(archive.differences(from: destination.settingsArchiveSnapshot)[.editor])
+        XCTAssertEqual(difference.count, 1)
+        XCTAssertTrue(try XCTUnwrap(difference.first).contains("→"))
+        try destination.importSettings(archive, categories: [.editor])
+        XCTAssertEqual(destination.proofing, source.proofing)
+    }
+
     func testUnknownKeysAndEnumValuesKeepLocalSettings() throws {
         let defaults = try isolatedDefaults()
         let store = makeStore(defaults)
@@ -159,6 +172,7 @@ final class SettingsArchiveTests: XCTestCase {
             #""editor":{"fontSize":1e300}"#,
             #""editor":{"highlights":{"selectedWord":"on"}}"#,
             #""editor":{"highlights":{"wordDelay":10}}"#,
+            #""editor":{"proofing":{"language":"english","usesSmartQuotes":"on"}}"#,
             #""editor":{"readingEstimate":{"language":"japanese","japaneseReadingRate":9223372036854775807,"japaneseSpeakingRate":300,"englishReadingRate":200,"englishSpeakingRate":130}}"#,
             #""themes":{"editorTheme":42}"#,
             #""themes":{"previewTheme":"navy"}"#,

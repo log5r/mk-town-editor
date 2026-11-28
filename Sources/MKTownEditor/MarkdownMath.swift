@@ -66,7 +66,41 @@ enum MarkdownMath {
     static func segments(_ text: String) -> [Segment] {
         let chars = Array(text)
         var parts: [Segment] = []
-        var plain = ""
+        var cursor = 0
+        for span in inlineSpans(in: chars) {
+            let bounds = span.bounds
+            if cursor < bounds.lowerBound {
+                parts.append(.text(String(chars[cursor..<bounds.lowerBound])))
+            }
+            let latex = String(chars[(bounds.lowerBound + 1)..<(bounds.upperBound - 1)])
+            parts.append(.formula(Formula(source: String(chars[bounds]), latex: latex, display: false)))
+            cursor = bounds.upperBound
+        }
+        if cursor < chars.count { parts.append(.text(String(chars[cursor...]))) }
+        return parts
+    }
+
+    static func inlineProofingRanges(in text: String) -> [(range: NSRange, isUnfinished: Bool)] {
+        let chars = Array(text)
+        var cursor = 0
+        var location = 0
+        return inlineSpans(in: chars, includesUnfinished: true).map { span in
+            location += String(chars[cursor..<span.bounds.lowerBound]).utf16.count
+            let length = String(chars[span.bounds]).utf16.count
+            let range = NSRange(location: location, length: length)
+            cursor = span.bounds.upperBound
+            location += length
+            return (range, span.isUnfinished)
+        }
+    }
+
+    /// Numeric prices without a closing dollar remain available for prose substitutions.
+    private static let price = try! NSRegularExpression(
+        pattern: #"^\p{Nd}++(?:[,.]\p{Nd}++)*+(?:$|[.,;:!?)\]]|[ \t]+(?:$|\p{L}|(?:--|[–—])[ \t]*\p{L}{2}))"#)
+
+    private static func inlineSpans(in chars: [Character], includesUnfinished: Bool = false)
+        -> [(bounds: Range<Int>, isUnfinished: Bool)] {
+        var spans: [(Range<Int>, Bool)] = []
         var index = 0
         var codeFence = 0
         while index < chars.count {
@@ -74,7 +108,6 @@ enum MarkdownMath {
                 let length = chars[index...].prefix(while: { $0 == "`" }).count
                 if codeFence == 0 { codeFence = length }
                 else if codeFence == length { codeFence = 0 }
-                plain += String(chars[index..<(index + length)])
                 index += length
                 continue
             }
@@ -91,22 +124,25 @@ enum MarkdownMath {
                               end + 1 == chars.count || (!chars[end + 1].isNumber && chars[end + 1] != "$" ) else {
                             break
                         }
-                        let latex = String(chars[(index + 1)..<end])
-                        if !plain.isEmpty { parts.append(.text(plain)); plain = "" }
-                        parts.append(.formula(Formula(source: String(chars[index...end]), latex: latex,
-                                                      display: false)))
+                        spans.append((index..<(end + 1), false))
                         index = end + 1
                         break
                     }
                     end += 1
                 }
                 if index == end + 1 { continue }
+                if includesUnfinished, end == chars.count || chars[end].isNewline {
+                    let content = String(chars[(index + 1)..<end])
+                    if price.firstMatch(in: content, range: NSRange(location: 0, length: content.utf16.count)) == nil {
+                        spans.append((index..<end, true))
+                        index = end
+                        continue
+                    }
+                }
             }
-            plain.append(chars[index])
             index += 1
         }
-        if !plain.isEmpty { parts.append(.text(plain)) }
-        return parts
+        return spans
     }
 
     private static func escaped(at index: Int, in chars: [Character]) -> Bool {

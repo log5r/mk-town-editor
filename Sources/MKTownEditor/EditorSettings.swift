@@ -415,6 +415,37 @@ struct EditorProofingSettings: Codable, Equatable {
     var language: ProofingLanguage = .automatic
     var checksSpelling = true
     var correctsSpelling = true
+    var usesSmartQuotes = false
+    var usesSmartDashes = false
+    var usesTextReplacement = false
+    var insertsPeriodOnDoubleSpace = false
+    var checksGrammar = false
+    var usesSmartInsertDelete = false
+
+    private enum CodingKeys: CodingKey {
+        case language, checksSpelling, correctsSpelling, usesSmartQuotes, usesSmartDashes,
+             usesTextReplacement, insertsPeriodOnDoubleSpace, checksGrammar, usesSmartInsertDelete
+    }
+}
+
+extension EditorProofingSettings {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init()
+        if let rawLanguage = try values.decodeIfPresent(String.self, forKey: .language) {
+            language = ProofingLanguage(rawValue: rawLanguage) ?? language
+        }
+        checksSpelling = try values.decodeIfPresent(Bool.self, forKey: .checksSpelling) ?? checksSpelling
+        correctsSpelling = try values.decodeIfPresent(Bool.self, forKey: .correctsSpelling) ?? correctsSpelling
+        usesSmartQuotes = try values.decodeIfPresent(Bool.self, forKey: .usesSmartQuotes) ?? usesSmartQuotes
+        usesSmartDashes = try values.decodeIfPresent(Bool.self, forKey: .usesSmartDashes) ?? usesSmartDashes
+        usesTextReplacement = try values.decodeIfPresent(Bool.self, forKey: .usesTextReplacement) ?? usesTextReplacement
+        insertsPeriodOnDoubleSpace = try values.decodeIfPresent(Bool.self, forKey: .insertsPeriodOnDoubleSpace)
+            ?? insertsPeriodOnDoubleSpace
+        checksGrammar = try values.decodeIfPresent(Bool.self, forKey: .checksGrammar) ?? checksGrammar
+        usesSmartInsertDelete = try values.decodeIfPresent(Bool.self, forKey: .usesSmartInsertDelete)
+            ?? usesSmartInsertDelete
+    }
 }
 
 struct EditorSnippet: Codable, Equatable, Identifiable {
@@ -950,6 +981,15 @@ final class EditorSettingsStore: ObservableObject {
     }
 
     var app: AppEditorSettings { values.app }
+
+    var proofing: EditorProofingSettings {
+        get { app.proofing ?? EditorProofingSettings() }
+        set {
+            guard newValue != proofing else { return }
+            values.app.proofing = newValue
+            save()
+        }
+    }
 
     /// 設定と現在の外観から決まる、対象で使う配色。
     func theme(for target: ThemeTarget) -> PreviewTheme {
