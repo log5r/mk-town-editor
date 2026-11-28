@@ -734,6 +734,9 @@ enum MarkdownProofingContext {
     }
 
     private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s)<>\]]+"#)
+    private static let dashMarkerPrefix = try! NSRegularExpression(
+        pattern: #"^(?:[ \t]*+(?:>|(?:[-+*]|[0-9]{1,9}[.)])[ \t]++))*[ \t-]*$"#
+    )
 
     static func protectedRanges(in source: String, analysis: MarkdownAnalysis? = nil) -> [ProtectedRange] {
         let analysis = analysis ?? MarkdownAnalysis(source)
@@ -746,8 +749,13 @@ enum MarkdownProofingContext {
         var ranges = code + inlineProtectedRanges(in: source)
         if let frontMatter = analysis.frontMatter {
             ranges.append(ProtectedRange(range: frontMatter.sourceRange, includesEnd: false))
+        } else if analysis.dialect == .extended, let draft = unfinishedFrontMatter(in: text) {
+            ranges.append(draft)
         }
         if analysis.dialect == .extended, source.contains("$") {
+            ranges.append(contentsOf: analysis.unfinishedDisplayMathRanges.map {
+                ProtectedRange(range: $0, includesEnd: NSMaxRange($0) == text.length)
+            })
             for block in analysis.blocks where block.kind != .codeBlock && block.kind != .quote {
                 if block.kind == .paragraph, block.content.trimmingCharacters(in: .whitespaces).hasPrefix("$$"),
                    MarkdownMath.displayFormula(block.content) != nil {
@@ -763,17 +771,9 @@ enum MarkdownProofingContext {
 
     private static func inlineMath(in source: String, offset: Int) -> [ProtectedRange] {
         guard source.contains("$") else { return [] }
-        var location = offset
-        return MarkdownMath.segments(source).compactMap { segment in
-            switch segment {
-            case let .text(text):
-                location += text.utf16.count
-                return nil
-            case let .formula(formula):
-                let length = formula.source.utf16.count
-                defer { location += length }
-                return ProtectedRange(range: NSRange(location: location, length: length), includesEnd: false)
-            }
+        return MarkdownMath.inlineProofingRanges(in: source).map { span in
+            ProtectedRange(range: NSRange(location: offset + span.range.location, length: span.range.length),
+                           includesEnd: span.isUnfinished)
         }
     }
 
@@ -796,13 +796,16 @@ enum MarkdownProofingContext {
         isProtected(range.location, in: ranges) || intersects(range, ranges)
     }
 
-    /// Leading hyphens can be a thematic break, a Setext underline, or a front matter delimiter.
+    /// Hyphens at the start of a block can be a thematic break, a Setext underline, or a front matter
+    /// delimiter. Repeated quote and list markers before the hyphens still leave them at a block start.
     static func isMarkdownDashMarker(_ range: NSRange, in source: String) -> Bool {
         let text = source as NSString
-        guard range.location <= text.length, range.length <= text.length - range.location else { return false }
+        guard range.location >= 0, range.location <= text.length,
+              range.length <= text.length - range.location else { return false }
         let line = text.lineRange(for: range)
-        let prefix = text.substring(with: NSRange(location: line.location, length: range.location - line.location))
-        return prefix.allSatisfy { $0 == " " || $0 == "\t" || $0 == "-" }
+        let length = range.location - line.location
+        let prefix = text.substring(with: NSRange(location: line.location, length: length))
+        return dashMarkerPrefix.firstMatch(in: prefix, range: NSRange(location: 0, length: length)) != nil
     }
 
     /// `intersects` for inline code and URLs of the paragraph containing `range`, used while
@@ -861,6 +864,36 @@ enum MarkdownProofingContext {
             return ProtectedRange(range: NSRange(location: range.location, length: length),
                                   includesEnd: item.includesEnd)
         }
+    }
+}
+
+private extension MarkdownProofingContext {
+    static let yamlMappingKey = try! NSRegularExpression(
+        pattern: #"^(?:[\p{L}\p{N}_][\p{L}\p{N}_ .-]*|"[^"]+"|'[^']+'):(?=[ \t]|$)"#)
+
+    /// Before the closing delimiter, protect a YAML-looking prefix starting on the next line.
+    /// An opening thematic break followed by a blank line still starts an ordinary document.
+    static func unfinishedFrontMatter(in source: NSString) -> ProtectedRange? {
+        guard source.hasPrefix("---") else { return nil }
+        let first = source.lineRange(for: NSRange(location: 0, length: 0))
+        guard source.substring(with: first).trimmingCharacters(in: .newlines) == "---" else { return nil }
+        var end = NSMaxRange(first)
+        var hasMapping = false
+        while end < source.length {
+            let range = source.lineRange(for: NSRange(location: end, length: 0))
+            let raw = source.substring(with: range).trimmingCharacters(in: .newlines)
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            let full = NSRange(location: 0, length: line.utf16.count)
+            if yamlMappingKey.firstMatch(in: line, range: full) != nil {
+                hasMapping = true
+            } else if !line.hasPrefix("#") && !(hasMapping &&
+                        (line.isEmpty || raw.hasPrefix(" ") || raw.hasPrefix("\t") || line.hasPrefix("- "))) {
+                break
+            }
+            end = NSMaxRange(range)
+        }
+        guard hasMapping else { return nil }
+        return ProtectedRange(range: NSRange(location: 0, length: end), includesEnd: end == source.length)
     }
 }
 

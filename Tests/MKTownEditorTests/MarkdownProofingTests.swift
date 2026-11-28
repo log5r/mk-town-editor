@@ -73,6 +73,19 @@ final class MarkdownProofingTests: XCTestCase {
         }
     }
 
+    func testUnfinishedFrontMatterProtectsTheMappingButLeavesOrdinaryProseAvailable() {
+        let source = "---\ntitle: draft -- title\nkeywords:\n  - first -- entry\n\nOrdinary -- prose"
+        let ranges = MarkdownProofingContext.protectedRanges(in: source)
+        let text = source as NSString
+        for fragment in ["draft -- title", "first -- entry"] {
+            XCTAssertTrue(MarkdownProofingContext.protectsEdit(text.range(of: fragment), in: ranges))
+        }
+        XCTAssertFalse(MarkdownProofingContext.protectsEdit(text.range(of: "Ordinary -- prose"), in: ranges))
+
+        let rule = "---\n\nNote: ordinary -- prose"
+        XCTAssertTrue(MarkdownProofingContext.protectedRanges(in: rule).isEmpty)
+    }
+
     // MARK: - Spelling markers
 
     private let codeSource = """
@@ -260,6 +273,42 @@ final class MarkdownProofingTests: XCTestCase {
         }
     }
 
+    func testSmartDashesPreserveMarkdownMarkersWithinQuotesAndLists() {
+        let examples = [
+            (line: "---", allowsSubstitution: false),
+            (line: "> ---", allowsSubstitution: false),
+            (line: "> Heading\n> --", allowsSubstitution: false),
+            (line: ">>\t---", allowsSubstitution: false),
+            (line: "> - ---", allowsSubstitution: false),
+            (line: "> > 12) + ---", allowsSubstitution: false),
+            (line: "* > ---", allowsSubstitution: false),
+            (line: "> Quoted prose -- here.", allowsSubstitution: true),
+            (line: "> 12) List prose -- here.", allowsSubstitution: true),
+            (line: "Plain prose -- here.", allowsSubstitution: true)
+        ]
+        let source = examples.map(\.line).joined(separator: "\n\n")
+        let (view, coordinator, window) = makeEditor(source, sharedAnalysis: false)
+        defer { window.close() }
+        coordinator.proofing.usesSmartDashes = true
+        coordinator.applyProofing()
+
+        var start = 0
+        let results = examples.map { example in
+            let dash = (example.line as NSString).range(of: "--")
+            let range = NSRange(location: start + dash.location, length: dash.length)
+            start += example.line.utf16.count + 2
+            return NSTextCheckingResult.dashCheckingResult(range: range, replacementString: "—")
+        }
+        let orthography = NSOrthography(dominantScript: "Latn", languageMap: ["Latn": ["en"]])
+        let filtered = view.delegate?.textView?(view, didCheckTextIn: NSRange(location: 0, length: source.utf16.count),
+            types: NSTextCheckingResult.CheckingType.dash.rawValue, options: [:], results: results,
+            orthography: orthography, wordCount: examples.count)
+        let allowed = zip(examples, results).compactMap { example, result in
+            example.allowsSubstitution ? result.range : nil
+        }
+        XCTAssertEqual(filtered?.map(\.range), allowed)
+    }
+
     func testSystemReplacementResultsAreFilteredForAllProtectedRanges() {
         let source = """
         ---
@@ -394,6 +443,66 @@ final class MarkdownProofingTests: XCTestCase {
 
             XCTAssertEqual(view.string, MarkdownTextFormat.normalizedText(test.expected))
             XCTAssertEqual(String(decoding: try document.encodedData(), as: UTF8.self), test.expected)
+        }
+    }
+
+    func testNativeSubstitutionsProtectUnfinishedMathWithAnOlderSnapshot() {
+        let original = #"""
+        Ordinary "text" -- before the formulas.
+        The cost is $12.50 -- including tax.
+        Here \$literal -- is escaped.
+        """#
+        let (view, coordinator, window) = makeEditor(original, sharedAnalysis: true)
+        defer { window.close() }
+        coordinator.sharedSnapshot = DocumentSnapshot(source: original)
+        coordinator.proofing.usesSmartQuotes = true
+        coordinator.proofing.usesSmartDashes = true
+        coordinator.applyProofing()
+        let draft = """
+
+        Drafts $x--y
+        and $3.14--z
+
+          $$
+        a "quoted" -- expression
+
+        next--line
+        """
+        let insertion = NSRange(location: original.utf16.count, length: 0)
+        view.textStorage?.replaceCharacters(in: insertion, with: draft)
+        coordinator.applyProofing()
+        XCTAssertTrue(view.isAutomaticDashSubstitutionEnabled)
+
+        view.checkTextInDocument(nil)
+        let deadline = Date().addingTimeInterval(2)
+        while view.string.contains("text\" -- before"), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        for fragment in [#""text" -- before"#, "$12.50 -- including", #"$literal -- is"#] {
+            XCTAssertFalse(view.string.contains(fragment), fragment)
+        }
+        for fragment in ["$x--y", "$3.14--z", #""quoted" -- expression"#, "next--line"] {
+            XCTAssertTrue(view.string.contains(fragment), fragment)
+        }
+    }
+
+    func testUnfinishedMathProtectionStopsAtItsContextBoundary() {
+        let source = """
+        Draft $x--y
+        Ordinary prose.
+
+        > $$
+        > draft--formula
+
+        After the quote.
+        """
+        let (view, coordinator, window) = makeEditor(source, sharedAnalysis: false)
+        defer { window.close() }
+        coordinator.applyProofing()
+        for fragment in ["$x--y", "draft--formula", "Ordinary", "After"] {
+            let range = (source as NSString).range(of: fragment)
+            let isProse = fragment == "Ordinary" || fragment == "After"
+            XCTAssertEqual(coordinator.allowsProofingEdit(range, in: view), isProse, fragment)
         }
     }
 
