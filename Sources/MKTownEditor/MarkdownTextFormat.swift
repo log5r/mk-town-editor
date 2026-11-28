@@ -34,10 +34,23 @@ struct MarkdownTextFormat: Equatable {
     static func read(_ data: Data) throws -> (text: String, format: Self) {
         let bom = data.starts(with: [0xEF, 0xBB, 0xBF])
         let payload = bom ? data.dropFirst(3) : data[...]
-        guard var value = String(data: payload, encoding: .utf8) else {
+        guard let value = decodeUTF8Payload(payload) else {
             throw CocoaError(.fileReadInapplicableStringEncoding)
         }
-        let scan = NewlineScan(payload)
+        return read(text: value, hasUTF8BOM: bom)
+    }
+
+    static func decodeUTF8Payload(_ data: Data) -> String? {
+        guard let text = String(data: data, encoding: .utf8) else { return nil }
+        // The caller has already consumed the file signature. Preserve a second U+FEFF,
+        // which Foundation would otherwise also remove when decoding the payload.
+        return data.starts(with: [0xEF, 0xBB, 0xBF]) ? String(decoding: data, as: UTF8.self) : text
+    }
+
+    static func read(text: String, hasUTF8BOM: Bool) -> (text: String, format: Self) {
+        var value = text
+        value.makeContiguousUTF8()
+        let scan = NewlineScan(value.utf8)
         let newline: Newline
         if scan.crlfCount > 0 && scan.crlfCount >= scan.crCount && scan.crlfCount >= scan.lfCount {
             newline = .crlf
@@ -48,11 +61,9 @@ struct MarkdownTextFormat: Equatable {
         }
         if scan.containsCarriageReturn {
             // 検証済みのUTF-8バイト列からCRを1回の走査で取り除き、ネイティブ文字列を直接作る。
-            value = String(decoding: normalizedBytes(payload, capacity: payload.count), as: UTF8.self)
-        } else {
-            value.makeContiguousUTF8()
+            value = String(decoding: normalizedBytes(value.utf8), as: UTF8.self)
         }
-        return (value, Self(newline: newline, hasUTF8BOM: bom,
+        return (value, Self(newline: newline, hasUTF8BOM: hasUTF8BOM,
                             originalNewlines: scan.mixedEndings))
     }
 
@@ -145,9 +156,9 @@ struct MarkdownTextFormat: Equatable {
         }
     }
 
-    private static func normalizedBytes(_ bytes: Data.SubSequence, capacity: Int) -> [UInt8] {
+    private static func normalizedBytes(_ bytes: String.UTF8View) -> [UInt8] {
         var result: [UInt8] = []
-        result.reserveCapacity(capacity)
+        result.reserveCapacity(bytes.count)
         var index = bytes.startIndex
         while index != bytes.endIndex {
             let byte = bytes[index]

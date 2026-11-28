@@ -722,6 +722,19 @@ private struct StoredEditorSettings: Codable, Equatable {
     var bookmarks: [DocumentBookmark]? = nil
 }
 
+enum MarkdownEncodingPreferences {
+    // FileDocument and background folder operations read this without creating a UI store.
+    static let key = "MKTownEditor.encodingDetectionOrder.v1"
+
+    static func candidates(in defaults: UserDefaults = .standard) -> [MarkdownTextEncoding] {
+        guard let stored = defaults.stringArray(forKey: key) else {
+            return MarkdownTextEncoding.defaultDetectionOrder
+        }
+        var seen = Set<MarkdownTextEncoding>()
+        return stored.compactMap(MarkdownTextEncoding.init(rawValue:)).filter { seen.insert($0).inserted }
+    }
+}
+
 /// Persists shared settings while keeping document display state separate from Markdown source.
 ///
 /// 書類ごとの表示状態は共有設定とは別のキーに保存し、件数に上限を設ける。表示位置の保存は
@@ -735,6 +748,7 @@ final class EditorSettingsStore: ObservableObject {
     }
     private var documents: [String: DocumentDisplayState]
     private let defaults: UserDefaults
+    @Published private(set) var encodingCandidates: [MarkdownTextEncoding]
     private var savedSettingsData: Data?
     private var savedDocumentsData: Data?
     private(set) var settingsWriteCount = 0
@@ -757,6 +771,7 @@ final class EditorSettingsStore: ObservableObject {
     init(defaults: UserDefaults = .standard, prunesMissingDocuments: Bool = true,
          appearance: InterfaceAppearance? = nil) {
         self.defaults = defaults
+        encodingCandidates = MarkdownEncodingPreferences.candidates(in: defaults)
         self.appearance = appearance ?? InterfaceAppearance(NSApplication.shared.effectiveAppearance)
         let storedData = defaults.data(forKey: Self.storageKey)
         var stored = storedData.flatMap { try? JSONDecoder().decode(StoredEditorSettings.self, from: $0) }
@@ -863,6 +878,23 @@ final class EditorSettingsStore: ObservableObject {
     func setAppSettings(_ settings: AppEditorSettings) {
         values.app = settings
         save()
+    }
+
+    func setDetectionEnabled(_ enabled: Bool, for encoding: MarkdownTextEncoding) {
+        guard enabled != encodingCandidates.contains(encoding) else { return }
+        if enabled {
+            encodingCandidates.append(encoding)
+        } else {
+            encodingCandidates.removeAll { $0 == encoding }
+        }
+        defaults.set(encodingCandidates.map(\.rawValue), forKey: MarkdownEncodingPreferences.key)
+    }
+
+    func moveEncodingCandidate(_ encoding: MarkdownTextEncoding, by offset: Int) {
+        guard let index = encodingCandidates.firstIndex(of: encoding),
+              encodingCandidates.indices.contains(index + offset) else { return }
+        encodingCandidates.swapAt(index, index + offset)
+        defaults.set(encodingCandidates.map(\.rawValue), forKey: MarkdownEncodingPreferences.key)
     }
 
     func setFolderSettings(_ settings: FolderEditorSettings?, for folderURL: URL) {

@@ -1,6 +1,216 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "%@ の %lld 行目に %@ で保存できない文字があります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %2$lld of %1$@ contains characters that cannot be saved in %3$@."
+          }
+        }
+      }
+    },
+    "文字コードの自動判別" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic Encoding Detection"
+          }
+        }
+      }
+    },
+    "%@の優先順位を上げる" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move %@ up"
+          }
+        }
+      }
+    },
+    "%@の優先順位を下げる" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move %@ down"
+          }
+        }
+      }
+    },
+    "BOMや文字コードの宣言がない場合に使う候補です。複数の候補で読めるときは上の候補を優先します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These encodings are used when there is no byte order mark or encoding declaration. Encodings higher in the list take priority."
+          }
+        }
+      }
+    },
+    "先頭1,000文字を表示しています。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previewing the first 1,000 characters."
+          }
+        }
+      }
+    },
+    "文字コードを選んで開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open with Encoding"
+          }
+        }
+      }
+    },
+    "開くと、編集中の本文をディスクから読み直した内容に置き換えます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening replaces the current text, including unsaved edits, with the contents read from disk."
+          }
+        }
+      }
+    },
+    "文字コードを判別できませんでした。読み込みに使う文字コードを選び、本文を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The encoding could not be identified. Choose an encoding and check the preview."
+          }
+        }
+      }
+    },
+    "別の文字コードで読み直す…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen with Encoding…"
+          }
+        }
+      }
+    },
+    "保存できない文字…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Unrepresentable Characters…"
+          }
+        }
+      }
+    },
+    "保存できない文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unrepresentable Characters"
+          }
+        }
+      }
+    },
+    "%@で表せない文字が%lld箇所あります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Characters at %2$lld positions cannot be represented in %1$@."
+          }
+        }
+      }
+    },
+    "%lld行・%lld列（UTF-16）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %1$lld, column %2$lld (UTF-16)"
+          }
+        }
+      }
+    },
+    "UTF-8で保存すると本文を保持できます。元の文字コードで保存すると、一覧の文字が「?」に置き換わります。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save as UTF-8 to keep the text intact. Saving in the original encoding replaces each character listed here with a question mark."
+          }
+        }
+      }
+    },
+    "保存できない文字はありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All characters can be saved."
+          }
+        }
+      }
+    },
+    "「?」に置換して保存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace with ? and Save"
+          }
+        }
+      }
+    },
+    "UTF-8で保存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save as UTF-8"
+          }
+        }
+      }
+    },
+    "文字コード %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encoding %@"
+          }
+        }
+      }
+    },
+    "保存できない文字を置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace Unrepresentable Characters"
+          }
+        }
+      }
+    },
+    "「文字コード」メニューの「保存できない文字」から、UTF-8への変換か文字の置換を選んでください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Encoding > Review Unrepresentable Characters to save as UTF-8 or replace the affected characters."
+          }
+        }
+      }
+    },
     "書類を開いたときの表示" : {
       "localizations" : {
         "en" : {

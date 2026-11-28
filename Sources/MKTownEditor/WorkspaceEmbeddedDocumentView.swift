@@ -202,6 +202,7 @@ enum WorkspaceEmbedSegment: Equatable {
 struct WorkspaceEmbedFileCache: Sendable {
     private struct Entry: Sendable {
         let metadata: WorkspaceFileMetadata
+        let candidates: [MarkdownTextEncoding]
         let text: String
     }
     private var entries: [URL: Entry] = [:]
@@ -212,23 +213,24 @@ struct WorkspaceEmbedFileCache: Sendable {
         self.readMetadata = readMetadata
     }
 
-    mutating func load(_ url: URL, openBuffers: [URL: Data]) -> String? {
+    mutating func load(_ url: URL, openBuffers: [URL: Data],
+                       candidates: [MarkdownTextEncoding] = MarkdownEncodingPreferences.candidates()) -> String? {
         if let data = openBuffers[url] {
             guard data.count <= WorkspaceDocumentEmbed.maximumBytes else { return nil }
-            return try? MarkdownDocument.decode(data)
+            return try? MarkdownDocument.decode(data, candidates: candidates)
         }
         guard let metadata = try? readMetadata(url),
               let size = metadata.size, size <= WorkspaceDocumentEmbed.maximumBytes else {
             entries.removeValue(forKey: url)
             return nil
         }
-        if let entry = entries[url], entry.metadata.matchesContent(of: metadata) {
+        if let entry = entries[url], entry.metadata.matchesContent(of: metadata), entry.candidates == candidates {
             return entry.text
         }
         guard let data = try? Data(contentsOf: url),
-              let text = try? MarkdownDocument.decode(data) else { return nil }
+              let text = try? MarkdownDocument.decode(data, candidates: candidates) else { return nil }
         readCount += 1
-        entries[url] = Entry(metadata: metadata, text: text)
+        entries[url] = Entry(metadata: metadata, candidates: candidates, text: text)
         return text
     }
 }

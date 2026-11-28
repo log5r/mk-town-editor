@@ -90,8 +90,17 @@ struct WorkspaceRootUnavailableError: LocalizedError, Equatable, Sendable {
 }
 
 private struct WorkspaceOpenBuffer {
-    let encodedData: () -> Data
+    let document: () -> MarkdownDocument
     let updateText: (String) -> Void
+}
+
+extension MarkdownDocument {
+    func matchesWorkspaceSnapshot(_ other: Self) -> Bool {
+        guard pendingEncodingData == other.pendingEncodingData, encoding == other.encoding, format == other.format,
+              text.utf8.elementsEqual(other.text.utf8) else { return false }
+        // For the same decoded text, UTF-16 BOMs and CP932 extension bytes can still differ.
+        return encoding == .utf8 || (try? encodedData()) == (try? other.encodedData())
+    }
 }
 
 enum WorkspaceOpenBufferError: LocalizedError {
@@ -300,12 +309,11 @@ final class WorkspaceStore: ObservableObject {
 
     var openDocumentURLs: [URL] { Array(openDocuments.keys) }
 
-    func registerOpenBuffer(id: UUID, url: URL, encodedData: @escaping () -> Data,
+    func registerOpenBuffer(id: UUID, url: URL, document: @escaping () -> MarkdownDocument,
                             updateText: @escaping (String) -> Void) {
         let key = url.resolvingSymlinksInPath().standardizedFileURL
         openBufferKeys[url.standardizedFileURL] = key
-        openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(encodedData: encodedData,
-                                                                  updateText: updateText)
+        openBuffers[key, default: [:]][id] = WorkspaceOpenBuffer(document: document, updateText: updateText)
         openBufferDidChange(for: url)
     }
 
@@ -320,7 +328,15 @@ final class WorkspaceStore: ObservableObject {
     }
 
     func openBufferSnapshots(under root: URL? = nil, including requested: Set<URL>? = nil) throws -> [URL: Data] {
-        var result: [URL: Data] = [:]
+        // Consumers that only read the editor text must see unsaved characters, even when
+        // the on-disk encoding cannot represent them. The BOM overrides a legacy charset declaration.
+        try openBufferDocuments(under: root, including: requested).mapValues {
+            Data([0xEF, 0xBB, 0xBF]) + Data($0.text.utf8)
+        }
+    }
+
+    func openBufferDocuments(under root: URL? = nil, including requested: Set<URL>? = nil) throws -> [URL: MarkdownDocument] {
+        var result: [URL: MarkdownDocument] = [:]
         let rootPath = root?.resolvingSymlinksInPath().standardizedFileURL.path
         for (url, buffers) in openBuffers {
             guard requested?.contains(url) != false else { continue }
@@ -328,10 +344,17 @@ final class WorkspaceStore: ObservableObject {
                 let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
                 guard url.path.hasPrefix(prefix) else { continue }
             }
-            let values = buffers.values.map { $0.encodedData() }
-            guard let first = values.first else { continue }
-            guard values.allSatisfy({ $0 == first }) else {
-                throw WorkspaceOpenBufferError.conflictingWindows(url)
+            // Swift 6.4.2 crashes in Release IR generation for first?.document().
+            // Unwrap the buffer before calling the closure that returns the document.
+            var iterator = buffers.values.makeIterator()
+            guard let firstBuffer = iterator.next() else { continue }
+            let first = firstBuffer.document()
+            guard first.pendingEncodingData == nil else { throw MarkdownEncodingError.cannotDecode }
+            while let buffer = iterator.next() {
+                let other = buffer.document()
+                guard first.matchesWorkspaceSnapshot(other) else {
+                    throw WorkspaceOpenBufferError.conflictingWindows(url)
+                }
             }
             result[url] = first
         }
@@ -349,12 +372,16 @@ final class WorkspaceStore: ObservableObject {
         }
         for (url, expected) in plan.inspectedOpenDocuments {
             let updated = plan.changes.first { $0.oldURL == url && $0.linkCount > 0 }?.updatedData
-            guard let buffers = openBuffers[url], !buffers.isEmpty,
-                  buffers.values.allSatisfy({ buffer in
-                      let data = buffer.encodedData()
-                      return data == expected || (allowAppliedData && data == updated)
-                  }) else {
+            guard let buffers = openBuffers[url], !buffers.isEmpty else {
                 throw WorkspaceFileOperationError.openDocumentChanged(url)
+            }
+            for buffer in buffers.values {
+                let document = buffer.document()
+                if expected.matchesWorkspaceSnapshot(document) { continue }
+                guard allowAppliedData, let updated, document.encoding == expected.encoding,
+                      (try? document.encodedData()) == updated else {
+                    throw WorkspaceFileOperationError.openDocumentChanged(url)
+                }
             }
         }
     }

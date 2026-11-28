@@ -10,11 +10,15 @@ struct MKTownEditorApp: App {
 
     var body: some Scene {
         DocumentGroup(newDocument: MarkdownDocument()) { file in
-            EditorWorkspace(document: file.$document, fileURL: file.fileURL)
-                .environmentObject(settingsStore)
-                .environmentObject(documentLinkNavigation)
-                .environmentObject(workspaceStore)
-                .environmentObject(layoutActivation)
+            if let data = file.document.pendingEncodingData {
+                MarkdownEncodingPicker(sourceData: data, onOpen: { file.document = $0 })
+            } else {
+                EditorWorkspace(document: file.$document, fileURL: file.fileURL)
+                    .environmentObject(settingsStore)
+                    .environmentObject(documentLinkNavigation)
+                    .environmentObject(workspaceStore)
+                    .environmentObject(layoutActivation)
+            }
         }
         .commands {
             MarkdownCommands(settingsStore: settingsStore, workspaceStore: workspaceStore)

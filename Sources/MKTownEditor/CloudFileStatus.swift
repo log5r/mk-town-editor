@@ -80,7 +80,7 @@ enum CloudFileVersions {
             result = Result {
                 let data = try Data(contentsOf: coordinatedURL)
                 guard data.count <= 4_000_000 else { throw CloudFileError.tooLarge }
-                guard let text = String(data: data, encoding: .utf8) else {
+                guard let text = try? MarkdownDocument.decode(data) else {
                     throw CloudFileError.contentsUnavailable
                 }
                 return text

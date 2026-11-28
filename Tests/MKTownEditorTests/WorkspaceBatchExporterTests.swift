@@ -19,7 +19,7 @@ final class WorkspaceBatchExporterTests: XCTestCase {
         XCTAssertEqual(files.map(\.relativePath), ["first.md", "nested/second.markdown"])
         var updates: [Int] = []
         let report = try await WorkspaceBatchExporter.export(documents: files, to: destination,
-            format: .html, openBuffers: [first.standardizedFileURL: Data("# Draft".utf8)],
+            format: .html, openBuffers: [first.standardizedFileURL: MarkdownDocument(text: "# Draft")],
             progress: { done, _ in updates.append(done) })
         XCTAssertEqual(report.exported, 2)
         XCTAssertTrue(report.failures.isEmpty)
@@ -52,6 +52,32 @@ final class WorkspaceBatchExporterTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: existing, encoding: .utf8), "existing")
         XCTAssertEqual(try String(contentsOf: destination.appendingPathComponent("c.txt"),
                                   encoding: .utf8), "fine")
+    }
+
+    func testMarkdownExportPreservesLegacyEncodingAndTextExportIncludesUnsavableEdits() async throws {
+        let root = try temporaryFolder()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("note.md")
+        let destination = root.appendingPathComponent("output")
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+        let original = try XCTUnwrap("日本語\r\n".data(using: .shiftJIS))
+        try original.write(to: source)
+        var buffer = try MarkdownDocument(data: original)
+        buffer.text += "追記"
+        let files = [BatchExportDocument(sourceURL: source, relativePath: "note.md")]
+        let key = source.resolvingSymlinksInPath().standardizedFileURL
+        let copy = try await WorkspaceBatchExporter.export(documents: files, to: destination,
+            format: .markdown, openBuffers: [key: buffer])
+        XCTAssertEqual(copy.exported, 1)
+        XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("note.md")),
+                       try XCTUnwrap("日本語\r\n追記".data(using: .shiftJIS)))
+        buffer.text += "😀"
+        let text = try await WorkspaceBatchExporter.export(documents: files, to: destination,
+            format: .plainText, openBuffers: [key: buffer])
+        XCTAssertEqual(text.exported, 1)
+        XCTAssertTrue(try String(contentsOf: destination.appendingPathComponent("note.txt"),
+                                 encoding: .utf8).contains("追記😀"))
+        XCTAssertEqual(try Data(contentsOf: source), original)
     }
 
     func testCancellationStopsBeforeNextDocument() async throws {

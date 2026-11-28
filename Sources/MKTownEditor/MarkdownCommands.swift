@@ -107,6 +107,9 @@ private struct OpenEncodingImportActionKey: FocusedValueKey {
 
 struct TextFormatActions {
     let format: MarkdownTextFormat
+    let encoding: MarkdownTextEncoding
+    let reopen: (() -> Void)?
+    let reviewLoss: (() -> Void)?
     let setNewline: (MarkdownTextFormat.Newline) -> Void
     let setBOM: (Bool) -> Void
 }
@@ -330,6 +333,10 @@ struct MarkdownCommands: Commands {
                 .disabled(workspaceStore.rootURL == nil)
         }
         CommandMenu("文字コード") {
+            Button("別の文字コードで読み直す…") { textFormatActions?.reopen?() }
+                .disabled(textFormatActions?.reopen == nil)
+            Button("保存できない文字…") { textFormatActions?.reviewLoss?() }
+                .disabled(textFormatActions?.reviewLoss == nil)
             Button("文字コードを指定して取り込む…") { openEncodingImportAction?() }
                 .disabled(openEncodingImportAction == nil)
             Divider()
@@ -358,7 +365,7 @@ struct MarkdownCommands: Commands {
                     Text("UTF-8 BOM")
                 }
             }
-            .disabled(textFormatActions == nil)
+            .disabled(textFormatActions?.encoding != .utf8)
         }
         CommandMenu("取り込み") {
             Button("HTML・RTFからMarkdownへ…") { importRichTextAction?() }

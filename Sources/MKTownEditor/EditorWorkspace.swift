@@ -276,6 +276,8 @@ struct EditorWorkspace: View {
     @State private var unsavedSessionBaseline: WritingSessionBaseline?
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
+    @State private var encodingLoss: MarkdownEncodingLoss?
+    @State private var showingEncodingLoss = false
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
 
@@ -319,6 +321,7 @@ struct EditorWorkspace: View {
         let id = UUID()
         let url: URL
         let data: Data
+        let isReload: Bool
     }
 
     private var displayedMode: EditorMode {
@@ -679,6 +682,11 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
         .focusedSceneValue(\.textFormatActions, TextFormatActions(
             format: document.format,
+            encoding: document.encoding,
+            reopen: fileURL != nil && !workspaceStore.isDocumentLocked(fileURL) ? {
+                if let fileURL { showEncodingPicker(for: fileURL, isReload: true) }
+            } : nil,
+            reviewLoss: encodingLoss == nil ? nil : { showingEncodingLoss = true },
             setNewline: { document.format.newline = $0 },
             setBOM: { document.format.hasUTF8BOM = $0 }
         ))
@@ -870,12 +878,26 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(item: $encodingImport) { input in
-            MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
-                Task {
-                    do { try await openDocument(at: url) }
-                    catch { errorQueue.present(.encodingImport(error.localizedDescription)) }
+            if input.isReload {
+                MarkdownEncodingPicker(sourceData: input.data, initialEncoding: document.encoding, isReload: true,
+                    onOpen: { reloaded in
+                        if fileURL == input.url, !workspaceStore.isDocumentLocked(fileURL) {
+                            document = reloaded
+                        }
+                        encodingImport = nil
+                    }, onCancel: { encodingImport = nil })
+            } else {
+                MarkdownEncodingImportSheet(sourceURL: input.url, sourceData: input.data) { url in
+                    Task {
+                        do { try await openDocument(at: url) }
+                        catch { errorQueue.present(.encodingImport(error.localizedDescription)) }
+                    }
                 }
             }
+        }
+        .sheet(isPresented: $showingEncodingLoss) {
+            MarkdownEncodingLossSheet(loss: encodingLoss, isLocked: workspaceStore.isDocumentLocked(fileURL),
+                                      onResolve: resolveEncodingLoss)
         }
         .sheet(isPresented: $showingGoToHeading) {
             GoToHeadingSheet(entries: currentAnalysisSnapshot?.outlineEntries ?? []) {
@@ -1372,6 +1394,7 @@ struct EditorWorkspace: View {
             if showingMarkdownLint { checkMarkdownLint() }
             if showingTerminology { checkTerminology() }
         }
+        .task(id: MarkdownEncodingLoss.Input(document: document)) { await checkEncodingLoss() }
         .onChange(of: collaboration.currentText) { _, sharedText in
             applyCollaborativeText(sharedText)
         }
@@ -2293,18 +2316,57 @@ struct EditorWorkspace: View {
         panel.allowsMultipleSelection = false
         panel.beginAttached { response in
             guard response == .OK, let url = panel.url else { return }
-            Task { @MainActor in
-                // Read off the main thread so a large or slow file does not stall the window.
-                let result = await Task.detached(priority: .userInitiated) {
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    return Result { try Data(contentsOf: url) }
-                }.value
-                switch result {
-                case let .success(data): encodingImport = EncodingImport(url: url, data: data)
-                case let .failure(error): errorQueue.present(.encodingImport(error.localizedDescription))
-                }
+            showEncodingPicker(for: url, isReload: false)
+        }
+    }
+
+    private func showEncodingPicker(for url: URL, isReload: Bool) {
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                return Result { try Data(contentsOf: url) }
+            }.value
+            switch result {
+            case let .success(data):
+                encodingImport = EncodingImport(url: url, data: data, isReload: isReload)
+            case let .failure(error):
+                errorQueue.present(.encodingImport(error.localizedDescription))
             }
+        }
+    }
+
+    private func checkEncodingLoss() async {
+        if encodingLoss != nil { encodingLoss = nil }
+        guard let input = MarkdownEncodingLoss.Input(document: document) else { return }
+        do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+        let worker = Task.detached(priority: .utility) {
+            MarkdownEncodingLoss(source: input.source, encoding: input.encoding)
+        }
+        let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+        guard !Task.isCancelled else { return }
+        encodingLoss = result
+    }
+
+    private func resolveEncodingLoss(convertToUTF8: Bool) {
+        guard let loss = encodingLoss, document.encoding == loss.encoding,
+              document.text.utf8.elementsEqual(loss.source.utf8),
+              !workspaceStore.isDocumentLocked(fileURL), editorModel.textView?.hasMarkedText() != true else { return }
+        do {
+            if convertToUTF8 {
+                document.convertToUTF8()
+            } else {
+                var converted = document
+                try converted.replaceUnrepresentableCharacters()
+                previewTaskUndoTarget.replaceText(converted.text, in: $document.text, undoManager: undoManager,
+                                                   actionName: String(localized: "保存できない文字を置換"))
+            }
+            showingEncodingLoss = false
+            if let fileURL, let file = NSDocumentController.shared.document(for: fileURL) {
+                Task { @MainActor in file.save(nil) }
+            }
+        } catch {
+            errorQueue.present(.encodingImport(error.localizedDescription))
         }
     }
 
@@ -2595,7 +2657,7 @@ struct EditorWorkspace: View {
     private func registerOpenBuffer(for url: URL) {
         let binding = $document
         workspaceStore.registerOpenBuffer(id: openBufferID, url: url,
-            encodedData: { binding.wrappedValue.encodedData() },
+            document: { binding.wrappedValue },
             updateText: { binding.wrappedValue.text = $0 })
     }
 
@@ -2657,6 +2719,14 @@ struct EditorWorkspace: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             Text("Markdown")
+            Text(verbatim: document.encoding.title)
+                .accessibilityLabel("文字コード \(document.encoding.title)")
+            if encodingLoss != nil {
+                Button { showingEncodingLoss = true } label: {
+                    Label("保存できない文字", systemImage: "exclamationmark.triangle")
+                }
+                .buttonStyle(.plain)
+            }
             Spacer()
             Text("\(statistics.lines) 行")
             Text("\(displayedWordCount) 語")

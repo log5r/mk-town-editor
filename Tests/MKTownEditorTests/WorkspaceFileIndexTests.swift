@@ -72,15 +72,15 @@ final class WorkspaceFileIndexTests: XCTestCase {
         let conflict = root.appendingPathComponent("conflict.md")
         let aID = UUID(), bID = UUID()
         var aEncodes = 0, bEncodes = 0, conflictEncodes = 0
-        store.registerOpenBuffer(id: aID, url: a, encodedData: {
-            aEncodes += 1; return Data("A".utf8)
+        store.registerOpenBuffer(id: aID, url: a, document: {
+            aEncodes += 1; return MarkdownDocument(text: "A")
         }, updateText: { _ in })
-        store.registerOpenBuffer(id: bID, url: b, encodedData: {
-            bEncodes += 1; return Data("B".utf8)
+        store.registerOpenBuffer(id: bID, url: b, document: {
+            bEncodes += 1; return MarkdownDocument(text: "B")
         }, updateText: { _ in })
         for text in ["first", "second"] {
-            store.registerOpenBuffer(id: UUID(), url: conflict, encodedData: {
-                conflictEncodes += 1; return Data(text.utf8)
+            store.registerOpenBuffer(id: UUID(), url: conflict, document: {
+                conflictEncodes += 1; return MarkdownDocument(text: text)
             }, updateText: { _ in })
         }
         let before = store.openBufferRevisions
@@ -88,7 +88,7 @@ final class WorkspaceFileIndexTests: XCTestCase {
         XCTAssertEqual(store.openBufferRevisions[a], before[a]! + 1)
         XCTAssertEqual(store.openBufferRevisions[b], before[b])
         XCTAssertEqual(aEncodes + bEncodes + conflictEncodes, 0)
-        XCTAssertEqual(try store.openBufferSnapshots(under: root, including: [a]), [a: Data("A".utf8)])
+        XCTAssertEqual(try store.openBufferSnapshots(under: root, including: [a]), [a: Data([0xEF, 0xBB, 0xBF]) + Data("A".utf8)])
         XCTAssertEqual(aEncodes, 1)
         XCTAssertEqual(bEncodes, 0)
         XCTAssertEqual(conflictEncodes, 0)

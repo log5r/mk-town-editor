@@ -4,6 +4,41 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testEncodingCandidateChangesArePersistedForNoninteractiveReaders() {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(store.encodingCandidates, MarkdownTextEncoding.defaultDetectionOrder)
+        for encoding in store.encodingCandidates { store.setDetectionEnabled(false, for: encoding) }
+        XCTAssertEqual(MarkdownEncodingPreferences.candidates(in: defaults), [])
+        store.setDetectionEnabled(true, for: .shiftJIS)
+        store.setDetectionEnabled(true, for: .eucJP)
+        store.setDetectionEnabled(true, for: .shiftJIS)
+        store.moveEncodingCandidate(.eucJP, by: -1)
+        store.moveEncodingCandidate(.eucJP, by: -1)
+        XCTAssertEqual(EditorSettingsStore(defaults: defaults).encodingCandidates, [.eucJP, .shiftJIS])
+        XCTAssertEqual(MarkdownEncodingPreferences.candidates(in: defaults), [.eucJP, .shiftJIS])
+    }
+
+    func testEncodingLossShowsEachAffectedCharacterAndItsUTF16Position() throws {
+        let loss = try XCTUnwrap(MarkdownEncodingLoss(source: "ABC\n🙂☃Z", encoding: .latin1))
+        XCTAssertEqual(loss.occurrences.map(\.character), ["🙂", "☃"])
+        XCTAssertEqual(loss.occurrences.map(\.line), [2, 2])
+        XCTAssertEqual(loss.occurrences.map(\.utf16Column), [1, 3])
+        XCTAssertNil(MarkdownEncodingLoss(source: "café", encoding: .latin1))
+    }
+
+    func testLossCheckRestartsForCanonicallyEquivalentEditsInLegacyDocuments() throws {
+        var document = try MarkdownDocument(data: Data([0xE9]), encoding: .latin1)
+        let first = try XCTUnwrap(MarkdownEncodingLoss.Input(document: document))
+        XCTAssertEqual(first, MarkdownEncodingLoss.Input(document: document))
+        document.text = "e\u{301}"
+        XCTAssertEqual(first.source, document.text)
+        XCTAssertNotEqual(first, MarkdownEncodingLoss.Input(document: document))
+        XCTAssertNotNil(MarkdownEncodingLoss(source: document.text, encoding: document.encoding))
+        document.convertToUTF8()
+        XCTAssertNil(MarkdownEncodingLoss.Input(document: document))
+    }
+
     func testSplitSizingReservesMinimumForBothPanes() {
         XCTAssertEqual(EditorSplitSizing.editorExtent(total: 1000, ratio: 0.3,
             minimum: 280), 297.6, accuracy: 0.001)

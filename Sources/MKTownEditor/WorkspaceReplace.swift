@@ -84,8 +84,9 @@ struct WorkspaceReplacePlan: Sendable {
 enum WorkspaceReplace {
     static func plan(root: URL, options: WorkspaceSearchOptions,
                      replacement: String) throws -> WorkspaceReplacePlan {
+        let candidates = MarkdownEncodingPreferences.candidates()
         let report = try WorkspaceSearch.report(root: root, options: options,
-                                                 maximumResults: 10_001)
+                                                 maximumResults: 10_001, candidates: candidates)
         let matches = report.results
         guard !matches.isEmpty else { throw WorkspaceReplaceError.noMatches }
         guard matches.count <= 10_000 else { throw WorkspaceReplaceError.tooManyMatches }
@@ -94,7 +95,7 @@ enum WorkspaceReplace {
             try Task.checkCancellation()
             let entries = grouped[url] ?? []
             let data = try Data(contentsOf: url)
-            var document = try MarkdownDocument(data: data)
+            var document = try MarkdownDocument(data: data, candidates: candidates)
             let source = document.text as NSString
             let compareOptions: NSString.CompareOptions = options.caseSensitive ? [] : [.caseInsensitive]
             for entry in entries {
@@ -119,7 +120,7 @@ enum WorkspaceReplace {
             }
             document.text = updated as String
             return WorkspaceReplaceChange(url: url, relativePath: entries[0].relativePath,
-                                          originalData: data, updatedData: document.encodedData(),
+                                          originalData: data, updatedData: try document.encodedData(for: url),
                                           matches: entries, previews: previews)
         }
         return WorkspaceReplacePlan(changes: changes, skippedDocuments: report.skippedDocuments, isTruncated: report.isTruncated)
