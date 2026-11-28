@@ -13,13 +13,15 @@ struct EditorUnicodeInspector: View {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(graphemes.indices, id: \.self) { index in
                         let grapheme = graphemes[index]
-                        if index > 0 { Divider() }
-                        Text(verbatim: unicodePreview(grapheme.text))
-                            .font(.title3)
-                            .accessibilityAddTraits(.isHeader)
-                        ForEach(grapheme.scalars.indices, id: \.self) { scalarIndex in
-                            if scalarIndex > 0 { Divider() }
-                            EditorUnicodeScalarFields(info: grapheme.scalars[scalarIndex])
+                        VStack(alignment: .leading, spacing: 10) {
+                            if index > 0 { Divider() }
+                            Text(verbatim: unicodePreview(grapheme.text))
+                                .font(.title3)
+                                .accessibilityAddTraits(.isHeader)
+                            ForEach(grapheme.scalars.indices, id: \.self) { scalarIndex in
+                                if scalarIndex > 0 { Divider() }
+                                EditorUnicodeScalarFields(info: grapheme.scalars[scalarIndex])
+                            }
                         }
                     }
                 }
