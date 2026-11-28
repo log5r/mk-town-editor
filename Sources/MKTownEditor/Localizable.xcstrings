@@ -13876,6 +13876,436 @@
           }
         }
       }
+    },
+    "置換セット…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replacement Sets…"
+          }
+        }
+      }
+    },
+    "置換セットを適用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply Replacement Set"
+          }
+        }
+      }
+    },
+    "置換セット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replacement Sets"
+          }
+        }
+      }
+    },
+    "セット名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set name"
+          }
+        }
+      }
+    },
+    "置換セットがありません" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No replacement sets"
+          }
+        }
+      }
+    },
+    "新規作成するか、ファイルから読み込んでください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create a set or import one from a file."
+          }
+        }
+      }
+    },
+    "コードブロックとインラインコードを除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude code blocks and inline code"
+          }
+        }
+      }
+    },
+    "「差分を確認」で置換内容を表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review differences to see the proposed replacements."
+          }
+        }
+      }
+    },
+    "置換セットを削除しますか？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete replacement set?"
+          }
+        }
+      }
+    },
+    "「%@」のルールがすべて削除されます。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All rules in “%@” will be deleted."
+          }
+        }
+      }
+    },
+    "セットを選択" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a set"
+          }
+        }
+      }
+    },
+    "新規" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New"
+          }
+        }
+      }
+    },
+    "新規セット" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Set"
+          }
+        }
+      }
+    },
+    "%@のコピー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Copy"
+          }
+        }
+      }
+    },
+    "読み込む…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import…"
+          }
+        }
+      }
+    },
+    "書き出す…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export…"
+          }
+        }
+      }
+    },
+    "置換セットを削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete replacement set"
+          }
+        }
+      }
+    },
+    "新規ルール" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New rule"
+          }
+        }
+      }
+    },
+    "無効" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disabled"
+          }
+        }
+      }
+    },
+    "置換ルール" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replacement rules"
+          }
+        }
+      }
+    },
+    "ルールを追加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add rule"
+          }
+        }
+      }
+    },
+    "ルールを削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove rule"
+          }
+        }
+      }
+    },
+    "ルールを上へ移動" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move rule up"
+          }
+        }
+      }
+    },
+    "ルールを下へ移動" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move rule down"
+          }
+        }
+      }
+    },
+    "有効" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled"
+          }
+        }
+      }
+    },
+    "ルールを追加してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a rule to begin."
+          }
+        }
+      }
+    },
+    "本文が変更されました。選択範囲を使うには、置換セットを開き直してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document changed. Reopen Replacement Sets to use a selection."
+          }
+        }
+      }
+    },
+    "%lld件の置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld replacements"
+          }
+        }
+      }
+    },
+    "適用後の本文に変更はありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applying this set leaves the document unchanged."
+          }
+        }
+      }
+    },
+    "有効なルールを上から順に適用します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled rules run in order from top to bottom."
+          }
+        }
+      }
+    },
+    "元の本文で各ルールに一致する箇所を表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight where each rule matches the original text."
+          }
+        }
+      }
+    },
+    "名称未設定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untitled Set"
+          }
+        }
+      }
+    },
+    "ハイライトできる一致箇所がありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no matches to highlight."
+          }
+        }
+      }
+    },
+    "本文が変更されました。もう一度検索してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document changed. Run the search again."
+          }
+        }
+      }
+    },
+    "置換できませんでした。本文と編集状態を確認し、差分を確認し直してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not apply replacements. Check the document and its editing state, then review the differences again."
+          }
+        }
+      }
+    },
+    "読み込む" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import"
+          }
+        }
+      }
+    },
+    "@@ ルール %lld、行 %lld @@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "@@ Rule %1$lld, line %2$lld @@"
+          }
+        }
+      }
+    },
+    "ルール %lld：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rule %1$lld: %2$@"
+          }
+        }
+      }
+    },
+    "この置換セットの形式には対応していません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This replacement set format is unsupported."
+          }
+        }
+      }
+    },
+    "置換セットを読み込めませんでした。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not import the replacement set."
+          }
+        }
+      }
+    },
+    "タブ区切りのファイルはUTF-8で保存してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save the tab-separated file as UTF-8."
+          }
+        }
+      }
+    },
+    "%lld行目に検索文字列と置換文字列をタブで区切って入力してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On line %lld, separate the search text and replacement with a tab."
+          }
+        }
+      }
+    },
+    "読み込める置換ルールがありません。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There are no replacement rules to import."
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

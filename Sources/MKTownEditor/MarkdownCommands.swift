@@ -57,6 +57,7 @@ private struct ZoomActionsKey: FocusedValueKey {
 
 struct DocumentSearchActions {
     let show: (DocumentSearchMode) -> Void
+    let showReplacementSets: () -> Void
     let clearHighlights: (() -> Void)?
 }
 
@@ -529,6 +530,8 @@ struct MarkdownCommands: Commands {
                 .disabled(documentSearchActions == nil)
             Button("正規表現検索・置換…") { documentSearchActions?.show(.regex) }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(documentSearchActions == nil)
+            Button("置換セット…") { documentSearchActions?.showReplacementSets() }
                 .disabled(documentSearchActions == nil)
             Button("検索の強調表示を解除") { documentSearchActions?.clearHighlights?() }
                 .disabled(documentSearchActions?.clearHighlights == nil)

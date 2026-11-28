@@ -238,6 +238,12 @@ struct EditorWorkspace: View {
         let initialScope: NSRange
     }
     @State private var documentSearchPresentation: DocumentSearchPresentation?
+    private struct ReplacementSetPresentation: Identifiable {
+        let id = UUID()
+        let selection: NSRange?
+        let source: String
+    }
+    @State private var replacementSetPresentation: ReplacementSetPresentation?
     @State private var documentOperation: Task<Void, Never>?
     @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
@@ -719,7 +725,27 @@ struct EditorWorkspace: View {
     private var documentSearchActions: DocumentSearchActions {
         let clearHighlights: (() -> Void)? = editorModel.hasDocumentSearchHighlights
             ? { editorModel.clearDocumentSearchHighlights() } : nil
-        return DocumentSearchActions(show: showDocumentSearch, clearHighlights: clearHighlights)
+        return DocumentSearchActions(show: showDocumentSearch, showReplacementSets: showReplacementSets,
+                                     clearHighlights: clearHighlights)
+    }
+
+    private func showReplacementSets() {
+        let ranges = editorModel.selectedRanges
+        let selection = ranges.count == 1 && ranges[0].length > 0 ? ranges[0] : nil
+        if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+        replacementSetPresentation = ReplacementSetPresentation(selection: selection, source: document.text)
+    }
+
+    private func replacementSetSheet(_ presentation: ReplacementSetPresentation) -> some View {
+        ReplacementSetSheet(source: document.text, selectedRange: presentation.selection,
+            selectionSource: presentation.source, canApply: canEditDocument,
+            dialect: documentContext.markdownDialect, onApply: { plan in
+                canEditDocument && MarkdownTextFormat.identicalText(document.text, plan.source) &&
+                    editorModel.applyReplacementSet(plan)
+            }, onHighlight: { expectedSource, ranges in
+                MarkdownTextFormat.identicalText(document.text, expectedSource) &&
+                    editorModel.showDocumentSearchHighlights(ranges, expectedSource: expectedSource)
+            })
     }
 
     private func documentSearchSheet(_ presentation: DocumentSearchPresentation) -> some View {
@@ -1055,6 +1081,9 @@ struct EditorWorkspace: View {
         }
         .sheet(item: $documentSearchPresentation) { presentation in
             documentSearchSheet(presentation)
+        }
+        .sheet(item: $replacementSetPresentation) { presentation in
+            replacementSetSheet(presentation)
         }
         .sheet(isPresented: $showingLinkDiagnostics) {
             LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,

@@ -79,7 +79,7 @@ enum RegexSearch {
                                                length: 0))
     }
 
-    private static func compile(_ pattern: String, caseSensitive: Bool) throws -> NSRegularExpression {
+    static func compile(_ pattern: String, caseSensitive: Bool) throws -> NSRegularExpression {
         guard !pattern.isEmpty else { throw RegexSearchError.emptyPattern }
         do {
             return try NSRegularExpression(pattern: pattern,
@@ -89,7 +89,7 @@ enum RegexSearch {
         }
     }
 
-    fileprivate static func validScope(_ scope: NSRange?, in source: String) throws -> NSRange {
+    static func validScope(_ scope: NSRange?, in source: String) throws -> NSRange {
         let length = (source as NSString).length
         guard let scope else {
             return NSRange(location: 0, length: length)
@@ -101,8 +101,8 @@ enum RegexSearch {
         return scope
     }
 
-    private static func expand(_ template: String, for match: NSTextCheckingResult,
-                               in source: NSString, captureCount: Int) throws -> String {
+    static func expand(_ template: String, for match: NSTextCheckingResult,
+                       in source: NSString, captureCount: Int) throws -> String {
         let characters = Array(template)
         var result = ""
         var cursor = 0
@@ -223,8 +223,8 @@ enum DocumentSearch {
 
     private static let wordBoundary = try! NSRegularExpression(pattern: #"\b"#, options: [.useUnicodeWordBoundaries])
 
-    private static func plainRanges(in source: String, pattern: String, options: DocumentSearchOptions,
-                                    scope: NSRange?, onlyMatch: NSRange? = nil) throws -> [NSRange] {
+    static func plainRanges(in source: String, pattern: String, options: DocumentSearchOptions,
+                            scope: NSRange?, onlyMatch: NSRange? = nil) throws -> [NSRange] {
         guard !pattern.isEmpty else { throw RegexSearchError.emptyPattern }
         let scope = try RegexSearch.validScope(scope, in: source)
         let original = source as NSString

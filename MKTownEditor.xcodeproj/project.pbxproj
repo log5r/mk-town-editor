@@ -64,6 +64,8 @@
 		A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* MarkdownLineIndex.swift */; };
 		A10000000000000000000021 /* GoToLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* GoToLineSheet.swift */; };
 		36B793901DAB4BA6AF223677 /* EditorLineSortSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */; };
+		B7BEC4991AE14462AAC61592 /* ReplacementSet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD997137A54B490AB1880748 /* ReplacementSet.swift */; };
+		0263067021C2426892143016 /* ReplacementSetSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 175043CE6B3A4254A2878175 /* ReplacementSetSheet.swift */; };
 		A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* GoToHeadingSheet.swift */; };
 		A10000000000000000000023 /* NavigationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* NavigationHistory.swift */; };
 		A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* MarkdownHeadingIndex.swift */; };
@@ -272,6 +274,8 @@
 		A20000000000000000000020 /* MarkdownLineIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineIndex.swift; sourceTree = "<group>"; };
 		A20000000000000000000021 /* GoToLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToLineSheet.swift; sourceTree = "<group>"; };
 		44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorLineSortSheet.swift; sourceTree = "<group>"; };
+		CD997137A54B490AB1880748 /* ReplacementSet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplacementSet.swift; sourceTree = "<group>"; };
+		175043CE6B3A4254A2878175 /* ReplacementSetSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplacementSetSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000022 /* GoToHeadingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToHeadingSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000023 /* NavigationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationHistory.swift; sourceTree = "<group>"; };
 		A20000000000000000000024 /* MarkdownHeadingIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHeadingIndex.swift; sourceTree = "<group>"; };
@@ -513,6 +517,8 @@
 				A20000000000000000000020 /* MarkdownLineIndex.swift */,
 				A20000000000000000000021 /* GoToLineSheet.swift */,
 				44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */,
+				CD997137A54B490AB1880748 /* ReplacementSet.swift */,
+				175043CE6B3A4254A2878175 /* ReplacementSetSheet.swift */,
 				A20000000000000000000022 /* GoToHeadingSheet.swift */,
 				A20000000000000000000023 /* NavigationHistory.swift */,
 				A20000000000000000000024 /* MarkdownHeadingIndex.swift */,
@@ -957,6 +963,8 @@
 				A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */,
 				A10000000000000000000021 /* GoToLineSheet.swift in Sources */,
 				36B793901DAB4BA6AF223677 /* EditorLineSortSheet.swift in Sources */,
+				B7BEC4991AE14462AAC61592 /* ReplacementSet.swift in Sources */,
+				0263067021C2426892143016 /* ReplacementSetSheet.swift in Sources */,
 				A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */,
 				A10000000000000000000023 /* NavigationHistory.swift in Sources */,
 				A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */,

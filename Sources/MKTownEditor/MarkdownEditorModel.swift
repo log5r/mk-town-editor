@@ -1124,8 +1124,9 @@ final class MarkdownEditorModel: ObservableObject {
     }
 
     /// 検索結果の順序を保ち、描画で扱える空でない範囲だけを保持する。
-    func showDocumentSearchHighlights(_ ranges: [NSRange], expectedSource: String) {
-        guard canUseDocumentSearchResult(expectedSource: expectedSource) else { return }
+    @discardableResult
+    func showDocumentSearchHighlights(_ ranges: [NSRange], expectedSource: String) -> Bool {
+        guard canUseDocumentSearchResult(expectedSource: expectedSource) else { return false }
         let length = (expectedSource as NSString).length
         var previousEnd = 0
         let drawableRanges = ranges.filter { range in
@@ -1134,11 +1135,15 @@ final class MarkdownEditorModel: ObservableObject {
             previousEnd = NSMaxRange(range)
             return true
         }
-        guard !drawableRanges.isEmpty else { clearDocumentSearchHighlights(); return }
+        guard !drawableRanges.isEmpty else {
+            clearDocumentSearchHighlights()
+            return true
+        }
         documentSearchHighlightSource = expectedSource
         documentSearchHighlightRanges = drawableRanges
         updateEditorState { $0.hasDocumentSearchHighlights = true }
         textView?.needsDisplay = true
+        return true
     }
 
     func clearDocumentSearchHighlights() {
@@ -1181,6 +1186,12 @@ final class MarkdownEditorModel: ObservableObject {
               edit.range.length >= 0,
               edit.range.length <= (expectedSource as NSString).length - edit.range.location else { return false }
         return perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
+    func applyReplacementSet(_ plan: ReplacementSetPlan) -> Bool {
+        guard let edit = plan.edit, applyRegexEdit(edit, expectedSource: plan.source) else { return false }
+        textView?.undoManager?.setActionName(String(localized: "置換セットを適用"))
+        return true
     }
 
     /// Applies a peer edit without stealing focus or splitting a Unicode grapheme.

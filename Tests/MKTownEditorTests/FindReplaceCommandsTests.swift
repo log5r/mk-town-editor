@@ -194,6 +194,49 @@ final class FindReplaceCommandsTests: XCTestCase {
         XCTAssertFalse(model.hasDocumentSearchHighlights)
         XCTAssertTrue(model.documentSearchHighlights(overlapping: range).isEmpty)
     }
+
+    func testReplacementSetAppliesSequentialChangesAsOneUndo() throws {
+        let source = "α one\nβ one"
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        defer { window.orderOut(nil); window.contentView = nil }
+        window.makeFirstResponder(view)
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let rules = [ReplacementRule(pattern: "one", replacement: "two"),
+                     ReplacementRule(pattern: "two", replacement: "三")]
+        let plan = try ReplacementSet(name: "表記統一", rules: rules).plan(in: source)
+
+        XCTAssertTrue(model.applyReplacementSet(plan))
+        XCTAssertEqual(view.string, "α 三\nβ 三")
+        let undoManager = try XCTUnwrap(view.undoManager)
+        XCTAssertTrue(undoManager.canUndo)
+        undoManager.undo()
+        XCTAssertEqual(view.string, source)
+        XCTAssertFalse(undoManager.canUndo)
+        undoManager.redo()
+        XCTAssertEqual(view.string, "α 三\nβ 三")
+    }
+
+    func testReplacementSetRejectsStaleTextReadOnlyAndMarkedText() throws {
+        let view = FinderSpyTextView()
+        view.string = "e\u{301} one"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        let set = ReplacementSet(name: "表記統一", rules: [ReplacementRule(pattern: "one", replacement: "two")])
+        let stalePlan = try set.plan(in: "é one")
+        XCTAssertFalse(model.applyReplacementSet(stalePlan))
+        let plan = try set.plan(in: view.string)
+        view.isEditable = false
+        XCTAssertFalse(model.applyReplacementSet(plan))
+        view.isEditable = true
+        view.simulatesMarkedText = true
+        XCTAssertFalse(model.applyReplacementSet(plan))
+        XCTAssertEqual(Array(view.string.utf16), Array("e\u{301} one".utf16))
+    }
 }
 
 @MainActor
