@@ -21,6 +21,18 @@ final class CollaborativeTextReplacementTests: XCTestCase {
                        NSRange(location: 3, length: 0))
     }
 
+    func testRemoteNormalizationPreservesExactTextAndMovesLaterSelection() throws {
+        let original = "Aが👩‍💻ぱB"
+        let normalized = "Aか\u{3099}👩‍💻は\u{309A}B"
+        let edit = try XCTUnwrap(CollaborativeTextReplacement.between(original, normalized))
+        let range = NSRange(location: 1, length: original.utf16.count - 2)
+        XCTAssertEqual(edit.range, range)
+        let updated = (original as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
+        XCTAssertEqual(Array(updated.utf8), Array(normalized.utf8))
+        XCTAssertEqual(edit.mapped(NSRange(location: original.utf16.count - 1, length: 1)),
+                       NSRange(location: normalized.utf16.count - 1, length: 1))
+    }
+
     @MainActor
     func testUnlockRetriesRemoteUpdateWithoutAnotherLocalTextEdit() async throws {
         let textView = EditorTextView()

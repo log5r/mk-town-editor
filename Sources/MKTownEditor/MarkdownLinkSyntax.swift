@@ -302,7 +302,7 @@ enum MarkdownLinkSyntax {
         }
     }
 
-    private static func isEscaped(_ source: NSString, at location: Int) -> Bool {
+    static func isEscaped(_ source: NSString, at location: Int) -> Bool {
         var cursor = location - 1
         while cursor >= 0 && source.character(at: cursor) == 92 { cursor -= 1 }
         return (location - cursor - 1) % 2 == 1

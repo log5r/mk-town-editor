@@ -16,6 +16,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var snippets: [EditorSnippet] = []
     var whitespaceOptions = EditorWhitespaceOptions()
     var whitespaceEditingOptions = EditorWhitespaceEditingOptions()
+    var textTransformationOptions = EditorTextTransformationOptions()
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -114,6 +115,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.onImageDrop = onImageDrop
         textView.onImagePaste = onImagePaste
         model.markdownDialect = documentContext.markdownDialect
+        model.textTransformationOptions = textTransformationOptions
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         textView.registerForDraggedTypes([.fileURL])
@@ -190,6 +192,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             textView.cancelLinkHover()
         }
         model.markdownDialect = documentContext.markdownDialect
+        model.textTransformationOptions = textTransformationOptions
         textView.hoverDocumentContext = documentContext
         textView.loadsExternalLinkPreviews = loadsExternalLinkPreviews
         context.coordinator.sharedSnapshot = sharedSnapshot
@@ -459,7 +462,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
             // until matching analysis arrives instead of clearing them on every keystroke.
             // Inline marker ranges also belong to the old source and must not be reapplied.
             if usesSharedAnalysis && snapshot == nil { return }
-            let needsBase = highlightedSource != source || highlightedSnapshotSource != snapshotSource ||
+            let needsBase = !MarkdownTextFormat.identicalText(highlightedSource, source) ||
+                !MarkdownTextFormat.identicalText(highlightedSnapshotSource, snapshotSource) ||
                 highlightedDialect != dialect ||
                 highlightedWithSharedAnalysis != usesSharedAnalysis ||
                 highlightedWithLivePresentation != usesInlineLivePresentation ||
@@ -575,7 +579,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             guard let textView else { return }
             let source = textView.editorSource
             let dialect = model.markdownDialect
-            let needsRanges = proofingSource != source || proofingDialect != dialect
+            let needsRanges = !MarkdownTextFormat.identicalText(proofingSource, source) || proofingDialect != dialect
             var analysedRanges = false
             if usesSharedAnalysis {
                 if let snapshot = sharedSnapshot, snapshot.matches(source: source, dialect: dialect) {
@@ -595,7 +599,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
             }
             // Shifting drops ranges cut by an edit. When the text is back to the analysed source
             // (an undo, or the edit retyped before a new snapshot arrived), use the exact ranges.
-            if proofingSource == source {
+            let hasCurrentSource = MarkdownTextFormat.identicalText(proofingSource, source)
+            if hasCurrentSource {
                 protectedProofingRanges = proofingSourceRanges
                 proofingRangesArePending = false
                 proofingRangesWereDiscarded = false
@@ -607,7 +612,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             // since then are found in the caret's paragraph, so prose keeps spelling and
             // correction. A pending dialect change (or no snapshot yet) still suppresses
             // correction: it can change which regions are protected anywhere in the document.
-            let sourcePending = usesSharedAnalysis && proofingSource != source
+            let sourcePending = usesSharedAnalysis && !hasCurrentSource
             let dialectPending = usesSharedAnalysis && proofingDialect != dialect
             let protected = dialectPending || proofingRangesWereDiscarded
                 || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)

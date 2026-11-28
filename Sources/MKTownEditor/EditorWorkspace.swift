@@ -236,13 +236,6 @@ struct EditorWorkspace: View {
         let initialMode: DocumentSearchMode
         let initialScope: NSRange
     }
-    private struct HighlightedDocumentSource: Equatable {
-        let text: String
-
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            MarkdownTextFormat.identicalText(lhs.text, rhs.text)
-        }
-    }
     @State private var documentSearchPresentation: DocumentSearchPresentation?
     @State private var documentOperation: Task<Void, Never>?
     @State private var documentOperationRunning = false
@@ -1499,7 +1492,8 @@ struct EditorWorkspace: View {
             receivePendingExternalLine()
             receivePendingWorkspaceTask()
         }
-        .onChange(of: document.text) { _, newText in
+        .onChange(of: MarkdownSourceText(document.text)) { _, source in
+            let newText = source.text
             if let fileURL { workspaceStore.openBufferDidChange(for: fileURL) }
             collaboration.localChange(newText)
             previewUpdates.sourceChanged()
@@ -1512,8 +1506,8 @@ struct EditorWorkspace: View {
             if showingTerminology { checkTerminology() }
         }
         .task(id: DocumentSaveWarnings.Input(document: document)) { await checkSaveWarnings() }
-        .onChange(of: collaboration.currentText) { _, sharedText in
-            applyCollaborativeText(sharedText)
+        .onChange(of: MarkdownSourceText(collaboration.currentText)) { _, source in
+            applyCollaborativeText(source.text)
         }
         .onChange(of: settingsStore.app.terminologyEntries) { _, _ in
             if showingTerminology { checkTerminology() }
@@ -1528,8 +1522,8 @@ struct EditorWorkspace: View {
     }
 
     private var searchHighlightChangesView: some View {
-        let source: HighlightedDocumentSource? = editorModel.hasDocumentSearchHighlights
-            ? HighlightedDocumentSource(text: document.text) : nil
+        let source: MarkdownSourceText? = editorModel.hasDocumentSearchHighlights
+            ? MarkdownSourceText(document.text) : nil
         return documentChangesView.onChange(of: source) { _, source in
             if let source { editorModel.invalidateDocumentSearchHighlights(for: source.text) }
         }
@@ -1554,7 +1548,7 @@ struct EditorWorkspace: View {
         // savePosition also records the sidebar; it used to be saved by a 3-second timer.
         .onChange(of: sidebarTab) { _, _ in schedulePositionSave() }
         .onChange(of: sidebarVisibility) { _, _ in schedulePositionSave() }
-        .onChange(of: analysisStore.snapshot?.source) { _, _ in
+        .onChange(of: analysisStore.snapshot.map { MarkdownSourceText($0.source) }) { _, _ in
             receiveCompletedAnalysis()
         }
         .onChange(of: analysisStore.snapshot?.dialect) { _, _ in
@@ -2385,7 +2379,7 @@ struct EditorWorkspace: View {
         externalLinkTask?.cancel()
         externalLinkChecks = []
         isCheckingExternalLinks = false
-        let cachedAnalysis = analysisStore.snapshot?.source == source
+        let cachedAnalysis = MarkdownTextFormat.identicalText(analysisStore.snapshot?.source, source)
             ? analysisStore.snapshot?.analysis : nil
         let context = documentContext
         isCheckingLinks = true
@@ -2394,7 +2388,7 @@ struct EditorWorkspace: View {
                 let analysis = cachedAnalysis ?? MarkdownAnalysis(source)
                 return MarkdownLinkDiagnostics.inspect(source, analysis: analysis, context: context)
             }.value
-            guard document.text == source else { return }
+            guard MarkdownTextFormat.identicalText(document.text, source) else { return }
             linkDiagnostics = diagnostics
             isCheckingLinks = false
         }
@@ -2402,7 +2396,7 @@ struct EditorWorkspace: View {
 
     private func checkExternalLinks() {
         let source = document.text
-        let cachedAnalysis = analysisStore.snapshot?.source == source
+        let cachedAnalysis = MarkdownTextFormat.identicalText(analysisStore.snapshot?.source, source)
             ? analysisStore.snapshot?.analysis : nil
         let analysis = cachedAnalysis ?? MarkdownAnalysis(source)
         let targets = MarkdownExternalLinkChecker.targets(in: source, analysis: analysis)
@@ -2411,7 +2405,7 @@ struct EditorWorkspace: View {
         isCheckingExternalLinks = true
         externalLinkTask = Task {
             let results = await MarkdownExternalLinkChecker.inspect(targets)
-            guard !Task.isCancelled, document.text == source else { return }
+            guard !Task.isCancelled, MarkdownTextFormat.identicalText(document.text, source) else { return }
             externalLinkChecks = results
             isCheckingExternalLinks = false
         }
@@ -2419,7 +2413,7 @@ struct EditorWorkspace: View {
 
     private func checkMarkdownLint() {
         let source = document.text
-        let cachedAnalysis = analysisStore.snapshot?.source == source
+        let cachedAnalysis = MarkdownTextFormat.identicalText(analysisStore.snapshot?.source, source)
             ? analysisStore.snapshot?.analysis : nil
         let context = documentContext
         let disabled = settingsStore.app.disabledLintRules ?? []
@@ -2429,7 +2423,7 @@ struct EditorWorkspace: View {
                 MarkdownLint.inspect(source, analysis: cachedAnalysis ?? MarkdownAnalysis(source),
                                      context: context, disabled: disabled)
             }.value
-            guard document.text == source,
+            guard MarkdownTextFormat.identicalText(document.text, source),
                   (settingsStore.app.disabledLintRules ?? []) == disabled else { return }
             markdownLintDiagnostics = diagnostics
             isCheckingMarkdownLint = false
@@ -2441,7 +2435,7 @@ struct EditorWorkspace: View {
         let source = document.text
         let entries = settingsStore.app.terminologyEntries ?? []
         let options = settingsStore.app.terminologyOptions ?? TerminologyOptions()
-        let cachedAnalysis = analysisStore.snapshot?.source == source
+        let cachedAnalysis = MarkdownTextFormat.identicalText(analysisStore.snapshot?.source, source)
             ? analysisStore.snapshot?.analysis : nil
         isCheckingTerminology = true
         let worker = Task.detached(priority: .userInitiated) {
@@ -2453,7 +2447,7 @@ struct EditorWorkspace: View {
         terminologyTask = worker
         Task {
             let issues = await worker.value
-            guard !worker.isCancelled, showingTerminology, document.text == source,
+            guard !worker.isCancelled, showingTerminology, MarkdownTextFormat.identicalText(document.text, source),
                   (settingsStore.app.terminologyEntries ?? []) == entries,
                   (settingsStore.app.terminologyOptions ?? TerminologyOptions()) == options else { return }
             terminologyIssues = issues
@@ -2596,7 +2590,10 @@ struct EditorWorkspace: View {
 
     private func applyCollaborativeText(_ sharedText: String) {
         guard !isReadOnly, collaboration.isActive else { pendingCollaborativeText = nil; return }
-        guard document.text != sharedText else { pendingCollaborativeText = nil; return }
+        guard !MarkdownTextFormat.identicalText(document.text, sharedText) else {
+            pendingCollaborativeText = nil
+            return
+        }
         guard !workspaceStore.isDocumentLocked(fileURL) else {
             pendingCollaborativeText = sharedText
             return
@@ -2801,6 +2798,7 @@ struct EditorWorkspace: View {
                                    showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
                                    showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
                                whitespaceEditingOptions: settingsStore.whitespaceEditingOptions(for: fileURL),
+                               textTransformationOptions: settingsStore.app.textTransformationOptions,
                                isEditable: canEditDocument,
                                onImageDrop: dropImage, onImagePaste: pasteImage,
                                onVisibleSourceChange: synchronizePreview(to:),

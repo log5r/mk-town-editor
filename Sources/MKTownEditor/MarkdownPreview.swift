@@ -13,7 +13,7 @@ struct PreviewNavigationTarget: Equatable {
     /// 表示中の原文で移動先を解決できたか。解析待ちの古い表示で解決した移動は、
     /// 一致する解析結果が届いた時にもう一度適用する。
     func isSettled(byDisplayedSource displayedSource: String) -> Bool {
-        source == nil || source == displayedSource
+        source == nil || MarkdownTextFormat.identicalText(source, displayedSource)
     }
 
     /// 要求後に初めて表示が新しい解析に変わった時は、原文が一致しなくても確定する。
@@ -79,7 +79,7 @@ struct MarkdownPreview: View {
 
     private var remoteImageWork: RemoteImageWork {
         guard loadsRemoteImages else { return RemoteImageWork(isEnabled: false, urls: [], sourceHash: 0) }
-        if let snapshot, snapshot.source == markdown {
+        if let snapshot, MarkdownTextFormat.identicalText(snapshot.source, markdown) {
             return RemoteImageWork(isEnabled: true, urls: snapshot.remoteImageURLs, sourceHash: 0)
         }
         return RemoteImageWork(isEnabled: true, urls: nil, sourceHash: markdown.hashValue)
@@ -697,7 +697,7 @@ struct HoverLinkText: NSViewRepresentable {
     func updateNSView(_ view: HoverPreviewTextView, context: Context) {
         context.coordinator.onOpenURL = { url in openURL(url) }
         if view.hoverDocumentContext != self.context ||
-            view.hoverSource != source ||
+            !MarkdownTextFormat.identicalText(view.hoverSource, source) ||
             view.loadsExternalLinkPreviews != loadsExternalPages {
             view.cancelHover()
         }
@@ -1007,7 +1007,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
         context.coordinator.onInspectImage = onInspectImage
         context.coordinator.documentContext = documentContext
         if textView.hoverDocumentContext != documentContext ||
-            textView.hoverSource != markdown ||
+            !MarkdownTextFormat.identicalText(textView.hoverSource, markdown) ||
             textView.loadsExternalLinkPreviews != loadsExternalLinkPreviews {
             textView.cancelHover()
         }
@@ -1053,7 +1053,7 @@ private struct MarkdownTextPreview: NSViewRepresentable {
     }
 
     private func update(_ textView: NSTextView, coordinator: Coordinator) {
-        guard coordinator.renderedSource != markdown ||
+        guard !MarkdownTextFormat.identicalText(coordinator.renderedSource, markdown) ||
                 coordinator.renderedContext != documentContext ||
                 coordinator.renderedZoom != zoom ||
                 coordinator.renderedRemoteRevision != remoteRevision else { return }
@@ -1478,7 +1478,7 @@ final class PreviewUpdateController: ObservableObject {
         generation += 1
         let requestedGeneration = generation
         task?.cancel()
-        if preferredSnapshot?.source == source && preferredSnapshot?.dialect == dialect {
+        if preferredSnapshot?.matches(source: source, dialect: dialect) == true {
             snapshot = preferredSnapshot
             task = nil
             return
@@ -1490,7 +1490,8 @@ final class PreviewUpdateController: ObservableObject {
     }
 
     private func publish(_ result: DocumentSnapshot, generation requestedGeneration: Int) {
-        guard generation == requestedGeneration, state.displayedSource == result.source else { return }
+        guard generation == requestedGeneration,
+              MarkdownTextFormat.identicalText(state.displayedSource, result.source) else { return }
         snapshot = result
         task = nil
     }

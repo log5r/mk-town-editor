@@ -123,16 +123,21 @@ struct CollaborativeDocument: Codable, Equatable {
     }
 
     mutating func edit(to next: String) -> Delta {
-        if textCache == next { return Delta() }
+        if let textCache, MarkdownTextFormat.identicalText(textCache, next) { return Delta() }
         let previous = visibleAtoms
         let newCharacters = Array(next)
         let common = min(previous.count, newCharacters.count)
         var prefix = 0
-        while prefix < common, previous[prefix].character == String(newCharacters[prefix]) { prefix += 1 }
+        while prefix < common,
+              MarkdownTextFormat.identicalText(previous[prefix].character, String(newCharacters[prefix])) {
+            prefix += 1
+        }
         var suffix = 0
         while suffix < common - prefix,
-              previous[previous.count - suffix - 1].character ==
-                String(newCharacters[newCharacters.count - suffix - 1]) { suffix += 1 }
+              MarkdownTextFormat.identicalText(previous[previous.count - suffix - 1].character,
+                String(newCharacters[newCharacters.count - suffix - 1])) {
+            suffix += 1
+        }
         let removed = previous[prefix..<(previous.count - suffix)]
         var delta = Delta(deletes: removed.map(\.id))
         var predecessor = prefix == 0 ? nil : previous[prefix - 1].id
@@ -150,7 +155,6 @@ struct CollaborativeDocument: Codable, Equatable {
         visible += delta.inserts
         visible += previous[(previous.count - suffix)...]
         visibleCache = visible
-        // 正準等価でも異なる表記の文字は既存の文字の表記を保つため、本文は文字から組み立てる。
         textCache = visible.map(\.character).joined()
         return delta
     }

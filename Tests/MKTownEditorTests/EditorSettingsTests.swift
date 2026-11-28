@@ -32,6 +32,29 @@ final class EditorSettingsTests: XCTestCase {
                                                       trimsTrailingWhitespaceOnSave: true, trimsWhitespaceOnlyLines: true))
     }
 
+    func testTextTransformationOptionsUseDefaultsForOlderSettingsAndPersistChanges() throws {
+        let old = try JSONDecoder().decode(AppEditorSettings.self,
+            from: Data(#"{"defaultMode":"split","fontSize":17,"lineSpacing":3,"wrapsLines":true}"#.utf8))
+        XCTAssertEqual(old.fontSize, 17)
+        XCTAssertTrue(old.textTransformationOptions.convertsAlphanumerics)
+        XCTAssertTrue(old.textTransformationOptions.convertsSymbols)
+        XCTAssertTrue(old.textTransformationOptions.convertsKana)
+        XCTAssertTrue(old.textTransformationOptions.preservesCodeAndURLs)
+
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        var settings = old
+        settings.textTransformationOptions.convertsAlphanumerics = false
+        settings.textTransformationOptions.convertsKana = false
+        settings.textTransformationOptions.preservesCodeAndURLs = false
+        store.setAppSettings(settings)
+
+        let reopened = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertEqual(reopened.app.textTransformationOptions, EditorTextTransformationOptions(
+            convertsAlphanumerics: false, convertsSymbols: true, convertsKana: false, preservesCodeAndURLs: false))
+        XCTAssertEqual(reopened.app.fontSize, 17)
+    }
+
     func testMixedNewlinePromptIsLimitedToMixedFilesAndRemembersDocumentExceptions() throws {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)

@@ -44,6 +44,21 @@ final class DocumentStatisticsTests: XCTestCase {
         XCTAssertNil(store.section)
     }
 
+    @MainActor
+    func testStatusRescansTheSameUTF16SelectionAfterNormalization() async throws {
+        let store = DocumentStatusStore()
+        let selections = [NSRange(location: 3, length: 1)]
+        store.update(snapshot: DocumentSnapshot(source: "か\u{3099}\n\n# Second\nvisible"), selections: selections)
+        for _ in 0..<100 where store.selection == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.selection?.nonWhitespaceCharacters, 0)
+        XCTAssertNil(store.section)
+
+        store.update(snapshot: DocumentSnapshot(source: "が\n\n# Second\nvisible"), selections: selections)
+        for _ in 0..<100 where store.section == nil { try await Task.sleep(for: .milliseconds(5)) }
+        XCTAssertEqual(store.selection?.nonWhitespaceCharacters, 1)
+        XCTAssertEqual(store.section?.title, "Second")
+    }
+
     func testScanObservingCancellationThrowsOnceTheTaskIsCancelled() async throws {
         let text = String(repeating: "word ", count: DocumentStatistics.cancellationCheckInterval)
         let completed = try await Task.detached { try DocumentStatistics.scanObservingCancellation(text) }.value

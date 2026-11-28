@@ -538,6 +538,12 @@ struct MarkdownCommands: Commands {
                 commandButton(.convertIndentationToSpaces)
                 commandButton(.convertIndentationToTabs)
             }
+            Menu("字種とUnicodeの変換") {
+                ForEach(EditorCommand.textTransformations, id: \.self) { command in
+                    commandButton(command)
+                }
+            }
+            .disabled(!editorHasTextSelection || editorModel?.canTransformSelection != true)
             commandButton(.inspectUnicode)
                 .disabled(!editorHasTextSelection)
             commandButton(.insertUnicode)

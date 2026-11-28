@@ -288,6 +288,7 @@ private extension SettingsArchive.Category {
                       summarize: optional(onOff)),
                 Field("trimsWhitespaceOnlyLines", \.app.trimsWhitespaceOnlyLines, "空白だけの行の空白削除",
                       summarize: optional(onOff)),
+                Field("textTransformation", \.app.textTransformation, "字種とUnicodeの変換"),
                 Field("wordCountMode", enumPath: \.app.wordCountMode, "語数の数え方", summarize: { $0.title }),
                 Field("readingEstimate", \.app.readingEstimate, "読む時間と音読時間", validate: validReadingEstimate,
                       summarize: optional(readingEstimateSummary), read: { values, key in

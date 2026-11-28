@@ -227,7 +227,7 @@ final class DocumentStatusStore: ObservableObject {
 
     func update(snapshot: DocumentSnapshot?, selections: [NSRange]) {
         guard let snapshot else { return }
-        let sourceChanged = source != snapshot.source || dialect != snapshot.dialect
+        let sourceChanged = dialect != snapshot.dialect || !MarkdownTextFormat.identicalText(source, snapshot.source)
         guard sourceChanged || ranges != selections else { return }
         if sourceChanged { sectionCache.removeAll() }
         source = snapshot.source

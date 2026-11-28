@@ -137,6 +137,51 @@ final class DocumentAnalysisStoreTests: XCTestCase {
         }
     }
 
+    func testCanonicallyEquivalentEditPublishesSnapshotWithUpdatedUTF16Offsets() async throws {
+        let decomposed = "か\u{3099} `code`"
+        let composed = "が `code`"
+        XCTAssertEqual(decomposed, composed)
+
+        let store = DocumentAnalysisStore()
+        store.update(source: decomposed)
+        for _ in 0..<100 where store.snapshot == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let initial = try XCTUnwrap(store.snapshot)
+        XCTAssertEqual(initial.inlineCodeRanges, [NSRange(location: 3, length: 6)])
+        XCTAssertFalse(initial.matches(source: composed, dialect: .extended))
+
+        store.update(source: composed)
+        let pending = PreviewPresentation(snapshot: store.snapshot, requestedSource: composed,
+                                          currentSource: composed, dialect: .extended)
+        XCTAssertFalse(pending.isCurrent)
+        XCTAssertEqual(Array(pending.source.utf8), Array(decomposed.utf8))
+
+        for _ in 0..<100 where store.snapshot?.source.utf16.count != composed.utf16.count {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let completed = try XCTUnwrap(store.snapshot)
+        XCTAssertEqual(Array(completed.source.utf8), Array(composed.utf8))
+        XCTAssertEqual(completed.inlineCodeRanges, [NSRange(location: 2, length: 6)])
+        XCTAssertTrue(PreviewPresentation(snapshot: completed, requestedSource: composed,
+                                          currentSource: composed, dialect: .extended).isCurrent)
+    }
+
+    func testCanonicallyEquivalentPendingRequestUsesLatestSource() async throws {
+        let composed = "が `code`"
+        let decomposed = "か\u{3099} `code`"
+        let store = DocumentAnalysisStore()
+        store.update(source: composed)
+        store.update(source: decomposed)
+
+        for _ in 0..<100 where store.snapshot == nil {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        let snapshot = try XCTUnwrap(store.snapshot)
+        XCTAssertEqual(Array(snapshot.source.utf8), Array(decomposed.utf8))
+        XCTAssertEqual(snapshot.inlineCodeRanges, [NSRange(location: 3, length: 6)])
+    }
+
     func testPreviewRequiresInitialAnalysisAndMatchingDialect() {
         let initial = PreviewPresentation(snapshot: nil, requestedSource: "new",
             currentSource: "new", dialect: .extended)

@@ -37,6 +37,22 @@ final class PreviewRenderCacheTests: XCTestCase {
         XCTAssertEqual(cache.renderCount, 3)
     }
 
+    func testCanonicallyEquivalentTextRendersTheRequestedScalarsInBlocksAndCells() throws {
+        let cache = PreviewRenderCache()
+        let context = DocumentContext(fileURL: nil)
+        for source in ["か\u{3099}", "が"] {
+            let analysis = MarkdownAnalysis(source)
+            let block = try XCTUnwrap(analysis.rootBlocks.first)
+            let renderedBlock = cache.render(block, in: analysis, context: context, zoom: 1)
+            let renderedCell = cache.renderCell(source, in: analysis, context: context, zoom: 1)
+            XCTAssertEqual(Array(renderedBlock.string.utf8), Array(source.utf8))
+            XCTAssertEqual(Array(renderedCell.string.utf8), Array(source.utf8))
+            XCTAssertTrue(renderedBlock === cache.render(block, in: analysis, context: context, zoom: 1))
+            XCTAssertTrue(renderedCell === cache.renderCell(source, in: analysis, context: context, zoom: 1))
+        }
+        XCTAssertEqual(cache.renderCount, 4)
+    }
+
     func testReferenceAndZoomChangesInvalidateCachedRendering() throws {
         let first = MarkdownAnalysis("[link][ref]\n\n[ref]: /a")
         let changed = MarkdownAnalysis("[link][ref]\n\n[ref]: /b")

@@ -184,6 +184,12 @@ struct EditorPreferencesView: View {
                 Text("Markdownの改行とコードブロック内の空白は保持します。")
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section("字種とUnicodeの変換") {
+                Toggle("英数字の全角・半角を変換", isOn: binding(\.textTransformationOptions.convertsAlphanumerics))
+                Toggle("記号の全角・半角を変換", isOn: binding(\.textTransformationOptions.convertsSymbols))
+                Toggle("カタカナの全角・半角を変換", isOn: binding(\.textTransformationOptions.convertsKana))
+                Toggle("コードとURLを変換対象から除外", isOn: binding(\.textTransformationOptions.preservesCodeAndURLs))
+            }
         }
         .formStyle(.grouped)
     }

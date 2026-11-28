@@ -1,5 +1,21 @@
 import Foundation
 
+/// Preserves code points when comparing text for source ranges, observation, or rendering.
+struct MarkdownSourceText: Hashable {
+    let text: String
+
+    init(_ text: String) { self.text = text }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        MarkdownTextFormat.identicalText(lhs.text, rhs.text)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        var source = text
+        source.withUTF8 { hasher.combine(bytes: UnsafeRawBufferPointer($0)) }
+    }
+}
+
 struct MarkdownTextFormat: Equatable {
     enum Newline: String, CaseIterable, Identifiable {
         case lf
@@ -278,6 +294,11 @@ struct MarkdownTextFormat: Equatable {
                 firstKind = kind
             }
         }
+    }
+
+    static func identicalText(_ lhs: String?, _ rhs: String?) -> Bool {
+        guard let lhs, let rhs else { return lhs == nil && rhs == nil }
+        return identicalText(lhs, rhs)
     }
 
     private static func normalizedBytes(_ bytes: String.UTF8View) -> [UInt8] {

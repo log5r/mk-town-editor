@@ -369,6 +369,13 @@ struct EditorWhitespaceEditingOptions: Equatable, Sendable {
     var trimsWhitespaceOnlyLines = false
 }
 
+struct EditorTextTransformationOptions: Codable, Equatable, Sendable {
+    var convertsAlphanumerics = true
+    var convertsSymbols = true
+    var convertsKana = true
+    var preservesCodeAndURLs = true
+}
+
 struct EditorProofingSettings: Codable, Equatable {
     var language: ProofingLanguage = .automatic
     var checksSpelling = true
@@ -468,6 +475,7 @@ struct AppEditorSettings: Codable, Equatable {
     var detectsIndentation: Bool?
     var trimsTrailingWhitespaceOnSave: Bool?
     var trimsWhitespaceOnlyLines: Bool?
+    var textTransformation: EditorTextTransformationOptions?
     var tableAddsRowOnTab: Bool?
     var editorZoom: Double?
     var previewZoom: Double?
@@ -516,6 +524,11 @@ struct AppEditorSettings: Codable, Equatable {
     var asksAboutMixedNewlines: Bool?
 
     var effectiveDocumentOpeningMode: DocumentOpeningMode { documentOpeningMode ?? .default }
+
+    var textTransformationOptions: EditorTextTransformationOptions {
+        get { textTransformation ?? EditorTextTransformationOptions() }
+        set { textTransformation = newValue == EditorTextTransformationOptions() ? nil : newValue }
+    }
 
     /// エディタのフォント。フォントファミリーを選ぶと `fontFamily` だけを書き、`fontChoice` は
     /// 以前の版が使う値として残す。標準装備の選択肢を選ぶと `fontFamily` を消す。

@@ -66,7 +66,7 @@ final class MarkdownMinimapStore: ObservableObject {
     private var task: Task<Void, Never>?
 
     func update(source: String) {
-        if requestedSource == source { return }
+        if MarkdownTextFormat.identicalText(requestedSource, source) { return }
         generation += 1
         let version = generation
         requestedSource = source
@@ -139,7 +139,7 @@ struct MarkdownMinimapView: View {
         .frame(width: 76)
         .background(Color.secondary.opacity(0.04))
         .onAppear { store.update(source: source) }
-        .onChange(of: source) { _, current in store.update(source: current) }
+        .onChange(of: MarkdownSourceText(source)) { _, current in store.update(source: current.text) }
         .onDisappear { store.cancel() }
     }
 }
