@@ -449,7 +449,7 @@ enum RegexSearchInputStyle {
     var color: NSColor { self == .pattern ? .systemPurple : .systemBlue }
 }
 
-private struct DocumentSearchField: NSViewRepresentable {
+struct DocumentSearchField: NSViewRepresentable {
     let title: String
     let placeholder: String
     @Binding var text: String
