@@ -193,6 +193,61 @@ final class EditorCommandTests: XCTestCase {
         withExtendedLifetime(coordinator) {}
     }
 
+    func testSelectionNormalizationPreservesSelectionAndSavedNewlinesAndSupportsUndo() throws {
+        let original = "前\r\nが👩‍💻\nパ\r\n後"
+        let decoded = MarkdownTextFormat.read(text: original, hasUTF8BOM: false)
+        var document = MarkdownDocument(text: decoded.text)
+        document.format = decoded.format
+        let binding = Binding(get: { document }, set: { document = $0 })
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        window.makeFirstResponder(view)
+        view.allowsUndo = true
+        view.string = document.text
+        let model = MarkdownEditorModel()
+        let coordinator = MarkdownTextEditor.Coordinator(text: binding.text, model: model, document: binding)
+        coordinator.textView = view
+        view.delegate = coordinator
+        model.connect(view)
+
+        let command = EditorCommand.transformSelection(.nfd)
+        XCTAssertFalse(command.canExecute(in: model))
+        let selection = (view.string as NSString).range(of: "が👩‍💻\nパ")
+        view.setSelectedRange(selection)
+        XCTAssertTrue(EditorCommand.paletteMatches("", in: model).contains(command))
+        XCTAssertTrue(EditorShortcutRegistry.commands.contains(command))
+        XCTAssertEqual(Set(EditorCommand.textTransformations.map(\.toolbarIdentifier)).count, 11)
+
+        command.perform(on: model)
+        let decomposed = "か\u{3099}👩‍💻\nハ\u{309A}"
+        XCTAssertEqual(view.selectedRange(), NSRange(location: selection.location, length: decomposed.utf16.count))
+        XCTAssertEqual(try document.encodedData(), Data("前\r\nか\u{3099}👩‍💻\nハ\u{309A}\r\n後".utf8))
+
+        view.undoManager?.undo()
+        XCTAssertEqual(try document.encodedData(), Data(original.utf8))
+        view.isEditable = false
+        view.setSelectedRange(selection)
+        XCTAssertFalse(command.canExecute(in: model))
+        withExtendedLifetime(coordinator) {}
+    }
+
+    func testWidthCommandUsesEditorPreferences() {
+        let view = NSTextView()
+        view.string = "x Ａ！ガ `Ｂ` y"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        model.textTransformationOptions.convertsSymbols = false
+        model.textTransformationOptions.convertsKana = false
+        model.textTransformationOptions.preservesCodeAndURLs = false
+        view.setSelectedRange((view.string as NSString).range(of: "Ａ！ガ `Ｂ`"))
+
+        EditorCommand.transformSelection(.fullwidthToHalfwidth).perform(on: model)
+
+        XCTAssertEqual(view.string, "x A！ガ `B` y")
+        XCTAssertEqual(view.selectedRange(), (view.string as NSString).range(of: "A！ガ `B`"))
+    }
+
     func testWhitespaceCommandsUseTheActiveSelectionAndRespectReadOnlyMode() {
         let view = NSTextView()
         view.string = "一行目 \n二行目 \n    字下げ\n"

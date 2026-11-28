@@ -16,6 +16,19 @@ final class MarkdownMinimapTests: XCTestCase {
         XCTAssertEqual(plan.location(at: -1), 0)
     }
 
+    @MainActor
+    func testNormalizationInvalidatesOldMinimapNavigationOffsets() async throws {
+        let store = MarkdownMinimapStore()
+        store.update(source: "か\u{3099}\nnext")
+        for _ in 0..<200 where !store.isCurrent { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.plan?.location(at: 1), 3)
+
+        store.update(source: "が\nnext")
+        XCTAssertFalse(store.isCurrent)
+        for _ in 0..<200 where !store.isCurrent { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(store.plan?.location(at: 1), 2)
+    }
+
     func testManyLinesRemainWithinBarLimit() throws {
         let source = Array(repeating: "short\nlonger line\n", count: 1000).joined()
         let plan = try XCTUnwrap(MarkdownMinimapPlan.make(source: source))

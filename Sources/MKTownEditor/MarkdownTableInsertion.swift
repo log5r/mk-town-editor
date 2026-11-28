@@ -674,7 +674,15 @@ enum MarkdownTableEditing {
         return source.substring(to: cursor)
     }
 
-    private static func cells(in line: String, expected: Int) -> [NSRange]? {
+    static func cellSourceRanges(in source: NSString, table: MarkdownTable, startingAt offset: Int) -> [NSRange] {
+        let header = source.lineRange(for: NSRange(location: offset, length: 0))
+        return ([header] + table.rowRanges).flatMap { row in
+            let line = lineContent(source.substring(with: row)).content
+            return (cells(in: line) ?? []).map { NSRange(location: row.location + $0.location, length: $0.length) }
+        }
+    }
+
+    private static func cells(in line: String, expected: Int? = nil) -> [NSRange]? {
         let source = line as NSString
         var boundaries: [Int] = []
         var cursor = (tablePrefix(line) as NSString).length
@@ -709,9 +717,12 @@ enum MarkdownTableEditing {
         if boundaries.last != end - 1 || boundaries.isEmpty {
             result.append(NSRange(location: cellStart, length: end - cellStart))
         }
-        guard !result.isEmpty, result.count <= expected else { return nil }
-        result += Array(repeating: NSRange(location: end, length: 0),
-                        count: expected - result.count)
+        guard !result.isEmpty else { return nil }
+        if let expected {
+            guard result.count <= expected else { return nil }
+            result += Array(repeating: NSRange(location: end, length: 0),
+                            count: expected - result.count)
+        }
         return result
     }
 

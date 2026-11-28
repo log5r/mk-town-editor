@@ -1,6 +1,166 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "字種とUnicodeの変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text and Unicode Transformations"
+          }
+        }
+      }
+    },
+    "大文字にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make Uppercase"
+          }
+        }
+      }
+    },
+    "小文字にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make Lowercase"
+          }
+        }
+      }
+    },
+    "語頭を大文字にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capitalize Words"
+          }
+        }
+      }
+    },
+    "半角にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert to Halfwidth"
+          }
+        }
+      }
+    },
+    "全角にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert to Fullwidth"
+          }
+        }
+      }
+    },
+    "ひらがなにする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert to Hiragana"
+          }
+        }
+      }
+    },
+    "カタカナにする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert to Katakana"
+          }
+        }
+      }
+    },
+    "NFCに正規化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalize to NFC"
+          }
+        }
+      }
+    },
+    "NFDに正規化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalize to NFD"
+          }
+        }
+      }
+    },
+    "NFKCに正規化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalize to NFKC"
+          }
+        }
+      }
+    },
+    "NFKDに正規化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalize to NFKD"
+          }
+        }
+      }
+    },
+    "英数字の全角・半角を変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Width of Latin Letters and Digits"
+          }
+        }
+      }
+    },
+    "記号の全角・半角を変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Width of Symbols"
+          }
+        }
+      }
+    },
+    "カタカナの全角・半角を変換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Width of Katakana"
+          }
+        }
+      }
+    },
+    "コードとURLを変換対象から除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Code and URLs from Transformations"
+          }
+        }
+      }
+    },
     "選択した文字のUnicode情報を表示" : {
       "localizations" : {
         "en" : {

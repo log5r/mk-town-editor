@@ -16,6 +16,8 @@ final class SettingsArchiveTests: XCTestCase {
         settings.loadsExternalLinkPreviews = true
         settings.editorFont = .family("Hiragino Sans")
         settings.fontSize = 16
+        settings.textTransformationOptions.convertsSymbols = false
+        settings.textTransformationOptions.preservesCodeAndURLs = false
         settings.disabledLintRules = [.headingHierarchy, .listMarker]
         settings.previewBodyWidth = 1040
         settings.preservesSoftLineBreaksInPreview = true
@@ -79,6 +81,7 @@ final class SettingsArchiveTests: XCTestCase {
         var local = destination.app
         local.fontSize = 22
         local.tabWidth = 8
+        local.textTransformationOptions.convertsKana = false
         local.previewBodyWidth = 720
         destination.setAppSettings(local)
 
@@ -94,6 +97,7 @@ final class SettingsArchiveTests: XCTestCase {
 
         XCTAssertEqual(destination.app.fontSize, 27)
         XCTAssertNil(destination.app.tabWidth)
+        XCTAssertTrue(destination.app.textTransformationOptions.convertsKana)
         XCTAssertEqual(destination.app.previewBodyWidth, 720)
         XCTAssertNil(destination.app.loadsRemoteImages)
         XCTAssertEqual(destination.displayState(for: localURL)?.mode, .editor)
@@ -111,6 +115,7 @@ final class SettingsArchiveTests: XCTestCase {
         settings.fontChoice = .menlo
         settings.previewTheme = .paper
         settings.fontFamily = "Some Family"
+        settings.textTransformationOptions.convertsKana = false
         store.setAppSettings(settings)
         let data = Data("""
         {
@@ -134,6 +139,7 @@ final class SettingsArchiveTests: XCTestCase {
         XCTAssertEqual(store.app.fontChoice, .menlo)
         XCTAssertEqual(store.app.fontFamily, "Some Family")
         XCTAssertEqual(store.app.previewTheme, .paper)
+        XCTAssertFalse(store.app.textTransformationOptions.convertsKana)
         XCTAssertNil(store.app.attachmentDirectory)
         XCTAssertNil(store.app.extensionPackages)
     }

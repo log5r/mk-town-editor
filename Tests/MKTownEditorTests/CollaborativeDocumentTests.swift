@@ -77,6 +77,26 @@ final class CollaborativeDocumentTests: XCTestCase {
         XCTAssertEqual(restored.comments, document.comments)
     }
 
+    func testNormalizationEditSendsTheExactTextToPeers() throws {
+        let original = "前が👩‍💻ぱ後"
+        let normalized = "前か\u{3099}👩‍💻は\u{309A}後"
+        let room = UUID()
+        var host = CollaborativeDocument(text: original, roomID: room, siteID: "host")
+        var guest = CollaborativeDocument(text: "", roomID: room, siteID: "guest")
+        guest.merge(host)
+
+        let delta = host.edit(to: normalized)
+        XCTAssertEqual(delta.deletes.count, 3)
+        let packet = try JSONEncoder().encode(delta)
+        guest.apply(try JSONDecoder().decode(CollaborativeDocument.Delta.self, from: packet))
+        XCTAssertEqual(Array(host.text.utf8), Array(normalized.utf8))
+        XCTAssertEqual(Array(guest.text.utf8), Array(normalized.utf8))
+        XCTAssertTrue(guest.edit(to: normalized).isEmpty)
+
+        host.apply(guest.edit(to: original))
+        XCTAssertEqual(Array(host.text.utf8), Array(original.utf8))
+    }
+
     func testSequentialLocalEditsAlwaysMatchRequestedText() {
         var document = CollaborativeDocument(text: "abc", siteID: "writer")
         var expected = "abc"

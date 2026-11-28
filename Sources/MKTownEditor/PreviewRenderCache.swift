@@ -58,13 +58,13 @@ enum PreviewStructure {
 final class PreviewRenderCache: ObservableObject {
     private struct BlockSignature: Hashable {
         struct TableSignature: Hashable {
-            let header: [String]
-            let rows: [[String]]
+            let header: [MarkdownSourceText]
+            let rows: [[MarkdownSourceText]]
             let alignments: [MarkdownTable.Alignment]
         }
 
         let kind: MarkdownBlock.Kind
-        let content: String
+        let content: MarkdownSourceText
         let codeLanguage: String?
         let lineBreaks: [MarkdownLineBreak]
         let nestingDepth: Int
@@ -74,31 +74,32 @@ final class PreviewRenderCache: ObservableObject {
 
         init(_ block: MarkdownBlock, showsTaskPrefix: Bool) {
             kind = block.kind
-            content = block.content
+            content = MarkdownSourceText(block.content)
             codeLanguage = block.codeLanguage
             lineBreaks = block.lineBreaks
             nestingDepth = block.nestingDepth
             hasParent = block.parentID != nil
             self.showsTaskPrefix = showsTaskPrefix
             table = block.table.map {
-                TableSignature(header: $0.header, rows: $0.rows, alignments: $0.alignments)
+                TableSignature(header: $0.header.map(MarkdownSourceText.init),
+                               rows: $0.rows.map { $0.map(MarkdownSourceText.init) }, alignments: $0.alignments)
             }
         }
     }
 
     private struct ReferenceSignature: Equatable {
-        let destination: String
-        let title: String?
+        let destination: MarkdownSourceText
+        let title: MarkdownSourceText?
     }
 
     private struct FootnoteSignature: Equatable {
         let id: String
         let number: Int
-        let content: String
+        let content: MarkdownSourceText
     }
 
     private struct CellKey: Hashable {
-        let markdown: String
+        let markdown: MarkdownSourceText
         let resourceRevision: Int?
     }
 
@@ -178,7 +179,7 @@ final class PreviewRenderCache: ObservableObject {
                     zoom: Double, remoteRevision: Int = 0,
                     theme: PreviewTheme = .system) -> NSAttributedString {
         prepare(analysis, context: context, zoom: zoom, theme: theme)
-        let key = CellKey(markdown: markdown,
+        let key = CellKey(markdown: MarkdownSourceText(markdown),
                           resourceRevision: Self.mayContainImage(markdown) ? remoteRevision : nil)
         clock += 1
         if var cached = cells[key] {
@@ -227,10 +228,10 @@ final class PreviewRenderCache: ObservableObject {
             analysisIdentity = analysis.identity
             signatureComputationCount += 1
             let signatures = analysis.references.mapValues {
-                ReferenceSignature(destination: $0.destination, title: $0.title)
+                ReferenceSignature(destination: MarkdownSourceText($0.destination), title: $0.title.map(MarkdownSourceText.init))
             }
             let noteSignatures = analysis.footnotes.entries.map {
-                FootnoteSignature(id: $0.id, number: $0.number, content: $0.content)
+                FootnoteSignature(id: $0.id, number: $0.number, content: MarkdownSourceText($0.content))
             }
             if references != signatures || footnotes != noteSignatures ||
                 crossReferences != analysis.crossReferences {

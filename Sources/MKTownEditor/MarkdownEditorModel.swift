@@ -136,7 +136,8 @@ final class MarkdownEditorModel: ObservableObject {
     private var unicodeInspector: NSPopover?
     var sharedSnapshot: DocumentSnapshot? {
         didSet {
-            if oldValue?.source != sharedSnapshot?.source || oldValue?.dialect != sharedSnapshot?.dialect {
+            if !MarkdownTextFormat.identicalText(oldValue?.source, sharedSnapshot?.source) ||
+                oldValue?.dialect != sharedSnapshot?.dialect {
                 scheduleAnalysisAvailabilityChange()
             }
         }
@@ -147,6 +148,7 @@ final class MarkdownEditorModel: ObservableObject {
     var markdownDialect: MarkdownDialect = .extended {
         didSet { if oldValue != markdownDialect { scheduleAnalysisAvailabilityChange() } }
     }
+    var textTransformationOptions = EditorTextTransformationOptions()
     private var analysisAvailabilityTask: Task<Void, Never>?
 
     private func scheduleAnalysisAvailabilityChange() {
@@ -180,7 +182,7 @@ final class MarkdownEditorModel: ObservableObject {
         let source = textView?.editorSource
         let selections = textView?.selectedRanges.map(\.rangeValue)
         let widths = [effectiveListIndentWidth, effectiveCodeIndentWidth]
-        if source != availabilitySource || selections != availabilitySelections ||
+        if !MarkdownTextFormat.identicalText(source, availabilitySource) || selections != availabilitySelections ||
             availabilityDialect != markdownDialect || availabilityIndentWidths != widths ||
             availabilityIndentationStyle != indentationStyle {
             availabilitySource = source; availabilitySelections = selections; availabilityDialect = markdownDialect
@@ -724,6 +726,25 @@ final class MarkdownEditorModel: ObservableObject {
         return textView.selectedRange().length > 0
     }
 
+    var canTransformSelection: Bool {
+        canExecuteCommand && (textView?.selectedRange().length ?? 0) > 0
+    }
+
+    func transformSelection(_ transformation: EditorTextTransformation) {
+        guard canTransformSelection, let textView, let storage = textView.textStorage else { return }
+        let selection = textView.selectedRange()
+        var widthCharacters: EditorTextTransformation.WidthCharacters = []
+        if textTransformationOptions.convertsAlphanumerics { widthCharacters.insert(.alphanumeric) }
+        if textTransformationOptions.convertsSymbols { widthCharacters.insert(.symbols) }
+        if textTransformationOptions.convertsKana { widthCharacters.insert(.kana) }
+        guard let replacement = transformation.replacement(in: textView.editorSource, range: selection,
+            widthCharacters: widthCharacters, protectsMarkdown: textTransformationOptions.preservesCodeAndURLs,
+            dialect: markdownDialect) else { return }
+        let selectedResult = NSRange(location: selection.location, length: replacement.utf16.count)
+        perform(MarkdownEdit(range: selection, replacement: replacement, selection: selectedResult),
+                in: textView, storage: storage, focusEditor: true)
+    }
+
     func presentUnicodeInspector() {
         guard canInspectUnicode, let textView, let window = textView.window else { return }
         let selection = textView.selectedRange()
@@ -1142,7 +1163,7 @@ final class MarkdownEditorModel: ObservableObject {
     func applyCollaborativeText(_ next: String, expectedSource: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
               textView.isEditable, !textView.hasMarkedText(),
-              textView.editorSource == expectedSource else { return false }
+              MarkdownTextFormat.identicalText(textView.editorSource, expectedSource) else { return false }
         guard let change = CollaborativeTextReplacement.between(expectedSource, next) else { return true }
         let selections = textView.selectedRanges.map(\.rangeValue).map(change.mapped)
         let edit = MarkdownEdit(range: change.range, replacement: change.replacement,

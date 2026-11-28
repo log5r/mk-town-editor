@@ -45,6 +45,7 @@ enum EditorCommand: Hashable {
     case find
     case inspectUnicode
     case insertUnicode
+    case transformSelection(EditorTextTransformation)
 
     static let toolbar: [Self] = [
         .bold, .italic, .link, .strikethrough, .inlineCode,
@@ -76,9 +77,11 @@ enum EditorCommand: Hashable {
         case .convertIndentationToTabs: "convert-indentation-to-tabs"
         case .inspectUnicode: "inspect-unicode"
         case .insertUnicode: "insert-unicode"
+        case let .transformSelection(transformation): "transform-selection-\(transformation.rawValue)"
         default: "other-\(String(describing: self))"
         }
     }
+    static let textTransformations = EditorTextTransformation.allCases.map(Self.transformSelection)
     static let palette: [Self] = [
         .bold, .italic, .strikethrough, .highlight, .superscript, .subscriptText,
         .inlineCode, .removeFormatting,
@@ -92,7 +95,7 @@ enum EditorCommand: Hashable {
         .deleteLines, .trimTrailingWhitespace, .convertIndentationToSpaces, .convertIndentationToTabs,
         .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find, .inspectUnicode, .insertUnicode
-    ] + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
+    ] + textTransformations + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
     /// The editor's context menu stays short: inline formatting, links and images, and list
     /// toggles. Everything else is in its "Markdown" submenu.
     static let contextGroups: [[Self]] = [
@@ -149,6 +152,17 @@ enum EditorCommand: Hashable {
         case .find: String(localized: "検索…")
         case .inspectUnicode: String(localized: "選択した文字のUnicode情報を表示")
         case .insertUnicode: String(localized: "コードポイントから文字を挿入…")
+        case .transformSelection(.uppercase): String(localized: "大文字にする")
+        case .transformSelection(.lowercase): String(localized: "小文字にする")
+        case .transformSelection(.capitalized): String(localized: "語頭を大文字にする")
+        case .transformSelection(.fullwidthToHalfwidth): String(localized: "半角にする")
+        case .transformSelection(.halfwidthToFullwidth): String(localized: "全角にする")
+        case .transformSelection(.hiraganaToKatakana): String(localized: "カタカナにする")
+        case .transformSelection(.katakanaToHiragana): String(localized: "ひらがなにする")
+        case .transformSelection(.nfc): String(localized: "NFCに正規化")
+        case .transformSelection(.nfd): String(localized: "NFDに正規化")
+        case .transformSelection(.nfkc): String(localized: "NFKCに正規化")
+        case .transformSelection(.nfkd): String(localized: "NFKDに正規化")
         }
     }
 
@@ -198,6 +212,7 @@ enum EditorCommand: Hashable {
         case .find: "magnifyingglass"
         case .inspectUnicode: "info.circle"
         case .insertUnicode: "text.insert"
+        case .transformSelection: "textformat"
         }
     }
 
@@ -238,7 +253,7 @@ enum EditorCommand: Hashable {
         case .image: nil
         case .table: nil
         case .find: ("f", .command)
-        case .inspectUnicode, .insertUnicode: nil
+        case .inspectUnicode, .insertUnicode, .transformSelection: nil
         }
     }
 
@@ -289,6 +304,8 @@ enum EditorCommand: Hashable {
             return model?.canComment == true
         case .snippet:
             return !(model?.snippets.isEmpty ?? true)
+        case .transformSelection:
+            return model?.canTransformSelection == true
         default: return true
         }
     }
@@ -341,6 +358,7 @@ enum EditorCommand: Hashable {
         case .find: model.showFindBar()
         case .inspectUnicode: model.presentUnicodeInspector()
         case .insertUnicode: model.presentUnicodeInsertion()
+        case let .transformSelection(transformation): model.transformSelection(transformation)
         }
     }
 }

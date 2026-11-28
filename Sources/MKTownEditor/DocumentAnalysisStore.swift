@@ -77,7 +77,7 @@ struct DocumentSnapshot: Sendable {
 
     /// Source offsets and parsed structure are valid only for both inputs.
     func matches(source: String, dialect: MarkdownDialect) -> Bool {
-        self.dialect == dialect && self.source == source
+        self.dialect == dialect && MarkdownTextFormat.identicalText(self.source, source)
     }
 }
 
@@ -106,7 +106,7 @@ struct PreviewPresentation {
          currentSource: String, dialect: MarkdownDialect) {
         self.snapshot = snapshot?.dialect == dialect ? snapshot : nil
         source = self.snapshot?.source ?? requestedSource
-        isCurrent = self.snapshot != nil && source == currentSource
+        isCurrent = self.snapshot?.matches(source: currentSource, dialect: dialect) == true
     }
 }
 
@@ -130,7 +130,8 @@ final class DocumentAnalysisStore: ObservableObject {
             if requestedSource != nil { cancel() }
             return
         }
-        if requestedSource == source && requestedDialect == dialect { return }
+        if requestedDialect == dialect, let requestedSource,
+           MarkdownTextFormat.identicalText(requestedSource, source) { return }
         generation += 1
         let requestedGeneration = generation
         requestedSource = source
