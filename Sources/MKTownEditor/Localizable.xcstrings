@@ -1,6 +1,326 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "比較する部分を調べています" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finding sort keys"
+          }
+        }
+      }
+    },
+    "行を並べ替えています" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sorting lines"
+          }
+        }
+      }
+    },
+    "条件を指定して行を並べ替え" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort Lines with Options"
+          }
+        }
+      }
+    },
+    "比較する部分" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort Key"
+          }
+        }
+      }
+    },
+    "行全体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whole Line"
+          }
+        }
+      }
+    },
+    "区切り文字で分けた列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delimited Column"
+          }
+        }
+      }
+    },
+    "正規表現の一致部分" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regular Expression Match"
+          }
+        }
+      }
+    },
+    "区切り文字（タブは\\t）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Separator (\\t for Tab)"
+          }
+        }
+      }
+    },
+    "列番号" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Column Number"
+          }
+        }
+      }
+    },
+    "キャプチャ番号（0は一致全体）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capture Group (0 for Entire Match)"
+          }
+        }
+      }
+    },
+    "大文字と小文字を区別しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore Case"
+          }
+        }
+      }
+    },
+    "数値として比較" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compare Numbers Numerically"
+          }
+        }
+      }
+    },
+    "言語の規則に従う" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow Language Rules"
+          }
+        }
+      }
+    },
+    "降順" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descending"
+          }
+        }
+      }
+    },
+    "先頭行を固定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep First Line in Place"
+          }
+        }
+      }
+    },
+    "並べ替えできませんでした。キャンセルして本文と選択範囲を確認してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't sort the lines. Cancel and check the document and selection."
+          }
+        }
+      }
+    },
+    "並べ替え" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort"
+          }
+        }
+      }
+    },
+    "比較に使う文字列のプレビュー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort Key Preview"
+          }
+        }
+      }
+    },
+    "元の行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Line"
+          }
+        }
+      }
+    },
+    "固定する行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept in Place"
+          }
+        }
+      }
+    },
+    "空文字列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty String"
+          }
+        }
+      }
+    },
+    "比較する部分なし" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Sort Key"
+          }
+        }
+      }
+    },
+    "区切り文字を入力してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a separator."
+          }
+        }
+      }
+    },
+    "列番号には1以上の整数を指定してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a column number of 1 or higher."
+          }
+        }
+      }
+    },
+    "有効な正規表現を入力してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a valid regular expression."
+          }
+        }
+      }
+    },
+    "キャプチャ番号には0から%lldまでの整数を指定してください。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a capture group between 0 and %lld."
+          }
+        }
+      }
+    },
+    "行の操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Operations"
+          }
+        }
+      }
+    },
+    "行を昇順に並べ替え" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort Lines Ascending"
+          }
+        }
+      }
+    },
+    "行を逆順にする" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reverse Line Order"
+          }
+        }
+      }
+    },
+    "重複行を削除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Duplicate Lines"
+          }
+        }
+      }
+    },
+    "行を結合" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Join Lines"
+          }
+        }
+      }
+    },
+    "条件を指定して行を並べ替え…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort Lines with Options…"
+          }
+        }
+      }
+    },
     "強調表示" : {
       "localizations" : {
         "en" : {

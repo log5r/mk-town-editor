@@ -538,6 +538,14 @@ struct MarkdownCommands: Commands {
                 commandButton(.convertIndentationToSpaces)
                 commandButton(.convertIndentationToTabs)
             }
+            Menu("行の操作") {
+                commandButton(.sortLinesAscending)
+                commandButton(.reverseLines)
+                commandButton(.removeDuplicateLines)
+                commandButton(.joinLines)
+                Divider()
+                commandButton(.sortLinesWithOptions)
+            }
             Menu("字種とUnicodeの変換") {
                 ForEach(EditorCommand.textTransformations, id: \.self) { command in
                     commandButton(command)
