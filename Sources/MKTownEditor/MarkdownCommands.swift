@@ -55,8 +55,13 @@ private struct ZoomActionsKey: FocusedValueKey {
     typealias Value = ZoomActions
 }
 
-private struct RegexSearchActionKey: FocusedValueKey {
-    typealias Value = () -> Void
+struct DocumentSearchActions {
+    let show: (DocumentSearchMode) -> Void
+    let clearHighlights: (() -> Void)?
+}
+
+private struct DocumentSearchActionsKey: FocusedValueKey {
+    typealias Value = DocumentSearchActions
 }
 
 private struct ExportHTMLActionKey: FocusedValueKey {
@@ -186,9 +191,9 @@ extension FocusedValues {
         get { self[ZoomActionsKey.self] }
         set { self[ZoomActionsKey.self] = newValue }
     }
-    var regexSearchAction: (() -> Void)? {
-        get { self[RegexSearchActionKey.self] }
-        set { self[RegexSearchActionKey.self] = newValue }
+    var documentSearchActions: DocumentSearchActions? {
+        get { self[DocumentSearchActionsKey.self] }
+        set { self[DocumentSearchActionsKey.self] = newValue }
     }
     var exportHTMLAction: (() -> Void)? {
         get { self[ExportHTMLActionKey.self] }
@@ -271,7 +276,7 @@ struct MarkdownCommands: Commands {
     @FocusedValue(\.goToHeadingAction) private var goToHeadingAction
     @FocusedValue(\.navigationHistoryActions) private var navigationHistoryActions
     @FocusedValue(\.zoomActions) private var zoomActions
-    @FocusedValue(\.regexSearchAction) private var regexSearchAction
+    @FocusedValue(\.documentSearchActions) private var documentSearchActions
     @FocusedValue(\.exportHTMLAction) private var exportHTMLAction
     @FocusedValue(\.exportPDFAction) private var exportPDFAction
     @FocusedValue(\.exportExternalAction) private var exportExternalAction
@@ -520,9 +525,13 @@ struct MarkdownCommands: Commands {
                 .disabled(editorModel?.canExecuteCommand != true ||
                           !editorHasTextSelection)
             Divider()
-            Button("正規表現検索・置換…") { regexSearchAction?() }
+            Button("文書内検索・置換…") { documentSearchActions?.show(.plain) }
+                .disabled(documentSearchActions == nil)
+            Button("正規表現検索・置換…") { documentSearchActions?.show(.regex) }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
-                .disabled(regexSearchAction == nil)
+                .disabled(documentSearchActions == nil)
+            Button("検索の強調表示を解除") { documentSearchActions?.clearHighlights?() }
+                .disabled(documentSearchActions?.clearHighlights == nil)
         }
 
         CommandMenu("Markdown") {
