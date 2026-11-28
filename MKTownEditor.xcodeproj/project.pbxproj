@@ -34,6 +34,8 @@
 		A10000000000000000000009 /* MarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MarkdownPreview.swift */; };
 		A1000000000000000000000A /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* MarkdownRenderer.swift */; };
 		A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* MarkdownTextEditor.swift */; };
+		73EA42C313AD4C21A646D7AA /* EditorHighlightMatching.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC8E23C10537419482A54EC4 /* EditorHighlightMatching.swift */; };
+		BA59E6EA1B1940A99973DD2E /* EditorHighlightPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6739DCA126E944F39DC598EB /* EditorHighlightPresentation.swift */; };
 		A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000E /* MarkdownPositionMap.swift */; };
 		A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000F /* MarkdownAnalysis.swift */; };
 		A10000000000000000000010 /* DocumentContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DocumentContext.swift */; };
@@ -235,6 +237,8 @@
 		A20000000000000000000009 /* MarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreview.swift; sourceTree = "<group>"; };
 		A2000000000000000000000A /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
+		CC8E23C10537419482A54EC4 /* EditorHighlightMatching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorHighlightMatching.swift; sourceTree = "<group>"; };
+		6739DCA126E944F39DC598EB /* EditorHighlightPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorHighlightPresentation.swift; sourceTree = "<group>"; };
 		A2000000000000000000000C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000000000000000000000D /* MKTownEditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MKTownEditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000000000000000000000E /* MarkdownPositionMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPositionMap.swift; sourceTree = "<group>"; };
@@ -473,6 +477,8 @@
 				A200000000000000000000B2 /* PreviewUserScrollObserver.swift */,
 				A2000000000000000000000A /* MarkdownRenderer.swift */,
 				A2000000000000000000000B /* MarkdownTextEditor.swift */,
+				CC8E23C10537419482A54EC4 /* EditorHighlightMatching.swift */,
+				6739DCA126E944F39DC598EB /* EditorHighlightPresentation.swift */,
 				A2000000000000000000000E /* MarkdownPositionMap.swift */,
 				A2000000000000000000000F /* MarkdownAnalysis.swift */,
 				A20000000000000000000010 /* DocumentContext.swift */,
@@ -912,6 +918,8 @@
 				A100000000000000000000B2 /* PreviewUserScrollObserver.swift in Sources */,
 				A1000000000000000000000A /* MarkdownRenderer.swift in Sources */,
 				A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */,
+				73EA42C313AD4C21A646D7AA /* EditorHighlightMatching.swift in Sources */,
+				BA59E6EA1B1940A99973DD2E /* EditorHighlightPresentation.swift in Sources */,
 				A1000000000000000000000E /* MarkdownPositionMap.swift in Sources */,
 				A1000000000000000000000F /* MarkdownAnalysis.swift in Sources */,
 				A10000000000000000000010 /* DocumentContext.swift in Sources */,

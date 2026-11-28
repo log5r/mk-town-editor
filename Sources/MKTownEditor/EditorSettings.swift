@@ -376,6 +376,41 @@ struct EditorTextTransformationOptions: Codable, Equatable, Sendable {
     var preservesCodeAndURLs = true
 }
 
+struct EditorHighlightSettings: Codable, Equatable, Sendable {
+    static let wordDelayRange = 0.10...2.00
+    static let defaultWordDelay = 0.35
+
+    var currentLine: Bool
+    var matchingBrackets: Bool
+    var selectedWord: Bool
+    var wordDelay: Double {
+        didSet { wordDelay = Self.normalizedDelay(wordDelay) }
+    }
+
+    init(currentLine: Bool = false, matchingBrackets: Bool = false, selectedWord: Bool = false,
+         wordDelay: Double = Self.defaultWordDelay) {
+        self.currentLine = currentLine
+        self.matchingBrackets = matchingBrackets
+        self.selectedWord = selectedWord
+        self.wordDelay = Self.normalizedDelay(wordDelay)
+    }
+
+    enum CodingKeys: CodingKey { case currentLine, matchingBrackets, selectedWord, wordDelay }
+
+    init(from decoder: Decoder) {
+        let values = try? decoder.container(keyedBy: CodingKeys.self)
+        self.init(currentLine: (try? values?.decode(Bool.self, forKey: .currentLine)) ?? false,
+                  matchingBrackets: (try? values?.decode(Bool.self, forKey: .matchingBrackets)) ?? false,
+                  selectedWord: (try? values?.decode(Bool.self, forKey: .selectedWord)) ?? false,
+                  wordDelay: (try? values?.decode(Double.self, forKey: .wordDelay)) ?? Self.defaultWordDelay)
+    }
+
+    private static func normalizedDelay(_ delay: Double) -> Double {
+        guard delay.isFinite else { return defaultWordDelay }
+        return min(max(delay, wordDelayRange.lowerBound), wordDelayRange.upperBound)
+    }
+}
+
 struct EditorProofingSettings: Codable, Equatable {
     var language: ProofingLanguage = .automatic
     var checksSpelling = true
@@ -492,6 +527,7 @@ struct AppEditorSettings: Codable, Equatable {
     var showsMinimap: Bool?
     var usesInlineLivePresentation: Bool?
     var usesTypewriterMode: Bool?
+    var highlights: EditorHighlightSettings?
     var terminologyEntries: [TerminologyEntry]?
     var terminologyOptions: TerminologyOptions?
     var attachmentDirectory: AttachmentDirectory?
@@ -528,6 +564,11 @@ struct AppEditorSettings: Codable, Equatable {
     var textTransformationOptions: EditorTextTransformationOptions {
         get { textTransformation ?? EditorTextTransformationOptions() }
         set { textTransformation = newValue == EditorTextTransformationOptions() ? nil : newValue }
+    }
+
+    var highlightOptions: EditorHighlightSettings {
+        get { highlights ?? EditorHighlightSettings() }
+        set { highlights = newValue == EditorHighlightSettings() ? nil : newValue }
     }
 
     /// エディタのフォント。フォントファミリーを選ぶと `fontFamily` だけを書き、`fontChoice` は

@@ -3,8 +3,8 @@ import SwiftUI
 
 /// 編集画面の配色。プレビューと同じ `PreviewTheme`（紺色・紙色・標準装備・カスタム）から作る。
 ///
-/// テーマはプレビュー向けの色（背景、本文、見出し、リンク、コード、コードの字句）しか持たないため、
-/// 編集画面だけにある要素（Markdownの記号、選択範囲、カーソル、行番号）の色はそこから導く。
+/// 編集画面だけにある要素（Markdownの記号、選択範囲、カーソル、行番号）の色は共通の色から導く。
+/// カスタムテーマでは強調表示の色も指定できる。
 /// 対応は docs/preview-themes.md の「編集画面の配色」を参照。
 struct EditorThemePalette: Equatable {
     /// 設定が未保存のときの編集画面の配色。
@@ -22,6 +22,10 @@ struct EditorThemePalette: Equatable {
     let selectedText: NSColor
     let insertionPoint: NSColor
     let lineNumber: NSColor
+    let currentLineHighlight: NSColor
+    let matchingBracketBackground: NSColor
+    let matchingBracketOutline: NSColor
+    let selectedWordHighlight: NSColor
     /// テーマの背景の明るさに合わせた外観。
     let appearanceName: NSAppearance.Name
     let heading: NSColor
@@ -58,10 +62,13 @@ struct EditorThemePalette: Equatable {
         })
         theme = colors
         self.background = background
-        text = readable(body)
+        let text = readable(body)
+        self.text = text
         // 見出しの色が本文と同じテーマ（GitHub風、Tomorrow、Tomorrow Night）は、見出しをリンク色で区別する。
-        heading = readable(Self.distinct(headingColor, from: body) ?? linkColor)
-        link = readable(linkColor)
+        let heading = readable(Self.distinct(headingColor, from: body) ?? linkColor)
+        self.heading = heading
+        let link = readable(linkColor)
+        self.link = link
         // コードの色が本文と同じテーマは、文字列の字句の色でコードを区別する。
         code = readable(Self.distinct(codeColor, from: body) ?? syntax[.string].flatMap { $0 } ?? codeColor)
         // 記号は控えめに見せるため、コメントの色を使う。字句の色がないテーマは本文の色にする。
@@ -78,6 +85,17 @@ struct EditorThemePalette: Equatable {
         self.selection = selection
         // 本文の色は背景に対して検査済みでも、リンク色を混ぜた選択範囲の背景では足りない場合がある。
         selectedText = Self.readable(text, on: selection)
+        let highlights = colors.definition?.editorHighlights
+        let foregrounds = [text, heading, code, link, marker, quoteMarker, listMarker, taskMarker, tableMarker]
+            + Array(tokens.values)
+        currentLineHighlight = highlights?.color(\.currentLine)
+            ?? Self.highlightFill(text, over: background, fraction: 0.13, foregrounds: foregrounds)
+        matchingBracketBackground = highlights?.color(\.matchingBracketBackground)
+            ?? Self.highlightFill(heading, over: background, fraction: 0.18, foregrounds: foregrounds)
+        matchingBracketOutline = Self.readable(highlights?.color(\.matchingBracketOutline) ?? link,
+                                              on: matchingBracketBackground)
+        selectedWordHighlight = highlights?.color(\.selectedWord)
+            ?? Self.highlightFill(link, over: background, fraction: 0.24, foregrounds: foregrounds)
         insertionPoint = text
         appearanceName = colors.colorScheme == .dark ? .darkAqua : .aqua
     }
@@ -133,6 +151,34 @@ struct EditorThemePalette: Equatable {
         return NSColor(srgbRed: mix(top.redComponent, base.redComponent),
                        green: mix(top.greenComponent, base.greenComponent),
                        blue: mix(top.blueComponent, base.blueComponent), alpha: 1)
+    }
+
+    @MainActor
+    private static func highlightFill(_ tint: NSColor, over background: NSColor, fraction: CGFloat,
+                                      foregrounds: [NSColor]) -> NSColor {
+        func isReadable(on fill: NSColor) -> Bool {
+            foregrounds.allSatisfy { PreviewTypography.contrastRatio($0, fill) >= minimumContrast }
+        }
+        let initial = blend(tint, over: background, fraction: fraction)
+        if isReadable(on: initial) { return initial }
+
+        // 字句の色とのコントラストが足りなければ、背景が暗い配色では暗く、明るい配色では明るくする。
+        // 色みを残しつつ、元の背景からも区別できる候補を探す。
+        let neutral: NSColor = PreviewTypography.contrastRatio(.black, background) <
+            PreviewTypography.contrastRatio(.white, background) ? .black : .white
+        let separation = min(PreviewTypography.contrastRatio(initial, background), 1.3)
+        for step in 1...19 {
+            let candidate = blend(neutral, over: initial, fraction: CGFloat(step) / 20)
+            if PreviewTypography.contrastRatio(candidate, background) >= separation,
+               isReadable(on: candidate) { return candidate }
+        }
+
+        // 白地など、背景と同じ方向に十分離せない配色では、読める範囲で元の色を薄くする。
+        for step in (1...19).reversed() {
+            let candidate = blend(initial, over: background, fraction: CGFloat(step) / 20)
+            if isReadable(on: candidate) { return candidate }
+        }
+        return background
     }
 
     /// 背景とのコントラストが基準に届かない色を、色相を保ったまま白（暗い背景）か黒（明るい背景）へ寄せる。

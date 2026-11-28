@@ -17,6 +17,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var whitespaceOptions = EditorWhitespaceOptions()
     var whitespaceEditingOptions = EditorWhitespaceEditingOptions()
     var textTransformationOptions = EditorTextTransformationOptions()
+    var highlights = EditorHighlightSettings()
     var isEditable = true
     var onImageDrop: ((URL, Int) -> Void)?
     var onImagePaste: ((Data) -> Void)?
@@ -129,6 +130,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.refreshSyntax()
         layoutOptions.synchronizeWidth(of: textView, in: scrollView)
         context.coordinator.isRestoringSession = false
+        textView.applyHighlights(highlights, palette: palette)
         textView.onFocused = { [weak textView, weak model, weak coordinator = context.coordinator] in
             guard let textView, let model else { return }
             model.editorDidGainFocus(textView)
@@ -161,6 +163,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         coordinator.cancelVisibleSourceChange()
         if let textView = scrollView.documentView as? NSTextView {
             (textView as? EditorTextView)?.cancelLinkHover()
+            (textView as? EditorTextView)?.cancelTransientHighlights()
             coordinator.model.disconnect(textView, scrollView: scrollView)
         }
     }
@@ -209,6 +212,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             palette.apply(to: textView, in: scrollView)
             context.coordinator.palette = palette
         }
+        textView.applyHighlights(highlights, palette: context.coordinator.palette)
         if context.coordinator.appliedLayoutOptions != layoutOptions {
             layoutOptions.apply(to: textView, in: scrollView)
             context.coordinator.appliedLayoutOptions = layoutOptions
@@ -253,6 +257,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
         textView.setSelectedRanges(restored.map(NSValue.init(range:)), affinity: .upstream,
                                    stillSelecting: false)
+        textView.refreshHighlights()
         Task { @MainActor [weak scrollView, weak model] in
             guard let scrollView, let model,
                   model.textView === scrollView.documentView else { return }
@@ -322,7 +327,10 @@ struct MarkdownTextEditor: NSViewRepresentable {
             var source = textView.editorSource
             source.makeContiguousUTF8()
             publish(source, from: textView)
-            (textView as? EditorTextView)?.refreshInvisibles()
+            if let editor = textView as? EditorTextView {
+                editor.refreshInvisibles()
+                editor.refreshHighlights()
+            }
             applyProofing()
             refreshSyntax()
             if let scrollView, let options = appliedLayoutOptions {
@@ -502,6 +510,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
             defer { model.endViewUpdate() }
             (textView as? EditorTextView)?.unfold(containing: textView.selectedRange())
             model.selectionDidChange(textView.selectedRanges.map(\.rangeValue))
+            (textView as? EditorTextView)?.refreshHighlights(matchesCrossedBracket: !isRestoringSession)
             applyProofing()
             refreshSyntax()
         }
@@ -834,6 +843,23 @@ final class EditorTextView: NSTextView {
     fileprivate var pendingPaste: (raw: String, preserve: Bool)?
     private(set) var sourceRevision = 0
     private(set) var sourceReadCount = 0
+    private let highlightPresentation = EditorHighlightPresentation()
+
+    var currentLineHighlightRange: NSRange? { highlightPresentation.currentLine }
+    var matchingBracketHighlightRange: NSRange? { highlightPresentation.matchingBracket }
+    var selectedWordHighlight: String? { highlightPresentation.selectedWord }
+
+    func applyHighlights(_ settings: EditorHighlightSettings, palette: EditorThemePalette) {
+        highlightPresentation.configure(settings, palette: palette, in: self)
+    }
+
+    func refreshHighlights(matchesCrossedBracket: Bool = false) {
+        highlightPresentation.updateSelection(in: self, matchesCrossedBracket: matchesCrossedBracket)
+    }
+
+    func cancelTransientHighlights() {
+        highlightPresentation.clearSelection(in: self)
+    }
     /// フォントファミリーから書体を取り出す処理。テストでフォントの追加・削除を再現するときだけ差し替える。
     var fontResolver = EditorFontResolver.system
     /// 最後に適用したスタイルと、そのときに解決した本文フォント。
@@ -932,6 +958,7 @@ final class EditorTextView: NSTextView {
             undoing: expected == nil || undoManager?.isUndoing == true || undoManager?.isRedoing == true)
         cachedSource = nil
         sourceRevision += 1
+        highlightPresentation.clearSelection(in: self)
         refreshPlaceholderVisibility()
     }
 
@@ -959,6 +986,7 @@ final class EditorTextView: NSTextView {
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         guard isEditable else { return }
         super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        refreshHighlights()
         refreshPlaceholderVisibility()
     }
 
@@ -1158,13 +1186,19 @@ final class EditorTextView: NSTextView {
 
     override func becomeFirstResponder() -> Bool {
         let didBecome = super.becomeFirstResponder()
-        if didBecome { onFocused?() }
+        if didBecome {
+            refreshHighlights()
+            onFocused?()
+        }
         return didBecome
     }
 
     override func resignFirstResponder() -> Bool {
         let didResign = super.resignFirstResponder()
-        if didResign { onBlurred?() }
+        if didResign {
+            cancelTransientHighlights()
+            onBlurred?()
+        }
         return didResign
     }
 
@@ -1344,12 +1378,19 @@ final class EditorTextView: NSTextView {
 
     override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        guard let commandModel, commandModel.hasDocumentSearchHighlights,
+        let showsSearch = commandModel?.hasDocumentSearchHighlights == true
+        guard showsSearch || highlightPresentation.hasHighlights,
               let layoutManager, let textContainer else { return }
+        highlightPresentation.drawCurrentLine(in: rect, textView: self, layoutManager: layoutManager,
+                                              textContainer: textContainer)
+        guard showsSearch || highlightPresentation.hasMarks else { return }
         let origin = textContainerOrigin
         let containerRect = rect.offsetBy(dx: -origin.x, dy: -origin.y)
         let visibleGlyphs = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
         let visible = layoutManager.characterRange(forGlyphRange: visibleGlyphs, actualGlyphRange: nil)
+        highlightPresentation.drawMarks(visible: visible, textView: self, layoutManager: layoutManager,
+                                        textContainer: textContainer)
+        guard showsSearch, let commandModel else { return }
         // A border leaves the editor's foreground and background colors intact and is drawn
         // below the selection and glyphs. Neither text storage nor native Find uses this state.
         let color = EditorThemePalette.readable(.findHighlightColor, on: backgroundColor)
