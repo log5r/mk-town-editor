@@ -129,7 +129,8 @@ enum WorkspaceSearch {
     }
 
     static func report(root: URL, options: WorkspaceSearchOptions,
-                       maximumResults: Int = 2_000) throws -> WorkspaceSearchReport {
+                       maximumResults: Int = 2_000,
+                       candidates: [MarkdownTextEncoding] = MarkdownEncodingPreferences.candidates()) throws -> WorkspaceSearchReport {
         guard !options.query.isEmpty else { return WorkspaceSearchReport(results: [], skippedDocuments: [], isTruncated: false) }
         let scan = try WorkspaceFileIndex.scan(root: root)
         var skipped: [URL] = []
@@ -144,7 +145,8 @@ enum WorkspaceSearch {
             let relative = String(path.dropFirst(rootPrefix.count))
             guard matches(relative, patterns: options.includePatterns),
                   !matches(relative, patterns: options.excludePatterns) else { continue }
-            guard let data = try? Data(contentsOf: url), let text = try? MarkdownDocument.decode(data) else {
+            guard let data = try? Data(contentsOf: url),
+                  let text = try? MarkdownDocument.decode(data, candidates: candidates) else {
                 skipped.append(url)
                 continue
             }

@@ -4,6 +4,37 @@ import XCTest
 
 @MainActor
 final class WorkspaceOpenBufferTests: XCTestCase {
+    func testUnsavableBufferCanBeIndexedAndManuallySelectedEncodingSurvivesLinkUpdate() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let reference = root.appendingPathComponent("reference.md")
+        let original = Data("charset=utf-8\r\n[link](source.md)".utf8)
+        try Data("source".utf8).write(to: source)
+        try original.write(to: reference)
+        var open = try MarkdownDocument(data: original, encoding: .shiftJIS)
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        store.registerOpenBuffer(id: UUID(), url: reference, document: { open }, updateText: { open.text = $0 })
+        open.text += "😀"
+        let snapshots = try store.openBufferSnapshots()
+        XCTAssertEqual(try MarkdownDocument.decode(XCTUnwrap(snapshots[reference.resolvingSymlinksInPath()])), open.text)
+        let destination = root.appendingPathComponent("renamed.md")
+        XCTAssertThrowsError(try WorkspaceFileOperations.planMove(source: source, destination: destination,
+            root: root, openDocuments: store.openBufferDocuments()))
+        XCTAssertEqual(try Data(contentsOf: reference), original)
+
+        open.text.removeLast()
+        open.text += "日本語"
+        let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
+            root: root, openDocuments: store.openBufferDocuments())
+        try plan.apply()
+        let expected = "charset=utf-8\r\n[link](renamed.md)日本語"
+        XCTAssertEqual(try Data(contentsOf: reference), try XCTUnwrap(expected.data(using: .shiftJIS)))
+        try plan.rollback()
+        XCTAssertEqual(try Data(contentsOf: reference), original)
+    }
+
     func testOpenBufferIsValidatedAndUpdatedAfterMove() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -16,11 +47,11 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         let store = WorkspaceStore(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         let id = UUID()
         store.registerOpenBuffer(id: id, url: reference,
-                                 encodedData: { open.encodedData() },
+                                 document: { open },
                                  updateText: { open.text = $0 })
         let plan = try WorkspaceFileOperations.planMove(
             source: source, destination: root.appendingPathComponent("renamed.md"), root: root,
-            openDocuments: store.openBufferSnapshots())
+            openDocuments: store.openBufferDocuments())
         try store.validateOpenBuffers(in: plan)
         let lockID = store.lockOpenDocuments(in: plan)
         let secondLockID = store.lockOpenDocuments(in: plan)
@@ -49,19 +80,19 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         let firstID = UUID()
         let secondID = UUID()
         store.registerOpenBuffer(id: firstID, url: reference,
-                                 encodedData: { Data(first.utf8) }, updateText: { first = $0 })
+                                 document: { MarkdownDocument(text: first) }, updateText: { first = $0 })
         store.registerOpenBuffer(id: secondID, url: reference,
-                                 encodedData: { Data(second.utf8) }, updateText: { second = $0 })
+                                 document: { MarkdownDocument(text: second) }, updateText: { second = $0 })
         let plan = try WorkspaceFileOperations.planMove(
             source: source, destination: root.appendingPathComponent("renamed.md"), root: root,
-            openDocuments: store.openBufferSnapshots())
+            openDocuments: store.openBufferDocuments())
         second = "another unsaved edit"
         XCTAssertThrowsError(try store.openBufferSnapshots())
         let outside = root.deletingLastPathComponent().appendingPathComponent("outside.md")
         store.registerOpenBuffer(id: UUID(), url: outside,
-                                 encodedData: { Data("outside".utf8) }, updateText: { _ in })
+                                 document: { MarkdownDocument(text: "outside") }, updateText: { _ in })
         store.registerOpenBuffer(id: UUID(), url: outside,
-                                 encodedData: { Data("different".utf8) }, updateText: { _ in })
+                                 document: { MarkdownDocument(text: "different") }, updateText: { _ in })
         XCTAssertThrowsError(try store.openBufferSnapshots(under: root))
         XCTAssertThrowsError(try store.validateOpenBuffers(in: plan))
         second = first
@@ -81,10 +112,10 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         var text = "unsaved\n[link](source.md)"
         let store = WorkspaceStore(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         store.registerOpenBuffer(id: UUID(), url: reference,
-                                 encodedData: { Data(text.utf8) }, updateText: { text = $0 })
+                                 document: { MarkdownDocument(text: text) }, updateText: { text = $0 })
         let plan = try WorkspaceFileOperations.planMove(
             source: source, destination: root.appendingPathComponent("renamed.md"), root: root,
-            openDocuments: store.openBufferSnapshots())
+            openDocuments: store.openBufferDocuments())
         try plan.apply()
         text = "unsaved\n[link](renamed.md)"
         try store.applyOpenBufferChanges(in: plan)
@@ -102,10 +133,10 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         var text = "plain"
         let store = WorkspaceStore(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         store.registerOpenBuffer(id: UUID(), url: unrelated,
-                                 encodedData: { Data(text.utf8) }, updateText: { text = $0 })
+                                 document: { MarkdownDocument(text: text) }, updateText: { text = $0 })
         let plan = try WorkspaceFileOperations.planMove(
             source: source, destination: root.appendingPathComponent("renamed.md"), root: root,
-            openDocuments: store.openBufferSnapshots())
+            openDocuments: store.openBufferDocuments())
         XCTAssertEqual(plan.inspectedOpenDocuments.count, 1)
         text = "[new](source.md)"
         XCTAssertThrowsError(try store.validateOpenBuffers(in: plan))

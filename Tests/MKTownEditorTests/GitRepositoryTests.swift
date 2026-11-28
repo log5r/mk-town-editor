@@ -69,6 +69,20 @@ final class GitRepositoryTests: XCTestCase {
         }
     }
 
+    func testHistoricalFileUsesSameEncodingDetectionAsTheEditor() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try git(["init", "--quiet"], in: folder)
+        let file = folder.appendingPathComponent("legacy.md")
+        try XCTUnwrap("旧版の日本語\r\n".data(using: .shiftJIS)).write(to: file)
+        try git(["add", "--", "legacy.md"], in: folder)
+        try git(["-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                 "commit", "--quiet", "-m", "Initial"], in: folder)
+        let snapshot = try GitRepository.load(for: file)
+        XCTAssertEqual(try GitRepository.content(of: XCTUnwrap(snapshot.history.first), in: snapshot), "旧版の日本語\n")
+    }
+
     func testStagesUnstagesAndCommitsOnlyReviewedIndex() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -185,7 +199,7 @@ final class GitRepositoryTests: XCTestCase {
         XCTAssertTrue(try GitRepository.statusEntries(in: folder)[0].isConflicted)
         XCTAssertThrowsError(try GitRepository.stage(["conflict.md"], in: folder))
         XCTAssertThrowsError(try GitRepository.stageResolvedConflict("conflict.md", in: folder))
-        try "resolved\n".write(to: file, atomically: true, encoding: .utf8)
+        try XCTUnwrap("解決済み\n".data(using: .shiftJIS)).write(to: file)
         try GitRepository.stageResolvedConflict("conflict.md", in: folder)
         XCTAssertFalse(try GitRepository.statusEntries(in: folder)[0].isConflicted)
     }

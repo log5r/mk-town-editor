@@ -4,10 +4,10 @@ import XCTest
 
 final class WorkspaceDocumentTemplateTests: XCTestCase {
     /// A new document starts empty; guidance is a placeholder, not saved text (#28).
-    func testTemplatesHaveDistinctBodiesAndNewDocumentIsEmpty() {
+    func testTemplatesHaveDistinctBodiesAndNewDocumentIsEmpty() throws {
         XCTAssertEqual(WorkspaceDocumentTemplate.blank.text, "")
         XCTAssertEqual(MarkdownDocument().text, "")
-        XCTAssertEqual(MarkdownDocument().encodedData(), Data())
+        XCTAssertEqual(try MarkdownDocument().encodedData(), Data())
         XCTAssertFalse(WorkspaceDocumentTemplate.starter.text.isEmpty)
         XCTAssertTrue(WorkspaceDocumentTemplate.meetingNotes.text.contains("## 決定事項"))
         XCTAssertTrue(WorkspaceDocumentTemplate.article.text.contains("## 本文"))

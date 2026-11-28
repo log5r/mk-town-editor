@@ -85,7 +85,8 @@ enum GitRepository {
         guard revision.hash.range(of: #"^[0-9a-f]{40,64}$"#, options: .regularExpression) != nil,
               snapshot.history.contains(revision) else { throw GitRepositoryError.invalidDocument }
         return try run(in: snapshot.rootURL,
-                       arguments: ["show", "--no-ext-diff", "\(revision.hash):\(snapshot.relativePath)"])
+                       arguments: ["show", "--no-ext-diff", "\(revision.hash):\(snapshot.relativePath)"],
+                       decodeOutput: { try MarkdownDocument.decode($0) })
     }
 
     static func statusEntries(in root: URL) throws -> [GitStatusEntry] {
@@ -142,7 +143,7 @@ enum GitRepository {
         }) else { throw GitRepositoryError.invalidSelection }
         let url = root.appendingPathComponent(path).standardizedFileURL
         guard let data = try? Data(contentsOf: url),
-              let source = String(data: data, encoding: .utf8),
+              let source = try? MarkdownDocument.decode(data),
               !source.components(separatedBy: .newlines).contains(where: {
                   $0.hasPrefix("<<<<<<< ") || $0.hasPrefix("=======") || $0.hasPrefix(">>>>>>> ")
               }) else { throw GitRepositoryError.unresolvedConflict }
@@ -189,7 +190,8 @@ enum GitRepository {
         return environment
     }
 
-    private static func run(in folder: URL, arguments: [String], timeout: TimeInterval = 8) throws -> String {
+    private static func run(in folder: URL, arguments: [String], timeout: TimeInterval = 8,
+                            decodeOutput: (Data) throws -> String = { String(decoding: $0, as: UTF8.self) }) throws -> String {
         let temporary = FileManager.default.temporaryDirectory
         let outputURL = temporary.appendingPathComponent("mktown-git-\(UUID().uuidString).out")
         let errorURL = temporary.appendingPathComponent("mktown-git-\(UUID().uuidString).err")
@@ -229,6 +231,6 @@ enum GitRepository {
             throw GitRepositoryError.commandFailed(message.isEmpty
                 ? String(localized: "Gitの読み取りに失敗しました。") : message)
         }
-        return String(decoding: data, as: UTF8.self)
+        return try decodeOutput(data)
     }
 }

@@ -12,6 +12,7 @@ enum WorkspaceFileOperationError: LocalizedError {
     case invalidName
     case workspaceChanged
     case openDocumentChanged(URL)
+    case unrepresentableText(URL, MarkdownTextEncoding, Int)
 
     var errorDescription: String? {
         switch self {
@@ -25,6 +26,22 @@ enum WorkspaceFileOperationError: LocalizedError {
         case .invalidName: String(localized: "ファイル名またはフォルダ名を確認してください。")
         case .workspaceChanged: String(localized: "確認後にワークスペース内の書類が増減しました。もう一度確認してください。")
         case let .openDocumentChanged(url): String(localized: "確認後に開いている書類が変更されました: \(url.lastPathComponent)")
+        case let .unrepresentableText(url, encoding, line):
+            String(localized: "\(url.lastPathComponent) の \(line) 行目に \(encoding.title) で保存できない文字があります。")
+        }
+    }
+}
+
+extension MarkdownDocument {
+    func encodedData(for url: URL) throws -> Data {
+        do {
+            return try encodedData()
+        } catch is UnrepresentableTextError {
+            guard let first = MarkdownEncodingConverter.unrepresentableRanges(in: text, as: encoding).first else {
+                throw UnrepresentableTextError()
+            }
+            let line = MarkdownLineIndex(text).line(containingUTF16Offset: first.location)
+            throw WorkspaceFileOperationError.unrepresentableText(url, encoding, line)
         }
     }
 }
@@ -36,7 +53,6 @@ struct WorkspaceDocumentChange: Sendable {
     let updatedData: Data
     let linkCount: Int
     let linkChanges: [WorkspaceLinkChange]
-    let openOriginalData: Data?
     let updatedOpenText: String?
 }
 
@@ -92,9 +108,16 @@ final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
         let metadata: WorkspaceFileMetadata
         let original: Data
         let digest: Data
-        let openData: Data?
+        let fromOpenBuffer: Bool
+        let candidates: [MarkdownTextEncoding]
         let document: MarkdownDocument?
         let analysis: MarkdownAnalysis?
+
+        func matches(openDocument: MarkdownDocument?, candidates: [MarkdownTextEncoding]) -> Bool {
+            guard self.candidates == candidates else { return false }
+            guard let openDocument else { return !fromOpenBuffer }
+            return fromOpenBuffer && document?.matchesWorkspaceSnapshot(openDocument) == true
+        }
     }
     private let lock = NSLock()
     private final class CachedEntry: NSObject {
@@ -112,11 +135,13 @@ final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
     private var builds = 0
     var analysisBuildCount: Int { lock.lock(); defer { lock.unlock() }; return builds }
 
-    func load(_ url: URL, openData: Data?) throws -> Entry {
+    func load(_ url: URL, openDocument: MarkdownDocument?,
+              candidates: [MarkdownTextEncoding] = MarkdownEncodingPreferences.candidates()) throws -> Entry {
         try Task.checkCancellation()
         let metadata = try readMetadata(url)
         let previous = entries.object(forKey: url as NSURL)?.value
-        if let previous, previous.metadata.matchesContent(of: metadata), previous.openData == openData {
+        let sameInput = previous?.matches(openDocument: openDocument, candidates: candidates) == true
+        if let previous, previous.metadata.matchesContent(of: metadata), sameInput {
             return previous
         }
         let data: Data
@@ -131,14 +156,16 @@ final class WorkspaceLinkAnalysisCache: @unchecked Sendable {
         }
         try Task.checkCancellation()
         let entry: Entry
-        if let previous, previous.digest == digest, previous.openData == openData {
-            entry = Entry(metadata: metadata, original: data, digest: digest, openData: openData,
+        if let previous, previous.digest == digest, sameInput {
+            entry = Entry(metadata: metadata, original: data, digest: digest,
+                          fromOpenBuffer: openDocument != nil, candidates: candidates,
                           document: previous.document, analysis: previous.analysis)
         } else {
-            let document = try? MarkdownDocument(data: openData ?? data)
+            let document = openDocument ?? (try? MarkdownDocument(data: data, candidates: candidates))
             let analysis = document.map { MarkdownAnalysis($0.text) }
             try Task.checkCancellation()
-            entry = Entry(metadata: metadata, original: data, digest: digest, openData: openData,
+            entry = Entry(metadata: metadata, original: data, digest: digest,
+                          fromOpenBuffer: openDocument != nil, candidates: candidates,
                           document: document, analysis: analysis)
             lock.lock()
             if analysis != nil { builds += 1 }
@@ -161,7 +188,7 @@ struct WorkspaceMovePlan: Sendable {
     let destinationURL: URL
     let changes: [WorkspaceDocumentChange]
     let inspectedDocuments: [WorkspaceDocumentSnapshot]
-    let inspectedOpenDocuments: [URL: Data]
+    let inspectedOpenDocuments: [URL: MarkdownDocument]
     var skippedDocuments: [URL] = []
     var isTruncated = false
     var readMetadata: WorkspaceFileMetadata.Reader = WorkspaceFileMetadata.read
@@ -267,7 +294,7 @@ struct WorkspaceMovePlan: Sendable {
 
 enum WorkspaceFileOperations {
     static func planMove(source: URL, destination: URL, root: URL,
-                         openDocuments: [URL: Data] = [:],
+                         openDocuments: [URL: MarkdownDocument] = [:],
                          cache: WorkspaceLinkAnalysisCache = .shared,
                          scanMaximumEntries: Int = WorkspaceFileIndex.maximumEntries) throws -> WorkspaceMovePlan {
         let source = source.resolvingSymlinksInPath().standardizedFileURL
@@ -290,22 +317,23 @@ enum WorkspaceFileOperations {
         let documents = markdownFiles(in: index.nodes)
         let documentIndex = WorkspaceDocumentIndex(documents: documents)
         let movedIndex = WorkspaceDocumentIndex(documents: documents.map { mapped($0, from: source, to: destination) })
-        let openData = openDocuments.reduce(into: [URL: Data]()) { result, item in
+        let openBuffers = openDocuments.reduce(into: [URL: MarkdownDocument]()) { result, item in
             result[item.key.resolvingSymlinksInPath().standardizedFileURL] = item.value
         }
         let workspaceDocumentPaths = Set(documents.map {
             $0.resolvingSymlinksInPath().standardizedFileURL.path
         })
-        let inspectedOpenDocuments = openData.filter {
+        let inspectedOpenDocuments = openBuffers.filter {
             workspaceDocumentPaths.contains($0.key.path)
         }
         var changes: [WorkspaceDocumentChange] = []
         var inspectedDocuments: [WorkspaceDocumentSnapshot] = []
         var skippedDocuments: [URL] = []
+        let candidates = MarkdownEncodingPreferences.candidates()
         for scannedDocument in documents {
             let document = scannedDocument.resolvingSymlinksInPath().standardizedFileURL
             try Task.checkCancellation()
-            guard let entry = try? cache.load(document, openData: openData[document]) else {
+            guard let entry = try? cache.load(document, openDocument: openBuffers[document], candidates: candidates) else {
                 try Task.checkCancellation()
                 skippedDocuments.append(document)
                 continue
@@ -327,11 +355,10 @@ enum WorkspaceFileOperations {
                 updatedDocument.text = updated
                 changes.append(WorkspaceDocumentChange(oldURL: document, newURL: newURL,
                                                        originalData: original,
-                                                       updatedData: updatedDocument.encodedData(),
+                                                       updatedData: links.isEmpty ? original : try updatedDocument.encodedData(for: document),
                                                        linkCount: links.count,
                                                        linkChanges: links,
-                                                       openOriginalData: openData[document],
-                                                       updatedOpenText: openData[document] == nil ? nil : updated))
+                                                       updatedOpenText: openBuffers[document] == nil ? nil : updated))
             }
         }
         return WorkspaceMovePlan(rootURL: root, sourceURL: source,

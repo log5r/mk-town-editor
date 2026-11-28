@@ -90,6 +90,33 @@ struct EditorPreferencesView: View {
                     }
                 }
             }
+            Section("文字コードの自動判別") {
+                let enabled = settingsStore.encodingCandidates
+                let disabled = MarkdownTextEncoding.allCases.filter { !enabled.contains($0) }
+                ForEach(enabled + disabled) { encoding in
+                    HStack {
+                        Toggle(encoding.title, isOn: Binding(
+                            get: { enabled.contains(encoding) },
+                            set: { settingsStore.setDetectionEnabled($0, for: encoding) }))
+                            .toggleStyle(.checkbox)
+                        Spacer()
+                        if let index = enabled.firstIndex(of: encoding) {
+                            Button { settingsStore.moveEncodingCandidate(encoding, by: -1) } label: {
+                                Image(systemName: "chevron.up")
+                            }
+                            .accessibilityLabel("\(encoding.title)の優先順位を上げる")
+                            .disabled(index == 0)
+                            Button { settingsStore.moveEncodingCandidate(encoding, by: 1) } label: {
+                                Image(systemName: "chevron.down")
+                            }
+                            .accessibilityLabel("\(encoding.title)の優先順位を下げる")
+                            .disabled(index == enabled.count - 1)
+                        }
+                    }
+                }
+                Text("BOMや文字コードの宣言がない場合に使う候補です。複数の候補で読めるときは上の候補を優先します。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("ネットワーク") {
                 Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
                 Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))

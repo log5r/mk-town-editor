@@ -102,7 +102,7 @@ struct WorkspaceFileOperationSheet: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if plan.isTruncated { Text("ファイル一覧が上限を超えたため、確認結果は一部のみです。") }
-                if plan.changes.contains(where: { $0.openOriginalData != nil && $0.linkCount > 0 }) {
+                if plan.changes.contains(where: { $0.updatedOpenText != nil && $0.linkCount > 0 }) {
                     Text("開いている参照元書類の未保存内容も、リンク更新と一緒に保存されます。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -190,7 +190,7 @@ struct WorkspaceFileOperationSheet: View {
     /// A plan with nothing to review is applied without a second confirmation.
     static func appliesWithoutReview(_ plan: WorkspaceMovePlan) -> Bool {
         plan.changedLinks == 0 && plan.skippedDocuments.isEmpty && !plan.isTruncated &&
-            !plan.changes.contains { $0.openOriginalData != nil && $0.linkCount > 0 }
+            !plan.changes.contains { $0.updatedOpenText != nil && $0.linkCount > 0 }
     }
 
     private func preparePlan(thenApply: Bool = false) {
@@ -199,8 +199,8 @@ struct WorkspaceFileOperationSheet: View {
             .appendingPathComponent(".trash-preview-\(UUID().uuidString)")
         isWorking = true
         errorMessage = nil
-        let openSnapshots: [URL: Data]
-        do { openSnapshots = needsPlan ? try workspaceStore.openBufferSnapshots(under: rootURL) : [:] }
+        let openSnapshots: [URL: MarkdownDocument]
+        do { openSnapshots = needsPlan ? try workspaceStore.openBufferDocuments(under: rootURL) : [:] }
         catch {
             errorMessage = error.localizedDescription
             isWorking = false
@@ -332,7 +332,7 @@ struct WorkspaceFileOperationSheet: View {
     private func checkOpenDocuments(in plan: WorkspaceMovePlan) throws {
         try checkOpenDocuments(for: plan.sourceURL)
         let known = Set(plan.changes.compactMap { change in
-            change.openOriginalData == nil ? nil : change.oldURL.resolvingSymlinksInPath().path
+            change.updatedOpenText == nil ? nil : change.oldURL.resolvingSymlinksInPath().path
         })
         let changed = Set(plan.changes.filter { $0.linkCount > 0 }.map {
             $0.oldURL.resolvingSymlinksInPath().path

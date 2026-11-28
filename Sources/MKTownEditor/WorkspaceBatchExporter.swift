@@ -93,7 +93,7 @@ enum WorkspaceBatchExporter {
 
     @MainActor
     static func export(documents: [BatchExportDocument], to destination: URL,
-                       format: BatchExportFormat, openBuffers: [URL: Data] = [:],
+                       format: BatchExportFormat, openBuffers: [URL: MarkdownDocument] = [:],
                        dialect: (URL) -> MarkdownDialect = { _ in .extended },
                        progress: (Int, Int) -> Void = { _, _ in }) async throws -> BatchExportReport {
         var isDirectory: ObjCBool = false
@@ -114,15 +114,17 @@ enum WorkspaceBatchExporter {
                 try manager.createDirectory(at: directory, withIntermediateDirectories: true)
                 let key = document.sourceURL.resolvingSymlinksInPath().standardizedFileURL
                 let buffer = openBuffers[key]
-                let (data, source) = try await DocumentWork.perform {
-                    let data = try buffer ?? Data(contentsOf: document.sourceURL)
-                    return (data, try MarkdownDocument.decode(data))
+                let sourceDocument = try await DocumentWork.perform {
+                    try buffer ?? MarkdownDocument(data: Data(contentsOf: document.sourceURL))
                 }
+                let source = sourceDocument.text
                 let temporary = directory.appendingPathComponent(".mktown-batch-\(UUID().uuidString).\(format.fileExtension)")
                 defer { try? manager.removeItem(at: temporary) }
                 switch format {
                 case .markdown:
-                    try await DocumentWork.perform { try data.write(to: temporary, options: .atomic) }
+                    try await DocumentWork.perform {
+                        try sourceDocument.encodedData(for: document.sourceURL).write(to: temporary, options: .atomic)
+                    }
                 case .html:
                     let rendered = try await MarkdownHTMLExporter.renderAsync(source, documentURL: document.sourceURL,
                                                                 dialect: dialect(document.sourceURL), outputURL: output)
@@ -245,7 +247,7 @@ struct WorkspaceBatchExportSheet: View {
                 let documents = try await DocumentWork.perform {
                     try WorkspaceBatchExporter.documents(in: source, excluding: destination)
                 }
-                let buffers = try workspaceStore.openBufferSnapshots(under: source)
+                let buffers = try workspaceStore.openBufferDocuments(under: source)
                 total = documents.count
                 result = try await WorkspaceBatchExporter.export(documents: documents,
                     to: destination, format: selectedFormat, openBuffers: buffers,

@@ -16,9 +16,9 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
         var encodes: [URL: Int] = [:]
         var parentText = "Parent\n![[child]]"
         for url in [parent, child, other] {
-            store.registerOpenBuffer(id: UUID(), url: url, encodedData: {
+            store.registerOpenBuffer(id: UUID(), url: url, document: {
                 encodes[url, default: 0] += 1
-                return Data((url == parent ? parentText : url.lastPathComponent).utf8)
+                return MarkdownDocument(text: url == parent ? parentText : url.lastPathComponent)
             }, updateText: { _ in })
         }
         let reference = WorkspaceEmbedReference(target: "parent", section: nil)
@@ -55,7 +55,7 @@ final class WorkspaceDocumentEmbedTests: XCTestCase {
         XCTAssertEqual(missing.dependencies, [target])
         XCTAssertFalse(missing.expansion.issues.isEmpty)
         try Data("disk".utf8).write(to: target)
-        store.registerOpenBuffer(id: id, url: target, encodedData: { Data("unsaved".utf8) }, updateText: { _ in })
+        store.registerOpenBuffer(id: id, url: target, document: { MarkdownDocument(text: "unsaved") }, updateText: { _ in })
         let open = try await WorkspaceEmbedLoader.load(reference, from: host, documents: [host, target],
             dependencies: missing.dependencies, loadOpenBuffers: { try store.openBufferSnapshots(including: $0) })
         XCTAssertEqual(open.expansion.text, "unsaved")

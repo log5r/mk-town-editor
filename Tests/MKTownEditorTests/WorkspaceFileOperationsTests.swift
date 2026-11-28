@@ -59,11 +59,12 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         let bad = root.appendingPathComponent("legacy.txt")
         let destination = root.appendingPathComponent("moved.md")
         try "needle".write(to: source, atomically: true, encoding: .utf8)
-        try Data([0x82, 0xA0]).write(to: bad)
+        let truncatedUTF16 = Data([0xFF, 0xFE, 0x61])
+        try truncatedUTF16.write(to: bad)
         let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination, root: root)
         XCTAssertEqual(plan.skippedDocuments, [bad.resolvingSymlinksInPath()])
         try plan.apply()
-        XCTAssertEqual(try Data(contentsOf: bad), Data([0x82, 0xA0]))
+        XCTAssertEqual(try Data(contentsOf: bad), truncatedUTF16)
         let report = try WorkspaceSearch.report(root: root, options: WorkspaceSearchOptions(query: "needle"))
         XCTAssertEqual(report.results.count, 1)
         XCTAssertEqual(report.skippedDocuments.count, 1)
@@ -171,25 +172,37 @@ final class WorkspaceFileOperationsTests: XCTestCase {
             try "".write(to: url, atomically: true, encoding: .utf8)
             try overwritePreservingMetadata(url, with: "alpha [[one]]")
             let cache = WorkspaceLinkAnalysisCache(readMetadata: reader)
-            let first = try cache.load(url, openData: nil)
+            let first = try cache.load(url, openDocument: nil)
             XCTAssertEqual(first.document?.text, "alpha [[one]]")
-            XCTAssertEqual(try cache.load(url, openData: nil).digest, first.digest)
+            XCTAssertEqual(try cache.load(url, openDocument: nil).digest, first.digest)
             XCTAssertEqual(cache.analysisBuildCount, 1)
 
             try overwritePreservingMetadata(url, with: "alpha [[two]]")
-            let edited = try cache.load(url, openData: nil)
+            let edited = try cache.load(url, openDocument: nil)
             XCTAssertEqual(edited.document?.text, "alpha [[two]]")
             XCTAssertNotEqual(edited.digest, first.digest)
             XCTAssertEqual(cache.analysisBuildCount, 2)
 
             let touchedDate = Self.pinnedDate.addingTimeInterval(100)
             try FileManager.default.setAttributes([.modificationDate: touchedDate], ofItemAtPath: url.path)
-            let touched = try cache.load(url, openData: nil)
+            let touched = try cache.load(url, openDocument: nil)
             XCTAssertEqual(touched.digest, edited.digest)
             XCTAssertEqual(touched.metadata.modified, touchedDate)
             XCTAssertEqual(touched.document?.text, "alpha [[two]]")
             XCTAssertEqual(cache.analysisBuildCount, 2, "unchanged bytes under a new date reuse the analysis")
         }
+    }
+
+    func testChangingEncodingCandidatesInvalidatesCachedDiskInterpretation() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".md")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try XCTUnwrap("見出しと本文".data(using: .shiftJIS)).write(to: url)
+        let cache = WorkspaceLinkAnalysisCache()
+        XCTAssertNil(try cache.load(url, openDocument: nil, candidates: [.utf8]).document)
+        XCTAssertEqual(try cache.load(url, openDocument: nil, candidates: [.shiftJIS]).document?.text, "見出しと本文")
+        var embed = WorkspaceEmbedFileCache()
+        XCTAssertEqual(embed.load(url, openBuffers: [:], candidates: [.shiftJIS]), "見出しと本文")
+        XCTAssertNil(embed.load(url, openBuffers: [:], candidates: [.utf8]))
     }
 
     func testFailedApplyRestoresOnlyWrittenDocumentsAndLeavesOthersUntouched() throws {
@@ -329,10 +342,10 @@ final class WorkspaceFileOperationsTests: XCTestCase {
         let openData = Data([0xEF, 0xBB, 0xBF] +
                             Array("unsaved\r\n[link](source.md)\r\n".utf8))
         let plan = try WorkspaceFileOperations.planMove(source: source, destination: destination,
-                                                        root: root, openDocuments: [reference: openData])
+                                                        root: root, openDocuments: [reference: try MarkdownDocument(data: openData)])
         let change = try XCTUnwrap(plan.changes.first { $0.oldURL.lastPathComponent == "reference.md" })
         XCTAssertEqual(change.linkCount, 1)
-        XCTAssertEqual(change.openOriginalData, openData)
+        XCTAssertEqual(try plan.inspectedOpenDocuments[change.oldURL]?.encodedData(), openData)
         XCTAssertEqual(change.updatedOpenText, "unsaved\n[link](renamed.md)\n")
         try plan.apply()
         try plan.validateAppliedData()

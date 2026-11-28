@@ -128,9 +128,9 @@ final class EditorScrollClippingTests: XCTestCase {
         var text = [parent: "Parent\n![[child]]", child: "Child", other: "Other", unrelated: "Unrelated"]
         let otherID = UUID()
         for url in documents {
-            store.registerOpenBuffer(id: url == other ? otherID : UUID(), url: url, encodedData: {
+            store.registerOpenBuffer(id: url == other ? otherID : UUID(), url: url, document: {
                 encodes[url, default: 0] += 1
-                return Data((text[url] ?? "Host").utf8)
+                return MarkdownDocument(text: text[url] ?? "Host")
             }, updateText: { _ in })
         }
         var requestsA: [Set<URL>] = [], requestsB: [Set<URL>] = []
@@ -219,10 +219,10 @@ final class EditorScrollClippingTests: XCTestCase {
         let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
         var text = "Child"
         var encodes = 0
-        store.registerOpenBuffer(id: UUID(), url: child, encodedData: {
-            encodes += 1; return Data(text.utf8)
+        store.registerOpenBuffer(id: UUID(), url: child, document: {
+            encodes += 1; return MarkdownDocument(text: text)
         }, updateText: { _ in })
-        store.registerOpenBuffer(id: UUID(), url: unrelated, encodedData: { Data("U".utf8) }, updateText: { _ in })
+        store.registerOpenBuffer(id: UUID(), url: unrelated, document: { MarkdownDocument(text: "U") }, updateText: { _ in })
 
         var probeBodies = 0
         let probe = NSHostingView(rootView: WorkspaceObserverProbe(store: store) { probeBodies += 1 })

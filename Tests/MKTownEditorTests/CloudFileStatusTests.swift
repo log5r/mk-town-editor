@@ -18,6 +18,8 @@ final class CloudFileStatusTests: XCTestCase {
         XCTAssertTrue(CloudFileVersions.unresolved(at: document).isEmpty)
         XCTAssertThrowsError(try CloudFileVersions.requestDownload(at: document))
         XCTAssertThrowsError(try CloudFileVersions.resolve(at: document, selectedText: "Local\n日本語"))
+        try XCTUnwrap("本文\r\n日本語".data(using: .shiftJIS)).write(to: document)
+        XCTAssertEqual(try CloudFileVersions.readCurrent(at: document), "本文\n日本語")
     }
 
     func testMissingFileDoesNotReturnAUsableStatus() {

@@ -46,6 +46,49 @@ final class WorkspaceReplaceTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: a, encoding: .utf8), "foo")
     }
 
+    func testLegacyAndUTF16SearchAndReplaceKeepOriginalBytesAndLineEndings() throws {
+        let root = try workspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("shift-jis.md")
+        let utf16 = root.appendingPathComponent("utf16.md")
+        let original = "# 日本語\r\n本文を検索\n"
+        let edited = "# 日本語\r\n本文を置換\n"
+        let bom = Data([0xFF, 0xFE])
+        try XCTUnwrap(original.data(using: .shiftJIS)).write(to: legacy)
+        try (bom + XCTUnwrap(original.data(using: .utf16LittleEndian))).write(to: utf16)
+
+        let options = WorkspaceSearchOptions(query: "検索")
+        let results = try WorkspaceSearch.report(root: root, options: options)
+        XCTAssertEqual(results.results.map(\.line), [2, 2])
+        XCTAssertTrue(results.skippedDocuments.isEmpty)
+        let plan = try WorkspaceReplace.plan(root: root, options: options, replacement: "置換")
+        try plan.apply(selectedURLs: [legacy, utf16], openDocuments: [])
+        XCTAssertEqual(try Data(contentsOf: legacy), try XCTUnwrap(edited.data(using: .shiftJIS)))
+        XCTAssertEqual(try Data(contentsOf: utf16), try bom + XCTUnwrap(edited.data(using: .utf16LittleEndian)))
+    }
+
+    func testUnrepresentableReplacementFailsBeforeWritingAnyFiles() throws {
+        let root = try workspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let unicode = root.appendingPathComponent("a.md")
+        let legacy = root.appendingPathComponent("b.md")
+        let text = "日本語の原稿"
+        let bytes = try XCTUnwrap(text.data(using: .shiftJIS))
+        try Data(text.utf8).write(to: unicode)
+        try bytes.write(to: legacy)
+        XCTAssertThrowsError(try WorkspaceReplace.plan(root: root,
+            options: WorkspaceSearchOptions(query: "原稿"), replacement: "😀")) { error in
+            guard case let .unrepresentableText(url, encoding, line)? = error as? WorkspaceFileOperationError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(url.lastPathComponent, "b.md")
+            XCTAssertEqual(encoding, .shiftJIS)
+            XCTAssertEqual(line, 1)
+        }
+        XCTAssertEqual(try Data(contentsOf: legacy), bytes)
+        XCTAssertEqual(try Data(contentsOf: unicode), Data(text.utf8))
+    }
+
     func testMidWriteFailureRestoresEveryTouchedFile() throws {
         let root = try workspace()
         defer { try? FileManager.default.removeItem(at: root) }
