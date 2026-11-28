@@ -1332,6 +1332,30 @@ final class EditorTextView: NSTextView {
         indicator.fill()
     }
 
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard let commandModel, commandModel.hasDocumentSearchHighlights,
+              let layoutManager, let textContainer else { return }
+        let origin = textContainerOrigin
+        let containerRect = rect.offsetBy(dx: -origin.x, dy: -origin.y)
+        let visibleGlyphs = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
+        let visible = layoutManager.characterRange(forGlyphRange: visibleGlyphs, actualGlyphRange: nil)
+        // A border leaves the editor's foreground and background colors intact and is drawn
+        // below the selection and glyphs. Neither text storage nor native Find uses this state.
+        let color = EditorThemePalette.readable(.findHighlightColor, on: backgroundColor)
+        color.setStroke()
+        for range in commandModel.documentSearchHighlights(overlapping: visible) {
+            let intersection = NSIntersectionRange(range, visible)
+            let glyphs = layoutManager.glyphRange(forCharacterRange: intersection, actualCharacterRange: nil)
+            layoutManager.enumerateEnclosingRects(forGlyphRange: glyphs,
+                withinSelectedGlyphRange: NSRange(location: NSNotFound, length: 0), in: textContainer) { rect, _ in
+                let frame = rect.offsetBy(dx: origin.x, dy: origin.y).insetBy(dx: 0.5, dy: 0.5)
+                guard frame.width > 0, frame.height > 0 else { return }
+                NSBezierPath(roundedRect: frame, xRadius: 2, yRadius: 2).stroke()
+            }
+        }
+    }
+
     private func drawInvisibles(in dirtyRect: NSRect) {
         guard !hasMarkedText(), let invisiblePlan, let layoutManager, let textContainer else { return }
         let containerRect = dirtyRect.offsetBy(dx: -textContainerOrigin.x, dy: -textContainerOrigin.y)

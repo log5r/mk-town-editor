@@ -103,12 +103,12 @@ final class ListKeyboardSelectionTests: XCTestCase {
     /// The result sheets and the inspector list their rows with `List(selection:)` instead of
     /// buttons, so the arrow keys move and Return opens the selected row (#60).
     func testResultListsUseSelectionInsteadOfButtons() throws {
-        let activating = ["PreviewSearchSheet.swift", "WorkspaceSearchSheet.swift",
+        let activating = ["PreviewSearchSheet.swift", "RegexSearchSheet.swift", "WorkspaceSearchSheet.swift",
                           "WorkspaceBacklinksSheet.swift", "WorkspaceTagsSheet.swift",
                           "WorkspaceLinkGraphSheet.swift", "WorkspaceTaskSheet.swift",
                           "WorkspaceNamedLayoutSheet.swift"]
         // These show the selected row beside the list, so selecting is all a row does.
-        let browsing = ["RegexSearchSheet.swift", "GitHistorySheet.swift", "GitCommitSheet.swift",
+        let browsing = ["GitHistorySheet.swift", "GitCommitSheet.swift",
                         "WorkspaceSnapshotHistory.swift"]
         for name in activating + browsing {
             let text = try source(name)
@@ -120,7 +120,6 @@ final class ListKeyboardSelectionTests: XCTestCase {
             XCTAssertTrue(text.contains(".activatesSelectionOnReturn("), name)
             XCTAssertTrue(text.contains(".activatesOnClick"), name)
         }
-        XCTAssertTrue(try source("RegexSearchSheet.swift").contains("startsUnselected: true"))
         // Browsing with the arrow keys cancels the previous load instead of starting one per row.
         for name in ["GitHistorySheet.swift", "GitCommitSheet.swift", "WorkspaceSnapshotHistory.swift"] {
             XCTAssertTrue(try source(name).contains("Task.sleep(for: .milliseconds(120))"), name)

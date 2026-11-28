@@ -11696,6 +11696,206 @@
           }
         }
       }
+    },
+    "文書内検索・置換…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find and Replace in Document…"
+          }
+        }
+      }
+    },
+    "文書内検索・置換" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find and Replace in Document"
+          }
+        }
+      }
+    },
+    "検索の強調表示を解除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Search Highlights"
+          }
+        }
+      }
+    },
+    "検索履歴" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find History"
+          }
+        }
+      }
+    },
+    "置換履歴" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replacement History"
+          }
+        }
+      }
+    },
+    "履歴を消去" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear History"
+          }
+        }
+      }
+    },
+    "空文字列（削除）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty Text (Delete)"
+          }
+        }
+      }
+    },
+    "検索方法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Mode"
+          }
+        }
+      }
+    },
+    "文字列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        }
+      }
+    },
+    "正規表現" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regular Expression"
+          }
+        }
+      }
+    },
+    "折り返し検索" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrap Around"
+          }
+        }
+      }
+    },
+    "全角と半角を区別しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore Character Width"
+          }
+        }
+      }
+    },
+    "ひらがなとカタカナを区別しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore Hiragana and Katakana Differences"
+          }
+        }
+      }
+    },
+    "アクセント記号を無視" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore Diacritics"
+          }
+        }
+      }
+    },
+    "単語全体に一致" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Match Whole Words"
+          }
+        }
+      }
+    },
+    "%lld件の一致" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld matches"
+          }
+        }
+      }
+    },
+    "すべてハイライト" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight All"
+          }
+        }
+      }
+    },
+    "ハイライトを解除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Highlights"
+          }
+        }
+      }
+    },
+    "置換文字列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replacement Text"
+          }
+        }
+      }
+    },
+    "検索文字列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Text"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

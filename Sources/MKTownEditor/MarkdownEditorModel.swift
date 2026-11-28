@@ -52,13 +52,17 @@ final class MarkdownEditorModel: ObservableObject {
         var selectedRange = NSRange(location: 0, length: 0)
         var selectedRanges = [NSRange(location: 0, length: 0)]
         var hasActiveEditor = false
+        var hasDocumentSearchHighlights = false
     }
 
-    /// 選択範囲の変更は `selectionState` だけが通知し、モデル本体の監視者は
-    /// エディタの接続状態が変わった時だけ更新される。
+    /// 選択範囲の変更は `selectionState` だけが通知する。モデル本体はエディタの接続と
+    /// 検索の強調解除コマンドの有効状態が変わったときに通知する。
     private var editorState = EditorState() {
         willSet {
-            if newValue.hasActiveEditor != editorState.hasActiveEditor { objectWillChange.send() }
+            if newValue.hasActiveEditor != editorState.hasActiveEditor ||
+                newValue.hasDocumentSearchHighlights != editorState.hasDocumentSearchHighlights {
+                objectWillChange.send()
+            }
         }
         didSet {
             selectionState.publish(selectedRange: editorState.selectedRange,
@@ -81,6 +85,9 @@ final class MarkdownEditorModel: ObservableObject {
     private(set) var hasActiveEditor: Bool {
         get { (pendingEditorState ?? editorState).hasActiveEditor }
         set { updateEditorState { $0.hasActiveEditor = newValue } }
+    }
+    var hasDocumentSearchHighlights: Bool {
+        (pendingEditorState ?? editorState).hasDocumentSearchHighlights
     }
     let viewportState = EditorViewportState()
     var viewport: EditorViewport { viewportState.current }
@@ -212,14 +219,18 @@ final class MarkdownEditorModel: ObservableObject {
     }
     private var snippetSession: SnippetSession?
     private var automaticClosers = MarkdownAutomaticClosers()
+    private var documentSearchHighlightSource: String?
+    private var documentSearchHighlightRanges: [NSRange] = []
 
     func sourceStorageDidChange(range: NSRange, delta: Int, undoing: Bool) {
+        clearDocumentSearchHighlights()
         if undoing { automaticClosers.clear() }
         else { automaticClosers.edited(range: range, delta: delta) }
     }
 
     func connect(_ textView: NSTextView, scrollView: NSScrollView? = nil) {
         self.textView = textView
+        invalidateDocumentSearchHighlights(for: textView.editorSource)
         automaticClosers.clear()
         transitionSelections = nil
         hasActiveEditor = true
@@ -922,11 +933,73 @@ final class MarkdownEditorModel: ObservableObject {
         performFinderAction(.replaceAllInSelection)
     }
 
+    private func canUseDocumentSearchResult(expectedSource: String) -> Bool {
+        guard let textView, !textView.hasMarkedText() else { return false }
+        return MarkdownTextFormat.identicalText(textView.editorSource, expectedSource)
+    }
+
+    func selectDocumentSearchResult(_ range: NSRange, expectedSource: String) -> Bool {
+        let length = (expectedSource as NSString).length
+        guard canUseDocumentSearchResult(expectedSource: expectedSource),
+              range.location >= 0, range.location <= length,
+              range.length >= 0, range.length <= length - range.location else { return false }
+        selectAndReveal(range, focusesEditor: false)
+        return true
+    }
+
+    /// 検索結果の順序を保ち、描画で扱える空でない範囲だけを保持する。
+    func showDocumentSearchHighlights(_ ranges: [NSRange], expectedSource: String) {
+        guard canUseDocumentSearchResult(expectedSource: expectedSource) else { return }
+        let length = (expectedSource as NSString).length
+        var previousEnd = 0
+        let drawableRanges = ranges.filter { range in
+            guard range.location >= previousEnd, range.location < length,
+                  range.length > 0, range.length <= length - range.location else { return false }
+            previousEnd = NSMaxRange(range)
+            return true
+        }
+        guard !drawableRanges.isEmpty else { clearDocumentSearchHighlights(); return }
+        documentSearchHighlightSource = expectedSource
+        documentSearchHighlightRanges = drawableRanges
+        updateEditorState { $0.hasDocumentSearchHighlights = true }
+        textView?.needsDisplay = true
+    }
+
+    func clearDocumentSearchHighlights() {
+        guard documentSearchHighlightSource != nil else { return }
+        documentSearchHighlightSource = nil
+        documentSearchHighlightRanges = []
+        updateEditorState { $0.hasDocumentSearchHighlights = false }
+        textView?.needsDisplay = true
+    }
+
+    func invalidateDocumentSearchHighlights(for source: String) {
+        if let documentSearchHighlightSource,
+           !MarkdownTextFormat.identicalText(documentSearchHighlightSource, source) {
+            clearDocumentSearchHighlights()
+        }
+    }
+
+    /// Offscreen matches have no effect on layout. Find the first visible match by bisection.
+    func documentSearchHighlights(overlapping visible: NSRange) -> ArraySlice<NSRange> {
+        guard visible.length > 0 else { return [] }
+        var lowerBound = 0
+        var upperBound = documentSearchHighlightRanges.count
+        while lowerBound < upperBound {
+            let middle = (lowerBound + upperBound) / 2
+            if NSMaxRange(documentSearchHighlightRanges[middle]) <= visible.location {
+                lowerBound = middle + 1
+            } else {
+                upperBound = middle
+            }
+        }
+        return documentSearchHighlightRanges[lowerBound...].prefix { $0.location < NSMaxRange(visible) }
+    }
+
     @discardableResult
     func applyRegexEdit(_ edit: MarkdownEdit, expectedSource: String) -> Bool {
         guard let textView, let storage = textView.textStorage,
-              textView.isEditable, !textView.hasMarkedText(),
-              textView.editorSource == expectedSource,
+              textView.isEditable, canUseDocumentSearchResult(expectedSource: expectedSource),
               edit.range.location >= 0,
               edit.range.location <= (expectedSource as NSString).length,
               edit.range.length >= 0,

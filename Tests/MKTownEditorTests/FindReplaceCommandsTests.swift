@@ -116,6 +116,84 @@ final class FindReplaceCommandsTests: XCTestCase {
         model.replaceAllInSelection()
         XCTAssertEqual(view.actions, [.replaceAllInSelection])
     }
+
+    func testDocumentSearchNavigationUsesExactUTF16RangeAndKeepsListFocus() {
+        let source = "e\u{301} 😀 needle"
+        let equivalentSource = "é 😀 needle"
+        let view = FinderSpyTextView()
+        view.string = source
+        let window = FinderFocusSpyWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                                          styleMask: [.titled], backing: .buffered, defer: false)
+        window.contentView = view
+        defer { window.orderOut(nil); window.contentView = nil }
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        window.focusRequests = 0
+
+        let stale = (equivalentSource as NSString).range(of: "😀")
+        XCTAssertFalse(model.selectDocumentSearchResult(stale, expectedSource: equivalentSource))
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 0, length: 0))
+        let match = (source as NSString).range(of: "😀")
+        XCTAssertTrue(model.selectDocumentSearchResult(match, expectedSource: source))
+        XCTAssertEqual(view.selectedRange(), match)
+        XCTAssertEqual(model.selectedRange, match)
+        XCTAssertEqual(window.focusRequests, 0)
+        view.simulatesMarkedText = true
+        XCTAssertFalse(model.selectDocumentSearchResult(match, expectedSource: source))
+    }
+
+    func testDocumentSearchHighlightsAreDisplayOnlyAndDiscardedByAnEdit() {
+        let source = "日本語😀 needle\nneedle"
+        let view = EditorTextView()
+        view.string = source
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.commandModel = model
+        view.updateEditorEditability(false)
+        let before = NSAttributedString(attributedString: view.attributedString())
+        let found = (source as NSString).range(of: "needle")
+        let second = (source as NSString).range(of: "needle", options: .backwards)
+        model.showDocumentSearchHighlights([found, second], expectedSource: source)
+
+        XCTAssertTrue(model.hasDocumentSearchHighlights)
+        XCTAssertEqual(Array(model.documentSearchHighlights(overlapping:
+            NSRange(location: NSMaxRange(found), length: 1))), [])
+        XCTAssertEqual(Array(model.documentSearchHighlights(overlapping:
+            NSRange(location: NSMaxRange(found) - 1, length: 3))), [found, second])
+        XCTAssertEqual(view.attributedString(), before)
+        XCTAssertEqual(view.selectedRange(), NSRange(location: 0, length: 0))
+
+        model.clearDocumentSearchHighlights()
+        XCTAssertFalse(model.hasDocumentSearchHighlights)
+        model.showDocumentSearchHighlights([found, second], expectedSource: source)
+        view.replaceEditorText(with: "Changed " + source)
+        XCTAssertFalse(model.hasDocumentSearchHighlights)
+        XCTAssertTrue(model.documentSearchHighlights(overlapping: found).isEmpty)
+    }
+
+    func testDocumentSearchHighlightsSurvivePreviewUntilSourceChanges() {
+        let source = "é needle"
+        let first = EditorTextView()
+        first.string = source
+        let model = MarkdownEditorModel()
+        model.connect(first)
+        let range = (source as NSString).range(of: "needle")
+        model.showDocumentSearchHighlights([range], expectedSource: source)
+        model.disconnect(first)
+
+        let second = EditorTextView()
+        second.string = source
+        model.connect(second)
+        XCTAssertTrue(model.hasDocumentSearchHighlights)
+        XCTAssertEqual(Array(model.documentSearchHighlights(overlapping: range)), [range])
+        model.disconnect(second)
+
+        let third = EditorTextView()
+        third.string = "e\u{301} needle"
+        model.connect(third)
+        XCTAssertFalse(model.hasDocumentSearchHighlights)
+        XCTAssertTrue(model.documentSearchHighlights(overlapping: range).isEmpty)
+    }
 }
 
 @MainActor

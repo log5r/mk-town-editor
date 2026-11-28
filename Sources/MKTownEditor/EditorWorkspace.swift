@@ -230,7 +230,19 @@ struct EditorWorkspace: View {
     @State private var terminologySource = ""
     @State private var terminologyTask: Task<[TerminologyIssue], Never>?
     @State private var showingAutoFormat = false
-    @State private var showingRegexSearch = false
+    private struct DocumentSearchPresentation: Identifiable {
+        let id = UUID()
+        let initialMode: DocumentSearchMode
+        let initialScope: NSRange
+    }
+    private struct HighlightedDocumentSource: Equatable {
+        let text: String
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            MarkdownTextFormat.identicalText(lhs.text, rhs.text)
+        }
+    }
+    @State private var documentSearchPresentation: DocumentSearchPresentation?
     @State private var documentOperation: Task<Void, Never>?
     @State private var documentOperationRunning = false
     @State private var showingPrintSettings = false
@@ -668,12 +680,56 @@ struct EditorWorkspace: View {
                                    preferredSnapshot: analysisStore.snapshot)
     }
 
+    private func showDocumentSearch(_ searchMode: DocumentSearchMode) {
+        let initialScope = editorModel.selectedRange
+        if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
+        documentSearchPresentation = DocumentSearchPresentation(initialMode: searchMode, initialScope: initialScope)
+    }
+
+    private var documentSearchActions: DocumentSearchActions {
+        let clearHighlights: (() -> Void)? = editorModel.hasDocumentSearchHighlights
+            ? { editorModel.clearDocumentSearchHighlights() } : nil
+        return DocumentSearchActions(show: showDocumentSearch, clearHighlights: clearHighlights)
+    }
+
+    private func documentSearchSheet(_ presentation: DocumentSearchPresentation) -> some View {
+        // 一致を選ぶと選択範囲が変わるため、次の一致は最新の選択範囲から求める。
+        EditorSelectionReader(selection: editorModel.selectionState) { selection in
+            RegexSearchSheet(source: document.text, selectedRange: selection,
+                             initialScope: presentation.initialScope, canReplace: canEditDocument,
+                             initialMode: presentation.initialMode,
+                             isHighlighting: editorModel.hasDocumentSearchHighlights,
+                             onSelect: selectSearchResult, onReplace: replaceSearchResult,
+                             onHighlight: highlightSearchResults,
+                             onClearHighlights: { editorModel.clearDocumentSearchHighlights() })
+        }
+    }
+
+    private func selectSearchResult(_ range: NSRange, source: String) {
+        let origin = currentNavigationPoint
+        guard MarkdownTextFormat.identicalText(document.text, source),
+              editorModel.selectDocumentSearchResult(range, expectedSource: source) else { return }
+        let destination = NavigationPoint(documentURL: fileURL, utf16Location: range.location)
+        navigationHistory.recordJump(from: origin, to: destination)
+    }
+
+    private func replaceSearchResult(_ edit: MarkdownEdit, source: String) -> Bool {
+        canEditDocument && MarkdownTextFormat.identicalText(document.text, source) &&
+            editorModel.applyRegexEdit(edit, expectedSource: source)
+    }
+
+    private func highlightSearchResults(_ ranges: [NSRange], source: String) {
+        guard MarkdownTextFormat.identicalText(document.text, source) else { return }
+        editorModel.showDocumentSearchHighlights(ranges, expectedSource: source)
+    }
+
     // Opaque return types bound type-checking work for each modifier chain.
     private var navigationActionsView: some View {
         navigationView
         .focusedSceneValue(\.focusModeActions, FocusModeActions(
             isActive: focusMode.isActive, toggle: toggleFocusMode))
         .focusedSceneValue(\.markdownEditorModel, editorModel)
+        .focusedSceneValue(\.documentSearchActions, documentSearchActions)
         .background {
             EditorSelectionReader(selection: editorModel.selectionState) { _ in
                 Color.clear.focusedSceneValue(\.editorSelectedRanges, editorModel.selectionState.selectedRanges)
@@ -694,10 +750,6 @@ struct EditorWorkspace: View {
 
     private var documentActionsView: some View {
         navigationActionsView
-        .focusedSceneValue(\.regexSearchAction) {
-            if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
-            showingRegexSearch = true
-        }
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
         .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
@@ -971,21 +1023,8 @@ struct EditorWorkspace: View {
                 navigate(to: $0)
             }
         }
-        .sheet(isPresented: $showingRegexSearch) {
-            // 一致を選ぶと選択範囲が変わるため、次の一致は最新の選択範囲から求める。
-            let initialScope = editorModel.selectedRange
-            EditorSelectionReader(selection: editorModel.selectionState) { selection in
-            RegexSearchSheet(source: document.text, selectedRange: selection,
-                             initialScope: initialScope, canReplace: canEditDocument,
-                             onSelect: { range in
-                                let destination = NavigationPoint(documentURL: fileURL,
-                                                                  utf16Location: range.location)
-                                navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
-                                editorModel.selectAndReveal(range)
-                             }, onReplace: { edit, source in
-                                canEditDocument && editorModel.applyRegexEdit(edit, expectedSource: source)
-                             })
-            }
+        .sheet(item: $documentSearchPresentation) { presentation in
+            documentSearchSheet(presentation)
         }
         .sheet(isPresented: $showingLinkDiagnostics) {
             LinkDiagnosticsSheet(diagnostics: linkDiagnostics, isChecking: isCheckingLinks,
@@ -1478,8 +1517,16 @@ struct EditorWorkspace: View {
         }
     }
 
+    private var searchHighlightChangesView: some View {
+        let source: HighlightedDocumentSource? = editorModel.hasDocumentSearchHighlights
+            ? HighlightedDocumentSource(text: document.text) : nil
+        return documentChangesView.onChange(of: source) { _, source in
+            if let source { editorModel.invalidateDocumentSearchHighlights(for: source.text) }
+        }
+    }
+
     var body: some View {
-        documentChangesView
+        searchHighlightChangesView
         .background {
             MixedNewlineOpeningPrompt(document: editableDocument, fileURL: fileURL,
                                       showingPrompt: $showingMixedNewlinePrompt, isReadOnly: isReadOnly)
