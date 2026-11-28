@@ -41,14 +41,19 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         let source = root.appendingPathComponent("source.md")
         let reference = root.appendingPathComponent("reference.md")
+        let unrelated = root.appendingPathComponent("unrelated.md")
         try "source".write(to: source, atomically: true, encoding: .utf8)
         try "[link](source.md)".write(to: reference, atomically: true, encoding: .utf8)
+        try "unrelated".write(to: unrelated, atomically: true, encoding: .utf8)
         var open = MarkdownDocument(text: "unsaved\n[link](source.md)")
+        var openUnrelated = MarkdownDocument(text: "unrelated")
         let store = WorkspaceStore(defaults: UserDefaults(suiteName: UUID().uuidString)!)
         let id = UUID()
         store.registerOpenBuffer(id: id, url: reference,
                                  document: { open },
                                  updateText: { open.text = $0 })
+        store.registerOpenBuffer(id: UUID(), url: unrelated, document: { openUnrelated },
+                                 isReadOnly: { true }, updateText: { openUnrelated.text = $0 })
         let plan = try WorkspaceFileOperations.planMove(
             source: source, destination: root.appendingPathComponent("renamed.md"), root: root,
             openDocuments: store.openBufferDocuments())
@@ -62,6 +67,7 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         XCTAssertTrue(store.isDocumentLocked(reference))
         store.unlockOpenDocuments(secondLockID)
         XCTAssertEqual(open.text, "unsaved\n[link](renamed.md)")
+        XCTAssertEqual(openUnrelated.text, "unrelated")
         XCTAssertFalse(store.isDocumentLocked(reference))
         store.unregisterOpenBuffer(id: id, url: reference)
     }
@@ -120,6 +126,57 @@ final class WorkspaceOpenBufferTests: XCTestCase {
         text = "unsaved\n[link](renamed.md)"
         try store.applyOpenBufferChanges(in: plan)
         XCTAssertEqual(text, "unsaved\n[link](renamed.md)")
+    }
+
+    func testReadOnlyWindowPreventsLinkRewriteBeforeAndAfterDiskCommit() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.md")
+        let reference = root.appendingPathComponent("reference.md")
+        let destination = root.appendingPathComponent("renamed.md")
+        let original = "[link](source.md)"
+        try "source".write(to: source, atomically: true, encoding: .utf8)
+        try original.write(to: reference, atomically: true, encoding: .utf8)
+        var firstText = original
+        var secondText = original
+        var secondIsReadOnly = true
+        let store = WorkspaceStore(defaults: try XCTUnwrap(UserDefaults(suiteName: UUID().uuidString)))
+        let secondID = UUID()
+        store.registerOpenBuffer(id: UUID(), url: reference,
+                                 document: { MarkdownDocument(text: firstText) }, updateText: { firstText = $0 })
+        store.registerOpenBuffer(id: secondID, url: reference,
+                                 document: { MarkdownDocument(text: secondText) },
+                                 isReadOnly: { secondIsReadOnly }, updateText: { secondText = $0 })
+        let plan = try WorkspaceFileOperations.planMove(
+            source: source, destination: destination, root: root, openDocuments: store.openBufferDocuments())
+
+        XCTAssertTrue(store.isDocumentReadOnly(reference))
+        XCTAssertThrowsError(try store.validateOpenBuffers(in: plan)) { error in
+            guard case let WorkspaceOpenBufferError.readOnly(url) = error else {
+                return XCTFail("Expected a read-only buffer error, received \(error)")
+            }
+            XCTAssertEqual(url, reference.resolvingSymlinksInPath().standardizedFileURL)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+
+        secondIsReadOnly = false
+        XCTAssertFalse(store.isDocumentReadOnly(reference))
+        try store.validateOpenBuffers(in: plan)
+        try plan.apply()
+        secondIsReadOnly = true
+        XCTAssertThrowsError(try store.applyOpenBufferChanges(in: plan)) { error in
+            guard case WorkspaceOpenBufferError.readOnly = error else {
+                return XCTFail("Expected a read-only buffer error, received \(error)")
+            }
+        }
+        XCTAssertEqual(firstText, original)
+        XCTAssertEqual(secondText, original)
+        try plan.rollback()
+        XCTAssertEqual(try String(contentsOf: reference, encoding: .utf8), original)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: source.path))
+        store.unregisterOpenBuffer(id: secondID, url: reference)
+        XCTAssertFalse(store.isDocumentReadOnly(reference))
     }
 
     func testNewLinkInPreviouslyUnrelatedOpenDocumentStopsMove() throws {

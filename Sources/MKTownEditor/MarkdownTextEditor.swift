@@ -308,7 +308,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView else { return }
+            guard let textView, textView.isEditable else { return }
+            if let editor = textView as? EditorTextView, editor.isChangingEditability { return }
             (textView as? EditorTextView)?.clearFolds()
             var source = textView.editorSource
             source.makeContiguousUTF8()
@@ -805,11 +806,17 @@ extension NSTextView {
 
     /// Reapplying AppKit settings can reset feedback in an active find session.
     func updateEditorEditability(_ editable: Bool) {
-        if isEditable != editable { isEditable = editable }
+        guard isEditable != editable else { return }
+        if let editor = self as? EditorTextView {
+            editor.applyEditability(editable)
+        } else {
+            isEditable = editable
+        }
     }
 }
 
 final class EditorTextView: NSTextView {
+    private(set) var isChangingEditability = false
     private var cachedSource: String?
     private var observesSourceEdits = false
     private var pendingCharacterEdit: (range: NSRange, delta: Int)?
@@ -897,6 +904,7 @@ final class EditorTextView: NSTextView {
     }
 
     override func shouldChangeText(in affectedCharRange: NSRange, replacementString: String?) -> Bool {
+        guard isEditable else { return false }
         let allowed = super.shouldChangeText(in: affectedCharRange, replacementString: replacementString)
         if allowed, let replacementString {
             pendingCharacterEdit = (affectedCharRange, replacementString.utf16.count - affectedCharRange.length)
@@ -939,6 +947,7 @@ final class EditorTextView: NSTextView {
     }
 
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        guard isEditable else { return }
         super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
         refreshPlaceholderVisibility()
     }
@@ -1044,6 +1053,15 @@ final class EditorTextView: NSTextView {
             if !isEditable { readinessNotificationTask?.cancel() }
             else if !oldValue { notifyCollaborativeReadiness() }
         }
+    }
+
+    /// AppKit may finish a composition while changing editability. Suppress the
+    /// resulting notification so updateNSView can restore the last committed source.
+    fileprivate func applyEditability(_ editable: Bool) {
+        isChangingEditability = true
+        defer { isChangingEditability = false }
+        isEditable = editable
+        if !editable, hasMarkedText() { unmarkText() }
     }
 
     override func unmarkText() {
@@ -1161,6 +1179,7 @@ final class EditorTextView: NSTextView {
     }
 
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        guard isEditable else { return }
         if let typed = insertString as? String,
            commandModel?.completeSymbol(typed, replacementRange: replacementRange) == true { return }
         super.insertText(insertString, replacementRange: replacementRange)
@@ -1194,7 +1213,8 @@ final class EditorTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        guard isEditable, !hasMarkedText(), selectedRanges.count == 1 else {
+        guard isEditable else { return }
+        guard !hasMarkedText(), selectedRanges.count == 1 else {
             super.paste(sender)
             return
         }
@@ -1215,10 +1235,11 @@ final class EditorTextView: NSTextView {
     // Paste and Match Style, plain-text drag and drop, and the standard paste
     // fallback use the same LF buffer as keyboard paste.
     override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard isEditable else { return false }
         guard type == .string, let raw = pboard.string(forType: type) else {
             return super.readSelection(from: pboard, type: type)
         }
-        if isEditable, !hasMarkedText(), selectedRanges.count == 1, raw.utf8.contains(13) || raw.utf8.contains(10) {
+        if !hasMarkedText(), selectedRanges.count == 1, raw.utf8.contains(13) || raw.utf8.contains(10) {
             return replaceSelection(withPastedText: raw, preservingNewlines: false)
         }
         guard raw.utf8.contains(13) else { return super.readSelection(from: pboard, type: type) }
@@ -1250,6 +1271,7 @@ final class EditorTextView: NSTextView {
     }
 
     @objc private func pasteURLAsPlainText(_ sender: Any?) {
+        guard isEditable else { return }
         super.paste(sender)
     }
 
@@ -1258,16 +1280,18 @@ final class EditorTextView: NSTextView {
     }
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard isEditable else { return [] }
         guard Self.imageURL(in: sender.draggingPasteboard) != nil, onImageDrop != nil,
-              isEditable, !hasMarkedText() else { return super.draggingEntered(sender) }
+              !hasMarkedText() else { return super.draggingEntered(sender) }
         selectionBeforeImageDrag = selectedRange()
         imageDropLocation = dropInsertionLocation(for: sender.draggingLocation)
         return imageImportMode == .managedCopy ? .copy : .link
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard isEditable else { return [] }
         guard Self.imageURL(in: sender.draggingPasteboard) != nil, onImageDrop != nil,
-              isEditable, !hasMarkedText() else { return super.draggingUpdated(sender) }
+              !hasMarkedText() else { return super.draggingUpdated(sender) }
         setSelectedRange(NSRange(location: dropInsertionLocation(for: sender.draggingLocation), length: 0))
         imageDropLocation = selectedRange().location
         return imageImportMode == .managedCopy ? .copy : .link
@@ -1286,8 +1310,9 @@ final class EditorTextView: NSTextView {
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard isEditable else { return false }
         guard let url = Self.imageURL(in: sender.draggingPasteboard), let onImageDrop,
-              isEditable, !hasMarkedText() else { return super.performDragOperation(sender) }
+              !hasMarkedText() else { return super.performDragOperation(sender) }
         let location = dropInsertionLocation(for: sender.draggingLocation)
         setSelectedRange(NSRange(location: location, length: 0))
         selectionBeforeImageDrag = nil
@@ -1405,7 +1430,7 @@ final class EditorTextView: NSTextView {
 
     func makeMarkdownMenu(baseMenu: NSMenu?) -> NSMenu {
         let menu = (baseMenu?.copy() as? NSMenu) ?? NSMenu()
-        if selectedRange().length > 0,
+        if isEditable, selectedRange().length > 0,
            let value = imagePasteboard.string(forType: .string),
            MarkdownURLPaste.validURL(value) != nil {
             if !menu.items.isEmpty { menu.addItem(.separator()) }

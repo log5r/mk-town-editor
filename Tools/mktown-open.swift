@@ -7,22 +7,29 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-var arguments = Array(CommandLine.arguments.dropFirst())
+var arguments = CommandLine.arguments.dropFirst()
 if arguments == ["--help"] || arguments == ["-h"] {
-    print("Usage: mktown-open [--line LINE] FILE_OR_FILE_URL")
+    print("Usage: mktown-open [--readonly] [--line LINE] FILE_OR_FILE_URL")
     exit(0)
 }
 
 var line: Int?
-if arguments.first == "--line" {
-    guard arguments.count >= 3, let value = Int(arguments[1]), value > 0 else {
-        fail("--line requires a positive line number")
+var isReadOnly = false
+while let option = arguments.first, option == "--line" || option == "--readonly" {
+    arguments.removeFirst()
+    if option == "--readonly" {
+        guard !isReadOnly else { fail("--readonly can only be specified once") }
+        isReadOnly = true
+    } else {
+        guard line == nil else { fail("--line can only be specified once") }
+        guard let argument = arguments.popFirst(), let value = Int(argument), value > 0 else {
+            fail("--line requires a positive line number")
+        }
+        line = value
     }
-    line = value
-    arguments.removeFirst(2)
 }
-guard arguments.count == 1 else { fail("expected one file path or file URL") }
-let argument = arguments[0]
+if arguments.first == "--" { arguments.removeFirst() }
+guard arguments.count == 1, let argument = arguments.first else { fail("expected one file path or file URL") }
 let fileURL: URL
 if argument.hasPrefix("file:") {
     guard let parsed = URL(string: argument), parsed.isFileURL else { fail("invalid file URL") }
@@ -41,6 +48,7 @@ components.scheme = "mktowneditor"
 components.host = "open"
 components.queryItems = [URLQueryItem(name: "url", value: normalized.absoluteString)]
 if let line { components.queryItems?.append(URLQueryItem(name: "line", value: String(line))) }
+if isReadOnly { components.queryItems?.append(URLQueryItem(name: "readonly", value: "1")) }
 guard let url = components.url, NSWorkspace.shared.open(url) else {
     fail("could not open MKTownEditor; launch the app once to register its URL scheme")
 }

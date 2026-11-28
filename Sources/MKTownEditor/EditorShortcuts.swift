@@ -97,7 +97,9 @@ enum EditorShortcutRegistry {
     static let reserved: Set<ShortcutChord> = [
         ShortcutChord(key: "q"), ShortcutChord(key: "w"), ShortcutChord(key: "h"),
         ShortcutChord(key: "m"), ShortcutChord(key: "n"), ShortcutChord(key: "o"),
-        ShortcutChord(key: "s"), ShortcutChord(key: ","), ShortcutChord(key: "p"),
+        ShortcutChord(key: "s"), ShortcutChord(key: "s", shift: true),
+        ShortcutChord(key: "s", option: true, shift: true),
+        ShortcutChord(key: ","), ShortcutChord(key: "p"),
         ShortcutChord(key: "a"), ShortcutChord(key: "c"), ShortcutChord(key: "v"),
         ShortcutChord(key: "x"), ShortcutChord(key: "z"), ShortcutChord(key: "t"),
         ShortcutChord(key: "z", shift: true), ShortcutChord(key: "q", shift: true),

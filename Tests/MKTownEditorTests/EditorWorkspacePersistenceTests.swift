@@ -28,7 +28,7 @@ final class EditorWorkspacePersistenceTests: XCTestCase {
         let workspaceStore = WorkspaceStore(defaults: defaults)
         let document = Binding.constant(MarkdownDocument(text: "# Title\n\nfirst line\nsecond line\n"))
         let make: (URL?) -> AnyView = { url in
-            AnyView(EditorWorkspace(document: document, fileURL: url)
+            AnyView(MarkdownDocumentWindow(document: document, fileURL: url)
                 .environmentObject(settings)
                 .environmentObject(navigation)
                 .environmentObject(workspaceStore)
@@ -183,6 +183,36 @@ final class EditorWorkspacePersistenceTests: XCTestCase {
         try await settle(opened, for: .milliseconds(300))
         XCTAssertTrue(showsEditor(opened))
         XCTAssertEqual(opened.settings.mode(for: a), .editor, "mktown-open --line switches to the editor as before")
+    }
+
+    func testReadOnlyOpenAppliesToTheRequestedWindowAndDoesNotPersist() async throws {
+        let defaults = try isolatedDefaults()
+        let (root, a, b) = try temporaryDocuments()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let navigation = DocumentLinkNavigation()
+        navigation.requestReadOnlyOpen(for: a)
+        let first = host(fileURL: a, defaults: defaults, navigation: navigation, savedMode: .editor)
+        first.window.isReleasedWhenClosed = false
+        defer { first.window.orderOut(nil) }
+        let firstEditor = try XCTUnwrap(descendants(of: first.controller.view, as: EditorTextView.self).first)
+        XCTAssertFalse(firstEditor.isEditable)
+
+        let second = host(fileURL: b, defaults: defaults, navigation: navigation, savedMode: .editor)
+        defer { second.window.orderOut(nil) }
+        let secondEditor = try XCTUnwrap(descendants(of: second.controller.view, as: EditorTextView.self).first)
+        XCTAssertTrue(secondEditor.isEditable)
+        navigation.requestReadOnlyOpen(for: b)
+        try await settle(second, for: .milliseconds(300))
+        XCTAssertFalse(secondEditor.isEditable)
+        XCTAssertTrue(secondEditor.isSelectable)
+        XCTAssertFalse(navigation.hasPendingReadOnlyOpen(for: a))
+        XCTAssertFalse(navigation.hasPendingReadOnlyOpen(for: b))
+
+        first.window.close()
+        let reopened = host(fileURL: a, defaults: defaults, navigation: navigation)
+        defer { reopened.window.orderOut(nil) }
+        let reopenedEditor = try XCTUnwrap(descendants(of: reopened.controller.view, as: EditorTextView.self).first)
+        XCTAssertTrue(reopenedEditor.isEditable)
     }
 
     func testNamedLayoutDocumentOpensInTheLayoutMode() async throws {

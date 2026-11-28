@@ -37,6 +37,7 @@ enum WorkspaceToolbarItem: String, CaseIterable {
     case publication
     case collaboration
     case aiSuggestion = "ai-suggestion"
+    case readOnly = "read-only"
 
     var title: String {
         switch self {
@@ -56,6 +57,7 @@ enum WorkspaceToolbarItem: String, CaseIterable {
         case .publication: String(localized: "ブログ・静的サイトへ公開")
         case .collaboration: String(localized: "共同編集とコメント")
         case .aiSuggestion: String(localized: "選択範囲をAIで推敲・翻訳")
+        case .readOnly: String(localized: "読み取り専用")
         }
     }
 
@@ -77,6 +79,7 @@ enum WorkspaceToolbarItem: String, CaseIterable {
         case .publication: "paperplane"
         case .collaboration: "person.2"
         case .aiSuggestion: "sparkles"
+        case .readOnly: "lock"
         }
     }
 
@@ -162,10 +165,12 @@ struct EditorFormattingToolbar<Content: View>: CustomizableToolbarContent {
 
 struct EditorWorkspace: View {
     @Binding var document: MarkdownDocument
+    @Binding var isReadOnly: Bool
     let fileURL: URL?
 
-    init(document: Binding<MarkdownDocument>, fileURL: URL?) {
+    init(document: Binding<MarkdownDocument>, fileURL: URL?, isReadOnly: Binding<Bool> = .constant(false)) {
         _document = document
+        _isReadOnly = isReadOnly
         self.fileURL = fileURL
         _toolbarInstanceID = State(initialValue: EditorToolbarInstanceID(documentURL: fileURL))
     }
@@ -291,6 +296,21 @@ struct EditorWorkspace: View {
     @State private var showingEncodingLoss = false
     @State private var workspaceViewActive = false
     @State private var openBufferID = UUID()
+
+    private var canEditDocument: Bool {
+        !isReadOnly && !workspaceStore.isDocumentLocked(fileURL)
+    }
+
+    // Read the live window state even when a sheet, async edit or undo retains this binding.
+    private var editableDocument: Binding<MarkdownDocument> {
+        Binding(get: { document }, set: { if canEditDocument { document = $0 } })
+    }
+
+    private func toggleReadOnly() {
+        guard !workspaceStore.isDocumentLocked(fileURL) else { return }
+        isReadOnly.toggle()
+        editorModel.textView?.updateEditorEditability(canEditDocument)
+    }
 
     enum SidebarTab: String, CaseIterable {
         case outline
@@ -435,6 +455,12 @@ struct EditorWorkspace: View {
                 if !focusMode.isActive {
                     Divider()
                     statusBar
+                } else if isReadOnly {
+                    Divider()
+                    readOnlyStatus
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                 }
             }
             .frame(minWidth: 720, minHeight: 480)
@@ -515,6 +541,7 @@ struct EditorWorkspace: View {
                     Divider()
                     Button("ブログ・静的サイトへ公開…") { showingPublication = true }
                     Button("共同編集とコメント…") { showingCollaboration = true }
+                        .disabled(!canEditDocument)
                     Button("スライド表示") { showSlidePresentation() }
                 }
                 .help("書き出し・公開・共有")
@@ -547,6 +574,7 @@ struct EditorWorkspace: View {
                             checkTerminology()
                         }
                         Button("自動整形…") { showingAutoFormat = true }
+                            .disabled(!canEditDocument)
                         Divider()
                         Button("選択範囲をAIで推敲・翻訳…") { showingAISuggestion = true }
                             .disabled(!hasActiveEditor || selection.length == 0)
@@ -589,6 +617,13 @@ struct EditorWorkspace: View {
             }
             toolbarItem(.collaboration) {
                 toolbarButton(.collaboration) { showingCollaboration = true }
+                    .disabled(!canEditDocument)
+            }
+            toolbarItem(.readOnly) {
+                Button(isReadOnly ? "編集を許可" : "編集を禁止",
+                       systemImage: isReadOnly ? "lock.open" : WorkspaceToolbarItem.readOnly.symbolName,
+                       action: toggleReadOnly)
+                    .disabled(workspaceStore.isDocumentLocked(fileURL))
             }
             toolbarItem(.aiSuggestion) {
                 let hasActiveEditor = editorModel.hasActiveEditor
@@ -666,7 +701,6 @@ struct EditorWorkspace: View {
         .focusedSceneValue(\.exportHTMLAction) { exportHTML() }
         .focusedSceneValue(\.exportPDFAction) { exportPDF() }
         .focusedSceneValue(\.exportExternalAction) { showingExternalExport = true }
-        .focusedSceneValue(\.importRichTextAction) { showingRichImport = true }
         .focusedSceneValue(\.exportPortablePackageAction) { showingPortablePackage = true }
         .focusedSceneValue(\.exportWorkspaceBatchAction) { showingBatchExport = true }
         .focusedSceneValue(\.pageSetupAction) { pageSetup() }
@@ -691,20 +725,36 @@ struct EditorWorkspace: View {
                                            preferredSnapshot: analysisStore.snapshot)
                 }))
         .focusedSceneValue(\.openEncodingImportAction) { chooseEncodingImport() }
-        .focusedSceneValue(\.textFormatActions, TextFormatActions(
+    }
+
+    private var textFormatActions: TextFormatActions {
+        let reopen: (() -> Void)? = fileURL != nil && canEditDocument ? {
+            if let fileURL { showEncodingPicker(for: fileURL, isReload: true) }
+        } : nil
+        let reviewLoss: (() -> Void)? = encodingLoss == nil ? nil : { showingEncodingLoss = true }
+        return TextFormatActions(
             format: document.format,
             encoding: document.encoding,
-            reopen: fileURL != nil && !workspaceStore.isDocumentLocked(fileURL) ? {
-                if let fileURL { showEncodingPicker(for: fileURL, isReload: true) }
-            } : nil,
-            reviewLoss: encodingLoss == nil ? nil : { showingEncodingLoss = true },
-            setNewline: { document.format.newline = $0 },
-            setBOM: { document.format.hasUTF8BOM = $0 }
-        ))
+            canEdit: canEditDocument,
+            reopen: reopen,
+            reviewLoss: reviewLoss,
+            setNewline: { if canEditDocument { document.format.newline = $0 } },
+            setBOM: { if canEditDocument { document.format.hasUTF8BOM = $0 } }
+        )
+    }
+
+    private var editingActionsView: some View {
+        let importRichText: (() -> Void)? = canEditDocument ? { showingRichImport = true } : nil
+        let editing = DocumentEditingActions(isReadOnly: isReadOnly,
+            canToggle: !workspaceStore.isDocumentLocked(fileURL), toggle: toggleReadOnly)
+        return documentActionsView
+            .focusedSceneValue(\.documentEditingActions, editing)
+            .focusedSceneValue(\.importRichTextAction, importRichText)
+            .focusedSceneValue(\.textFormatActions, textFormatActions)
     }
 
     private var sheetView: some View {
-        documentActionsView
+        editingActionsView
             .overlay {
                 if documentOperationRunning {
                     VStack(spacing: 12) {
@@ -733,16 +783,16 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingCloudStatus) {
             if let fileURL {
-                CloudFileStatusSheet(fileURL: fileURL, source: $document.text) { selected, expected in
-                    guard document.text == expected else { return false }
+                CloudFileStatusSheet(fileURL: fileURL, source: $document.text,
+                                     canEdit: { canEditDocument }) { selected, expected in
+                    guard canEditDocument, document.text == expected else { return false }
                     if editorModel.hasActiveEditor {
                         let range = NSRange(location: 0, length: (expected as NSString).length)
                         return editorModel.applyRegexEdit(MarkdownEdit(range: range,
                             replacement: selected, selection: NSRange(location: 0, length: 0)),
                             expectedSource: expected)
                     }
-                    previewTaskUndoTarget.replaceText(selected, in: $document.text,
-                        undoManager: undoManager, actionName: String(localized: "競合版を採用"))
+                    replaceTextWithUndo(selected, actionName: String(localized: "競合版を採用"))
                     return true
                 }
             }
@@ -751,12 +801,14 @@ struct EditorWorkspace: View {
             PublicationSheet(source: $document.text, documentURL: fileURL)
         }
         .sheet(isPresented: $showingCollaboration) {
-            CollaborationSheet(session: collaboration, editorModel: editorModel,
-                               source: $document.text,
-                               documentTitle: fileURL?.lastPathComponent ?? String(localized: "無題"))
+            if !isReadOnly {
+                CollaborationSheet(session: collaboration, editorModel: editorModel,
+                                   source: editableDocument.text,
+                                   documentTitle: fileURL?.lastPathComponent ?? String(localized: "無題"))
+            }
         }
         .sheet(isPresented: $showingAISuggestion) {
-            AISuggestionSheet(editorModel: editorModel, source: $document.text)
+            AISuggestionSheet(editorModel: editorModel, source: $document.text, canApply: { canEditDocument })
         }
         .sheet(isPresented: $showingGoToLine) {
             let index = MarkdownLineIndex(document.text)
@@ -791,15 +843,14 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingRichImport) {
             RichTextImportSheet(currentText: $document.text) { imported, expected in
-                guard document.text == expected else { return false }
+                guard canEditDocument, document.text == expected else { return false }
                 if editorModel.hasActiveEditor {
                     let range = NSRange(location: 0, length: (expected as NSString).length)
                     let edit = MarkdownEdit(range: range, replacement: imported,
                         selection: NSRange(location: 0, length: 0))
                     return editorModel.applyRegexEdit(edit, expectedSource: expected)
                 }
-                previewTaskUndoTarget.replaceText(imported, in: $document.text,
-                    undoManager: undoManager, actionName: String(localized: "HTML・RTFを取り込む"))
+                replaceTextWithUndo(imported, actionName: String(localized: "HTML・RTFを取り込む"))
                 return true
             }
         }
@@ -849,16 +900,15 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $showingSnapshotHistory) {
             if let fileURL {
                 WorkspaceSnapshotHistorySheet(documentURL: fileURL,
-                    currentText: $document.text) { restored, expected in
-                    guard document.text == expected else { return false }
+                    currentText: $document.text, canRestore: canEditDocument) { restored, expected in
+                    guard canEditDocument, document.text == expected else { return false }
                     if editorModel.hasActiveEditor {
                         let range = NSRange(location: 0, length: (expected as NSString).length)
                         let edit = MarkdownEdit(range: range, replacement: restored,
                             selection: NSRange(location: 0, length: 0))
                         return editorModel.applyRegexEdit(edit, expectedSource: expected)
                     }
-                    previewTaskUndoTarget.replaceText(restored, in: $document.text,
-                        undoManager: undoManager, actionName: String(localized: "スナップショットを復元"))
+                    replaceTextWithUndo(restored, actionName: String(localized: "スナップショットを復元"))
                     return true
                 }
             }
@@ -897,7 +947,7 @@ struct EditorWorkspace: View {
             if input.isReload {
                 MarkdownEncodingPicker(sourceData: input.data, initialEncoding: document.encoding, isReload: true,
                     onOpen: { reloaded in
-                        if fileURL == input.url, !workspaceStore.isDocumentLocked(fileURL) {
+                        if fileURL == input.url, canEditDocument {
                             document = reloaded
                             reloadedFileURL = input.url
                         }
@@ -913,7 +963,7 @@ struct EditorWorkspace: View {
             }
         }
         .sheet(isPresented: $showingEncodingLoss) {
-            MarkdownEncodingLossSheet(loss: encodingLoss, isLocked: workspaceStore.isDocumentLocked(fileURL),
+            MarkdownEncodingLossSheet(loss: encodingLoss, isLocked: !canEditDocument,
                                       onResolve: resolveEncodingLoss)
         }
         .sheet(isPresented: $showingGoToHeading) {
@@ -926,14 +976,14 @@ struct EditorWorkspace: View {
             let initialScope = editorModel.selectedRange
             EditorSelectionReader(selection: editorModel.selectionState) { selection in
             RegexSearchSheet(source: document.text, selectedRange: selection,
-                             initialScope: initialScope,
+                             initialScope: initialScope, canReplace: canEditDocument,
                              onSelect: { range in
                                 let destination = NavigationPoint(documentURL: fileURL,
                                                                   utf16Location: range.location)
                                 navigationHistory.recordJump(from: currentNavigationPoint, to: destination)
                                 editorModel.selectAndReveal(range)
                              }, onReplace: { edit, source in
-                                editorModel.applyRegexEdit(edit, expectedSource: source)
+                                canEditDocument && editorModel.applyRegexEdit(edit, expectedSource: source)
                              })
             }
         }
@@ -1017,14 +1067,12 @@ struct EditorWorkspace: View {
                 WorkspaceWikiLinkSheet(index: workspaceStore.quickOpenIndex,
                     documentURL: fileURL, source: document.text,
                     selection: wikiSelection, onApply: { edit, expectedSource in
-                        guard document.text == expectedSource,
-                              !workspaceStore.isDocumentLocked(fileURL) else { return false }
+                        guard canEditDocument, document.text == expectedSource else { return false }
                         if editorModel.hasActiveEditor {
                             return editorModel.applyRegexEdit(edit, expectedSource: expectedSource)
                         }
-                        previewTaskUndoTarget.replaceText(edit.applying(to: expectedSource),
-                            in: $document.text, undoManager: undoManager,
-                            actionName: String(localized: "Wikiリンクを変更"))
+                        replaceTextWithUndo(edit.applying(to: expectedSource),
+                                            actionName: String(localized: "Wikiリンクを変更"))
                         return true
                     }, onOpen: { url in
                         if url.resolvingSymlinksInPath().standardizedFileURL ==
@@ -1053,7 +1101,10 @@ struct EditorWorkspace: View {
                     isTruncated: workspaceStore.isTruncated,
                     loadOpenBuffers: {
                         try workspaceStore.openBufferSnapshots(under: root)
+                    }, canToggle: { task in
+                        !workspaceStore.isDocumentReadOnly(task.sourceURL)
                     }, onToggle: { task in
+                        guard !workspaceStore.isDocumentReadOnly(task.sourceURL) else { return }
                         if task.sourceURL.resolvingSymlinksInPath().standardizedFileURL ==
                             fileURL?.resolvingSymlinksInPath().standardizedFileURL {
                             applyWorkspaceTask(task)
@@ -1110,8 +1161,7 @@ struct EditorWorkspace: View {
                     source: document.text, headingLocation: headingLocation,
                     workspaceDocuments: workspaceStore.quickOpenIndex.rankedDocumentURLs,
                     onCreate: { plan, destination, expectedSource in
-                        guard document.text == expectedSource,
-                              !workspaceStore.isDocumentLocked(fileURL) else {
+                        guard canEditDocument, document.text == expectedSource else {
                             throw WorkspaceNoteOperationError.sourceChanged
                         }
                         return try WorkspaceNoteOperations.applySplit(plan,
@@ -1120,10 +1170,8 @@ struct EditorWorkspace: View {
                                 return editorModel.applyRegexEdit(plan.sourceEdit,
                                     expectedSource: expectedSource)
                             }
-                            previewTaskUndoTarget.replaceText(
-                                plan.sourceEdit.applying(to: expectedSource),
-                                in: $document.text, undoManager: undoManager,
-                                actionName: String(localized: "セクションを分割"))
+                            replaceTextWithUndo(plan.sourceEdit.applying(to: expectedSource),
+                                                actionName: String(localized: "セクションを分割"))
                             return true
                         }
                     }, onOpen: { url in
@@ -1164,28 +1212,26 @@ struct EditorWorkspace: View {
         }
         .sheet(isPresented: $showingFrontMatterProperties) {
             FrontMatterPropertiesSheet(source: document.text,
-                canEdit: !workspaceStore.isDocumentLocked(fileURL)) { edit, expectedSource in
-                    guard document.text == expectedSource,
-                          !workspaceStore.isDocumentLocked(fileURL) else { return false }
+                canEdit: canEditDocument) { edit, expectedSource in
+                    guard canEditDocument, document.text == expectedSource else { return false }
                     if editorModel.hasActiveEditor {
                         return editorModel.applyRegexEdit(edit, expectedSource: expectedSource)
                     }
-                    previewTaskUndoTarget.replaceText(edit.applying(to: expectedSource),
-                        in: $document.text, undoManager: undoManager,
-                        actionName: String(localized: "文書プロパティを変更"))
+                    replaceTextWithUndo(edit.applying(to: expectedSource),
+                                        actionName: String(localized: "文書プロパティを変更"))
                     return true
                 }
         }
         .sheet(isPresented: $showingTerminology) {
             TerminologySheet(issues: terminologyIssues, isChecking: isCheckingTerminology,
-                             source: terminologySource, canReplace: editorModel.canExecuteCommand,
+                             source: terminologySource, canReplace: canEditDocument && editorModel.canExecuteCommand,
                              hasEntries: !(settingsStore.app.terminologyEntries ?? []).isEmpty,
                              onSelect: { issue in
                                  showingTerminology = false
                                  if mode.wrappedValue == .preview { mode.wrappedValue = .editor }
                                  navigate(to: issue.range.location)
                              }, onReplace: { issue in
-                                 guard document.text == terminologySource,
+                                 guard canEditDocument, document.text == terminologySource,
                                        let edit = issue.replacement(in: terminologySource) else { return false }
                                  return editorModel.applyRegexEdit(edit, expectedSource: terminologySource)
                              })
@@ -1198,12 +1244,11 @@ struct EditorWorkspace: View {
         .sheet(isPresented: $showingAutoFormat) {
             MarkdownAutoFormatSheet(source: document.text,
                                     selectedRange: editorModel.selectedRange) { plan in
-                guard document.text == plan.source else { return false }
+                guard canEditDocument, document.text == plan.source else { return false }
                 if editorModel.hasActiveEditor {
                     return editorModel.applyRegexEdit(plan.edit, expectedSource: plan.source)
                 }
-                previewTaskUndoTarget.replaceText(plan.edit.applying(to: plan.source),
-                    in: $document.text, undoManager: undoManager, actionName: String(localized: "Markdownを自動整形"))
+                replaceTextWithUndo(plan.edit.applying(to: plan.source), actionName: String(localized: "Markdownを自動整形"))
                 return true
             }
         }
@@ -1346,6 +1391,12 @@ struct EditorWorkspace: View {
         .onChange(of: workspaceStore.isDocumentLocked(fileURL)) { _, isLocked in
             if !isLocked, let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
         }
+        .onChange(of: isReadOnly) { _, readOnly in
+            guard readOnly else { return }
+            collaboration.stop()
+            pendingCollaborativeText = nil
+            showingCollaboration = false
+        }
         .onChange(of: editorModel.hasActiveEditor) { _, _ in
             if let pendingCollaborativeText { applyCollaborativeText(pendingCollaborativeText) }
         }
@@ -1429,7 +1480,10 @@ struct EditorWorkspace: View {
 
     var body: some View {
         documentChangesView
-        .background { MixedNewlineOpeningPrompt(document: $document, fileURL: fileURL, showingPrompt: $showingMixedNewlinePrompt) }
+        .background {
+            MixedNewlineOpeningPrompt(document: editableDocument, fileURL: fileURL,
+                                      showingPrompt: $showingMixedNewlinePrompt, isReadOnly: isReadOnly)
+        }
         // Only `isEmpty` reaches the window, so typing does not compare the whole text.
         .background(WindowRestorationSetter(isRestorable: EditorWindowRestoration.isRestorable(
             fileURL: fileURL, isTextEmpty: document.text.isEmpty)))
@@ -1674,7 +1728,7 @@ struct EditorWorkspace: View {
     }
 
     private var previewTaskAction: ((Int) -> Void)? {
-        guard currentAnalysisSnapshot != nil else { return nil }
+        guard canEditDocument, currentAnalysisSnapshot != nil else { return nil }
         return { toggleTask(at: $0) }
     }
 
@@ -1773,12 +1827,10 @@ struct EditorWorkspace: View {
                     wikiSelection = editorModel.selectedRange
                     showingWikiLinks = true
                 }
-                .disabled(fileURL == nil || !isWorkspaceReadable ||
-                    workspaceStore.isDocumentLocked(fileURL))
+                .disabled(fileURL == nil || !isWorkspaceReadable || !canEditDocument)
             }
             Section("文書を整理") {
-                let splitUnavailable = !isReady || fileURL == nil || !isWorkspaceReadable ||
-                    workspaceStore.isDocumentLocked(fileURL)
+                let splitUnavailable = !isReady || fileURL == nil || !isWorkspaceReadable || !canEditDocument
                 let entries = outlineEntries
                 EditorSelectionReader(selection: editorModel.selectionState) { selection in
                 Button("現在のセクションを分割…") {
@@ -2255,8 +2307,8 @@ struct EditorWorkspace: View {
     }
 
     private func applyWorkspaceTask(_ task: WorkspaceTaskItem) {
-        guard let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text),
-              !workspaceStore.isDocumentLocked(fileURL) else {
+        guard !isReadOnly else { return }
+        guard canEditDocument, let edit = WorkspaceTaskIndex.toggleEdit(for: task, in: document.text) else {
             errorQueue.present(.workspaceOpen(String(localized: "タスクの位置または内容が変わりました。一覧を更新してください。")))
             return
         }
@@ -2267,9 +2319,7 @@ struct EditorWorkspace: View {
             }
             editorModel.selectAndReveal(NSRange(location: task.sourceLocation, length: 0))
         } else {
-            previewTaskUndoTarget.replaceText(edit.applying(to: document.text),
-                in: $document.text, undoManager: undoManager,
-                actionName: String(localized: "タスクを完了"))
+            replaceTextWithUndo(edit.applying(to: document.text), actionName: String(localized: "タスクを完了"))
         }
     }
 
@@ -2400,15 +2450,14 @@ struct EditorWorkspace: View {
     private func resolveEncodingLoss(convertToUTF8: Bool) {
         guard let loss = encodingLoss, document.encoding == loss.encoding,
               document.text.utf8.elementsEqual(loss.source.utf8),
-              !workspaceStore.isDocumentLocked(fileURL), editorModel.textView?.hasMarkedText() != true else { return }
+              canEditDocument, editorModel.textView?.hasMarkedText() != true else { return }
         do {
             if convertToUTF8 {
                 document.convertToUTF8()
             } else {
                 var converted = document
                 try converted.replaceUnrepresentableCharacters()
-                previewTaskUndoTarget.replaceText(converted.text, in: $document.text, undoManager: undoManager,
-                                                   actionName: String(localized: "保存できない文字を置換"))
+                replaceTextWithUndo(converted.text, actionName: String(localized: "保存できない文字を置換"))
             }
             showingEncodingLoss = false
             if let fileURL, let file = NSDocumentController.shared.document(for: fileURL) {
@@ -2489,7 +2538,7 @@ struct EditorWorkspace: View {
     }
 
     private func applyCollaborativeText(_ sharedText: String) {
-        guard collaboration.isActive else { pendingCollaborativeText = nil; return }
+        guard !isReadOnly, collaboration.isActive else { pendingCollaborativeText = nil; return }
         guard document.text != sharedText else { pendingCollaborativeText = nil; return }
         guard !workspaceStore.isDocumentLocked(fileURL) else {
             pendingCollaborativeText = sharedText
@@ -2581,6 +2630,10 @@ struct EditorWorkspace: View {
             startDocumentOperation {
                 let text = try await DocumentWork.perform {
                     MarkdownPlainTextExporter.render(source, options: options)
+                }
+                guard !workspaceStore.isDocumentReadOnly(destination) else {
+                    errorQueue.present(.plainExport(String(localized: "読み取り専用で開いている書類には書き出せません。")))
+                    return
                 }
                 try await DocumentWork.commit { try Data(text.utf8).write(to: destination, options: .atomic) }
             } onError: { errorQueue.present(.plainExport($0)) }
@@ -2679,7 +2732,7 @@ struct EditorWorkspace: View {
 
     private var sourceEditor: some View {
         HStack(spacing: 0) {
-            MarkdownTextEditor(text: $document.text, model: editorModel, document: $document,
+            MarkdownTextEditor(text: editableDocument.text, model: editorModel, document: editableDocument,
                                textStyle: settingsStore.textStyle(for: fileURL),
                                layoutOptions: settingsStore.layoutOptions(for: fileURL),
                                sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
@@ -2690,7 +2743,7 @@ struct EditorWorkspace: View {
                                whitespaceOptions: EditorWhitespaceOptions(
                                    showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,
                                    showsIndentGuides: settingsStore.app.showsIndentGuides ?? false),
-                               isEditable: !workspaceStore.isDocumentLocked(fileURL),
+                               isEditable: canEditDocument,
                                onImageDrop: dropImage, onImagePaste: pasteImage,
                                onVisibleSourceChange: synchronizePreview(to:),
                                documentContext: documentContext,
@@ -2710,13 +2763,15 @@ struct EditorWorkspace: View {
 
     private func registerOpenBuffer(for url: URL) {
         let binding = $document
+        let readOnly = $isReadOnly
         workspaceStore.registerOpenBuffer(id: openBufferID, url: url,
             document: { binding.wrappedValue },
+            isReadOnly: { readOnly.wrappedValue },
             updateText: { binding.wrappedValue.text = $0 })
     }
 
     private func dropImage(_ url: URL, at location: Int) {
-        guard let draft = editorModel.imageDropDraft(at: location) else { return }
+        guard canEditDocument, let draft = editorModel.imageDropDraft(at: location) else { return }
         let context = documentContext
         let mode = settingsStore.imageImportMode(for: fileURL)
         Task {
@@ -2732,7 +2787,7 @@ struct EditorWorkspace: View {
     }
 
     private func pasteImage(_ data: Data) {
-        guard let draft = editorModel.imagePasteDraft() else { return }
+        guard canEditDocument, let draft = editorModel.imagePasteDraft() else { return }
         let context = documentContext
         guard context.directoryURL != nil else {
             pasteNeedsSave = true
@@ -2750,14 +2805,20 @@ struct EditorWorkspace: View {
     }
 
     private func toggleTask(at sourceLocation: Int) {
+        guard canEditDocument else { return }
         if editorModel.hasActiveEditor {
             editorModel.toggleTask(at: sourceLocation)
             return
         }
         guard let edit = MarkdownFormatter.toggleTasks(in: document.text,
             selection: NSRange(location: sourceLocation, length: 0)) else { return }
-        previewTaskUndoTarget.replaceText(edit.applying(to: document.text),
-                                          in: $document.text, undoManager: undoManager)
+        replaceTextWithUndo(edit.applying(to: document.text))
+    }
+
+    private func replaceTextWithUndo(_ text: String,
+                                     actionName: String = String(localized: "タスクの完了切替")) {
+        previewTaskUndoTarget.replaceText(text, in: $document.text, undoManager: undoManager,
+                                          canEdit: { canEditDocument }, actionName: actionName)
     }
 
     private func insertImage(alt: String, input: ImageInput, title: String,
@@ -2773,6 +2834,9 @@ struct EditorWorkspace: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             Text("Markdown")
+            if isReadOnly {
+                readOnlyStatus
+            }
             Text(verbatim: document.encoding.title)
                 .accessibilityLabel("文字コード \(document.encoding.title)")
             if let warnings = currentSaveWarnings, !warnings.items.isEmpty {
@@ -2868,6 +2932,11 @@ struct EditorWorkspace: View {
         .accessibilityElement(children: .contain)
     }
 
+    private var readOnlyStatus: some View {
+        Label("読み取り専用", systemImage: "lock")
+            .accessibilityLabel("読み取り専用")
+    }
+
     private var statusAccessibilityLabel: String {
         String(localized: "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字")
     }
@@ -2954,7 +3023,7 @@ struct EditorWorkspace: View {
                 Label(command.title, systemImage: command.symbolName)
             }
             .help(command.title)
-            .disabled(!command.canExecute(in: editorModel))
+            .disabled(!canEditDocument || !command.canExecute(in: editorModel))
         }
     }
 }
@@ -3334,14 +3403,16 @@ private struct MarkdownAutoFormatSheet: View {
 @MainActor
 final class PreviewTaskUndoTarget {
     func replaceText(_ newText: String, in text: Binding<String>, undoManager: UndoManager?,
+                     canEdit: @escaping () -> Bool = { true },
                      actionName: String = String(localized: "タスクの完了切替")) {
+        guard canEdit() else { return }
         let previous = text.wrappedValue
         guard previous != newText else { return }
         text.wrappedValue = newText
         if let undoManager {
             undoManager.registerUndo(withTarget: self) { [weak undoManager] target in
                 target.replaceText(previous, in: text, undoManager: undoManager,
-                                   actionName: actionName)
+                                   canEdit: canEdit, actionName: actionName)
             }
             undoManager.setActionName(actionName)
         }

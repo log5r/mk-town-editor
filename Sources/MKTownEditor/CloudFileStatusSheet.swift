@@ -4,6 +4,7 @@ struct CloudFileStatusSheet: View {
     @Environment(\.dismiss) private var dismiss
     let fileURL: URL
     @Binding var source: String
+    let canEdit: () -> Bool
     let useText: (String, String) -> Bool
     @State private var status: CloudFileStatus?
     @State private var versions: [NSFileVersion] = []
@@ -75,16 +76,16 @@ struct CloudFileStatusSheet: View {
                             error = String(localized: "編集中の文書が変わりました。更新してから再試行してください。")
                         }
                     }
-                    .disabled(status == nil || status?.needsDownload == true)
+                    .disabled(!canEdit() || status == nil || status?.needsDownload == true)
                     Button("競合の解消を確定") {
-                        guard let adoptedText else { return }
+                        guard canEdit(), let adoptedText else { return }
                         do {
                             try CloudFileVersions.resolve(at: fileURL, selectedText: adoptedText)
                             self.adoptedText = nil
                             refresh()
                         } catch { self.error = error.localizedDescription }
                     }
-                    .disabled(versions.isEmpty || adoptedText == nil)
+                    .disabled(!canEdit() || versions.isEmpty || adoptedText == nil)
                     Text("採用後に文書を保存し、保存完了後に解消を確定してください。")
                         .font(.caption).foregroundStyle(.secondary)
                 }

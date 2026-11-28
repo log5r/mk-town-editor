@@ -33,6 +33,28 @@ final class DocumentLinkNavigation: ObservableObject {
     @Published private(set) var pendingPosition: PendingPosition?
     @Published private(set) var pendingLines: [URL: Int] = [:]
     @Published private(set) var pendingTaskToggle: WorkspaceTaskItem?
+    @Published private(set) var pendingReadOnlyOpens: [URL: UUID] = [:]
+
+    @discardableResult
+    func requestReadOnlyOpen(for fileURL: URL) -> UUID {
+        let id = UUID()
+        pendingReadOnlyOpens[fileURL.resolvingSymlinksInPath().standardizedFileURL] = id
+        return id
+    }
+
+    func hasPendingReadOnlyOpen(for fileURL: URL) -> Bool {
+        pendingReadOnlyOpens[fileURL.resolvingSymlinksInPath().standardizedFileURL] != nil
+    }
+
+    func finishReadOnlyOpen(for fileURL: URL) {
+        pendingReadOnlyOpens.removeValue(forKey: fileURL.resolvingSymlinksInPath().standardizedFileURL)
+    }
+
+    func cancelReadOnlyOpen(for fileURL: URL, id: UUID) {
+        let key = fileURL.resolvingSymlinksInPath().standardizedFileURL
+        guard pendingReadOnlyOpens[key] == id else { return }
+        pendingReadOnlyOpens.removeValue(forKey: key)
+    }
 
     func requestTaskToggle(_ task: WorkspaceTaskItem) {
         pendingTaskToggle = task

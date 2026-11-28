@@ -85,6 +85,8 @@ Xcodeでペアリング済みのiPhone・iPadには、ターミナルからも�
 
 macOS版では、Shift JIS、EUC-JP、ISO-2022-JP、UTF-16の書類もFinderから直接開けます。文字化けした場合は「文字コード」→「別の文字コードで読み直す…」で本文を確認してください。[文字コードの判別と保存](docs/features.md#文字コードの判別と保存)
 
+原文を誤って変更しないように参照するには、「編集」→「編集を禁止」か、「ファイル」→「読み取り専用で開く…」を選びます。読み取り専用でも、原文の選択、コピー、検索、書き出しができます。[読み取り専用で書類を参照する](docs/read-only-documents.md)
+
 ### よく使うショートカット
 
 以下は初期設定です。書式コマンドなどの割り当ては設定画面で確認・変更できます。
@@ -109,9 +111,12 @@ macOS版では、Shift JIS、EUC-JP、ISO-2022-JP、UTF-16の書類もFinderか�
 
 ```sh
 swift Tools/mktown-open.swift --line 42 ~/notes/example.md
+swift Tools/mktown-open.swift --readonly --line 42 ~/notes/example.md
 ```
 
 ファイルURLも指定できます。`--line`を付けると、編集表示でその行へ移動します。行番号を省略すると書類だけを開き、ほかの開き方と同じく「書類を開いたときの表示」の設定に従います。既に開いている書類は、そのウインドウを使います。URLスキームは`mktowneditor://open?url=<パーセントエンコードしたfile URL>&line=42`です。
+
+`--readonly`を付けると、開いたウインドウが読み取り専用になります。URLスキームでは`&readonly=1`を付けます。
 
 ## 追加設定が必要な機能
 
