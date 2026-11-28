@@ -130,7 +130,7 @@ struct RegexSearchSheet: View {
                 }
             }
             .formStyle(.grouped)
-            .fixedSize(horizontal: false, vertical: true)
+            .frame(height: 245)
 
             status(matches.count)
             resultList(matches)
@@ -156,7 +156,7 @@ struct RegexSearchSheet: View {
                     .keyboardShortcut(.cancelAction)
             }
         }
-        .frame(minWidth: 730, idealWidth: 770, minHeight: 440)
+        .frame(width: 750, height: 505)
         .padding(20)
         .task(id: query) { await search(query) }
         .onChange(of: query) { cancelReplacement() }
@@ -228,7 +228,7 @@ struct RegexSearchSheet: View {
                 }
             }
         }
-        .frame(minHeight: 180, idealHeight: 260)
+        .frame(maxHeight: .infinity)
     }
 
     private var listSelection: Binding<Int?> {
