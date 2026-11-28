@@ -126,6 +126,7 @@ struct EditorPreferencesView: View {
                 Toggle("リモート画像を読み込む", isOn: binding(\.loadsRemoteImages, default: false))
                 Toggle("外部リンクのホバー時にページ情報を取得", isOn: binding(\.loadsExternalLinkPreviews, default: false))
             }
+            SettingsArchiveSection(settingsStore: settingsStore)
         }
         .formStyle(.grouped)
     }

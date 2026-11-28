@@ -53,17 +53,32 @@ struct MarkdownExportPresetStore {
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     func load() -> [MarkdownExportPreset] {
+        [.standard] + customPresets()
+    }
+
+    func customPresets() -> [MarkdownExportPreset] {
         guard let data = defaults.data(forKey: key),
               let presets = try? JSONDecoder().decode([MarkdownExportPreset].self, from: data) else {
-            return [.standard]
+            return []
         }
-        return [.standard] + presets.filter { $0.id != MarkdownExportPreset.standard.id && $0.isValid }
+        return presets.filter { $0.id != MarkdownExportPreset.standard.id && $0.isValid }
+    }
+
+    static func validCustomPresets(_ presets: [MarkdownExportPreset]) -> Bool {
+        presets.allSatisfy { $0.id != MarkdownExportPreset.standard.id && $0.isValid }
+            && Set(presets.map(\.id)).count == presets.count
+            && Set(presets.map(\.name)).count == presets.count
+    }
+
+    func replaceCustomPresets(_ presets: [MarkdownExportPreset]) throws {
+        guard Self.validCustomPresets(presets) else { throw PresetError.invalid }
+        defaults.set(try JSONEncoder().encode(presets), forKey: key)
     }
 
     @discardableResult
     func save(_ preset: MarkdownExportPreset) throws -> MarkdownExportPreset {
         guard preset.isValid else { throw PresetError.invalid }
-        var presets = load().filter { $0.id != MarkdownExportPreset.standard.id }
+        var presets = customPresets()
         let saved = preset.id == MarkdownExportPreset.standard.id
             ? MarkdownExportPreset(id: UUID(),
                                    name: preset.name == MarkdownExportPreset.standard.name

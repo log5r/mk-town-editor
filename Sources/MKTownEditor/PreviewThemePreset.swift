@@ -84,11 +84,15 @@ extension PreviewTheme {
 }
 
 extension AppEditorSettings {
-    /// 読み込み済みのJSON拡張が持つテーマ。同じ内容のテーマは1つにまとめる。
+    /// JSON拡張と設定に保存されたテーマ。配色だけを移行したときも、選択中のテーマを表示する。
     var customPreviewThemes: [PreviewTheme] {
+        let installed = (extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) }
+        let selected: [PreviewTheme] = Self.themeSelections.compactMap { keyPath, _ in
+            guard case .extensionTheme(let theme) = self[keyPath: keyPath] else { return nil }
+            return .extensionTheme(theme)
+        }
         var seen = Set<PreviewTheme>()
-        return (extensionPackages ?? []).compactMap { $0.theme.map(PreviewTheme.extensionTheme) }
-            .filter { seen.insert($0).inserted }
+        return (installed + selected).filter { seen.insert($0).inserted }
     }
 
     /// 配色の設定と、選んでいた拡張のテーマがなくなったときに戻す値。
