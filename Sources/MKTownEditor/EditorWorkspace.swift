@@ -2919,7 +2919,7 @@ struct EditorWorkspace: View {
                                sharedSnapshot: analysisStore.snapshot, usesSharedAnalysis: true,
                                imageImportMode: settingsStore.imageImportMode(for: fileURL),
                                tableAddsRowOnTab: settingsStore.app.tableAddsRowOnTab ?? true,
-                               proofing: settingsStore.app.proofing ?? EditorProofingSettings(),
+                               proofing: settingsStore.proofing, proofingSettingsStore: settingsStore,
                                snippets: settingsStore.app.effectiveSnippets,
                                whitespaceOptions: EditorWhitespaceOptions(
                                    showsCharacters: settingsStore.app.showsInvisibleCharacters ?? false,

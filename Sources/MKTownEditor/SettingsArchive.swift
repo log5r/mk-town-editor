@@ -302,10 +302,9 @@ private extension SettingsArchive.Category {
                           let rules = names.compactMap(MarkdownLintRule.init(rawValue:))
                           return !names.isEmpty && rules.isEmpty ? nil : .some(rules)
                       }),
-                Field("proofing", \.app.proofing, "スペルチェックと自動訂正",
-                      summarize: optional(proofingSummary), read: { values, key in
+                Field("proofing", \.app.proofing, "校正", read: { values, key in
                           try readLanguageSetting(EditorProofingSettings.self, language: ProofingLanguage.self, values, key)
-                      }),
+                      }, changes: proofingChanges),
             ]
         case .preview:
             [
@@ -487,8 +486,29 @@ private func readingEstimateSummary(_ settings: ReadingEstimateSettings) -> Stri
     String(localized: "\(settings.language.title)・日本語 \(settings.japaneseReadingRate)/\(settings.japaneseSpeakingRate)・英語 \(settings.englishReadingRate)/\(settings.englishSpeakingRate)")
 }
 
-private func proofingSummary(_ settings: EditorProofingSettings) -> String {
-    String(localized: "\(settings.language.title)・スペルチェック \(onOff(settings.checksSpelling))・自動訂正 \(onOff(settings.correctsSpelling))")
+private func proofingChanges(_ old: EditorProofingSettings?, _ new: EditorProofingSettings?) -> [String] {
+    let old = old ?? EditorProofingSettings()
+    let new = new ?? EditorProofingSettings()
+    var changes: [String] = []
+    if old.language != new.language {
+        changes.append(changedValue(String(localized: "スペルチェックの言語"),
+                                    before: old.language.title, after: new.language.title))
+    }
+    let switches: [(LocalizedStringResource, KeyPath<EditorProofingSettings, Bool>)] = [
+        ("スペルチェック", \.checksSpelling),
+        ("自動訂正", \.correctsSpelling),
+        ("スペルと一緒に文法をチェック", \.checksGrammar),
+        ("スマート引用符", \.usesSmartQuotes),
+        ("スマートダッシュ", \.usesSmartDashes),
+        ("テキスト置換", \.usesTextReplacement),
+        ("スペースを2回押してピリオドを入力", \.insertsPeriodOnDoubleSpace),
+        ("スマートコピー／ペースト", \.usesSmartInsertDelete),
+    ]
+    for (title, setting) in switches where old[keyPath: setting] != new[keyPath: setting] {
+        changes.append(changedValue(String(localized: title),
+                                    before: onOff(old[keyPath: setting]), after: onOff(new[keyPath: setting])))
+    }
+    return changes
 }
 
 private func terminologyOptionsSummary(_ options: TerminologyOptions) -> String {

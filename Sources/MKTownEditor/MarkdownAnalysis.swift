@@ -177,6 +177,7 @@ struct MarkdownBlock: Equatable, Sendable {
     let codeLanguage: String?
     let codeFenceMarker: Character?
     let codeFenceLength: Int?
+    var codeFenceIsUnclosed = false
     let table: MarkdownTable?
     let lineBreaks: [MarkdownLineBreak]
     let sourceIndent: String?
@@ -377,14 +378,15 @@ struct MarkdownAnalysis: Sendable {
                     codeLines.append(removingUpToSpaces(lines[index].text, count: fence.indentation))
                     index += 1
                 }
-                if index < lines.count { index += 1 }
+                let hasClosingFence = index < lines.count
+                if hasClosingFence { index += 1 }
                 let end = lines[index - 1].range
                 result.append(MarkdownBlock(
                     id: id, parentID: parentID, kind: .codeBlock,
                     content: codeLines.joined(separator: "\n"),
                     sourceRange: NSRange(location: line.range.location, length: NSMaxRange(end) - line.range.location),
                     codeLanguage: fence.language, codeFenceMarker: fence.marker,
-                    codeFenceLength: fence.length, table: nil,
+                    codeFenceLength: fence.length, codeFenceIsUnclosed: !hasClosingFence, table: nil,
                     lineBreaks: [], sourceIndent: nil, nestingDepth: 0
                 ))
                 listAncestors.removeAll()

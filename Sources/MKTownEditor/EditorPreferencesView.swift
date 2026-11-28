@@ -256,7 +256,7 @@ struct EditorPreferencesView: View {
 
     private var proofingPane: some View {
         Form {
-            Section("スペルチェック") {
+            Section("スペルと文法") {
                 Picker("スペルチェックの言語", selection: proofingBinding(\.language)) {
                     ForEach(ProofingLanguage.allCases, id: \.self) { language in
                         Text(language.title).tag(language)
@@ -264,7 +264,15 @@ struct EditorPreferencesView: View {
                 }
                 Toggle("スペルチェック", isOn: proofingBinding(\.checksSpelling))
                 Toggle("自動訂正", isOn: proofingBinding(\.correctsSpelling))
-                Text("コードとURLでは自動訂正を一時停止します。ユーザー辞書にはmacOSの標準機能を使います。")
+                Toggle("スペルと一緒に文法をチェック", isOn: proofingBinding(\.checksGrammar))
+            }
+            Section("自動置換") {
+                Toggle("スマート引用符", isOn: proofingBinding(\.usesSmartQuotes))
+                Toggle("スマートダッシュ", isOn: proofingBinding(\.usesSmartDashes))
+                Toggle("テキスト置換", isOn: proofingBinding(\.usesTextReplacement))
+                Toggle("スペースを2回押してピリオドを入力", isOn: proofingBinding(\.insertsPeriodOnDoubleSpace))
+                Toggle("スマートコピー／ペースト", isOn: proofingBinding(\.usesSmartInsertDelete))
+                Text("テキスト置換にはmacOSのユーザ辞書を使います。コード・URL・フロントマター・数式では自動訂正と自動置換を一時停止します。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -580,14 +588,8 @@ struct EditorPreferencesView: View {
     }
 
     private func proofingBinding<Value>(_ keyPath: WritableKeyPath<EditorProofingSettings, Value>) -> Binding<Value> {
-        Binding(get: { (settingsStore.app.proofing ?? EditorProofingSettings())[keyPath: keyPath] },
-                set: { value in
-                    var settings = settingsStore.app
-                    var proofing = settings.proofing ?? EditorProofingSettings()
-                    proofing[keyPath: keyPath] = value
-                    settings.proofing = proofing
-                    settingsStore.setAppSettings(settings)
-                })
+        Binding(get: { settingsStore.proofing[keyPath: keyPath] },
+                set: { settingsStore.proofing[keyPath: keyPath] = $0 })
     }
 
     private func terminologyOptionBinding(_ keyPath: WritableKeyPath<TerminologyOptions, Bool>) -> Binding<Bool> {

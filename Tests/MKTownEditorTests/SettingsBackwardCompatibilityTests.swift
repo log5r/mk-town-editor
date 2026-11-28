@@ -67,6 +67,21 @@ final class SettingsBackwardCompatibilityTests: XCTestCase {
         XCTAssertNil(earlier.app.editorTheme)
     }
 
+    func testProofingOptionsAreReadableByVersionsBeforeSubstitutions() throws {
+        let defaults = try isolatedDefaults()
+        saveSettings(in: defaults) { settings in
+            settings.proofing = EditorProofingSettings(language: .english, checksSpelling: false,
+                                                       correctsSpelling: false, usesSmartQuotes: true)
+        }
+        let earlier = try JSONDecoder().decode(EarlierStoredSettings.self,
+                                               from: Data(try storedJSON(in: defaults).utf8))
+        let proofing = try XCTUnwrap(earlier.app.proofing)
+        XCTAssertEqual(earlier.app.fontSize, 17)
+        XCTAssertEqual(proofing.language, .english)
+        XCTAssertFalse(proofing.checksSpelling)
+        XCTAssertFalse(proofing.correctsSpelling)
+    }
+
     // MARK: - この版での往復
 
     func testSettingsWithoutWhitespaceOptionsKeepExistingSettingsAndUseDefaults() throws {
@@ -202,7 +217,7 @@ private struct EarlierAppSettings: Decodable {
     var wordCountMode: WordCountMode?
     var readingEstimate: ReadingEstimateSettings?
     var disabledLintRules: Set<MarkdownLintRule>?
-    var proofing: EditorProofingSettings?
+    var proofing: EarlierProofingSettings?
     var showsFrontMatterInPreview: Bool?
     var formatsFrontMatterInPreview: Bool?
     var preservesSoftLineBreaksInPreview: Bool?
@@ -225,6 +240,12 @@ private struct EarlierAppSettings: Decodable {
     var showsLineNumbers: Bool?
     var shortcutOverrides: [String: ShortcutChord]?
     var documentOpeningMode: DocumentOpeningMode?
+}
+
+private struct EarlierProofingSettings: Decodable {
+    var language: ProofingLanguage
+    var checksSpelling: Bool
+    var correctsSpelling: Bool
 }
 
 /// PR #98 より前の `PreviewTheme`。知らないテーマ名で `DecodingError` を投げる。

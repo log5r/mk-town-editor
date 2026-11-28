@@ -5,8 +5,8 @@ import XCTest
 
 @MainActor
 final class MarkdownProofingTests: XCTestCase {
-    // Extended Markdown treats this as front matter; Basic parses indented code.
-    private let source = "---\n    coode\n---\n\nnormal prose"
+    // Extended Markdown treats the title as front matter. In Basic it is prose.
+    private let source = "---\ntitle: coode\n---\n\nnormal prose"
 
     func testSameSourceDialectSwitchUpdatesSharedProofingInBothDirections() {
         let view = NSTextView()
@@ -21,8 +21,8 @@ final class MarkdownProofingTests: XCTestCase {
             model.markdownDialect = dialect
             coordinator.sharedSnapshot = DocumentSnapshot(source: source, dialect: dialect)
             coordinator.applyProofing()
-            XCTAssertEqual(view.isContinuousSpellCheckingEnabled, dialect == .extended)
-            XCTAssertEqual(view.isAutomaticSpellingCorrectionEnabled, dialect == .extended)
+            XCTAssertEqual(view.isContinuousSpellCheckingEnabled, dialect == .basic)
+            XCTAssertEqual(view.isAutomaticSpellingCorrectionEnabled, dialect == .basic)
             XCTAssertEqual(view.string, source)
         }
     }
@@ -68,8 +68,8 @@ final class MarkdownProofingTests: XCTestCase {
         for dialect in [MarkdownDialect.basic, .extended, .basic] {
             model.markdownDialect = dialect
             coordinator.applyProofing()
-            XCTAssertEqual(view.isContinuousSpellCheckingEnabled, dialect == .extended)
-            XCTAssertEqual(view.isAutomaticSpellingCorrectionEnabled, dialect == .extended)
+            XCTAssertEqual(view.isContinuousSpellCheckingEnabled, dialect == .basic)
+            XCTAssertEqual(view.isAutomaticSpellingCorrectionEnabled, dialect == .basic)
         }
     }
 
@@ -95,9 +95,11 @@ final class MarkdownProofingTests: XCTestCase {
         window.isReleasedWhenClosed = false
         let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
         _ = view.layoutManager
+        view.isRichText = false
         view.string = source
         window.contentView = view
         let model = MarkdownEditorModel()
+        model.markdownDialect = .extended
         let coordinator = MarkdownTextEditor.Coordinator(text: .constant(source), model: model)
         coordinator.textView = view
         view.delegate = coordinator
@@ -199,5 +201,205 @@ final class MarkdownProofingTests: XCTestCase {
         XCTAssertTrue(view.isContinuousSpellCheckingEnabled)
         checkSpelling(view)
         assertOnlyProseIsMarked(view)
+    }
+
+    func testNativeProofingOptionsAndSubstitutions() {
+        let source = """
+        ---
+        title: "front -- matter"
+        ---
+
+        Try "ordinary" prose -- here.
+
+        ```
+        "fenced -- code"
+        ```
+
+        Try `"inline -- code"` and https://example.com/path--part.
+        Also try $"inline -- math"$.
+
+          $$
+          "display -- math"
+          $$
+        """
+        let (view, coordinator, window) = makeEditor(source, sharedAnalysis: false)
+        defer { window.close() }
+        let protected = [#""front -- matter""#, #""fenced -- code""#, #""inline -- code""#,
+                         "https://example.com/path--part", #""inline -- math""#, #""display -- math""#]
+        let prose = #"Try "ordinary" prose -- here."#
+        select(prose, in: view)
+        coordinator.applyProofing()
+        XCTAssertFalse(view.isAutomaticQuoteSubstitutionEnabled)
+        XCTAssertFalse(view.isAutomaticDashSubstitutionEnabled)
+        XCTAssertFalse(view.isAutomaticTextReplacementEnabled)
+        XCTAssertFalse(view.isGrammarCheckingEnabled)
+        XCTAssertFalse(view.smartInsertDeleteEnabled)
+
+        coordinator.proofing.usesSmartQuotes = true
+        coordinator.proofing.usesSmartDashes = true
+        coordinator.proofing.usesTextReplacement = true
+        coordinator.proofing.checksGrammar = true
+        coordinator.proofing.usesSmartInsertDelete = true
+        coordinator.applyProofing()
+        XCTAssertTrue(view.isAutomaticQuoteSubstitutionEnabled)
+        XCTAssertTrue(view.isAutomaticDashSubstitutionEnabled)
+        XCTAssertTrue(view.isAutomaticTextReplacementEnabled)
+        XCTAssertTrue(view.isGrammarCheckingEnabled)
+        XCTAssertTrue(view.smartInsertDeleteEnabled)
+
+        select(prose, in: view)
+        view.checkTextInDocument(nil)
+        let deadline = Date().addingTimeInterval(2)
+        while view.string.contains(prose), Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertFalse(view.string.contains(#""ordinary""#), "AppKit should substitute prose quotes")
+        XCTAssertFalse(view.string.contains("prose -- here"), "AppKit should substitute prose dashes")
+        for fragment in protected {
+            XCTAssertTrue(view.string.contains(fragment), "\(fragment) should retain the source punctuation")
+        }
+    }
+
+    func testSystemReplacementResultsAreFilteredForAllProtectedRanges() {
+        let source = """
+        ---
+        title: frontmatter
+        ---
+
+        prose replace
+
+        ```
+        fenced
+        ```
+
+        `inlinecode` https://example.com/urlpath $inlinemath$
+
+        $$
+        displaymath
+        $$
+        """
+        let (view, coordinator, window) = makeEditor(source, sharedAnalysis: true)
+        defer { window.close() }
+        coordinator.proofing.usesTextReplacement = true
+        coordinator.sharedSnapshot = DocumentSnapshot(source: source)
+        coordinator.applyProofing()
+        let words = ["replace", "frontmatter", "fenced", "inlinecode", "urlpath", "inlinemath", "displaymath"]
+        let results = words.map { word in
+            NSTextCheckingResult.replacementCheckingResult(range: (source as NSString).range(of: word),
+                                                           replacementString: "substituted")
+        }
+        let orthography = NSOrthography(dominantScript: "Latn", languageMap: ["Latn": ["en"]])
+        let type = NSTextCheckingResult.CheckingType.replacement.rawValue
+        let filtered = view.delegate?.textView?(view, didCheckTextIn: NSRange(location: 0, length: source.utf16.count),
+            types: type, options: [:], results: results, orthography: orthography, wordCount: words.count)
+        XCTAssertEqual(filtered?.map(\.range), [results[0].range])
+    }
+
+    func testDoubleSpaceSubstitutesOnlyWhenEnabledInProse() {
+        let tests = [
+            (source: "ordinary text", after: "ordinary", enabled: true, expected: "ordinary.  text"),
+            (source: "ordinary text", after: "ordinary", enabled: false, expected: "ordinary   text"),
+            (source: "`inline code`", after: "inline", enabled: true, expected: "`inline   code`"),
+            (source: "$inline + math$", after: "inline", enabled: true, expected: "$inline   + math$"),
+            (source: "https://example.com/path", after: "/path", enabled: true, expected: "https://example.com/path  ")
+        ]
+        for test in tests {
+            let (view, coordinator, window) = makeEditor(test.source, sharedAnalysis: false)
+            defer { window.close() }
+            coordinator.proofing.insertsPeriodOnDoubleSpace = test.enabled
+            let precedingText = (test.source as NSString).range(of: test.after)
+            view.setSelectedRange(NSRange(location: NSMaxRange(precedingText), length: 0))
+            coordinator.applyProofing()
+            let insertion = NSRange(location: NSNotFound, length: 0)
+            view.insertText(" ", replacementRange: insertion)
+            view.insertText(" ", replacementRange: insertion)
+            XCTAssertEqual(view.string, test.expected)
+        }
+    }
+
+    func testMovingCaretCancelsTheFirstSpace() {
+        let (view, coordinator, window) = makeEditor("sentence", sharedAnalysis: false)
+        defer { window.close() }
+        coordinator.proofing.insertsPeriodOnDoubleSpace = true
+        view.setSelectedRange(NSRange(location: 8, length: 0))
+        coordinator.applyProofing()
+        let insertion = NSRange(location: NSNotFound, length: 0)
+        view.insertText(" ", replacementRange: insertion)
+        let afterFirstSpace = view.selectedRange()
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        view.setSelectedRange(afterFirstSpace)
+        view.insertText(" ", replacementRange: insertion)
+        XCTAssertEqual(view.string, "sentence  ")
+    }
+
+    func testFencedCodeAtEndOfDocumentProtectsOnlyTheOpenBlock() {
+        for (source, allowsSubstitutions) in [("```\ncode\n```\n", true), ("```\ncode\n", false)] {
+            let (view, coordinator, window) = makeEditor(source, sharedAnalysis: false)
+            defer { window.close() }
+            coordinator.proofing.usesSmartQuotes = true
+            let end = NSRange(location: source.utf16.count, length: 0)
+            view.setSelectedRange(end)
+            coordinator.applyProofing()
+            XCTAssertEqual(view.isAutomaticQuoteSubstitutionEnabled, allowsSubstitutions)
+            XCTAssertEqual(coordinator.allowsProofingEdit(end, in: view), allowsSubstitutions)
+        }
+    }
+
+    func testSmartSpacingHonorsTheRangeBeingEdited() {
+        let source = "Keep one two three and `one four three`."
+        let (view, coordinator, window) = makeEditor(source, sharedAnalysis: false)
+        defer { window.close() }
+        coordinator.proofing.usesSmartInsertDelete = true
+        coordinator.applyProofing()
+
+        for (word, protected) in [("two", false), ("four", true)] {
+            let wordRange = (source as NSString).range(of: word)
+            let insertion = NSRange(location: wordRange.location + 1, length: 0)
+            var before: NSString?
+            var after: NSString?
+            view.smartInsert(for: "new", replacing: insertion, before: &before, after: &after)
+            XCTAssertEqual(before, protected ? nil : " ")
+            XCTAssertEqual(after, protected ? nil : " ")
+
+            let delete = view.smartDeleteRange(forProposedRange: wordRange)
+            XCTAssertEqual(delete.length, wordRange.length + (protected ? 0 : 1))
+        }
+    }
+
+    func testMultilineSmartPastePreservesTheRequestedLineEndings() throws {
+        let cases = [
+            (source: "foobar", marker: true, preserves: false, expected: "foo hello\nword bar"),
+            (source: "foobar", marker: false, preserves: false, expected: "foohello\nwordbar"),
+            (source: "foobar", marker: true, preserves: true, expected: "foo hello\r\nword bar"),
+            (source: "```\nfoobar\n```", marker: true, preserves: true, expected: "```\nfoohello\r\nwordbar\n```")
+        ]
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        let smartPasteType = NSPasteboard.PasteboardType("NeXT smart paste pasteboard type")
+        for test in cases {
+            let (view, coordinator, window) = makeEditor(test.source, sharedAnalysis: false)
+            defer { window.close() }
+            var document = MarkdownDocument(text: test.source)
+            coordinator.document = Binding(get: { document }, set: { document = $0 })
+            coordinator.proofing.usesSmartInsertDelete = true
+            let prefix = (test.source as NSString).range(of: "foo")
+            view.setSelectedRange(NSRange(location: NSMaxRange(prefix), length: 0))
+            coordinator.applyProofing()
+
+            board.clearContents()
+            XCTAssertTrue(board.setString("hello\r\nword", forType: .string))
+            if test.marker { XCTAssertTrue(board.setData(Data(), forType: smartPasteType)) }
+            view.imagePasteboard = board
+            if test.preserves { view.pastePreservingNewlines() } else { view.paste(nil) }
+
+            XCTAssertEqual(view.string, MarkdownTextFormat.normalizedText(test.expected))
+            XCTAssertEqual(String(decoding: try document.encodedData(), as: UTF8.self), test.expected)
+        }
+    }
+
+    private func select(_ substring: String, in view: NSTextView) {
+        let range = (view.string as NSString).range(of: substring)
+        XCTAssertNotEqual(range.location, NSNotFound)
+        view.setSelectedRange(NSRange(location: range.location, length: 0))
     }
 }

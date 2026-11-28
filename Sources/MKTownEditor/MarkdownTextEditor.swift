@@ -13,6 +13,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
     var imageImportMode: ImageImportMode = .managedCopy
     var tableAddsRowOnTab = true
     var proofing = EditorProofingSettings()
+    var proofingSettingsStore: EditorSettingsStore?
     var snippets: [EditorSnippet] = []
     var whitespaceOptions = EditorWhitespaceOptions()
     var whitespaceEditingOptions = EditorWhitespaceEditingOptions()
@@ -66,8 +67,6 @@ struct MarkdownTextEditor: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
-        textView.isAutomaticSpellingCorrectionEnabled = proofing.correctsSpelling
-        textView.isContinuousSpellCheckingEnabled = proofing.checksSpelling
         textView.isVerticallyResizable = true
         scrollView.documentView = textView
         layoutOptions.apply(to: textView, in: scrollView)
@@ -125,6 +124,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.usesInlineLivePresentation = usesInlineLivePresentation
         context.coordinator.usesTypewriterMode = usesTypewriterMode
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
+        context.coordinator.proofingSettingsStore = proofingSettingsStore
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
         context.coordinator.refreshSyntax()
@@ -204,6 +204,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         context.coordinator.usesTypewriterMode = usesTypewriterMode
         if !usesTypewriterMode { context.coordinator.cancelTypewriterFollow() }
         context.coordinator.onVisibleSourceChange = onVisibleSourceChange
+        context.coordinator.proofingSettingsStore = proofingSettingsStore
         context.coordinator.proofing = proofing
         context.coordinator.applyProofing()
         if context.coordinator.palette.theme != theme.editorColors {
@@ -293,6 +294,7 @@ struct MarkdownTextEditor: NSViewRepresentable {
         private var isUserScrolling = false
         private var typewriterFollowTask: Task<Void, Never>?
         private var visibleSourceChangeTask: Task<Void, Never>?
+        weak var proofingSettingsStore: EditorSettingsStore?
         var proofing = EditorProofingSettings()
         private var proofingSource: String?
         private var proofingDialect: MarkdownDialect?
@@ -304,6 +306,8 @@ struct MarkdownTextEditor: NSViewRepresentable {
         /// Set when an edit replaced all of the previous text (a reload or select-all paste): no
         /// range of the old text says where code is, so checking waits for a matching analysis.
         private var proofingRangesWereDiscarded = false
+        private var liveProofingRanges: (source: String, dialect: MarkdownDialect,
+                                         ranges: [MarkdownProofingContext.ProtectedRange])?
         var onVisibleSourceChange: ((Int) -> Void)?
         private var highlightedSource: String?
         private var highlightedSnapshotSource: String?
@@ -566,6 +570,48 @@ struct MarkdownTextEditor: NSViewRepresentable {
             return value
         }
 
+        func textView(_ textView: NSTextView, didCheckTextIn range: NSRange,
+                      types checkingTypes: NSTextCheckingTypes, options: [NSSpellChecker.OptionKey: Any],
+                      results: [NSTextCheckingResult], orthography: NSOrthography,
+                      wordCount: Int) -> [NSTextCheckingResult] {
+            guard textView === self.textView else { return results }
+            return results.filter { result in
+                switch result.resultType {
+                case .quote: guard proofing.usesSmartQuotes else { return false }
+                case .dash:
+                    guard proofing.usesSmartDashes,
+                          !MarkdownProofingContext.isMarkdownDashMarker(result.range, in: textView.editorSource)
+                    else { return false }
+                case .replacement: guard proofing.usesTextReplacement else { return false }
+                case .correction: guard proofing.correctsSpelling else { return false }
+                default: return true
+                }
+                return allowsProofingEdit(result.range, in: textView)
+            }
+        }
+
+        /// A checking result or smart paste can touch text away from the current caret.
+        /// Resolve pending analysis once for the live source before allowing a replacement.
+        func allowsProofingEdit(_ range: NSRange, in textView: NSTextView) -> Bool {
+            guard textView.isEditable, !textView.hasMarkedText() else { return false }
+            let source = textView.editorSource
+            let dialect = model.markdownDialect
+            guard range.location <= source.utf16.count,
+                  range.length <= source.utf16.count - range.location else { return false }
+            let ranges: [MarkdownProofingContext.ProtectedRange]
+            if proofingDialect == dialect && MarkdownTextFormat.identicalText(proofingSource, source) {
+                ranges = proofingSourceRanges
+            } else if let liveProofingRanges, liveProofingRanges.dialect == dialect,
+                      MarkdownTextFormat.identicalText(liveProofingRanges.source, source) {
+                ranges = liveProofingRanges.ranges
+            } else {
+                ranges = MarkdownProofingContext.protectedRanges(in: source,
+                    analysis: MarkdownAnalysis(source, dialect: dialect))
+                liveProofingRanges = (source, dialect, ranges)
+            }
+            return !MarkdownProofingContext.protectsEdit(range, in: ranges)
+        }
+
         /// Removes markers set before a range was known to be code, e.g. words that were prose
         /// until a fence or backtick was typed around them while the analysis was pending.
         private func clearSpellingMarkers(in ranges: [MarkdownProofingContext.ProtectedRange]) {
@@ -613,9 +659,9 @@ struct MarkdownTextEditor: NSViewRepresentable {
                 protectedProofingRanges = proofingSourceRanges
                 proofingRangesArePending = false
                 proofingRangesWereDiscarded = false
+                liveProofingRanges = nil
             }
             if analysedRanges { clearSpellingMarkers(in: protectedProofingRanges) }
-            let location = textView.selectedRange().location
             // While the snapshot for an edited source is pending, the previous ranges stay
             // aligned through proofingStorageDidProcessEditing, and inline code or URLs typed
             // since then are found in the caret's paragraph, so prose keeps spelling and
@@ -623,9 +669,13 @@ struct MarkdownTextEditor: NSViewRepresentable {
             // correction: it can change which regions are protected anywhere in the document.
             let sourcePending = usesSharedAnalysis && !hasCurrentSource
             let dialectPending = usesSharedAnalysis && proofingDialect != dialect
-            let protected = dialectPending || proofingRangesWereDiscarded
-                || MarkdownProofingContext.isProtected(location, in: protectedProofingRanges)
-                || (sourcePending && MarkdownProofingContext.isProtectedInParagraph(location, of: source))
+            let protected = dialectPending || proofingRangesWereDiscarded || textView.selectedRanges.contains {
+                let selection = $0.rangeValue
+                return MarkdownProofingContext.protectsEdit(selection, in: protectedProofingRanges)
+                    || (sourcePending && (selection.length == 0
+                        ? MarkdownProofingContext.isProtectedInParagraph(selection.location, of: source)
+                        : MarkdownProofingContext.intersectsInParagraph(selection, of: source)))
+            }
             let checksSpelling = proofing.checksSpelling && !protected
             if textView.isContinuousSpellCheckingEnabled != checksSpelling {
                 textView.isContinuousSpellCheckingEnabled = checksSpelling
@@ -634,6 +684,18 @@ struct MarkdownTextEditor: NSViewRepresentable {
             if textView.isAutomaticSpellingCorrectionEnabled != correctsSpelling {
                 textView.isAutomaticSpellingCorrectionEnabled = correctsSpelling
             }
+            let checksGrammar = proofing.checksGrammar && !protected
+            if textView.isGrammarCheckingEnabled != checksGrammar { textView.isGrammarCheckingEnabled = checksGrammar }
+            // AppKit checks the affected range again through the delegate, including results
+            // received after the caret has moved or the user has changed a setting.
+            let quotes = proofing.usesSmartQuotes && !protected && textView.isEditable
+            let dashes = proofing.usesSmartDashes && !protected && textView.isEditable
+            let replacement = proofing.usesTextReplacement && !protected && textView.isEditable
+            let smartPaste = proofing.usesSmartInsertDelete && !protected && textView.isEditable
+            if textView.isAutomaticQuoteSubstitutionEnabled != quotes { textView.isAutomaticQuoteSubstitutionEnabled = quotes }
+            if textView.isAutomaticDashSubstitutionEnabled != dashes { textView.isAutomaticDashSubstitutionEnabled = dashes }
+            if textView.isAutomaticTextReplacementEnabled != replacement { textView.isAutomaticTextReplacementEnabled = replacement }
+            if textView.smartInsertDeleteEnabled != smartPaste { textView.smartInsertDeleteEnabled = smartPaste }
             if textView.window?.firstResponder === textView { applyProofingLanguage() }
         }
 
@@ -675,9 +737,44 @@ enum MarkdownProofingContext {
 
     static func protectedRanges(in source: String, analysis: MarkdownAnalysis? = nil) -> [ProtectedRange] {
         let analysis = analysis ?? MarkdownAnalysis(source)
+        let text = source as NSString
         let code = analysis.blocks.filter { $0.kind == .codeBlock }
-            .map { ProtectedRange(range: $0.sourceRange, includesEnd: false) }
-        return code + inlineProtectedRanges(in: source)
+            .map { ProtectedRange(range: $0.sourceRange,
+                                  includesEnd: NSMaxRange($0.sourceRange) == text.length &&
+                                      ($0.codeFenceIsUnclosed ||
+                                          ($0.codeFenceMarker == nil && !source.hasSuffix("\n")))) }
+        var ranges = code + inlineProtectedRanges(in: source)
+        if let frontMatter = analysis.frontMatter {
+            ranges.append(ProtectedRange(range: frontMatter.sourceRange, includesEnd: false))
+        }
+        if analysis.dialect == .extended, source.contains("$") {
+            for block in analysis.blocks where block.kind != .codeBlock && block.kind != .quote {
+                if block.kind == .paragraph, block.content.trimmingCharacters(in: .whitespaces).hasPrefix("$$"),
+                   MarkdownMath.displayFormula(block.content) != nil {
+                    ranges.append(ProtectedRange(range: block.sourceRange, includesEnd: false))
+                } else {
+                    ranges.append(contentsOf: inlineMath(in: text.substring(with: block.sourceRange),
+                                                        offset: block.sourceRange.location))
+                }
+            }
+        }
+        return ranges
+    }
+
+    private static func inlineMath(in source: String, offset: Int) -> [ProtectedRange] {
+        guard source.contains("$") else { return [] }
+        var location = offset
+        return MarkdownMath.segments(source).compactMap { segment in
+            switch segment {
+            case let .text(text):
+                location += text.utf16.count
+                return nil
+            case let .formula(formula):
+                let length = formula.source.utf16.count
+                defer { location += length }
+                return ProtectedRange(range: NSRange(location: location, length: length), includesEnd: false)
+            }
+        }
     }
 
     /// Inline code spans and URLs, which need no block analysis.
@@ -693,6 +790,19 @@ enum MarkdownProofingContext {
     /// Whether a checked word or phrase overlaps code or a URL.
     static func intersects(_ range: NSRange, _ ranges: [ProtectedRange]) -> Bool {
         ranges.contains { NSIntersectionRange(range, $0.range).length > 0 }
+    }
+
+    static func protectsEdit(_ range: NSRange, in ranges: [ProtectedRange]) -> Bool {
+        isProtected(range.location, in: ranges) || intersects(range, ranges)
+    }
+
+    /// Leading hyphens can be a thematic break, a Setext underline, or a front matter delimiter.
+    static func isMarkdownDashMarker(_ range: NSRange, in source: String) -> Bool {
+        let text = source as NSString
+        guard range.location <= text.length, range.length <= text.length - range.location else { return false }
+        let line = text.lineRange(for: range)
+        let prefix = text.substring(with: NSRange(location: line.location, length: range.location - line.location))
+        return prefix.allSatisfy { $0 == " " || $0 == "\t" || $0 == "-" }
     }
 
     /// `intersects` for inline code and URLs of the paragraph containing `range`, used while
@@ -1222,11 +1332,69 @@ final class EditorTextView: NSTextView {
         super.insertBacktab(sender)
     }
 
+    private var firstPeriodSpace: (caret: Int, revision: Int, time: TimeInterval)?
+
+    override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+        if ranges != selectedRanges { firstPeriodSpace = nil }
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+    }
+
     override func insertText(_ insertString: Any, replacementRange: NSRange) {
+        let firstSpace = firstPeriodSpace
+        firstPeriodSpace = nil
         guard isEditable else { return }
+        if insertString as? String == " ", replacementRange.location == NSNotFound,
+           let coordinator = delegate as? MarkdownTextEditor.Coordinator,
+           coordinator.proofing.insertsPeriodOnDoubleSpace, !hasMarkedText(),
+           selectedRanges.count == 1, selectedRange().length == 0 {
+            let selection = selectedRange()
+            let time = ProcessInfo.processInfo.systemUptime
+            if let firstSpace, firstSpace.caret == selection.location,
+               firstSpace.revision == sourceRevision, time - firstSpace.time <= 0.5 {
+                let space = NSRange(location: selection.location - 1, length: 1)
+                if coordinator.allowsProofingEdit(space, in: self) {
+                    super.insertText(". ", replacementRange: space)
+                    return
+                }
+            }
+            let source = sourceText as NSString
+            let followsWord = selection.location > 0 && CharacterSet.alphanumerics.contains(
+                source.substring(with: source.rangeOfComposedCharacterSequence(at: selection.location - 1))
+                    .unicodeScalars.first ?? " ")
+            // A space before a closing dollar can make inline math unrecognizable.
+            // Check that boundary before inserting the first space.
+            let beforeDollar = selection.location < source.length && source.character(at: selection.location) == 36
+            let mayStart = followsWord && (!beforeDollar || coordinator.allowsProofingEdit(selection, in: self))
+            let revision = sourceRevision
+            super.insertText(insertString, replacementRange: replacementRange)
+            if mayStart, sourceRevision == revision + 1, selectedRange().location == selection.location + 1 {
+                firstPeriodSpace = (selection.location + 1, sourceRevision, time)
+            }
+            return
+        }
         if let typed = insertString as? String,
            commandModel?.completeSymbol(typed, replacementRange: replacementRange) == true { return }
         super.insertText(insertString, replacementRange: replacementRange)
+    }
+
+    override func smartDeleteRange(forProposedRange proposedCharRange: NSRange) -> NSRange {
+        let range = super.smartDeleteRange(forProposedRange: proposedCharRange)
+        guard let coordinator = delegate as? MarkdownTextEditor.Coordinator else { return range }
+        return coordinator.allowsProofingEdit(range, in: self) ? range : proposedCharRange
+    }
+
+    override func smartInsert(for pasteString: String, replacing charRangeToReplace: NSRange,
+                              before beforeString: AutoreleasingUnsafeMutablePointer<NSString?>?,
+                              after afterString: AutoreleasingUnsafeMutablePointer<NSString?>?) {
+        let end = NSRange(location: NSMaxRange(charRangeToReplace), length: 0)
+        if let coordinator = delegate as? MarkdownTextEditor.Coordinator,
+           !coordinator.allowsProofingEdit(charRangeToReplace, in: self)
+               || !coordinator.allowsProofingEdit(end, in: self) {
+            beforeString?.pointee = nil
+            afterString?.pointee = nil
+            return
+        }
+        super.smartInsert(for: pasteString, replacing: charRangeToReplace, before: beforeString, after: afterString)
     }
 
     override var rangeForUserCompletion: NSRange {
@@ -1269,7 +1437,7 @@ final class EditorTextView: NSTextView {
         if let value = imagePasteboard.string(forType: .string) {
             if commandModel?.pasteURLAsLink(value) == true { return }
             if value.utf8.contains(13) || value.utf8.contains(10) {
-                replaceSelection(with: value, preservingNewlines: false)
+                pasteText(value, from: imagePasteboard, preservingNewlines: false)
                 return
             }
         }
@@ -1284,19 +1452,36 @@ final class EditorTextView: NSTextView {
             return super.readSelection(from: pboard, type: type)
         }
         if !hasMarkedText(), selectedRanges.count == 1, raw.utf8.contains(13) || raw.utf8.contains(10) {
-            return replaceSelection(with: raw, preservingNewlines: false)
+            return pasteText(raw, from: pboard, preservingNewlines: false)
         }
         guard raw.utf8.contains(13) else { return super.readSelection(from: pboard, type: type) }
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
         board.setString(MarkdownTextFormat.normalizedText(raw), forType: type)
+        if pboard.types?.contains(Self.smartPasteType) == true {
+            board.setData(Data(), forType: Self.smartPasteType)
+        }
         return super.readSelection(from: board, type: type)
     }
 
     func pastePreservingNewlines() {
         guard isEditable, !hasMarkedText(), selectedRanges.count == 1,
               let raw = imagePasteboard.string(forType: .string) else { return }
-        replaceSelection(with: raw, preservingNewlines: true)
+        pasteText(raw, from: imagePasteboard, preservingNewlines: true)
+    }
+
+    // AppKit's pasteboard marker says that the clipboard text can be treated as whole words.
+    private static let smartPasteType = NSPasteboard.PasteboardType("NeXT smart paste pasteboard type")
+
+    @discardableResult
+    private func pasteText(_ raw: String, from board: NSPasteboard, preservingNewlines: Bool) -> Bool {
+        var before: NSString?
+        var after: NSString?
+        if smartInsertDeleteEnabled, board.types?.contains(Self.smartPasteType) == true {
+            smartInsert(for: raw, replacing: selectedRange(), before: &before, after: &after)
+        }
+        let value = (before as String? ?? "") + raw + (after as String? ?? "")
+        return replaceSelection(with: value, preservingNewlines: preservingNewlines)
     }
 
     @discardableResult
@@ -1578,7 +1763,66 @@ final class EditorTextView: NSTextView {
             guard let command = menuItem.representedObject as? EditorCommand else { return false }
             return command.canExecute(in: commandModel)
         }
+        if let selection = proofingOption(for: menuItem.action),
+           let settings = (delegate as? MarkdownTextEditor.Coordinator)?.proofingSettingsStore {
+            // The active insertion point may suppress a saved proofreading option temporarily.
+            menuItem.state = settings.proofing[keyPath: selection] ? .on : .off
+            return isEditable
+        }
         return super.validateMenuItem(menuItem)
+    }
+
+    // The standard Edit submenus send these actions through the AppKit responder chain.
+    override func toggleContinuousSpellChecking(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.checksSpelling) { super.toggleContinuousSpellChecking(sender) }
+    }
+
+    override func toggleGrammarChecking(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.checksGrammar) { super.toggleGrammarChecking(sender) }
+    }
+
+    override func toggleAutomaticSpellingCorrection(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.correctsSpelling) { super.toggleAutomaticSpellingCorrection(sender) }
+    }
+
+    override func toggleAutomaticQuoteSubstitution(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.usesSmartQuotes) { super.toggleAutomaticQuoteSubstitution(sender) }
+    }
+
+    override func toggleAutomaticDashSubstitution(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.usesSmartDashes) { super.toggleAutomaticDashSubstitution(sender) }
+    }
+
+    override func toggleAutomaticTextReplacement(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.usesTextReplacement) { super.toggleAutomaticTextReplacement(sender) }
+    }
+
+    override func toggleSmartInsertDelete(_ sender: Any?) {
+        if !toggleStoredProofingOption(\.usesSmartInsertDelete) { super.toggleSmartInsertDelete(sender) }
+    }
+
+    private func proofingOption(for action: Selector?) -> KeyPath<EditorProofingSettings, Bool>? {
+        switch action {
+        case #selector(toggleContinuousSpellChecking(_:)): \.checksSpelling
+        case #selector(toggleGrammarChecking(_:)): \.checksGrammar
+        case #selector(toggleAutomaticSpellingCorrection(_:)): \.correctsSpelling
+        case #selector(toggleAutomaticQuoteSubstitution(_:)): \.usesSmartQuotes
+        case #selector(toggleAutomaticDashSubstitution(_:)): \.usesSmartDashes
+        case #selector(toggleAutomaticTextReplacement(_:)): \.usesTextReplacement
+        case #selector(toggleSmartInsertDelete(_:)): \.usesSmartInsertDelete
+        default: nil
+        }
+    }
+
+    /// A text view that is not attached to the document settings keeps AppKit's default action.
+    private func toggleStoredProofingOption(_ option: WritableKeyPath<EditorProofingSettings, Bool>) -> Bool {
+        guard let coordinator = delegate as? MarkdownTextEditor.Coordinator,
+              let settings = coordinator.proofingSettingsStore else { return false }
+        guard isEditable else { return true }
+        settings.proofing[keyPath: option].toggle()
+        coordinator.proofing = settings.proofing
+        coordinator.applyProofing()
+        return true
     }
 
     @objc private func performMarkdownCommand(_ item: NSMenuItem) {
