@@ -1,49 +1,59 @@
-# 開発方針
+# MKTownEditor 開発ガイド
 
-- Human Interface Guideline (https://developer.apple.com/design/human-interface-guidelines) を守って開発する。
-- 機能を実装したら対応するテストを必ず書く。
-- 実装が完了したら、実装コードをレビューする。
-- 作業完了前にユニットテストをすべて実行する。UIテストは負荷が高いため、必要な場合に限り実行する。
-- 不具合調査時はナレッジベースを適宜参照する。
-- 不具合を修正した時は、その不具合が再現しないことを確認するテストを必ず書く。
-- 不具合を修正した後は、同じ原因が別の呼び出し元・状態遷移・処理経路にないか検索して確認する。
-- 再利用できる調査結果、設計判断、不具合の原因と検証方法はナレッジベースとして蓄積する。(docsフォルダを作ってmdファイルまたはHTMLで保存することを推奨する)
+## 実装・テスト
 
-# AIエージェントのビルド・テストログ
+- 開発では Apple の [Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) に従う。
+- 機能を実装したら、その動作を検証するテストを追加する。不具合を修正したら、再発を検出する回帰テストを追加する。
+- 実装後は変更したコードをレビューする。
+- 作業完了前にすべてのユニットテストを実行する。実行手順は [Swift Package と開発スクリプトのテスト](README.md#テスト) および [iOS 専用のユニットテスト](docs/iphone-duo-support.md#検証) を参照する。UI テストは必要な場合に限り実行する。
 
-- AIエージェントが `xcodebuild`、`swift build`、`swift test` を実行する場合は、標準出力と標準エラーを `2>&1` でまとめ、`tee` で全ログを保存してから `xcsift -f toon -w` に渡す。エージェントに返す出力は整形結果、終了コード、全ログの保存先に限定する。
-- 全ログはリポジトリ直下の `.build-logs/` に保存する。実行ごとに日時とプロセスIDなどを付けたファイル名を使い、以前のログを上書きしない。ログはGitにコミットしない。
-- `set -o pipefail` を有効にし、ビルド・テストやログ処理の失敗を成功として扱わない。パイプライン直後に終了コードを保存し、保存先を表示した後もその終了コードで終了する。`set -e` が有効でも保存先を表示できるよう、パイプラインを `if` で実行する。
-- 詳細調査が必要な場合は、まず保存済みログを `xcsift` で再解析する。追加情報が必要な場合も `rg` や行範囲の指定で必要箇所だけを読む。全ログを `cat` したり、未整形の全出力をエージェントに返したりしない。
-- 実行前に `command -v xcsift` で利用可能か確認する。未導入などで利用できない場合はその理由を報告し、全ログをファイルに保存したうえで、終了コード、保存先、必要最小限の診断だけを返す。
-- ビルドを伴うスクリプトやツールを使う場合も、このログ方針を適用する。
+## 不具合調査と記録
 
-リポジトリのルートで実行する例（Bash）：
+- 不具合を調査するときは、[ナレッジベース](docs/) から関連する記録を参照する。
+- 修正後は、同じ原因が残っていないか、別の呼び出し元・状態遷移・処理経路を検索して確認する。
+- 再利用できる調査結果、設計判断、不具合の原因と検証方法をナレッジベースに記録する。保存先には `docs/` 内の Markdown または HTML ファイルを推奨する。
+
+## AIエージェントのビルド・テストログ
+
+以下の手順は `xcodebuild`、`swift build`、`swift test` の実行と、ビルドを伴うスクリプトやツールの利用に適用する。
+
+1. `set -o pipefail` を有効にする。リポジトリ直下の `.build-logs/` に、日時やプロセス ID などを含む新しいログファイルを作る。ログは Git にコミットしない。
+2. 実行前に `command -v xcsift` で利用可否を確認する。利用できる場合は、標準出力と標準エラーを `2>&1` でまとめ、`tee` で全ログを保存しながら `xcsift -f toon -w` に渡す。エージェントに返す出力は整形結果、終了コード、ログの保存先に限る。
+3. `xcsift` が利用できない場合は、その理由を報告し、標準出力と標準エラーをログに直接保存する。エージェントに返すのは終了コード、ログの保存先、必要最小限の診断とする。
+4. `set -e` が有効でも失敗時に保存先を表示できるよう、パイプラインを `if` で実行し、直後に終了コードを保持する。ビルド・テストやログ処理が失敗した場合も、保存先を表示した後、その終了コードで終了する。
+5. 詳細調査では、まず `xcsift -f toon -w < "$log"` で保存済みログを再解析する。情報が足りない場合や `xcsift` が利用できない場合は、`rg` や行範囲の指定で必要箇所だけを読む。未整形の全ログはエージェントの出力に含めない。
+
+リポジトリ直下で Swift Package の全テストを実行する Bash の例。
 
 ```bash
 set -o pipefail
 
-command -v xcsift >/dev/null 2>&1 || { echo "xcsift is unavailable" >&2; exit 127; }
 mkdir -p .build-logs || exit 1
-LOG=".build-logs/build-$(date +%Y%m%d-%H%M%S)-$$.log"
+log=$(mktemp ".build-logs/test-$(date +%Y%m%d-%H%M%S)-$$.XXXXXX") || exit 1
+test_command=(swift test --force-resolved-versions)
 
-if xcodebuild -project MKTownEditor.xcodeproj -scheme MKTownEditor build 2>&1 \
-  | tee "$LOG" \
-  | xcsift -f toon -w; then
-  BUILD_STATUS=0
+if command -v xcsift >/dev/null 2>&1; then
+  if "${test_command[@]}" 2>&1 | tee "$log" | xcsift -f toon -w; then
+    run_status=0
+  else
+    run_status=$?
+  fi
 else
-  BUILD_STATUS=$?
+  printf '%s\n' 'xcsift が PATH に見つからないため、全ログをファイルに保存します。' >&2
+  if "${test_command[@]}" >"$log" 2>&1; then
+    run_status=0
+  else
+    run_status=$?
+  fi
 fi
 
-echo "Exit code: $BUILD_STATUS"
-echo "Full build log: $LOG"
-exit "$BUILD_STATUS"
+printf 'Exit code: %s\nFull log: %s\n' "$run_status" "$log"
+exit "$run_status"
 ```
 
-テストでは `xcodebuild ... test` または `swift test` に置き換え、ログ名も `test-...` にする。オプションは [xcsiftの公式ドキュメント](https://github.com/ldomaradzki/xcsift) を参照する。
+別のテストやビルドでは配列内のコマンドを差し替える。ビルドのログには `build-` で始まる名前を使う。整形オプションは [xcsift の公式ドキュメント](https://github.com/ldomaradzki/xcsift) を参照する。
 
-# ドキュメント方針
+## ドキュメント
 
-- READMEにはプロジェクトの概要、起動方法、基本操作、開発・テスト手順をまとめる。
-- READMEが長くなる場合は、詳細をGitで追跡するdocsフォルダへ分け、READMEから相対リンクを張ってよい。
-- 公開ドキュメントはリポジトリ内のdocsフォルダで管理する。docs-localフォルダは比較・参照用のローカル資料として扱う。
+- `README.md` にプロジェクトの概要、起動方法、基本操作、開発・テスト手順をまとめる。長くなる場合は、詳細を `docs/` に分け、README から相対リンクで参照してよい。
+- 公開ドキュメントは `docs/` で Git 管理する。`docs-local/` は比較・参照用のローカル資料に使う。
