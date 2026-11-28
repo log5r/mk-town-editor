@@ -114,11 +114,9 @@ enum WorkspaceReplace {
                                 length: entry.sourceRange.length), with: replacement)
                 return WorkspaceReplacePreview(line: entry.line, before: before, after: after)
             }
-            let updated = NSMutableString(string: document.text)
-            for entry in entries.sorted(by: { $0.sourceRange.location > $1.sourceRange.location }) {
-                updated.replaceCharacters(in: entry.sourceRange, with: replacement)
+            guard document.replaceText(in: entries.map(\.sourceRange), with: replacement, preservingNewlines: false) else {
+                throw WorkspaceReplaceError.documentChanged(url)
             }
-            document.text = updated as String
             return WorkspaceReplaceChange(url: url, relativePath: entries[0].relativePath,
                                           originalData: data, updatedData: try document.encodedData(for: url),
                                           matches: entries, previews: previews)

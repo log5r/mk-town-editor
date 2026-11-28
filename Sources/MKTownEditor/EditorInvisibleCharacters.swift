@@ -7,7 +7,7 @@ struct EditorWhitespaceOptions: Equatable {
 }
 
 struct InvisibleCharacterPlan: Equatable {
-    enum Kind: Equatable { case space, trailingSpace, tab, newline }
+    enum Kind: Equatable { case space, trailingSpace, tab, newline, differentNewline }
     struct Mark: Equatable {
         let location: Int
         let kind: Kind
@@ -15,8 +15,9 @@ struct InvisibleCharacterPlan: Equatable {
     let marks: [Mark]
     let guides: [Int]
 
-    init(source: String, tabWidth: Int) {
+    init(source: String, tabWidth: Int, format: MarkdownTextFormat = MarkdownTextFormat()) {
         let text = source as NSString
+        let differentEndings = Set(format.newlineWarnings(in: source).map { $0.range.location })
         var marks: [Mark] = []
         var guides: [Int] = []
         var cursor = 0
@@ -47,7 +48,7 @@ struct InvisibleCharacterPlan: Equatable {
                 }
             }
             if end < NSMaxRange(lineRange) {
-                marks.append(Mark(location: end, kind: .newline))
+                marks.append(Mark(location: end, kind: differentEndings.contains(end) ? .differentNewline : .newline))
             }
             cursor = NSMaxRange(lineRange)
         }

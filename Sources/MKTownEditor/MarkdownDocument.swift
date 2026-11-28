@@ -11,11 +11,19 @@ struct MarkdownDocument: FileDocument {
     static let readableContentTypes: [UTType] = [markdownType, .plainText]
     static let writableContentTypes: [UTType] = [markdownType]
 
-    var text: String
+    private var storedText: String
+    var text: String {
+        get { storedText }
+        set {
+            let normalized = MarkdownTextFormat.normalizedText(newValue)
+            format.updateNewlines(from: storedText, to: normalized)
+            storedText = normalized
+        }
+    }
     var format = MarkdownTextFormat()
 
     init(text: String = "") {
-        self.text = text
+        storedText = MarkdownTextFormat.normalizedText(text)
     }
 
     #if os(macOS)
@@ -49,7 +57,7 @@ struct MarkdownDocument: FileDocument {
 
     private init(data: Data, decoded: MarkdownEncodingConverter.Decoded) {
         encoding = decoded.encoding
-        (text, format) = MarkdownTextFormat.read(text: decoded.text,
+        (storedText, format) = MarkdownTextFormat.read(text: decoded.text,
                                                   hasUTF8BOM: encoding == .utf8 && decoded.hasBOM)
         hasUTF16BOM = (encoding == .utf16LE || encoding == .utf16BE) && decoded.hasBOM
         if encoding != .utf8 {
@@ -77,12 +85,76 @@ struct MarkdownDocument: FileDocument {
         format.hasUTF8BOM = true
     }
 
+    /// TextKit already has the complete edited buffer. Check that this exact edit produced
+    /// it before applying the saved line endings, without building a second copy on each key.
+    mutating func acceptEditorText(_ source: String, replacing range: NSRange, with replacement: String,
+                                   preservingNewlines: Bool) -> Bool {
+        guard Self.isValid(range, in: storedText as NSString) else { return false }
+        let normalized = MarkdownTextFormat.normalizedText(replacement)
+        let old = storedText.utf8, new = source.utf8
+        let start = String.Index(utf16Offset: range.location, in: storedText)
+        let end = String.Index(utf16Offset: NSMaxRange(range), in: storedText)
+        let prefix = old[..<start], suffix = old[end...]
+        guard new.count == prefix.count + normalized.utf8.count + suffix.count else { return false }
+        let insertion = new.index(new.startIndex, offsetBy: prefix.count)
+        let after = new.index(insertion, offsetBy: normalized.utf8.count)
+        guard new[insertion..<after].elementsEqual(normalized.utf8),
+              new[..<insertion].elementsEqual(prefix), new[after...].elementsEqual(suffix) else { return false }
+        updateEditedEndings(in: [range], with: replacement, preservingNewlines: preservingNewlines)
+        storedText = source
+        return true
+    }
+
+    /// Apply disjoint UTF-16 edits against one snapshot. The editor works in LF offsets
+    /// while a paste or an undo can carry the original endings of the replacement.
+    mutating func replaceText(in ranges: [NSRange], with replacement: String, preservingNewlines: Bool) -> Bool {
+        let source = storedText as NSString
+        let descending = ranges.sorted { $0.location > $1.location }
+        var limit = source.length
+        for range in descending {
+            guard Self.isValid(range, in: source), NSMaxRange(range) <= limit else { return false }
+            limit = range.location
+        }
+        let normalized = MarkdownTextFormat.normalizedText(replacement)
+        updateEditedEndings(in: descending, with: replacement, preservingNewlines: preservingNewlines)
+        let updated = NSMutableString(string: storedText)
+        for range in descending { updated.replaceCharacters(in: range, with: normalized) }
+        storedText = updated as String
+        return true
+    }
+
+    private mutating func updateEditedEndings(in ranges: [NSRange], with replacement: String,
+                                              preservingNewlines: Bool) {
+        let endings = format.endings(for: replacement, preservingNewlines: preservingNewlines)
+        guard format.hasMixedNewlines || endings.contains(where: { $0 != format.newline }) else { return }
+        let source = storedText as NSString
+        guard !endings.isEmpty || ranges.contains(where: {
+            $0.length > 0 && source.range(of: "\n", options: .literal, range: $0).location != NSNotFound
+        }) else { return }
+        let lines = MarkdownLineIndex(storedText)
+        let newlineRanges = ranges.map { range in
+            let first = lines.line(containingUTF16Offset: range.location) - 1
+            let end = lines.line(containingUTF16Offset: NSMaxRange(range)) - 1
+            return first..<end
+        }
+        format.replaceEndings(newlineRanges, with: endings, totalBefore: lines.lineCount - 1)
+    }
+
+    private static func isValid(_ range: NSRange, in text: NSString) -> Bool {
+        guard range.location >= 0, range.location <= text.length, range.length >= 0,
+              range.length <= text.length - range.location else { return false }
+        // TextKit ranges can split a grapheme cluster, but not a UTF-16 surrogate pair.
+        return [range.location, NSMaxRange(range)].allSatisfy {
+            $0 == text.length || !(0xDC00...0xDFFF).contains(text.character(at: $0))
+        }
+    }
+
     mutating func replaceUnrepresentableCharacters() throws {
         let ranges = MarkdownEncodingConverter.unrepresentableRanges(in: text, as: encoding)
         guard !ranges.isEmpty else { return }
         let replaced = NSMutableString(string: text)
         for range in ranges.reversed() {
-            replaced.replaceCharacters(in: range, with: "?")
+            replaced.replaceCharacters(in: range, with: MarkdownEncodingConverter.lossReplacement)
         }
         var updated = self
         updated.text = replaced as String
@@ -96,7 +168,7 @@ struct MarkdownDocument: FileDocument {
     #else
     init(data: Data) throws {
         let result = try MarkdownTextFormat.read(data)
-        text = result.text
+        storedText = result.text
         format = result.format
     }
 

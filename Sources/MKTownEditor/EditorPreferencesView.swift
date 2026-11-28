@@ -89,6 +89,11 @@ struct EditorPreferencesView: View {
                         Text(dialect.title).tag(dialect)
                     }
                 }
+                Toggle("改行コードが混在する書類を開くときに確認", isOn: binding(\.asksAboutMixedNewlines, default: true))
+                if settingsStore.hasSuppressedMixedNewlinePrompts {
+                    Button("確認を省略した書類でも再び確認する") { settingsStore.resetMixedNewlinePrompts() }
+                        .disabled(settingsStore.app.asksAboutMixedNewlines == false)
+                }
             }
             Section("文字コードの自動判別") {
                 let enabled = settingsStore.encodingCandidates

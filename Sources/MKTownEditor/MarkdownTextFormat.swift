@@ -31,6 +31,111 @@ struct MarkdownTextFormat: Equatable {
     var hasUTF8BOM = false
     private var originalNewlines: [Newline]?
 
+    var hasMixedNewlines: Bool { originalNewlines != nil }
+
+    func matchesNewlineCount(in text: String) -> Bool {
+        guard let originalNewlines else { return true }
+        return originalNewlines.count == NewlineScan(text.utf8).totalCount
+    }
+
+    mutating func normalizeNewlines() {
+        originalNewlines = nil
+    }
+
+    struct NewlineWarning: Equatable, Sendable {
+        let line: Int
+        let range: NSRange
+        let newline: Newline
+    }
+
+    /// The editor has one LF code unit per physical line ending, including CRLF.
+    func newlineWarnings(in text: String) -> [NewlineWarning] {
+        guard let originalNewlines else { return [] }
+        var result: [NewlineWarning] = []
+        var index = 0
+        var previousOffset = -2
+        for (offset, unit) in text.utf16.enumerated() where unit == 10 {
+            guard index < originalNewlines.count else { break }
+            let kind = Self.serializedNewline(at: index, in: originalNewlines,
+                                              adjacentToPrevious: offset == previousOffset + 1)
+            previousOffset = offset
+            index += 1
+            if kind != newline {
+                result.append(NewlineWarning(line: index, range: NSRange(location: offset, length: 1),
+                                             newline: kind))
+            }
+        }
+        return result
+    }
+
+    private static func serializedNewline(at index: Int, in endings: [Newline], adjacentToPrevious: Bool) -> Newline {
+        // Deleting all text between a CR and LF would serialize two breaks as one CRLF.
+        // Use CR + CRLF here so the blank line survives the next open.
+        if adjacentToPrevious && index > 0 && endings[index - 1] == .cr && endings[index] == .lf {
+            return .crlf
+        }
+        return endings[index]
+    }
+
+    /// Canonically equivalent text can have different UTF-16 offsets and encoded bytes.
+    static func identicalText(_ lhs: String, _ rhs: String) -> Bool {
+        var left = lhs, right = rhs
+        return left.withUTF8 { a in right.withUTF8 { b in
+            a.count == b.count && (a.baseAddress == b.baseAddress || a.elementsEqual(b))
+        } }
+    }
+
+    static func normalizedText(_ text: String) -> String {
+        guard text.utf8.contains(13) else { return text }
+        return String(decoding: normalizedBytes(text.utf8), as: UTF8.self)
+    }
+
+    /// A binding or a batch command may publish a complete buffer with no edit range.
+    /// Keep the line endings on both sides of the changed text. When editing several
+    /// lines in place, retain their endings by position as well.
+    mutating func updateNewlines(from oldText: String, to newText: String) {
+        guard let originalNewlines else { return }
+        let old = oldText.utf8, new = newText.utf8
+        var oldStart = old.startIndex, newStart = new.startIndex
+        var prefixLines = 0
+        while oldStart < old.endIndex, newStart < new.endIndex, old[oldStart] == new[newStart] {
+            if old[oldStart] == 10 { prefixLines += 1 }
+            old.formIndex(after: &oldStart)
+            new.formIndex(after: &newStart)
+        }
+        var oldEnd = old.endIndex, newEnd = new.endIndex
+        var suffixLines = 0
+        while oldEnd > oldStart, newEnd > newStart {
+            let oldLast = old.index(before: oldEnd), newLast = new.index(before: newEnd)
+            guard old[oldLast] == new[newLast] else { break }
+            if old[oldLast] == 10 { suffixLines += 1 }
+            oldEnd = oldLast
+            newEnd = newLast
+        }
+        let replaced = prefixLines..<(originalNewlines.count - suffixLines)
+        let inserted = NewlineScan(new[newStart..<newEnd]).totalCount
+        guard inserted != replaced.count else { return }
+        replaceEndings([replaced], with: Array(repeating: newline, count: inserted),
+                       totalBefore: originalNewlines.count)
+    }
+
+    func endings(for replacement: String, preservingNewlines: Bool) -> [Newline] {
+        let scan = NewlineScan(replacement.utf8)
+        if preservingNewlines, let mixed = scan.mixedEndings { return mixed }
+        let kind = preservingNewlines ? scan.dominant : newline
+        return Array(repeating: kind, count: scan.totalCount)
+    }
+
+    /// The caller supplies disjoint ranges of newline ordinals in descending order.
+    mutating func replaceEndings(_ ranges: [Range<Int>], with endings: [Newline], totalBefore: Int) {
+        guard originalNewlines != nil || endings.contains(where: { $0 != newline }) else { return }
+        if originalNewlines == nil { originalNewlines = Array(repeating: newline, count: totalBefore) }
+        for range in ranges {
+            originalNewlines?.replaceSubrange(range, with: endings)
+        }
+        if originalNewlines?.contains(where: { $0 != newline }) == false { originalNewlines = nil }
+    }
+
     static func read(_ data: Data) throws -> (text: String, format: Self) {
         let bom = data.starts(with: [0xEF, 0xBB, 0xBF])
         let payload = bom ? data.dropFirst(3) : data[...]
@@ -51,19 +156,11 @@ struct MarkdownTextFormat: Equatable {
         var value = text
         value.makeContiguousUTF8()
         let scan = NewlineScan(value.utf8)
-        let newline: Newline
-        if scan.crlfCount > 0 && scan.crlfCount >= scan.crCount && scan.crlfCount >= scan.lfCount {
-            newline = .crlf
-        } else if scan.crCount > 0 && scan.crCount >= scan.lfCount {
-            newline = .cr
-        } else {
-            newline = .lf
-        }
         if scan.containsCarriageReturn {
             // 検証済みのUTF-8バイト列からCRを1回の走査で取り除き、ネイティブ文字列を直接作る。
             value = String(decoding: normalizedBytes(value.utf8), as: UTF8.self)
         }
-        return (value, Self(newline: newline, hasUTF8BOM: hasUTF8BOM,
+        return (value, Self(newline: scan.dominant, hasUTF8BOM: hasUTF8BOM,
                             originalNewlines: scan.mixedEndings))
     }
 
@@ -84,13 +181,15 @@ struct MarkdownTextFormat: Equatable {
                 utf8.formIndex(after: &index)
                 continue
             }
+            let adjacent = segmentStart == index
             data.append(contentsOf: utf8[segmentStart..<index])
             utf8.formIndex(after: &index)
             if byte == 0x0D, index != utf8.endIndex, utf8[index] == 0x0A {
                 utf8.formIndex(after: &index)
             }
             if let endings {
-                data.append(contentsOf: endings[lineIndex].sequence.utf8)
+                let kind = Self.serializedNewline(at: lineIndex, in: endings, adjacentToPrevious: adjacent)
+                data.append(contentsOf: kind.sequence.utf8)
             } else {
                 data.append(contentsOf: fixed)
             }
@@ -111,6 +210,11 @@ struct MarkdownTextFormat: Equatable {
 
         var totalCount: Int { crlfCount + crCount + lfCount }
         var containsCarriageReturn: Bool { crlfCount + crCount > 0 }
+        var dominant: Newline {
+            if crlfCount > 0 && crlfCount >= crCount && crlfCount >= lfCount { return .crlf }
+            if crCount > 0 && crCount >= lfCount { return .cr }
+            return .lf
+        }
 
         init<Bytes: Collection>(_ bytes: Bytes) where Bytes.Element == UInt8 {
             var index = bytes.startIndex

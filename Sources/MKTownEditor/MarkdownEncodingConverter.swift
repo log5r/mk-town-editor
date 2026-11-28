@@ -87,6 +87,7 @@ enum MarkdownEncodingError: LocalizedError {
 
 enum MarkdownEncodingConverter {
     typealias Decoded = (text: String, encoding: MarkdownTextEncoding, hasBOM: Bool)
+    static let lossReplacement = "?"
 
     static func detect(_ data: Data, candidates: [MarkdownTextEncoding] = MarkdownTextEncoding.defaultDetectionOrder) throws -> Decoded {
         if data.starts(with: [0xFF, 0xFE, 0, 0]) || data.starts(with: [0, 0, 0xFE, 0xFF]) {

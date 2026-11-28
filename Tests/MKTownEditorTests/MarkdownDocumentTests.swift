@@ -161,7 +161,100 @@ final class MarkdownDocumentTests: XCTestCase {
         XCTAssertEqual(document.format.newline, .crlf)
         XCTAssertEqual(try document.encodedData(), Data("A\r\nB\r\nC\nD".utf8))
         document.text += "\nE"
-        XCTAssertEqual(try document.encodedData(), Data("A\r\nB\r\nC\r\nD\r\nE".utf8))
+        XCTAssertEqual(try document.encodedData(), Data("A\r\nB\r\nC\nD\r\nE".utf8))
+    }
+
+    func testMixedWarningsUseEditorOffsetsAndNormalizationPreservesBOMAndText() throws {
+        let bom = Data([0xEF, 0xBB, 0xBF])
+        let data = bom + Data("A🙂\r\ne\u{301}\r終\nD\r\n".utf8)
+        var document = try MarkdownDocument(data: data)
+        let originalText = document.text
+        let warnings = document.format.newlineWarnings(in: document.text)
+        XCTAssertTrue(document.format.hasMixedNewlines)
+        XCTAssertEqual(warnings.map(\.line), [2, 3])
+        XCTAssertEqual(warnings.map(\.range), [NSRange(location: 6, length: 1), NSRange(location: 8, length: 1)])
+        XCTAssertEqual(warnings.map(\.newline), [.cr, .lf])
+        XCTAssertEqual(try document.encodedData(), data)
+
+        document.format.normalizeNewlines()
+        XCTAssertFalse(document.format.hasMixedNewlines)
+        XCTAssertTrue(document.format.newlineWarnings(in: document.text).isEmpty)
+        XCTAssertEqual(document.text, originalText)
+        XCTAssertEqual(try document.encodedData(), bom + Data("A🙂\r\ne\u{301}\r\n終\r\nD\r\n".utf8))
+    }
+
+    func testExplicitPasteCanKeepDifferentEndingsWithIdenticalEditorText() throws {
+        var document = try MarkdownDocument(data: Data("A\r\nB\r\nC".utf8))
+        let range = NSRange(location: 1, length: 3)
+        XCTAssertTrue(document.acceptEditorText("A\nB\nC", replacing: range, with: "\nB\r", preservingNewlines: true))
+        XCTAssertEqual(document.text, "A\nB\nC")
+        XCTAssertEqual(try document.encodedData(), Data("A\nB\rC".utf8))
+        XCTAssertEqual(document.format.newlineWarnings(in: document.text).map(\.newline), [.lf, .cr])
+        XCTAssertTrue(document.format.matchesNewlineCount(in: document.text))
+        XCTAssertFalse(document.format.matchesNewlineCount(in: "A\nBC"))
+        XCTAssertTrue(document.acceptEditorText("A\nB\nC", replacing: range, with: "\r\nB\r\n", preservingNewlines: true))
+        XCTAssertFalse(document.format.hasMixedNewlines)
+        XCTAssertTrue(document.acceptEditorText("A\nB\nC", replacing: range, with: "\nB\r", preservingNewlines: false))
+        XCTAssertEqual(try document.encodedData(), Data("A\r\nB\r\nC".utf8))
+    }
+
+    func testDeletingAndInsertingNextToIdenticalBlankLinesRetainsTheIntendedEndings() throws {
+        var document = try MarkdownDocument(data: Data("A\r\n\n\rB".utf8))
+        XCTAssertTrue(document.acceptEditorText("A\n\nB", replacing: NSRange(location: 1, length: 1),
+                                                with: "", preservingNewlines: false))
+        XCTAssertEqual(try document.encodedData(), Data("A\n\rB".utf8))
+        XCTAssertTrue(document.acceptEditorText("A\n\n\nB", replacing: NSRange(location: 2, length: 0),
+                                                with: "\n", preservingNewlines: false))
+        XCTAssertEqual(try document.encodedData(), Data("A\n\r\n\rB".utf8))
+        XCTAssertEqual(document.format.newlineWarnings(in: document.text).map(\.line), [1, 3])
+    }
+
+    func testEditingRequiresMatchingBufferAndAllowsACombiningMarkSelection() throws {
+        let bytes = Data("e\u{301}🙂\r\nx\ny".utf8)
+        var document = try MarkdownDocument(data: bytes)
+        XCTAssertFalse(document.acceptEditorText("other", replacing: NSRange(location: 1, length: 1),
+                                                 with: "", preservingNewlines: false))
+        XCTAssertFalse(document.acceptEditorText("", replacing: NSRange(location: 3, length: 0),
+                                                 with: "", preservingNewlines: false))
+        XCTAssertEqual(try document.encodedData(), bytes)
+        XCTAssertTrue(document.acceptEditorText("e🙂\nx\ny", replacing: NSRange(location: 1, length: 1),
+                                                with: "", preservingNewlines: false))
+        XCTAssertEqual(try document.encodedData(), Data("e🙂\r\nx\ny".utf8))
+    }
+
+    func testWholeBufferEditsRetainUntouchedMixedEndingsAndWarnings() throws {
+        var document = try MarkdownDocument(data: Data("A\rB\nC\rD".utf8))
+        document.text = "A\nnew\nB\nC\nD"
+        XCTAssertEqual(try document.encodedData(), Data("A\rnew\rB\nC\rD".utf8))
+        XCTAssertEqual(document.format.newlineWarnings(in: document.text).map(\.line), [3])
+        document.text = "A\nnew\nBC\nD"
+        XCTAssertFalse(document.format.hasMixedNewlines)
+        XCTAssertEqual(try document.encodedData(), Data("A\rnew\rBC\rD".utf8))
+    }
+
+    func testDeletingTextBetweenCRAndLFDoesNotMergeTwoLineBreaksOnDisk() throws {
+        var document = try MarkdownDocument(data: Data("a\rdelete\nb\rc".utf8))
+        XCTAssertTrue(document.acceptEditorText("a\n\nb\nc", replacing: NSRange(location: 2, length: 6),
+                                                with: "", preservingNewlines: false))
+        XCTAssertEqual(document.format.newlineWarnings(in: document.text).map(\.newline), [.crlf])
+        let saved = try document.encodedData()
+        XCTAssertEqual(saved, Data("a\r\r\nb\rc".utf8))
+        let reopened = try MarkdownDocument(data: saved)
+        XCTAssertEqual(reopened.text, document.text)
+        XCTAssertEqual(reopened.format.newlineWarnings(in: reopened.text), document.format.newlineWarnings(in: document.text))
+    }
+
+    func testEncodingWarningsIdentifyEveryScalarAndMatchActualReplacement() throws {
+        var document = try MarkdownDocument(data: Data("header\n".utf8), encoding: .latin1)
+        document.text += "é e\u{301} 👩‍💻"
+        let loss = try XCTUnwrap(MarkdownEncodingLoss(source: document.text, encoding: document.encoding))
+        XCTAssertEqual(loss.occurrences.map(\.character), ["e\u{301}", "👩‍💻"])
+        XCTAssertEqual(loss.occurrences.map(\.codePoints), ["U+0065 U+0301", "U+1F469 U+200D U+1F4BB"])
+        XCTAssertEqual(loss.occurrences.map(\.line), [2, 2])
+        XCTAssertEqual(loss.occurrences.map(\.utf16Column), [3, 6])
+        try document.replaceUnrepresentableCharacters()
+        XCTAssertEqual(document.text, "header\né " + loss.occurrences.map(\.replacement).joined(separator: " "))
+        XCTAssertNoThrow(try document.encodedData())
     }
 
     func testSinglePassNewlineScanMatchesReferenceForEveryCombination() throws {

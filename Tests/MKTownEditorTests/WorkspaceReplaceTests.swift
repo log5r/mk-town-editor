@@ -67,6 +67,17 @@ final class WorkspaceReplaceTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: utf16), try bom + XCTUnwrap(edited.data(using: .utf16LittleEndian)))
     }
 
+    func testMultilineReplacementsKeepMixedEndingsBetweenMatches() throws {
+        let root = try workspace()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("draft.md")
+        try Data("x\r\n中\nx\r\n終".utf8).write(to: file)
+        let plan = try WorkspaceReplace.plan(root: root, options: WorkspaceSearchOptions(query: "x"),
+                                            replacement: "X\nY")
+        try plan.apply(selectedURLs: [file], openDocuments: [])
+        XCTAssertEqual(try Data(contentsOf: file), Data("X\r\nY\r\n中\nX\r\nY\r\n終".utf8))
+    }
+
     func testUnrepresentableReplacementFailsBeforeWritingAnyFiles() throws {
         let root = try workspace()
         defer { try? FileManager.default.removeItem(at: root) }

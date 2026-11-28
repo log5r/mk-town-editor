@@ -439,24 +439,10 @@ final class MarkdownEditorModel: ObservableObject {
     /// `focusesEditor` is false when a list's selection follows the arrow keys, so the list
     /// keeps the keyboard focus while the editor shows the selected place.
     func navigate(to sourceLocation: Int, focusesEditor: Bool = true) {
-        let location = max(0, sourceLocation)
-        guard let textView else {
-            selectedRange = NSRange(location: location, length: 0)
-            selectedRanges = [selectedRange]
-            pendingNavigationLocation = location
-            return
-        }
-        pendingNavigationLocation = nil
-        let range = NSRange(location: min(location, (textView.editorSource as NSString).length), length: 0)
-        (textView as? EditorTextView)?.unfold(containing: range)
-        textView.setSelectedRange(range)
-        textView.scrollRangeToVisible(range)
-        if focusesEditor { textView.window?.makeFirstResponder(textView) }
-        selectedRange = range
-        selectedRanges = [range]
+        selectAndReveal(NSRange(location: max(0, sourceLocation), length: 0), focusesEditor: focusesEditor)
     }
 
-    func selectAndReveal(_ sourceRange: NSRange) {
+    func selectAndReveal(_ sourceRange: NSRange, focusesEditor: Bool = true) {
         let location = max(0, sourceRange.location)
         guard let textView else {
             selectedRange = NSRange(location: location, length: max(0, sourceRange.length))
@@ -464,6 +450,7 @@ final class MarkdownEditorModel: ObservableObject {
             pendingNavigationLocation = location
             return
         }
+        pendingNavigationLocation = nil
         let length = (textView.editorSource as NSString).length
         let safeLocation = min(location, length)
         let range = NSRange(location: safeLocation,
@@ -471,7 +458,7 @@ final class MarkdownEditorModel: ObservableObject {
         (textView as? EditorTextView)?.unfold(containing: range)
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
-        textView.window?.makeFirstResponder(textView)
+        if focusesEditor { textView.window?.makeFirstResponder(textView) }
         selectedRange = range
         selectedRanges = [range]
     }

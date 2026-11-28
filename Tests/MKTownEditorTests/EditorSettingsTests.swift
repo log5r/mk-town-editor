@@ -4,6 +4,52 @@ import XCTest
 
 @MainActor
 final class EditorSettingsTests: XCTestCase {
+    func testMixedNewlinePromptIsLimitedToMixedFilesAndRemembersDocumentExceptions() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let file = URL(fileURLWithPath: "/tmp/work/chapter.md")
+        let renamed = URL(fileURLWithPath: "/tmp/work/renamed.md")
+        let other = URL(fileURLWithPath: "/tmp/work/appendix.md")
+        let mixed = try MarkdownDocument(data: Data("A\r\nB\nC".utf8)).format
+        let uniform = try MarkdownDocument(data: Data("A\r\nB\r\nC".utf8)).format
+
+        XCTAssertTrue(store.shouldAskAboutMixedNewlines(in: mixed, at: file))
+        XCTAssertFalse(store.shouldAskAboutMixedNewlines(in: uniform, at: file))
+        XCTAssertFalse(store.shouldAskAboutMixedNewlines(in: mixed, at: nil))
+        store.setWritingGoal(500, for: file)
+        store.suppressMixedNewlinePrompt(for: file)
+        store.moveDocumentState(from: file, to: renamed)
+        let restored = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertFalse(restored.shouldAskAboutMixedNewlines(in: mixed, at: renamed))
+        XCTAssertTrue(restored.shouldAskAboutMixedNewlines(in: mixed, at: other))
+        XCTAssertTrue(restored.hasSuppressedMixedNewlinePrompts)
+
+        restored.resetMixedNewlinePrompts()
+        let reset = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertTrue(reset.shouldAskAboutMixedNewlines(in: mixed, at: renamed))
+        XCTAssertEqual(reset.displayState(for: renamed)?.writingGoal, 500)
+        XCTAssertFalse(reset.hasSuppressedMixedNewlinePrompts)
+    }
+
+    func testDisablingMixedNewlinePromptGloballyPreservesPerDocumentExceptions() throws {
+        let defaults = isolatedDefaults()
+        let store = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        let file = URL(fileURLWithPath: "/tmp/work/note.md")
+        let other = URL(fileURLWithPath: "/tmp/work/other.md")
+        let mixed = try MarkdownDocument(data: Data("A\rB\n".utf8)).format
+        store.suppressMixedNewlinePrompt(for: file)
+        var settings = store.app
+        settings.asksAboutMixedNewlines = false
+        store.setAppSettings(settings)
+
+        let restored = EditorSettingsStore(defaults: defaults, prunesMissingDocuments: false)
+        XCTAssertFalse(restored.shouldAskAboutMixedNewlines(in: mixed, at: other))
+        settings.asksAboutMixedNewlines = true
+        restored.setAppSettings(settings)
+        XCTAssertTrue(restored.shouldAskAboutMixedNewlines(in: mixed, at: other))
+        XCTAssertFalse(restored.shouldAskAboutMixedNewlines(in: mixed, at: file))
+    }
+
     func testEncodingCandidateChangesArePersistedForNoninteractiveReaders() {
         let defaults = isolatedDefaults()
         let store = EditorSettingsStore(defaults: defaults)
@@ -29,14 +75,14 @@ final class EditorSettingsTests: XCTestCase {
 
     func testLossCheckRestartsForCanonicallyEquivalentEditsInLegacyDocuments() throws {
         var document = try MarkdownDocument(data: Data([0xE9]), encoding: .latin1)
-        let first = try XCTUnwrap(MarkdownEncodingLoss.Input(document: document))
-        XCTAssertEqual(first, MarkdownEncodingLoss.Input(document: document))
+        let first = try XCTUnwrap(DocumentSaveWarnings.Input(document: document))
+        XCTAssertEqual(first, DocumentSaveWarnings.Input(document: document))
         document.text = "e\u{301}"
         XCTAssertEqual(first.source, document.text)
-        XCTAssertNotEqual(first, MarkdownEncodingLoss.Input(document: document))
+        XCTAssertNotEqual(first, DocumentSaveWarnings.Input(document: document))
         XCTAssertNotNil(MarkdownEncodingLoss(source: document.text, encoding: document.encoding))
         document.convertToUTF8()
-        XCTAssertNil(MarkdownEncodingLoss.Input(document: document))
+        XCTAssertNil(DocumentSaveWarnings.Input(document: document))
     }
 
     func testSplitSizingReservesMinimumForBothPanes() {
