@@ -17,13 +17,22 @@ enum MarkdownTextEncoding: String, CaseIterable, Identifiable, Codable, Sendable
 
     var title: String {
         switch self {
-        case .utf8: "UTF-8"
         case .shiftJIS: "Shift JIS (CP932)"
+        case .utf16LE: "UTF-16 LE"
+        case .utf16BE: "UTF-16 BE"
+        default: declarationName
+        }
+    }
+
+    fileprivate var declarationName: String {
+        switch self {
+        case .utf8: "UTF-8"
+        case .shiftJIS: "Windows-31J"
         case .eucJP: "EUC-JP"
         case .iso2022JP: "ISO-2022-JP"
         case .latin1: "ISO-8859-1"
-        case .utf16LE: "UTF-16 LE"
-        case .utf16BE: "UTF-16 BE"
+        case .utf16LE: "UTF-16LE"
+        case .utf16BE: "UTF-16BE"
         }
     }
 
@@ -88,7 +97,7 @@ enum MarkdownEncodingConverter {
             return try read(data, as: encoding)
         }
         if let declaration = encodingDeclaration(in: data) {
-            guard let encoding = MarkdownTextEncoding(declaration: declaration) else {
+            guard let encoding = declaration.encoding else {
                 throw MarkdownEncodingError.cannotDecode
             }
             return try read(data, as: encoding)
@@ -133,22 +142,44 @@ enum MarkdownEncodingConverter {
         pattern: #"(?i)(?:<meta\b[^>]*?\bcharset\s*=|<\?xml\b[^>]*?\bencoding\s*=)[ \t]*["']?([\w.-]+)"#
     )
 
-    private static func encodingDeclaration(in data: Data) -> String? {
-        let header = String(decoding: data.prefix(4096), as: UTF8.self)
+    private struct EncodingDeclaration {
+        let encoding: MarkdownTextEncoding?
+        let byteRange: Range<Data.Index>
+    }
+
+    private static func encodingDeclaration(in data: Data) -> EncodingDeclaration? {
+        // A declaration is ASCII. Mapping each other byte to a single replacement character
+        // keeps UTF-16 regex offsets aligned with file bytes, including CP932 aliases and CRLF.
+        let sample = data.prefix(4096)
+        let header = String(decoding: sample, as: Unicode.ASCII.self)
         let opening = header.trimmingCharacters(in: .whitespacesAndNewlines).prefix(32).lowercased()
-        let declarationArea: NSString
+        let limit: String.Index
         let pattern: NSRegularExpression
         if ["<!doctype html", "<html", "<head", "<meta", "<?xml"].contains(where: opening.hasPrefix) {
-            declarationArea = header as NSString
+            limit = header.endIndex
             pattern = markupDeclaration
         } else {
             let lines = header.split(maxSplits: 2, omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            declarationArea = lines.prefix(2).joined(separator: "\n") as NSString
+            limit = lines.prefix(2).last?.endIndex ?? header.startIndex
             pattern = textDeclaration
         }
-        let entireRange = NSRange(location: 0, length: declarationArea.length)
-        guard let match = pattern.firstMatch(in: declarationArea as String, range: entireRange) else { return nil }
-        return declarationArea.substring(with: match.range(at: 1))
+        let area = NSRange(header.startIndex..<limit, in: header)
+        guard let match = pattern.firstMatch(in: header, range: area) else { return nil }
+        let token = match.range(at: 1)
+        let start = data.startIndex + token.location
+        var end = start + token.length
+        if end == sample.endIndex {
+            // When the token starts inside the header but crosses the sample boundary,
+            // include its remaining bytes before replacing it.
+            end = data[end...].firstIndex { byte in
+                switch byte {
+                case 0x30...0x39, 0x41...0x5A, 0x61...0x7A, 0x2D, 0x2E, 0x5F: false
+                default: true
+                }
+            } ?? data.endIndex
+        }
+        let value = String(decoding: data[start..<end], as: Unicode.ASCII.self)
+        return EncodingDeclaration(encoding: MarkdownTextEncoding(declaration: value), byteRange: start..<end)
     }
 
     private static func utf16ByteOrder(in data: Data) -> MarkdownTextEncoding? {
@@ -271,20 +302,24 @@ enum MarkdownEncodingConverter {
     static func convert(_ data: Data, from source: MarkdownTextEncoding,
                         to destination: MarkdownTextEncoding) throws -> Data {
         let decoded = try read(data, as: source)
-        if source == destination { return data }
+        if source == destination && decoded.hasBOM { return data }
         if destination == .utf16LE || destination == .utf16BE {
-            return try encode(decoded.text, as: destination, hasBOM: true)
+            return source == destination ? data : try encode(decoded.text, as: destination, hasBOM: true)
         }
-        let payload = try encode(decoded.text, as: destination)
+
+        // Use the original bytes when possible, even when fixing a stale declaration.
+        // Re-encoding the entire file could change duplicate CP932 representations.
+        var payload = source == destination ? data : try encode(decoded.text, as: destination)
+        let declaration = encodingDeclaration(in: payload)
         if destination == .utf8 {
-            // Conversion preserves the document's text, including any old declaration.
-            // A BOM overrides that declaration, and escapes a literal leading U+FEFF.
-            let staleDeclaration = encodingDeclaration(in: payload).map {
-                MarkdownTextEncoding(declaration: $0) != destination
-            } ?? false
+            // Preserve the text, including an old declaration or a literal leading U+FEFF.
+            let staleDeclaration = declaration.map { $0.encoding != destination } ?? false
             if staleDeclaration || payload.starts(with: destination.byteOrderMark) {
                 return Data(destination.byteOrderMark) + payload
             }
+        } else if let declaration, declaration.encoding != destination {
+            // Legacy encodings have no BOM to override the old label when the file is reopened.
+            payload.replaceSubrange(declaration.byteRange, with: destination.declarationName.utf8)
         }
         return payload
     }

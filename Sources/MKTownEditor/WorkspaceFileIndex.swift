@@ -344,10 +344,17 @@ final class WorkspaceStore: ObservableObject {
                 let prefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
                 guard url.path.hasPrefix(prefix) else { continue }
             }
-            guard let first = buffers.values.first?.document() else { continue }
+            // Swift 6.4.2 crashes in Release IR generation for first?.document().
+            // Unwrap the buffer before calling the closure that returns the document.
+            var iterator = buffers.values.makeIterator()
+            guard let firstBuffer = iterator.next() else { continue }
+            let first = firstBuffer.document()
             guard first.pendingEncodingData == nil else { throw MarkdownEncodingError.cannotDecode }
-            guard buffers.values.dropFirst().allSatisfy({ first.matchesWorkspaceSnapshot($0.document()) }) else {
-                throw WorkspaceOpenBufferError.conflictingWindows(url)
+            while let buffer = iterator.next() {
+                let other = buffer.document()
+                guard first.matchesWorkspaceSnapshot(other) else {
+                    throw WorkspaceOpenBufferError.conflictingWindows(url)
+                }
             }
             result[url] = first
         }
@@ -365,16 +372,16 @@ final class WorkspaceStore: ObservableObject {
         }
         for (url, expected) in plan.inspectedOpenDocuments {
             let updated = plan.changes.first { $0.oldURL == url && $0.linkCount > 0 }?.updatedData
-            guard let buffers = openBuffers[url], !buffers.isEmpty,
-                  buffers.values.allSatisfy({ buffer in
-                      let document = buffer.document()
-                      if expected.matchesWorkspaceSnapshot(document) { return true }
-                      guard allowAppliedData, let updated, document.encoding == expected.encoding else {
-                          return false
-                      }
-                      return (try? document.encodedData()) == updated
-                  }) else {
+            guard let buffers = openBuffers[url], !buffers.isEmpty else {
                 throw WorkspaceFileOperationError.openDocumentChanged(url)
+            }
+            for buffer in buffers.values {
+                let document = buffer.document()
+                if expected.matchesWorkspaceSnapshot(document) { continue }
+                guard allowAppliedData, let updated, document.encoding == expected.encoding,
+                      (try? document.encodedData()) == updated else {
+                    throw WorkspaceFileOperationError.openDocumentChanged(url)
+                }
             }
         }
     }

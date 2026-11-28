@@ -111,6 +111,41 @@ final class MarkdownEncodingConverterTests: XCTestCase {
         XCTAssertEqual(try MarkdownEncodingConverter.convert(ibmBytes, from: .shiftJIS, to: .shiftJIS), ibmBytes)
     }
 
+    func testLegacyConversionUpdatesOnlyDeclaredLabelAndReopensWithDestinationEncoding() throws {
+        let text = "# 日本語\r\n# -*- CoDiNg : 'cp932' -*-\r\nああ cp932\r\n"
+        let original = try MarkdownEncodingConverter.encode(text, as: .shiftJIS)
+        let output = try MarkdownEncodingConverter.convert(original, from: .shiftJIS, to: .eucJP)
+        let reopened = try MarkdownEncodingConverter.detect(output, candidates: [.shiftJIS])
+        XCTAssertEqual(reopened.encoding, .eucJP)
+        XCTAssertEqual(reopened.text, "# 日本語\r\n# -*- CoDiNg : 'EUC-JP' -*-\r\nああ cp932\r\n")
+
+        let markup = "<html>\r\n<meta name='説明' charset = \"euc-jp\">\r\nああ euc-jp"
+        let utf8 = try MarkdownEncodingConverter.encode(markup, as: .utf8, hasBOM: true)
+        let cp932 = try MarkdownEncodingConverter.convert(utf8, from: .utf8, to: .shiftJIS)
+        let imported = try MarkdownEncodingConverter.detect(cp932)
+        XCTAssertEqual(imported.encoding, .shiftJIS)
+        XCTAssertEqual(imported.text, "<html>\r\n<meta name='説明' charset = \"Windows-31J\">\r\nああ euc-jp")
+    }
+
+    func testSameLegacyEncodingRepairsUnknownDeclarationWithoutReencodingBody() throws {
+        let body = Data([0xFA, 0x40, 0xFB, 0xFC]) // IBM code points with alternative CP932 spellings.
+        let original = Data("# coding: UNKNOWN\r\n".utf8) + body
+        let output = try MarkdownEncodingConverter.convert(original, from: .shiftJIS, to: .shiftJIS)
+        XCTAssertEqual(output, Data("# coding: Windows-31J\r\n".utf8) + body)
+        XCTAssertEqual(try MarkdownEncodingConverter.detect(output).text, "# coding: Windows-31J\r\nⅰ髙")
+
+        let longHeader = "# coding:" + String(repeating: " ", count: 4084)
+        let splitLabel = Data((longHeader + "unknown-name\n").utf8) + body
+        XCTAssertEqual(try MarkdownEncodingConverter.convert(splitLabel, from: .shiftJIS, to: .shiftJIS),
+                       Data((longHeader + "Windows-31J\n").utf8) + body)
+
+        let matching = Data("# coding: sJiS\r\n".utf8) + body
+        XCTAssertEqual(try MarkdownEncodingConverter.convert(matching, from: .shiftJIS, to: .shiftJIS), matching)
+        let staleUTF8 = Data("# coding: cp932\nああ".utf8)
+        let marked = try MarkdownEncodingConverter.convert(staleUTF8, from: .utf8, to: .utf8)
+        XCTAssertEqual(try MarkdownEncodingConverter.detect(marked).encoding, .utf8)
+    }
+
     func testTruncatedBOMPayloadAndUnsupportedUTF32AreRejected() {
         for bytes: [UInt8] in [[0xFF, 0xFE, 0x41], [0xFE, 0xFF, 0xD8, 0x00],
                                [0xEF, 0xBB, 0xBF, 0xFF], [0xFF, 0xFE, 0x00, 0x00]] {
