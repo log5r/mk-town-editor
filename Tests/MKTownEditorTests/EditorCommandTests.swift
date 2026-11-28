@@ -248,6 +248,83 @@ final class EditorCommandTests: XCTestCase {
         XCTAssertEqual(view.selectedRange(), (view.string as NSString).range(of: "A！ガ `B`"))
     }
 
+    func testLineCommandsEditTheSelectionOrDocumentAndUndoInOneStep() throws {
+        let examples: [(command: EditorCommand, source: String, selected: String?, expected: String)] = [
+            (.sortLinesAscending, "c\na\nb", nil, "a\nb\nc"),
+            (.reverseLines, "前\na\nb\n後", "a\nb\n", "前\nb\na\n後"),
+            (.removeDuplicateLines, "a\nb\na\nc\nb", nil, "a\nb\nc"),
+            (.joinLines, "前\n一行目\n　二行目\n後", "一行目\n　二行目\n", "前\n一行目二行目\n後")
+        ]
+        for example in examples {
+            let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+            let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+            window.contentView = view
+            window.makeFirstResponder(view)
+            view.allowsUndo = true
+            view.string = example.source
+            let model = MarkdownEditorModel()
+            model.connect(view)
+            let selection = example.selected.map { (example.source as NSString).range(of: $0) }
+                ?? NSRange(location: 0, length: 0)
+            view.setSelectedRange(selection)
+
+            XCTAssertTrue(EditorCommand.paletteMatches("", in: model).contains(example.command))
+            example.command.perform(on: model)
+            XCTAssertEqual(view.string, example.expected, example.command.title)
+            try XCTUnwrap(view.undoManager).undo()
+            XCTAssertEqual(view.string, example.source, example.command.title)
+            withExtendedLifetime(window) {}
+        }
+    }
+
+    func testLineCommandsHaveCustomizableShortcutsAndRequireAnEditableEditor() throws {
+        let commands: [EditorCommand] = [.sortLinesAscending, .reverseLines, .removeDuplicateLines,
+                                         .joinLines, .sortLinesWithOptions]
+        XCTAssertTrue(commands.allSatisfy(EditorShortcutRegistry.commands.contains))
+        XCTAssertEqual(Set(commands.map(\.toolbarIdentifier)).count, commands.count)
+        XCTAssertTrue(commands.allSatisfy { !$0.canExecute(in: nil) })
+
+        let view = NSTextView()
+        view.string = "二\n一"
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        XCTAssertTrue(commands.allSatisfy { $0.canExecute(in: model) })
+
+        let suite = UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let chord = ShortcutChord(key: "j", option: true)
+        let store = EditorSettingsStore(defaults: defaults)
+        try store.setShortcut(chord, for: .joinLines)
+        let restored = EditorSettingsStore(defaults: defaults)
+        XCTAssertEqual(restored.shortcut(for: .joinLines), chord)
+        XCTAssertEqual(EditorCommand.paletteMatches(chord.label, in: model,
+            shortcutLabel: { restored.shortcut(for: $0)?.label }), [.joinLines])
+
+        view.isEditable = false
+        XCTAssertTrue(commands.allSatisfy { !$0.canExecute(in: model) })
+    }
+
+    func testLineSortPreservesCRLFAndNoFinalNewlineOnDisk() throws {
+        let original = "3|三\r\n1|一\r\n2|二"
+        var document = try MarkdownDocument(data: Data(original.utf8), encoding: .utf8)
+        let binding = Binding(get: { document }, set: { document = $0 })
+        let view = EditorTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.string = document.text
+        view.setSelectedRange(NSRange(location: 0, length: 0))
+        let model = MarkdownEditorModel()
+        let coordinator = MarkdownTextEditor.Coordinator(text: binding.text, model: model, document: binding)
+        coordinator.textView = view
+        view.delegate = coordinator
+        model.connect(view)
+
+        EditorCommand.sortLinesAscending.perform(on: model)
+
+        XCTAssertEqual(try document.encodedData(), Data("1|一\r\n2|二\r\n3|三".utf8))
+        withExtendedLifetime(coordinator) {}
+    }
+
     func testWhitespaceCommandsUseTheActiveSelectionAndRespectReadOnlyMode() {
         let view = NSTextView()
         view.string = "一行目 \n二行目 \n    字下げ\n"

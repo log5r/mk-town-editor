@@ -80,6 +80,7 @@ enum MarkdownFormattingStyle {
     case moveLinesUp
     case moveLinesDown
     case deleteLines
+    case lineOperation(EditorLineOperation)
     case comment
     case unorderedList
     case orderedList
@@ -260,6 +261,9 @@ enum MarkdownFormatter {
             return editLines(text, selection: safeSelection, operation: .moveDown)
         case .deleteLines:
             return editLines(text, selection: safeSelection, operation: .delete)
+        case let .lineOperation(operation):
+            return (try? lineOperationEdit(operation, in: text, selection: safeSelection)) ??
+                unchangedEdit(text, selection: safeSelection)
         case .comment:
             return commentEdit(in: text, selection: safeSelection) ?? unchangedEdit(text, selection: safeSelection)
         case .unorderedList:
@@ -632,6 +636,38 @@ enum MarkdownFormatter {
 
     private enum LineOperation { case duplicate, moveUp, moveDown, delete }
 
+    static func lineOperationSample(in text: String, selection: NSRange, limit: Int = 5) -> [String] {
+        let source = text as NSString
+        let range = lineOperationRange(in: source, selection: clamped(selection, in: text))
+        guard range.length > 0, limit > 0 else { return [] }
+        return lineParts(in: source, range: range, limit: limit).map(\.content)
+    }
+
+    static func lineOperationEdit(_ operation: EditorLineOperation, in text: String,
+                                  selection: NSRange) throws -> MarkdownEdit {
+        try Task.checkCancellation()
+        let source = text as NSString
+        let selection = clamped(selection, in: text)
+        let range = lineOperationRange(in: source, selection: selection)
+        let afterCarriageReturn = range.location > 0 && source.character(at: range.location - 1) == 13
+        let replacement = try operation.replacement(for: lineParts(in: source, range: range),
+                                                     afterCarriageReturn: afterCarriageReturn)
+        try Task.checkCancellation()
+        guard let replacement,
+              !MarkdownTextFormat.identicalText(source.substring(with: range), replacement) else {
+            return unchangedEdit(text, selection: selection)
+        }
+        return MarkdownEdit(range: range, replacement: replacement,
+                            selection: NSRange(location: range.location, length: replacement.utf16.count))
+    }
+
+    private static func lineOperationRange(in source: NSString, selection: NSRange) -> NSRange {
+        guard selection.length > 0 else { return NSRange(location: 0, length: source.length) }
+        let first = source.lineRange(for: NSRange(location: selection.location, length: 0))
+        let last = source.lineRange(for: NSRange(location: NSMaxRange(selection) - 1, length: 0))
+        return NSUnionRange(first, last)
+    }
+
     private static func editLines(_ text: String, selection: NSRange,
                                   operation: LineOperation) -> MarkdownEdit {
         let source = text as NSString
@@ -899,9 +935,14 @@ enum MarkdownFormatter {
     private static func selectedLines(in text: String, selection: NSRange) ->
         (range: NSRange, parts: [(content: String, ending: String)]) {
         let source = text as NSString
-        let lineRange = source.lineRange(for: selection)
+        let range = source.lineRange(for: selection)
+        return (range, lineParts(in: source, range: range))
+    }
+
+    private static func lineParts(in source: NSString, range: NSRange, limit: Int = .max)
+        -> [(content: String, ending: String)] {
         var parts: [(String, String)] = []
-        var cursor = lineRange.location
+        var cursor = range.location
         repeat {
             var start = 0
             var end = 0
@@ -911,8 +952,8 @@ enum MarkdownFormatter {
             parts.append((source.substring(with: NSRange(location: start, length: contentEnd - start)),
                           source.substring(with: NSRange(location: contentEnd, length: end - contentEnd))))
             cursor = end
-        } while cursor < NSMaxRange(lineRange)
-        return (lineRange, parts)
+        } while cursor < NSMaxRange(range) && parts.count < limit
+        return parts
     }
 
     private static let listMarkerExpression = try! NSRegularExpression(

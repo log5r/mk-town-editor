@@ -578,6 +578,55 @@ final class MarkdownEditorModelTests: XCTestCase {
         XCTAssertEqual(view.string, "hello")
     }
 
+    func testConfiguredLineSortPreviewsSelectionAndCanBeUndoneOnce() throws {
+        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        view.allowsUndo = true
+        let source = "前\n項目,番号\n甲,10\n乙,2\n後"
+        view.string = source
+        let window = NSWindow(contentRect: view.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        let undo = ExplicitEventUndoProvider()
+        window.delegate = undo
+        window.contentView = view
+        window.makeFirstResponder(view)
+        defer { window.orderOut(nil) }
+        let model = MarkdownEditorModel()
+        model.connect(view)
+        view.setSelectedRange((source as NSString).range(of: "項目,番号\n甲,10\n乙,2\n"))
+
+        EditorCommand.sortLinesWithOptions.perform(on: model)
+        let draft = try XCTUnwrap(model.lineSortDraft)
+        XCTAssertEqual(draft.sample, ["項目,番号", "甲,10", "乙,2"])
+        XCTAssertEqual(view.string, source)
+        let options = EditorLineSortOptions(key: .column(separator: ",", number: 2),
+                                            numeric: true, keepsFirstLine: true)
+        let edit = try MarkdownFormatter.lineOperationEdit(.sort(options), in: draft.source,
+                                                           selection: draft.selection)
+        undo.event { XCTAssertTrue(model.commitLineSort(edit, draft: draft)) }
+        XCTAssertEqual(view.string, "前\n項目,番号\n乙,2\n甲,10\n後")
+
+        view.undoManager?.undo()
+        XCTAssertEqual(view.string, source)
+        XCTAssertFalse(undo.manager.canUndo)
+    }
+
+    func testConfiguredLineSortRejectsStaleDraft() throws {
+        let model = MarkdownEditorModel()
+        let view = NSTextView()
+        view.string = "b\na"
+        model.connect(view)
+        model.presentLineSortOptions()
+        let draft = try XCTUnwrap(model.lineSortDraft)
+
+        let edit = try MarkdownFormatter.lineOperationEdit(.sortAscending, in: draft.source,
+                                                           selection: draft.selection)
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+        XCTAssertFalse(model.commitLineSort(edit, draft: draft))
+        view.setSelectedRange(draft.selection)
+        view.string = "c\na"
+        XCTAssertFalse(model.commitLineSort(edit, draft: draft))
+        XCTAssertEqual(view.string, "c\na")
+    }
+
     func testFootnoteInsertionMovesCaretToDefinitionAndUndoesTogether() {
         let view = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
         view.allowsUndo = true

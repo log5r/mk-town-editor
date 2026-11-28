@@ -731,7 +731,7 @@ struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var settingsStore: EditorSettingsStore
     @ObservedObject var model: MarkdownEditorModel
-    var deferUnicodeCommand: ((EditorCommand) -> Void)? = nil
+    var deferSheetCommand: ((EditorCommand) -> Void)? = nil
     @State private var query = ""
     @State private var selectedCommand: EditorCommand?
     @State private var didSubmit = false
@@ -781,10 +781,10 @@ struct CommandPaletteView: View {
     private func execute(_ command: EditorCommand) {
         guard !didSubmit else { return }
         didSubmit = true
-        let opensUnicodeView = command == .inspectUnicode || command == .insertUnicode
-        if opensUnicodeView { deferUnicodeCommand?(command) }
+        let opensSheet = command == .inspectUnicode || command == .insertUnicode || command == .sortLinesWithOptions
+        if opensSheet { deferSheetCommand?(command) }
         dismiss()
         model.showingCommandPalette = false
-        if !opensUnicodeView || deferUnicodeCommand == nil { command.perform(on: model) }
+        if !opensSheet || deferSheetCommand == nil { command.perform(on: model) }
     }
 }

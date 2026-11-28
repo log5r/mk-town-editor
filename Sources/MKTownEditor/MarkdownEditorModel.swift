@@ -9,6 +9,14 @@ struct UnicodeInsertionDraft: Identifiable {
     let selection: NSRange
 }
 
+struct EditorLineSortDraft: Identifiable {
+    let id = UUID()
+    let editor: ObjectIdentifier
+    let source: String
+    let selection: NSRange
+    let sample: [String]
+}
+
 struct EditorViewport: Equatable {
     let topFraction: Double
     let visibleFraction: Double
@@ -128,6 +136,7 @@ final class MarkdownEditorModel: ObservableObject {
     @Published var tableDraft: MarkdownTableDraft?
     @Published var tableGridDraft: MarkdownTableGridDraft?
     @Published var unicodeInsertionDraft: UnicodeInsertionDraft?
+    @Published var lineSortDraft: EditorLineSortDraft?
     @Published var showingSnippetPicker = false
     @Published var showingCommandPalette = false
     /// A recoverable problem shown briefly in the window instead of an alert (#29).
@@ -581,6 +590,22 @@ final class MarkdownEditorModel: ObservableObject {
         }
         let edit = MarkdownFormatter.apply(style, to: textView.editorSource, selection: textView.selectedRange())
         perform(edit, in: textView, storage: storage, focusEditor: true)
+    }
+
+    func presentLineSortOptions() {
+        guard canExecuteCommand, let textView else { return }
+        let source = textView.editorSource
+        let selection = textView.selectedRange()
+        lineSortDraft = EditorLineSortDraft(editor: ObjectIdentifier(textView), source: source,
+            selection: selection, sample: MarkdownFormatter.lineOperationSample(in: source, selection: selection))
+    }
+
+    func commitLineSort(_ edit: MarkdownEdit, draft: EditorLineSortDraft) -> Bool {
+        guard canExecuteCommand, let textView, let storage = textView.textStorage,
+              lineSortDraft?.id == draft.id, ObjectIdentifier(textView) == draft.editor,
+              MarkdownTextFormat.identicalText(textView.editorSource, draft.source),
+              textView.selectedRange() == draft.selection else { return false }
+        return perform(edit, in: textView, storage: storage, focusEditor: true)
     }
 
     private func perform(_ plan: MarkdownMultiSelectionPlan, in textView: NSTextView,

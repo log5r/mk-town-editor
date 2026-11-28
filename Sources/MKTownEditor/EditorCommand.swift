@@ -21,6 +21,11 @@ enum EditorCommand: Hashable {
     case moveLinesUp
     case moveLinesDown
     case deleteLines
+    case sortLinesAscending
+    case reverseLines
+    case removeDuplicateLines
+    case joinLines
+    case sortLinesWithOptions
     case comment
     case expandSelection
     case shrinkSelection
@@ -71,6 +76,11 @@ enum EditorCommand: Hashable {
         case .image: "image"
         case .table: "table"
         case .footnote: "footnote"
+        case .sortLinesAscending: "sort-lines-ascending"
+        case .reverseLines: "reverse-lines"
+        case .removeDuplicateLines: "remove-duplicate-lines"
+        case .joinLines: "join-lines"
+        case .sortLinesWithOptions: "sort-lines-with-options"
         case .selectNextOccurrence: "select-next-occurrence"
         case .trimTrailingWhitespace: "trim-trailing-whitespace"
         case .convertIndentationToSpaces: "convert-indentation-to-spaces"
@@ -92,7 +102,8 @@ enum EditorCommand: Hashable {
         .renumberList, .indentList, .outdentList, .toggleTaskCompletion,
         .codeBlock(language: nil), .horizontalRule, .comment,
         .tableOfContents, .duplicateLines, .moveLinesUp, .moveLinesDown,
-        .deleteLines, .trimTrailingWhitespace, .convertIndentationToSpaces, .convertIndentationToTabs,
+        .deleteLines, .sortLinesAscending, .reverseLines, .removeDuplicateLines, .joinLines,
+        .sortLinesWithOptions, .trimTrailingWhitespace, .convertIndentationToSpaces, .convertIndentationToTabs,
         .expandSelection, .shrinkSelection, .selectNextOccurrence, .toggleFold,
         .unfoldAll, .find, .inspectUnicode, .insertUnicode
     ] + textTransformations + MarkdownCodeLanguage.allCases.map { .codeBlock(language: $0) }
@@ -128,6 +139,11 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: String(localized: "行を上へ移動")
         case .moveLinesDown: String(localized: "行を下へ移動")
         case .deleteLines: String(localized: "行を削除")
+        case .sortLinesAscending: String(localized: "行を昇順に並べ替え")
+        case .reverseLines: String(localized: "行を逆順にする")
+        case .removeDuplicateLines: String(localized: "重複行を削除")
+        case .joinLines: String(localized: "行を結合")
+        case .sortLinesWithOptions: String(localized: "条件を指定して行を並べ替え…")
         case .comment: String(localized: "コメントにする／解除")
         case .expandSelection: String(localized: "選択範囲を拡大")
         case .shrinkSelection: String(localized: "選択範囲を縮小")
@@ -188,6 +204,11 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: "arrow.up"
         case .moveLinesDown: "arrow.down"
         case .deleteLines: "trash"
+        case .sortLinesAscending: "arrow.down"
+        case .reverseLines: "arrow.up.arrow.down"
+        case .removeDuplicateLines: "minus.square"
+        case .joinLines: "arrow.turn.down.right"
+        case .sortLinesWithOptions: "slider.horizontal.3"
         case .comment: "text.bubble"
         case .expandSelection: "arrow.up.left.and.arrow.down.right"
         case .shrinkSelection: "arrow.down.right.and.arrow.up.left"
@@ -236,6 +257,7 @@ enum EditorCommand: Hashable {
         case .tableOfContents: nil
         case .renumberList: nil
         case .duplicateLines, .moveLinesUp, .moveLinesDown, .deleteLines: nil
+        case .sortLinesAscending, .reverseLines, .removeDuplicateLines, .joinLines, .sortLinesWithOptions: nil
         case .comment: nil
         case .expandSelection, .shrinkSelection, .selectNextOccurrence: nil
         case .toggleFold, .unfoldAll: nil
@@ -334,6 +356,11 @@ enum EditorCommand: Hashable {
         case .moveLinesUp: model.apply(.moveLinesUp)
         case .moveLinesDown: model.apply(.moveLinesDown)
         case .deleteLines: model.apply(.deleteLines)
+        case .sortLinesAscending: model.apply(.lineOperation(.sortAscending))
+        case .reverseLines: model.apply(.lineOperation(.reverse))
+        case .removeDuplicateLines: model.apply(.lineOperation(.removeDuplicates))
+        case .joinLines: model.apply(.lineOperation(.join))
+        case .sortLinesWithOptions: model.presentLineSortOptions()
         case .comment: model.apply(.comment)
         case .expandSelection: model.expandSelection()
         case .shrinkSelection: model.shrinkSelection()

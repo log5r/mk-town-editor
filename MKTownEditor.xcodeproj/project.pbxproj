@@ -31,6 +31,7 @@
 		2C2E0EE6BC4F4670AD3CB717 /* MarkdownWhitespaceTrim.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */; };
 		A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* MarkdownEditorModel.swift */; };
 		A10000000000000000000008 /* MarkdownFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* MarkdownFormatter.swift */; };
+		AEA3429634D440D6A610C286 /* EditorLineOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D57C5A523D22478793D49E9A /* EditorLineOperation.swift */; };
 		A10000000000000000000009 /* MarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* MarkdownPreview.swift */; };
 		A1000000000000000000000A /* MarkdownRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000A /* MarkdownRenderer.swift */; };
 		A1000000000000000000000B /* MarkdownTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000000B /* MarkdownTextEditor.swift */; };
@@ -61,6 +62,7 @@
 		A1000000000000000000001F /* MarkdownOutline.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000001F /* MarkdownOutline.swift */; };
 		A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* MarkdownLineIndex.swift */; };
 		A10000000000000000000021 /* GoToLineSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* GoToLineSheet.swift */; };
+		36B793901DAB4BA6AF223677 /* EditorLineSortSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */; };
 		A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* GoToHeadingSheet.swift */; };
 		A10000000000000000000023 /* NavigationHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* NavigationHistory.swift */; };
 		A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* MarkdownHeadingIndex.swift */; };
@@ -234,6 +236,7 @@
 		F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownWhitespaceTrim.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* MarkdownEditorModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownEditorModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000008 /* MarkdownFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownFormatter.swift; sourceTree = "<group>"; };
+		D57C5A523D22478793D49E9A /* EditorLineOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorLineOperation.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* MarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownPreview.swift; sourceTree = "<group>"; };
 		A2000000000000000000000A /* MarkdownRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownRenderer.swift; sourceTree = "<group>"; };
 		A2000000000000000000000B /* MarkdownTextEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownTextEditor.swift; sourceTree = "<group>"; };
@@ -266,6 +269,7 @@
 		A2000000000000000000001F /* MarkdownOutline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownOutline.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* MarkdownLineIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownLineIndex.swift; sourceTree = "<group>"; };
 		A20000000000000000000021 /* GoToLineSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToLineSheet.swift; sourceTree = "<group>"; };
+		44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorLineSortSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000022 /* GoToHeadingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoToHeadingSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000023 /* NavigationHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationHistory.swift; sourceTree = "<group>"; };
 		A20000000000000000000024 /* MarkdownHeadingIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownHeadingIndex.swift; sourceTree = "<group>"; };
@@ -473,6 +477,7 @@
 				F3DB6D73F1F040B2AAA8DDB7 /* MarkdownWhitespaceTrim.swift */,
 				A20000000000000000000007 /* MarkdownEditorModel.swift */,
 				A20000000000000000000008 /* MarkdownFormatter.swift */,
+				D57C5A523D22478793D49E9A /* EditorLineOperation.swift */,
 				A20000000000000000000009 /* MarkdownPreview.swift */,
 				A200000000000000000000B2 /* PreviewUserScrollObserver.swift */,
 				A2000000000000000000000A /* MarkdownRenderer.swift */,
@@ -504,6 +509,7 @@
 				A2000000000000000000001F /* MarkdownOutline.swift */,
 				A20000000000000000000020 /* MarkdownLineIndex.swift */,
 				A20000000000000000000021 /* GoToLineSheet.swift */,
+				44AFACF6E49F47BCB934B559 /* EditorLineSortSheet.swift */,
 				A20000000000000000000022 /* GoToHeadingSheet.swift */,
 				A20000000000000000000023 /* NavigationHistory.swift */,
 				A20000000000000000000024 /* MarkdownHeadingIndex.swift */,
@@ -914,6 +920,7 @@
 				2C2E0EE6BC4F4670AD3CB717 /* MarkdownWhitespaceTrim.swift in Sources */,
 				A10000000000000000000007 /* MarkdownEditorModel.swift in Sources */,
 				A10000000000000000000008 /* MarkdownFormatter.swift in Sources */,
+				AEA3429634D440D6A610C286 /* EditorLineOperation.swift in Sources */,
 				A10000000000000000000009 /* MarkdownPreview.swift in Sources */,
 				A100000000000000000000B2 /* PreviewUserScrollObserver.swift in Sources */,
 				A1000000000000000000000A /* MarkdownRenderer.swift in Sources */,
@@ -945,6 +952,7 @@
 				A1000000000000000000001F /* MarkdownOutline.swift in Sources */,
 				A10000000000000000000020 /* MarkdownLineIndex.swift in Sources */,
 				A10000000000000000000021 /* GoToLineSheet.swift in Sources */,
+				36B793901DAB4BA6AF223677 /* EditorLineSortSheet.swift in Sources */,
 				A10000000000000000000022 /* GoToHeadingSheet.swift in Sources */,
 				A10000000000000000000023 /* NavigationHistory.swift in Sources */,
 				A10000000000000000000024 /* MarkdownHeadingIndex.swift in Sources */,
