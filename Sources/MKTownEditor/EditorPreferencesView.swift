@@ -12,7 +12,7 @@ struct EditorPreferencesView: View {
     /// The Settings window follows the macOS convention: a toolbar tab per area and controls
     /// that take effect as soon as they change, with no Save button (#52).
     enum Pane: String, CaseIterable {
-        case general, editor, preview, proofing, snippets, extensions, keyboard
+        case general, editor, preview, proofing, statistics, snippets, extensions, keyboard
 
         var title: String {
             switch self {
@@ -20,6 +20,7 @@ struct EditorPreferencesView: View {
             case .editor: String(localized: "エディタ")
             case .preview: String(localized: "プレビュー")
             case .proofing: String(localized: "校正")
+            case .statistics: String(localized: "統計")
             case .snippets: String(localized: "スニペット")
             case .extensions: String(localized: "拡張")
             case .keyboard: String(localized: "キーボード")
@@ -32,6 +33,7 @@ struct EditorPreferencesView: View {
             case .editor: "square.and.pencil"
             case .preview: "eye"
             case .proofing: "textformat.abc.dottedunderline"
+            case .statistics: "chart.bar"
             case .snippets: "text.insert"
             case .extensions: "puzzlepiece.extension"
             case .keyboard: "keyboard"
@@ -39,7 +41,12 @@ struct EditorPreferencesView: View {
         }
     }
 
-    @AppStorage("settingsPane") private var selectedPane = Pane.general
+    private static let paneStorageKey = "settingsPane"
+    @AppStorage(EditorPreferencesView.paneStorageKey) private var selectedPane = Pane.general
+
+    static func selectPane(_ pane: Pane) {
+        UserDefaults.standard.set(pane.rawValue, forKey: paneStorageKey)
+    }
 
     var body: some View {
         TabView(selection: $selectedPane) {
@@ -63,6 +70,7 @@ struct EditorPreferencesView: View {
         case .editor: editorPane
         case .preview: previewPane
         case .proofing: proofingPane
+        case .statistics: statisticsPane
         case .snippets: snippetsPane
         case .extensions: extensionsPane
         case .keyboard:
@@ -297,6 +305,61 @@ struct EditorPreferencesView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var statisticsPane: some View {
+        Form {
+            Section("文字数の数え方") {
+                Picker("数える単位", selection: binding(\.statisticsPreferences.count.unit)) {
+                    ForEach(DocumentCountUnit.allCases, id: \.self) { unit in
+                        Text(unit.title).tag(unit)
+                    }
+                }
+                if settingsStore.app.statisticsPreferences.count.unit == .bytes {
+                    Picker("バイト数を数える文字コード", selection: binding(\.statisticsPreferences.count.encoding)) {
+                        ForEach(MarkdownTextEncoding.allCases) { encoding in
+                            Text(encoding.title).tag(encoding)
+                        }
+                    }
+                }
+                Picker("数える前のUnicode正規化", selection: binding(\.statisticsPreferences.count.normalization)) {
+                    Text("正規化しない").tag(DocumentCountNormalization.none)
+                    ForEach(DocumentCountNormalization.allCases.filter { $0 != .none }, id: \.self) { mode in
+                        Text(verbatim: mode.rawValue.uppercased()).tag(mode)
+                    }
+                }
+            }
+            Section("空白と改行") {
+                Toggle("改行を除外", isOn: binding(\.statisticsPreferences.count.excludeNewlines))
+                Toggle("空白を除外", isOn: binding(\.statisticsPreferences.count.excludeWhitespace))
+                Toggle("連続する空白を1つとして数える", isOn: binding(\.statisticsPreferences.count.collapseWhitespace))
+                    .disabled(settingsStore.app.statisticsPreferences.count.excludeWhitespace)
+            }
+            Section("Markdown") {
+                Toggle("Markdownの記号を除外", isOn: binding(\.statisticsPreferences.count.excludeMarkdownSyntax))
+                Toggle("リンク先URLを除外", isOn: binding(\.statisticsPreferences.count.excludeLinkDestinations))
+                Toggle("コードブロックを除外", isOn: binding(\.statisticsPreferences.count.excludeCodeBlocks))
+                Toggle("フロントマターを除外", isOn: binding(\.statisticsPreferences.count.excludeFrontMatter))
+            }
+            Section("ステータスバーの表示項目") {
+                ForEach(DocumentStatusField.allCases, id: \.self) { field in
+                    Toggle(field.title, isOn: statusFieldBinding(field))
+                }
+                .toggleStyle(.checkbox)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func statusFieldBinding(_ field: DocumentStatusField) -> Binding<Bool> {
+        let fields = binding(\.statisticsPreferences.statusFields)
+        return Binding(get: { fields.wrappedValue.contains(field) }, set: { visible in
+            if visible {
+                fields.wrappedValue.insert(field)
+            } else {
+                fields.wrappedValue.remove(field)
+            }
+        })
     }
 
     private var snippetsPane: some View {

@@ -181,6 +181,7 @@ struct EditorWorkspace: View {
     @EnvironmentObject private var layoutActivation: WorkspaceLayoutActivation
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openDocument) private var openDocument
+    @Environment(\.openSettings) private var openSettings
     @StateObject private var editorModel = MarkdownEditorModel()
     @State private var deferredPaletteCommand: EditorCommand?
     /// スクロール・選択のたびに書き換わる補助状態。変更でビュー全体を再評価しないよう参照型で保持する。
@@ -288,7 +289,20 @@ struct EditorWorkspace: View {
     @State private var previewSearchRange: NSRange?
     @State private var showingStatistics = false
     @State private var writingGoalInput = ""
-    @State private var unsavedSessionBaseline: WritingSessionBaseline?
+    @State private var sessionBaseline: WritingSessionBaseline?
+    @State private var unsavedSessionCount: WritingSessionCount?
+
+    private struct SessionCountRequest: Equatable {
+        let baseline: WritingSessionBaseline
+        let options: DocumentCountOptions
+        let dialect: MarkdownDialect
+        let fileURL: URL?
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.baseline.id == rhs.baseline.id && lhs.options == rhs.options &&
+                lhs.dialect == rhs.dialect && lhs.fileURL == rhs.fileURL
+        }
+    }
     @State private var fileAction: WorkspaceFileAction?
     @State private var encodingImport: EncodingImport?
     @State private var reloadedFileURL: URL?
@@ -395,6 +409,28 @@ struct EditorWorkspace: View {
 
     private var statistics: DocumentStatistics {
         analysisStore.snapshot?.statistics ?? .empty
+    }
+
+    private var statisticsPreferences: DocumentStatisticsPreferences {
+        settingsStore.app.statisticsPreferences
+    }
+
+    private var countOptions: DocumentCountOptions { statisticsPreferences.count }
+
+    private var configuredSessionCount: WritingSessionCount? {
+        let count = if let fileURL {
+            settingsStore.displayState(for: fileURL)?.sessionBaselineCount
+        } else {
+            unsavedSessionCount
+        }
+        guard count?.options == countOptions, count?.dialect == documentContext.markdownDialect else { return nil }
+        return count
+    }
+
+    private var sessionCountRequest: SessionCountRequest? {
+        guard let sessionBaseline, countOptions != DocumentCountOptions() else { return nil }
+        return SessionCountRequest(baseline: sessionBaseline, options: countOptions,
+                                   dialect: documentContext.markdownDialect, fileURL: fileURL)
     }
 
     private var wordCountMode: WordCountMode {
@@ -1387,12 +1423,11 @@ struct EditorWorkspace: View {
             }
             analysisStore.update(source: document.text,
                                  dialect: settingsStore.markdownDialect(for: fileURL))
-            if let fileURL {
-                settingsStore.ensureWritingSession(for: fileURL,
-                    initialText: document.text)
-            } else if unsavedSessionBaseline == nil {
-                unsavedSessionBaseline = WritingSessionBaseline(text: document.text)
+            if sessionBaseline == nil { sessionBaseline = WritingSessionBaseline(text: document.text) }
+            if let fileURL, let sessionBaseline {
+                settingsStore.ensureWritingSession(for: fileURL, baseline: sessionBaseline)
             }
+            updateCharacterCounts(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
             receivePendingDocumentLink()
             receivePendingSearchPosition()
             workspaceStore.refresh()
@@ -1487,7 +1522,11 @@ struct EditorWorkspace: View {
                     settingsStore.setMode(unsavedMode, for: newURL)
                 }
                 settingsStore.ensureWritingSession(for: newURL,
-                    baseline: unsavedSessionBaseline ?? WritingSessionBaseline(text: document.text))
+                    baseline: sessionBaseline ?? WritingSessionBaseline(text: document.text))
+                if let unsavedSessionCount,
+                   settingsStore.displayState(for: newURL)?.sessionBaselineCount == nil {
+                    settingsStore.setWritingSessionCount(unsavedSessionCount, for: newURL)
+                }
             case let (oldURL?, nil):
                 unsavedMode = settingsStore.mode(for: oldURL)
             case (nil, nil):
@@ -1504,6 +1543,7 @@ struct EditorWorkspace: View {
             previewUpdates.sourceChanged()
             analysisStore.update(source: newText,
                                  dialect: settingsStore.markdownDialect(for: fileURL))
+            updateCharacterCounts(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
             previewSearchRange = nil
             transientState.synchronizedBlockID = nil
             if showingLinkDiagnostics { checkLinks() }
@@ -1522,6 +1562,7 @@ struct EditorWorkspace: View {
         }
         .onChange(of: settingsStore.markdownDialect(for: fileURL)) { _, dialect in
             analysisStore.update(source: document.text, dialect: dialect)
+            updateCharacterCounts(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
             previewUpdates.resume()
         }
     }
@@ -1534,8 +1575,20 @@ struct EditorWorkspace: View {
         }
     }
 
+    private var statisticsUpdatesView: some View {
+        let baselineRequest = sessionCountRequest
+        let sizeInput = statisticsPreferences.statusFields.contains(.fileSize)
+            ? MarkdownDocument.FileSizeInput(document: document) : nil
+        return searchHighlightChangesView
+            .onChange(of: statisticsPreferences) { _, _ in
+                updateCharacterCounts(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
+            }
+            .task(id: baselineRequest) { await countSessionBaseline(baselineRequest) }
+            .task(id: sizeInput) { await countFileSize(sizeInput) }
+    }
+
     var body: some View {
-        searchHighlightChangesView
+        statisticsUpdatesView
         .background {
             MixedNewlineOpeningPrompt(document: editableDocument, fileURL: fileURL,
                                       showingPrompt: $showingMixedNewlinePrompt, isReadOnly: isReadOnly)
@@ -1546,7 +1599,9 @@ struct EditorWorkspace: View {
         .onChange(of: previewSearchCaseSensitive) { _, _ in previewSearchRange = nil }
         .onReceive(editorModel.selectionState.$selectedRanges.dropFirst()) { selections in
             schedulePositionSave()
-            statusStore.update(snapshot: currentAnalysisSnapshot, selections: selections)
+            let snapshot = currentAnalysisSnapshot
+            statusStore.update(snapshot: snapshot, selections: selections)
+            updateCharacterCounts(snapshot: snapshot, selections: selections)
         }
         .onChange(of: splitOrientation) { _, _ in savePosition(for: fileURL) }
         .onChange(of: previewFirst) { _, _ in savePosition(for: fileURL) }
@@ -2312,11 +2367,49 @@ struct EditorWorkspace: View {
     }
 
     private func receiveCompletedAnalysis() {
-        guard currentAnalysisSnapshot != nil else { return }
-        statusStore.update(snapshot: currentAnalysisSnapshot, selections: editorModel.selectedRanges)
+        guard let snapshot = currentAnalysisSnapshot else { return }
+        statusStore.update(snapshot: snapshot, selections: editorModel.selectedRanges)
+        updateCharacterCounts(snapshot: snapshot, selections: editorModel.selectedRanges)
         receivePendingDocumentLink()
         receivePendingWorkspaceTask()
         if let previewSearchRange { scrollPreview(to: previewSearchRange.location) }
+    }
+
+    private func updateCharacterCounts(snapshot: DocumentSnapshot?, selections: [NSRange]) {
+        statusStore.updateCharacterCounts(snapshot: snapshot, selections: selections, options: countOptions,
+                                          showsPosition: statisticsPreferences.statusFields.contains(.position))
+    }
+
+    private func countSessionBaseline(_ request: SessionCountRequest?) async {
+        guard let request, configuredSessionCount == nil else { return }
+        do {
+            let count = try await DocumentWork.perform {
+                let source = request.baseline.text
+                let analysis = request.options.usesMarkdown ? MarkdownAnalysis(source, dialect: request.dialect) : nil
+                return try request.options.countObservingCancellation(in: source, analysis: analysis)
+            }
+            guard !Task.isCancelled, request == sessionCountRequest else { return }
+            let baselineCount = WritingSessionCount(options: request.options, dialect: request.dialect, value: count)
+            if let fileURL = request.fileURL {
+                settingsStore.setWritingSessionCount(baselineCount, for: fileURL)
+            } else {
+                unsavedSessionCount = baselineCount
+            }
+        } catch { /* The baseline or count settings changed. */ }
+    }
+
+    private func countFileSize(_ input: MarkdownDocument.FileSizeInput?) async {
+        guard !Task.isCancelled else { return }
+        guard let input else {
+            statusStore.publishFileSize(nil)
+            return
+        }
+        do {
+            try await Task.sleep(for: .milliseconds(250))
+            let size = try await DocumentWork.perform { input.byteCount }
+            guard !Task.isCancelled else { return }
+            statusStore.publishFileSize(size)
+        } catch { /* The document or status fields changed. */ }
     }
 
     private func receivePendingDocumentLink() {
@@ -2894,13 +2987,16 @@ struct EditorWorkspace: View {
     }
 
     private var statusBar: some View {
-        HStack(spacing: 12) {
+        let fields = statisticsPreferences.statusFields
+        return HStack(spacing: 12) {
             Text("Markdown")
             if isReadOnly {
                 readOnlyStatus
             }
-            Text(verbatim: document.encoding.title)
-                .accessibilityLabel("文字コード \(document.encoding.title)")
+            if fields.contains(.encoding) {
+                Text(verbatim: document.encoding.title)
+                    .accessibilityLabel("文字コード \(document.encoding.title)")
+            }
             if let warnings = currentSaveWarnings, !warnings.items.isEmpty {
                 Button {
                     sidebarTab = .inspector
@@ -2911,87 +3007,157 @@ struct EditorWorkspace: View {
                 .buttonStyle(.plain)
                 .help("インスペクタで警告を表示")
             }
-            Spacer()
-            Text("\(statistics.lines) 行")
-            Text("\(displayedWordCount) 語")
-                .help(wordCountMode.title)
-            DocumentStatusReader(store: statusStore) { selection, section in
-                if let selection {
-                    Text("選択 \(selection.characters) 文字")
-                } else if let section {
-                    Text("節 \(section.value.characters) 文字")
-                }
-            }
-            let documentLabel = statusAccessibilityLabel
-            DocumentStatusReader(store: statusStore) { selection, section in
-                Button("\(statistics.characters) 文字") { showingStatistics = true }
-                    .buttonStyle(.plain)
-                    .help("文字数の内訳を表示")
-                    .accessibilityLabel("\(Self.statusAccessibilityLabel(documentLabel, selection: selection, section: section))。内訳を表示")
-            }
-                .popover(isPresented: $showingStatistics, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("文字数の内訳").font(.headline)
-                        Picker("語数の数え方", selection: wordCountBinding) {
-                            ForEach(WordCountMode.allCases, id: \.self) { mode in
-                                Text(mode.title).tag(mode)
-                            }
-                        }
-                        Text("\(displayedWordCount) 語。\(wordCountMode.explanation)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Divider()
-                        Picker("時間の推定言語", selection: readingLanguageBinding) {
-                            ForEach(ReadingLanguage.allCases, id: \.self) { language in
-                                Text(language.title).tag(language)
-                            }
-                        }
-                        let speedRange = readingEstimate.language == .japanese ? 100...2000 : 50...500
-                        Stepper(value: rateBinding(spoken: false), in: speedRange, step: 10) {
-                            Text("読む速度: \(readingEstimate.readingRate) \(readingEstimate.language.unit)")
-                        }
-                        Stepper(value: rateBinding(spoken: true), in: speedRange, step: 10) {
-                            Text("音読速度: \(readingEstimate.speakingRate) \(readingEstimate.language.unit)")
-                        }
-                        Text("読了の目安: \(estimatedTimeLabel(spoken: false)) / 音読の目安: \(estimatedTimeLabel(spoken: true))")
-                            .font(.caption)
-                        Text("Markdown原文を対象にした推定値です。実際の所要時間は読み方で変わります。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Divider()
-                        statisticsRow(String(localized: "全文"), value: statistics)
-                        DocumentStatusReader(store: statusStore) { selection, section in
-                            if let selection {
-                                statisticsRow(String(localized: "選択範囲"), value: selection)
-                            } else {
-                                Text("選択範囲なし")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let section {
-                                statisticsRow(String(localized: "セクション: \(section.title)"),
-                                              value: section.value)
-                            }
-                        }
-                        Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Divider()
-                        writingProgressView
+            Spacer(minLength: 0)
+            DocumentStatusReader(store: statusStore) { status in
+                ViewThatFits(in: .horizontal) {
+                    statusMetrics(fields, status: status)
+                    ScrollView(.horizontal) {
+                        statusMetrics(fields, status: status)
                     }
-                    .padding(16)
-                    .frame(width: 370, alignment: .leading)
-                    .onAppear { writingGoalInput = fileURL.flatMap {
-                        settingsStore.displayState(for: $0)?.writingGoal.map(String.init)
-                    } ?? "" }
+                    .defaultScrollAnchor(.trailing)
                 }
+                statisticsButton(showCount: fields.contains(.characters),
+                                 counts: status.characterCounts)
+            }
         }
         .font(.caption)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
         .padding(.horizontal, 12)
         .frame(height: 28)
         .background(.bar)
         .accessibilityElement(children: .contain)
+    }
+
+    private func statusMetrics(_ fields: Set<DocumentStatusField>, status: DocumentStatusStore) -> some View {
+        HStack(spacing: 12) {
+            if fields.contains(.lineEnding) {
+                let newline = document.format.newline.rawValue.uppercased()
+                let label = document.format.hasMixedNewlines ? String(localized: "\(newline)（混在）") : newline
+                Text(verbatim: label)
+                    .accessibilityLabel("改行コード \(label)")
+            }
+            if fields.contains(.fileSize) {
+                let label = status.characterCounts.fileSize.map {
+                    ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file)
+                } ?? "—"
+                Text(verbatim: label)
+                    .accessibilityLabel("ファイルサイズ \(label)")
+                    .help("ファイルサイズ")
+            }
+            if fields.contains(.position), editorModel.hasActiveEditor,
+               let line = status.characterCounts.line, let column = status.characterCounts.column {
+                Text("\(line) 行 \(column) 桁")
+            }
+            if fields.contains(.lines) {
+                Text("\(statistics.lines) 行")
+            }
+            if fields.contains(.words) {
+                Text("\(displayedWordCount) 語")
+                    .help(wordCountMode.title)
+                    .accessibilityLabel("\(displayedWordCount) 語。\(wordCountMode.title)")
+            }
+            if fields.contains(.selectionLength), status.characterCounts.hasSelection,
+               let selection = status.selection {
+                Text("選択長 \(selection.characters) 文字")
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func statisticsButton(showCount: Bool, counts: DocumentCharacterCounts) -> some View {
+        let value = countOptions.formattedCount(counts.displayedCount)
+        let label = counts.hasSelection ? String(localized: "選択範囲 \(value)") : String(localized: "全文 \(value)")
+        return Button {
+            showingStatistics = true
+        } label: {
+            if showCount {
+                Text(verbatim: counts.hasSelection ? label : value)
+            } else {
+                Image(systemName: "chart.bar.xaxis")
+            }
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help("文字数の内訳を表示")
+        .accessibilityLabel(showCount ? String(localized: "\(label)。内訳を表示")
+                                      : String(localized: "文字数の内訳を表示"))
+        .popover(isPresented: $showingStatistics, arrowEdge: .top) {
+            statisticsPopover
+        }
+    }
+
+    private var statisticsPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("文字数の内訳").font(.headline)
+                Spacer()
+                Button("統計の設定を開く") {
+                    showingStatistics = false
+                    EditorPreferencesView.selectPane(.statistics)
+                    openSettings()
+                }
+            }
+            Picker("語数の数え方", selection: wordCountBinding) {
+                ForEach(WordCountMode.allCases, id: \.self) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            Text("\(displayedWordCount) 語。\(wordCountMode.explanation)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Divider()
+            Picker("時間の推定言語", selection: readingLanguageBinding) {
+                ForEach(ReadingLanguage.allCases, id: \.self) { language in
+                    Text(language.title).tag(language)
+                }
+            }
+            let speedRange = readingEstimate.language == .japanese ? 100...2000 : 50...500
+            Stepper(value: rateBinding(spoken: false), in: speedRange, step: 10) {
+                Text("読む速度: \(readingEstimate.readingRate) \(readingEstimate.language.unit)")
+            }
+            Stepper(value: rateBinding(spoken: true), in: speedRange, step: 10) {
+                Text("音読速度: \(readingEstimate.speakingRate) \(readingEstimate.language.unit)")
+            }
+            Text("読了の目安: \(estimatedTimeLabel(spoken: false)) / 音読の目安: \(estimatedTimeLabel(spoken: true))")
+                .font(.caption)
+            Text("Markdown原文を対象にした推定値です。実際の所要時間は読み方で変わります。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Divider()
+            DocumentStatusReader(store: statusStore) { status in
+                let counts = status.characterCounts
+                statisticsRow(String(localized: "全文"), value: statistics,
+                              configuredCount: countOptions.formattedCount(counts.document))
+                if counts.hasSelection {
+                    statisticsRow(String(localized: "選択範囲"), value: status.selection,
+                                  configuredCount: countOptions.formattedCount(counts.selection))
+                } else {
+                    Text("選択範囲なし")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if let section = status.section {
+                    statisticsRow(String(localized: "セクション: \(section.title)"), value: section.value)
+                }
+                if countOptions.unit == .bytes {
+                    Text("バイト数は \(countOptions.encoding.title) で計算します。変換できない文字がある場合は「—」を表示します。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Text("空白込みは改行・空白を含む文字数、空白除外は改行・空白を除く文字数です。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Divider()
+                writingProgressView(documentCount: counts.document)
+            }
+        }
+        .lineLimit(nil)
+        .padding(16)
+        .frame(width: 370, alignment: .leading)
+        .onAppear { writingGoalInput = fileURL.flatMap {
+            settingsStore.displayState(for: $0)?.writingGoal.map(String.init)
+        } ?? "" }
     }
 
     private var readOnlyStatus: some View {
@@ -2999,26 +3165,18 @@ struct EditorWorkspace: View {
             .accessibilityLabel("読み取り専用")
     }
 
-    private var statusAccessibilityLabel: String {
-        String(localized: "文書統計。\(statistics.lines) 行、\(wordCountMode.title)で\(displayedWordCount) 語、全文 \(statistics.characters) 文字")
-    }
-
-    private static func statusAccessibilityLabel(_ document: String, selection: DocumentStatistics?,
-                                                 section: (title: String, value: DocumentStatistics)?) -> String {
-        var value = document
-        if let selection {
-            value += String(localized: "、選択範囲 \(selection.characters) 文字")
-        } else if let section {
-            value += String(localized: "、セクション \(section.value.characters) 文字")
-        }
-        return value
-    }
-
-    private func statisticsRow(_ title: String, value: DocumentStatistics) -> some View {
+    private func statisticsRow(_ title: String, value: DocumentStatistics?,
+                               configuredCount: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.subheadline.weight(.semibold))
-            Text("空白込み \(value.characters) 文字 / 空白除外 \(value.nonWhitespaceCharacters) 文字")
-                .font(.caption)
+            if let configuredCount {
+                Text("設定した数え方で \(configuredCount)")
+                    .font(.caption)
+            }
+            if let value {
+                Text("空白込み \(value.characters) 文字 / 空白除外 \(value.nonWhitespaceCharacters) 文字")
+                    .font(.caption)
+            }
         }
     }
 
@@ -3033,20 +3191,29 @@ struct EditorWorkspace: View {
         return String(localized: "約\(minutes) 分")
     }
 
-    private var writingProgressView: some View {
+    private func writingProgressView(documentCount: Int?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("執筆目標とセッション").font(.headline)
             if let fileURL {
                 let state = settingsStore.displayState(for: fileURL)
-                if let goal = state?.writingGoal {
-                    ProgressView(value: min(1, Double(statistics.characters) / Double(goal))) {
-                        Text("\(statistics.characters) / \(goal) 文字")
+                if let goal = state?.writingGoal, goal > 0 {
+                    if let documentCount {
+                        ProgressView(value: min(1, Double(documentCount) / Double(goal))) {
+                            Text("\(documentCount) / \(countOptions.formattedCount(goal))")
+                        }
+                        if documentCount >= goal {
+                            Text("目標を達成しました").font(.caption)
+                        } else {
+                            Text("目標まで \(countOptions.formattedCount(goal - documentCount))").font(.caption)
+                        }
+                    } else {
+                        Text("\(countOptions.formattedCount(nil)) / \(countOptions.formattedCount(goal))")
+                            .font(.caption)
                     }
-                    Text(statistics.characters >= goal ? "目標を達成しました" : "目標まで \(goal - statistics.characters) 文字")
-                        .font(.caption)
                 }
                 HStack {
-                    TextField("文字数目標", text: $writingGoalInput)
+                    TextField("文字数目標", text: $writingGoalInput,
+                              prompt: Text("目標（\(countOptions.unit.title)）"))
                         .textFieldStyle(.roundedBorder)
                     Button("設定") {
                         settingsStore.setWritingGoal(Int(writingGoalInput), for: fileURL)
@@ -3059,21 +3226,31 @@ struct EditorWorkspace: View {
                         }
                     }
                 }
-                let change = statistics.characters - (state?.sessionBaselineCharacters ?? statistics.characters)
-                Text("セッションの増減: \(change >= 0 ? "+" : "")\(change) 文字")
+                let baseline = countOptions == DocumentCountOptions()
+                    ? state?.sessionBaselineCharacters : configuredSessionCount?.value
+                Text("セッションの増減: \(sessionChangeLabel(documentCount, baseline: baseline))")
                 Button("セッションをここから開始") {
-                    settingsStore.resetWritingSession(for: fileURL,
-                        baseline: WritingSessionBaseline(text: document.text))
+                    let baseline = WritingSessionBaseline(text: document.text)
+                    sessionBaseline = baseline
+                    settingsStore.resetWritingSession(for: fileURL, baseline: baseline)
                 }
                 .font(.caption)
             } else {
                 Text("目標を保存するには書類を保存してください。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                let change = statistics.characters - (unsavedSessionBaseline?.characters ?? statistics.characters)
-                Text("このウインドウの増減: \(change >= 0 ? "+" : "")\(change) 文字")
+                let baseline = countOptions == DocumentCountOptions()
+                    ? sessionBaseline?.characters : configuredSessionCount?.value
+                Text("このウインドウの増減: \(sessionChangeLabel(documentCount, baseline: baseline))")
             }
         }
+    }
+
+    private func sessionChangeLabel(_ count: Int?, baseline: Int?) -> String {
+        guard let count, let baseline else { return countOptions.formattedCount(nil) }
+        let change = count - baseline
+        let formatted = countOptions.formattedCount(change)
+        return change >= 0 ? "+" + formatted : formatted
     }
 
     private func formatButton(_ command: EditorCommand) -> some View {
@@ -3722,12 +3899,30 @@ struct EditorSelectionReader<Content: View>: View {
     var body: some View { content(selection.selectedRange) }
 }
 
-/// 選択範囲・節の統計だけを監視する。ステータスバーの該当部分だけを更新する。
+/// 書類の統計を監視し、ステータス欄と内訳の該当部分だけを更新する。
 private struct DocumentStatusReader<Content: View>: View {
     @ObservedObject var store: DocumentStatusStore
-    @ViewBuilder let content: (DocumentStatistics?, (title: String, value: DocumentStatistics)?) -> Content
+    @ViewBuilder let content: (DocumentStatusStore) -> Content
 
-    var body: some View { content(store.selection, store.section) }
+    var body: some View { content(store) }
+}
+
+extension DocumentCharacterCounts {
+    var displayedCount: Int? {
+        hasSelection ? selection : document
+    }
+}
+
+extension DocumentCountOptions {
+    func formattedCount(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        switch unit {
+        case .grapheme: return String(localized: "\(value) 文字")
+        case .unicodeScalar: return String(localized: "\(value) スカラー")
+        case .utf16: return String(localized: "\(value) UTF-16単位")
+        case .bytes: return String(localized: "\(value) バイト")
+        }
+    }
 }
 
 /// A failure the user can only acknowledge. Each case has a title and message so the window

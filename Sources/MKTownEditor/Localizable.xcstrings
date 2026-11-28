@@ -1,6 +1,196 @@
 {
   "sourceLanguage" : "ja",
   "strings" : {
+    "目標（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Goal (%@)"
+          }
+        }
+      }
+    },
+    "目標まで %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ to goal"
+          }
+        }
+      }
+    },
+    "セッションの増減: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session change: %@"
+          }
+        }
+      }
+    },
+    "このウインドウの増減: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change in this window: %@"
+          }
+        }
+      }
+    },
+    "%lld / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$@"
+          }
+        }
+      }
+    },
+    "%@ / %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ / %2$@"
+          }
+        }
+      }
+    },
+    "%@（混在）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (mixed)"
+          }
+        }
+      }
+    },
+    "改行コード %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line endings %@"
+          }
+        }
+      }
+    },
+    "ファイルサイズ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File size %@"
+          }
+        }
+      }
+    },
+    "%lld 行 %lld 桁" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line %1$lld, column %2$lld"
+          }
+        }
+      }
+    },
+    "選択長 %lld 文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selection length: %lld characters"
+          }
+        }
+      }
+    },
+    "選択範囲 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selection %@"
+          }
+        }
+      }
+    },
+    "全文 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Document %@"
+          }
+        }
+      }
+    },
+    "統計の設定を開く" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Statistics Settings"
+          }
+        }
+      }
+    },
+    "設定した数え方で %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configured count: %@"
+          }
+        }
+      }
+    },
+    "%lld スカラー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Unicode scalars"
+          }
+        }
+      }
+    },
+    "%lld UTF-16単位" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld UTF-16 units"
+          }
+        }
+      }
+    },
+    "%lld バイト" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld bytes"
+          }
+        }
+      }
+    },
+    "バイト数は %@ で計算します。変換できない文字がある場合は「—」を表示します。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytes are counted in %@. A dash appears if the text cannot be encoded."
+          }
+        }
+      }
+    },
     "比較する部分を調べています" : {
       "localizations" : {
         "en" : {
@@ -13363,6 +13553,266 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Add “%@”"
+          }
+        }
+      }
+    },
+    "統計" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistics"
+          }
+        }
+      }
+    },
+    "文字数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Character Count"
+          }
+        }
+      }
+    },
+    "語数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Word Count"
+          }
+        }
+      }
+    },
+    "行数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Count"
+          }
+        }
+      }
+    },
+    "現在の行と桁" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current Line and Column"
+          }
+        }
+      }
+    },
+    "選択範囲の長さ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selection Length"
+          }
+        }
+      }
+    },
+    "改行コード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line Endings"
+          }
+        }
+      }
+    },
+    "ファイルサイズ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File Size"
+          }
+        }
+      }
+    },
+    "書記素クラスタ（見た目の1文字）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grapheme Clusters (Visible Characters)"
+          }
+        }
+      }
+    },
+    "Unicodeスカラー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unicode Scalars"
+          }
+        }
+      }
+    },
+    "UTF-16コード単位" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UTF-16 Code Units"
+          }
+        }
+      }
+    },
+    "バイト数" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytes"
+          }
+        }
+      }
+    },
+    "数える単位" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Counting Unit"
+          }
+        }
+      }
+    },
+    "バイト数を数える文字コード" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Encoding for Byte Count"
+          }
+        }
+      }
+    },
+    "数える前のUnicode正規化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unicode Normalization Before Counting"
+          }
+        }
+      }
+    },
+    "正規化しない" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Normalization"
+          }
+        }
+      }
+    },
+    "空白と改行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whitespace and Line Breaks"
+          }
+        }
+      }
+    },
+    "改行を除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Line Breaks"
+          }
+        }
+      }
+    },
+    "空白を除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Whitespace"
+          }
+        }
+      }
+    },
+    "連続する空白を1つとして数える" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Count Consecutive Whitespace as One"
+          }
+        }
+      }
+    },
+    "Markdownの記号を除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Markdown Markers"
+          }
+        }
+      }
+    },
+    "リンク先URLを除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Link URLs"
+          }
+        }
+      }
+    },
+    "コードブロックを除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Code Blocks"
+          }
+        }
+      }
+    },
+    "フロントマターを除外" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclude Front Matter"
+          }
+        }
+      }
+    },
+    "ステータスバーの表示項目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Status Bar Items"
+          }
+        }
+      }
+    },
+    "文字数の数え方とステータスバー" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Character Counting and Status Bar"
           }
         }
       }

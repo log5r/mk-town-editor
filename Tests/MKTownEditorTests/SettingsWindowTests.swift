@@ -205,7 +205,8 @@ final class SettingsWindowTests: XCTestCase {
 
     func testSettingsAreSplitIntoTabsWithoutASaveButton() throws {
         let panes = EditorPreferencesView.Pane.allCases
-        XCTAssertEqual(panes.count, 7)
+        XCTAssertEqual(panes.count, 8)
+        XCTAssertTrue(panes.contains(.statistics))
         XCTAssertEqual(Set(panes.map(\.title)).count, panes.count)
         let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("Sources/MKTownEditor")
